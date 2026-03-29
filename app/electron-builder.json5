@@ -8,17 +8,17 @@
     "output": "release/${version}"
   },
   "files": [
-    "dist/**/*",
-    "dist-electron/**/*",
-    "node_modules/**/*",
-    "package.json",
-    "bin/**/*",
-    "!**/*.ts",
-    "!**/*.map",
-    "!src/**/*",
-    "!README.md",
-    "!tsconfig.json",
-    "!vite.config.ts",
+  "Front-End/dist/**/*",
+  "dist-electron/**/*",
+  "node_modules/**/*",
+  "package.json",
+  "bin/**/*",
+  "!**/*.ts",
+  "!**/*.map",
+  "!Front-End/src/**/*",
+  "!README.md",
+  "!tsconfig.json",
+  "!vite.config.ts",
     // Exclude common unnecessary files in node_modules to shrink installer
     "!node_modules/**/*.map",
     "!node_modules/**/test/**",
@@ -52,7 +52,7 @@
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
   "win": {
-    "icon": "public/CortexDL.ico",
+  "icon": "Front-End/public/CortexDL.ico",
     "target": [
       {
         "target": "nsis",
@@ -64,12 +64,12 @@
     "artifactName": "${productName} Setup ${version}.${ext}"
   },
   "nsis": {
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": true,
-    "installerIcon": "public/CortexDL.ico",
-    "uninstallerIcon": "public/CortexDL.ico",
+  "oneClick": false,
+  "perMachine": false,
+  "allowToChangeInstallationDirectory": true,
+  "deleteAppDataOnUninstall": true,
+  "installerIcon": "Front-End/public/CortexDL.ico",
+  "uninstallerIcon": "Front-End/public/CortexDL.ico",
     "include": "build/installer.nsh"
   },
   "npmRebuild": false,

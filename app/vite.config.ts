@@ -12,6 +12,7 @@ export default defineConfig(({ command, mode }) => {
   const isBuild = command === 'build'
 
   return {
+    root: path.join(__dirname, 'Front-End'),
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
     },
@@ -23,10 +24,10 @@ export default defineConfig(({ command, mode }) => {
       react(),
       electron({
         main: {
-          entry: 'electron/main.ts',
+          entry: path.join(__dirname, 'Back-End', 'electron', 'main.ts'),
         },
         preload: {
-          input: path.join(__dirname, 'electron/preload.ts'),
+          input: path.join(__dirname, 'Back-End', 'electron', 'preload.ts'),
         },
       }),
       isBuild && obfuscator({
