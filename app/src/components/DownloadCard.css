@@ -1,0 +1,455 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   DownloadCard.css — Isolated styles for the download card component.
+   
+   Naming convention: dc- prefix (Download Card) to avoid collisions
+   with the existing App.css until the legacy card code is fully removed.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Card Container ────────────────────────────────────────────────────────── */
+
+.dc-card {
+  background: var(--bg-card);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  display: flex;
+  min-height: 180px;
+  height: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
+  position: relative;
+  box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.3);
+}
+
+.dc-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--accent-primary);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Thumbnail ─────────────────────────────────────────────────────────────── */
+
+.dc-thumb {
+  width: 260px;
+  min-height: 180px;
+  position: relative;
+  background: #000;
+  flex-shrink: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dc-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.9;
+  transition: transform 0.5s ease;
+}
+
+.dc-card:hover .dc-thumb img {
+  transform: scale(1.05);
+}
+
+.dc-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.8rem;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Body ──────────────────────────────────────────────────────────────────── */
+
+.dc-body {
+  flex: 1;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0; /* allows text truncation to work */
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+
+.dc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.dc-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-main);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.dc-format-tag {
+  font-size: 0.75rem;
+  font-weight: 900;
+  padding: 4px 10px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dc-format-tag.mp4 { background: rgba(56, 189, 248, 0.15); color: var(--accent-primary); }
+.dc-format-tag.mkv { background: rgba(129, 140, 248, 0.15); color: #818cf8; }
+.dc-format-tag.avi { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+.dc-format-tag.mov { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+.dc-format-tag.webm { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
+.dc-format-tag.gif { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+.dc-format-tag.mp3 { background: rgba(129, 140, 248, 0.15); color: var(--accent-secondary, #818cf8); }
+.dc-format-tag.wav { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.dc-format-tag.m4a { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
+.dc-format-tag.ogg { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+.dc-format-tag.flac { background: rgba(20, 184, 166, 0.15); color: #14b8a6; }
+
+/* ── Meta row (phase badge + stats) ────────────────────────────────────────── */
+
+.dc-meta {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dc-phase-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.dc-phase-badge.processing {
+  animation: dc-pulse-text 1.5s ease-in-out infinite;
+}
+
+@keyframes dc-pulse-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Pulse dot for active downloads */
+.dc-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: dc-pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes dc-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+/* Stats container */
+.dc-stats {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.dc-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dc-accelerating {
+  color: var(--accent-primary);
+  animation: dc-pulse-text 1s infinite;
+}
+
+/* ── Progress bar ──────────────────────────────────────────────────────────── */
+
+.dc-progress {
+  margin-top: 1rem;
+}
+
+.dc-bar-bg {
+  height: 10px;
+  background: var(--bg-sidebar);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+
+.dc-bar-fill {
+  height: 100%;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Shimmer overlay for active bars */
+.dc-bar-fill::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: dc-shimmer 2s infinite;
+}
+
+@keyframes dc-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ─ Phase-specific bar colors ─ */
+
+.dc-bar-fill.downloading {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.dc-bar-fill.completed {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+.dc-bar-fill.completed::after { display: none; }
+
+.dc-bar-fill.error {
+  background: var(--error);
+}
+.dc-bar-fill.error::after { display: none; }
+
+.dc-bar-fill.paused {
+  background: var(--warning);
+}
+.dc-bar-fill.paused::after { display: none; }
+
+.dc-bar-fill.queued {
+  background: rgba(255, 255, 255, 0.15);
+}
+.dc-bar-fill.queued::after { display: none; }
+
+.dc-bar-fill.merging,
+.dc-bar-fill.converting {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+}
+.dc-bar-fill.merging::after,
+.dc-bar-fill.converting::after {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  animation: dc-shimmer 1.5s infinite;
+}
+
+/* ─ Indeterminate animation (full width, animated striped/shimmer) ─ */
+
+.dc-bar-fill.indeterminate {
+  width: 100% !important;
+  transition: none !important;
+}
+.dc-bar-fill.indeterminate::after { display: none; }
+
+.dc-bar-fill.downloading.indeterminate {
+  background: repeating-linear-gradient(
+    -45deg,
+    #3b82f6 0px,
+    #3b82f6 10px,
+    #60a5fa 10px,
+    #60a5fa 20px
+  );
+  background-size: 28.28px 100%; /* sqrt(2)*20 for 45° stripe tile */
+  animation: dc-stripe-scroll 0.8s linear infinite;
+}
+
+.dc-bar-fill.merging.indeterminate,
+.dc-bar-fill.converting.indeterminate {
+  background: repeating-linear-gradient(
+    -45deg,
+    #7c3aed 0px,
+    #7c3aed 10px,
+    #a78bfa 10px,
+    #a78bfa 20px
+  );
+  background-size: 28.28px 100%;
+  animation: dc-stripe-scroll 1s linear infinite;
+}
+
+@keyframes dc-stripe-scroll {
+  0%   { background-position: 0 0; }
+  100% { background-position: 28.28px 0; }
+}
+
+/* Progress info row */
+.dc-progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.dc-percent {
+  color: var(--accent-primary);
+}
+
+/* ── Error message ─────────────────────────────────────────────────────────── */
+
+.dc-error {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.08);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+/* ── Actions ───────────────────────────────────────────────────────────────── */
+
+.dc-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.dc-action-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Text buttons */
+.dc-btn {
+  height: 38px;
+  padding: 0 1.1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.dc-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.dc-btn.primary {
+  color: var(--accent-primary);
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.2);
+}
+.dc-btn.primary:hover {
+  background: var(--accent-primary);
+  color: #000;
+  border-color: var(--accent-primary);
+}
+
+.dc-btn.success {
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+.dc-btn.success:hover {
+  background: var(--success);
+  color: #fff;
+  border-color: var(--success);
+}
+
+.dc-btn.danger {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+.dc-btn.danger:hover {
+  background: var(--error);
+  color: #fff;
+  border-color: var(--error);
+}
+
+.dc-btn.ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+}
+.dc-btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Icon-only buttons */
+.dc-btn-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.dc-btn-icon:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.dc-btn-icon.ghost-success {
+  color: var(--success, #22c55e);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+.dc-btn-icon.ghost-success:hover {
+  background: var(--success, #22c55e);
+  color: #fff;
+  border-color: var(--success, #22c55e);
+}
+
+.dc-btn-icon.ghost-warning {
+  color: var(--warning, #eab308);
+  border-color: rgba(234, 179, 8, 0.2);
+}
+.dc-btn-icon.ghost-warning:hover {
+  background: var(--warning, #eab308);
+  color: #000;
+  border-color: var(--warning, #eab308);
+}
+
+.dc-btn-icon.ghost-danger {
+  color: var(--error, #ef4444);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+.dc-btn-icon.ghost-danger:hover {
+  background: var(--error, #ef4444);
+  color: #fff;
+  border-color: var(--error, #ef4444);
+}

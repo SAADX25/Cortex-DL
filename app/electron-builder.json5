@@ -1,0 +1,93 @@
+// @see - https://www.electron.build/configuration/configuration
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.cortex.dl",
+  "asar": true,
+  "productName": "Cortex DL",
+  "directories": {
+    "output": "release/${version}"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "node_modules/**/*",
+    "package.json",
+    "bin/**/*",
+    "!**/*.ts",
+    "!**/*.map",
+    "!src/**/*",
+    "!README.md",
+    "!tsconfig.json",
+    "!vite.config.ts",
+    // Exclude common unnecessary files in node_modules to shrink installer
+    "!node_modules/**/*.map",
+    "!node_modules/**/test/**",
+    "!node_modules/**/tests/**",
+    "!node_modules/**/__tests__/**",
+    "!node_modules/**/example/**",
+    "!node_modules/**/examples/**",
+    "!node_modules/**/doc/**",
+    "!node_modules/**/docs/**",
+    "!node_modules/**/benchmark/**",
+    "!node_modules/**/benchmarks/**",
+    "!node_modules/**/*.md",
+    "!node_modules/**/*.ts",
+    "!node_modules/**/*.tsx",
+    "!node_modules/**/*.d.ts",
+    "!node_modules/**/.github/**",
+    "!node_modules/**/.vscode/**",
+    "!**/*.log"
+  ],
+  "extraResources": [
+    {
+      "from": "bin",
+      "to": "bin",
+      "filter": ["**/*"]
+    }
+  ],
+  "mac": {
+    "target": [
+      "dmg"
+    ],
+    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+  },
+  "win": {
+    "icon": "public/CortexDL.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "${productName} Setup ${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": true,
+    "installerIcon": "public/CortexDL.ico",
+    "uninstallerIcon": "public/CortexDL.ico",
+    "include": "build/installer.nsh"
+  },
+  "npmRebuild": false,
+  "asarUnpack": ["**/*.node"],
+  "compression": "maximum",
+  "linux": {
+    "target": [
+      "AppImage"
+    ],
+    "artifactName": "${productName}-Linux-${version}.${ext}"
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "SAADX25",
+      "repo": "Cortex-DL-Releases",
+      "private": false,
+      "releaseType": "release"
+    }
+  ]
+}

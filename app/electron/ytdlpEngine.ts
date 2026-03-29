@@ -1,0 +1,539 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  yt-dlp Engine — YouTube, social media, and general video site downloads.
+ *
+ *  Handles:
+ *  - YouTube, Facebook, Instagram, TikTok, Twitter, Vimeo, etc.
+ *  - Cookie support via --cookies-from-browser or user-provided cookies.txt
+ *  - Zero-CPU merge strategy (MKV → remux to target container)
+ *  - Section trimming (start/end time)
+ *  - Audio extraction with format conversion
+ *  - File rename after download (task ID → sanitized title)
+ *
+ *  Progress is parsed from both stdout and stderr using the dual-stream
+ *  line-buffered parser in progressParser.ts.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+import { spawn } from 'node:child_process'
+import { existsSync, promises as fs } from 'node:fs'
+import path from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
+import type {
+  DownloadTask, TaskRuntime, EngineContext,
+  AudioFormat, VideoFormat, TargetFormat,
+} from './types'
+import { AUDIO_FORMATS, VIDEO_FORMATS } from './types'
+import { getBinaryPath, getCookiesPath } from './paths'
+import { nowMs, sanitizeFilename, getFileSizeIfExists, sendNotification, parseTimeToSeconds } from './utils'
+import {
+  parseDownloadProgress, parseFfmpegProgress,
+  parseStateTransition, flushLines,
+} from './progressParser'
+import type { FfmpegState } from './progressParser'
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  yt-dlp Spawn — builds the argument list and spawns the process
+// ═══════════════════════════════════════════════════════════════════════════
+
+function spawnYtdlp(
+  url: string,
+  outputPath: string,
+  format: TargetFormat,
+  taskId: string,
+  formatId?: string,
+  browser?: string,
+  cookieFile?: string,
+  username?: string,
+  password?: string,
+  speedLimit?: string,
+  startTime?: string,
+  endTime?: string,
+) {
+  const globalCookies = getCookiesPath()
+  const hasCookies = !!cookieFile || !!globalCookies || (!!browser && browser !== 'none')
+  const fragments = hasCookies ? '8' : '6'
+
+  const args = [
+    '--no-playlist',
+    '--progress',
+    '--newline',
+    '--no-check-certificate',
+    '--no-mtime',
+    '--no-keep-video',
+    '--geo-bypass',
+    '--force-ipv4',
+    '--no-warnings',
+    // Machine-parseable progress template
+    '--progress-template', 'download:CORTEX_DL:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s:%(progress.speed)s',
+    '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
+    // Performance optimizations
+    '--concurrent-fragments', fragments,
+    '--resize-buffer',
+    '--http-chunk-size', '10M',
+    '--buffer-size', '16M',
+    '--file-access-retries', '5',
+    '--socket-timeout', '5',
+    '--compat-options', 'no-live-chat',
+    // Stealth user-agent
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  ]
+
+  // Authentication
+  if (username) args.push('--username', username)
+  if (password) args.push('--password', password)
+  if (speedLimit && speedLimit !== 'auto') args.push('--limit-rate', speedLimit)
+
+  // Section trimming (start/end time)
+  if (startTime || endTime) {
+    const start = startTime || '00:00:00'
+    const end = endTime || 'inf'
+    args.push('--download-sections', `*${start}-${end}`)
+  }
+
+  // JS runtime detection (Deno preferred over Node for speed)
+  const denoPath = getBinaryPath('deno')
+  if (existsSync(denoPath)) {
+    args.push('--js-runtimes', `deno:${denoPath}`)
+  } else {
+    const nodePath = getBinaryPath('node')
+    args.push('--js-runtimes', existsSync(nodePath) ? `node:${nodePath}` : 'node')
+  }
+
+  // FFmpeg location
+  const ffmpegExePath = getBinaryPath('ffmpeg')
+  if (existsSync(ffmpegExePath)) {
+    args.push('--ffmpeg-location', path.dirname(ffmpegExePath))
+  }
+
+  // Cookie priority: temp cookieFile > global cookies.txt > browser
+  if (cookieFile) {
+    args.push('--cookies', cookieFile)
+  } else if (globalCookies) {
+    args.push('--cookies', globalCookies)
+  } else if (browser && browser !== 'none') {
+    args.push('--cookies-from-browser', browser)
+  }
+
+  // ── Format Selection & Container Strategy ──────────────────────────────
+  if (AUDIO_FORMATS.includes(format as AudioFormat)) {
+    const audioFormatArg = format === 'ogg' ? 'vorbis' : format
+    args.push('-x', '--audio-format', audioFormatArg, '-f', 'bestaudio/best')
+    if (format === 'mp3') args.push('--audio-quality', '0')
+  } else if (VIDEO_FORMATS.includes(format as VideoFormat)) {
+    buildVideoFormatArgs(args, format as VideoFormat, formatId)
+  } else {
+    // Fallback for unknown formats — MKV is always safe
+    args.push('-f', 'bestvideo+bestaudio/best', '-S', 'res,fps')
+    args.push('--merge-output-format', 'mkv', '--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
+  }
+
+  // Output: use task ID as filename (ASCII-safe), rename after download
+  const downloadDir = path.dirname(outputPath)
+  args.push('--paths', `temp:${downloadDir}`)
+  args.push('-o', path.join(downloadDir, `${taskId}.%(ext)s`), url)
+
+  return spawn(getBinaryPath('yt-dlp'), args, {
+    windowsHide: true,
+    detached: false,
+    env: { ...process.env, PYTHONUNBUFFERED: '1' },
+  })
+}
+
+/**
+ * Zero-CPU merge strategy: Always merge into MKV first (accepts ALL codecs),
+ * then remux to the target container only if codecs are compatible.
+ *
+ * Container compatibility:
+ *   MP4/MOV → H.264+AAC only (no VP9, no Opus, no AV1)
+ *   MKV     → EVERYTHING
+ *   WEBM    → VP9+Opus only
+ *   AVI     → MPEG-4/H.264+MP3 (limited, recode often needed)
+ *   GIF     → Always requires recode
+ */
+function buildVideoFormatArgs(args: string[], format: VideoFormat, formatId?: string): void {
+  const is4K = formatId === '2160p'
+  const resFragment = formatId && /^\d{3,4}p$/.test(formatId)
+    ? `res:${formatId.replace('p', '')},fps`
+    : 'res,fps'
+
+  // Format selection
+  if (formatId && !/^\d{3,4}p$/.test(formatId)) {
+    args.push('-f', `${formatId}+bestaudio/best`)
+  } else if ((format === 'mp4' || format === 'mov') && !is4K) {
+    args.push('-f', 'bestvideo+bestaudio/best', '-S', `vcodec:h264,acodec:m4a,${resFragment}`)
+  } else if (format === 'webm') {
+    args.push('-f', 'bestvideo+bestaudio/best', '-S', `vcodec:vp9,acodec:opus,${resFragment}`)
+  } else {
+    args.push('-f', 'bestvideo+bestaudio/best', '-S', resFragment)
+  }
+
+  // Container / post-processing strategy
+  switch (format) {
+    case 'mkv':
+      args.push('--merge-output-format', 'mkv')
+      args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
+      break
+    case 'mp4':
+    case 'mov':
+      args.push('--merge-output-format', 'mkv')
+      args.push('--remux-video', format)
+      args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
+      break
+    case 'webm':
+      args.push('--merge-output-format', 'mkv')
+      args.push('--remux-video', 'webm')
+      args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
+      break
+    case 'avi':
+      args.push('--merge-output-format', 'mkv')
+      args.push('--recode-video', 'avi')
+      args.push('--postprocessor-args', 'ffmpeg:-c:v mpeg4 -q:v 5 -c:a mp3 -threads 0')
+      break
+    case 'gif':
+      args.push('--merge-output-format', 'mkv')
+      args.push('--recode-video', 'gif')
+      args.push('--postprocessor-args', 'ffmpeg:-vf fps=15,scale=480:-1:flags=lanczos -threads 0')
+      break
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Engine Entry Point
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function runYtdlpDownload(
+  task: DownloadTask,
+  runtime: TaskRuntime,
+  ctx: EngineContext,
+): Promise<void> {
+  // ── Dependency Check ───────────────────────────────────────────────────
+  const ytdlpPath = getBinaryPath('yt-dlp')
+  const ffmpegPath = getBinaryPath('ffmpeg')
+
+  if (!existsSync(ytdlpPath)) {
+    task.status = 'error'
+    task.errorMessage = 'yt-dlp binary is missing from the bin directory.'
+    ctx.sendUpdate(task)
+    return
+  }
+
+  if (!existsSync(ffmpegPath)) {
+    task.status = 'error'
+    task.errorMessage = 'ffmpeg binary is missing. High quality downloads (4K/1080p) require it.'
+    ctx.sendUpdate(task)
+    return
+  }
+
+  // ── Initialize Runtime ─────────────────────────────────────────────────
+  runtime.abortController?.abort()
+  runtime.abortController = new AbortController()
+  runtime.lastSpeedSampleAtMs = null
+  runtime.lastSpeedSampleBytes = null
+
+  task.status = 'downloading'
+  task.errorMessage = null
+  task.updatedAtMs = nowMs()
+  ctx.sendUpdate(task)
+
+  try {
+    // ── Pre-fetch metadata (title, thumbnail) so UI shows real info early
+    try {
+      const META_TIMEOUT_MS = 15_000
+      const metaArgs = ['--dump-single-json', '--no-warnings', '--no-playlist', task.url]
+      const metaProc = spawn(getBinaryPath('yt-dlp'), metaArgs, { windowsHide: true, detached: false, env: { ...process.env, PYTHONUNBUFFERED: '1' } })
+      let metaOut = ''
+      const collectMeta = async () => {
+        for await (const chunk of metaProc.stdout) {
+          metaOut += chunk.toString()
+        }
+      }
+      // Race metadata collection against a hard timeout to prevent indefinite hang
+      // on bot-detection challenges or slow/stalled network connections.
+      await Promise.race([
+        collectMeta(),
+        new Promise<void>((_, rej) =>
+          setTimeout(() => { try { metaProc.kill() } catch { /* ignore */ }; rej(new Error('meta timeout')) }, META_TIMEOUT_MS)
+        ),
+      ])
+      if (metaOut) {
+        try {
+          const info = JSON.parse(metaOut)
+          if (info?.title) {
+            task.title = String(info.title)
+            // set filename base to title (extension will be resolved after download)
+            const ext = path.extname(task.filename)
+            task.filename = `${sanitizeFilename(task.title)}${ext || ''}`
+          }
+          if (info?.thumbnail) task.thumbnail = String(info.thumbnail)
+          task.updatedAtMs = nowMs()
+          ctx.sendUpdate(task)
+        } catch { /* ignore malformed json */ }
+      }
+    } catch (metaErr) {
+      // Non-fatal: continue without metadata
+      console.warn('[ytdlp] metadata fetch failed', metaErr)
+    }
+    // ── Spawn yt-dlp ──────────────────────────────────────────────────
+    const proc = spawnYtdlp(
+      task.url, task.filePath, task.targetFormat, task.id,
+      task.ytdlpFormatId, task.cookieBrowser,
+      task.cookieFile,
+      task.username, task.password, task.speedLimit,
+      task.startTime, task.endTime,
+    )
+    runtime.child = proc
+
+    // ── Progress Parsing State ────────────────────────────────────
+    // Pre-seed trim duration so the very first time= tick can compute percent
+    // without waiting for a Duration: header — which never appears when yt-dlp
+    // passes only the trimmed section fragments to FFmpeg.
+    let preseedDuration: number | null = null
+    if (task.startTime && task.endTime) {
+      const td = parseTimeToSeconds(task.endTime) - parseTimeToSeconds(task.startTime)
+      if (td > 0) preseedDuration = td
+    }
+    const ffmpegState: FfmpegState = { totalDuration: preseedDuration, stderr: '' }
+    let stdoutBuf = ''
+    let stderrBuf = ''
+    let lastUpdateAtMs = 0
+    let detectedFinalPath: string | null = null
+
+    const progressCtx = {
+      sendUpdate: (t: DownloadTask) => ctx.sendUpdate(t),
+      saveState: () => ctx.saveState(),
+    }
+
+    // ── STDERR Handler ────────────────────────────────────────────────
+    const MAX_STDERR_BYTES = 64 * 1024
+    proc.stderr.on('data', (data: Buffer) => {
+      const chunk = data.toString()
+      ffmpegState.stderr += chunk
+      if (ffmpegState.stderr.length > MAX_STDERR_BYTES) {
+        ffmpegState.stderr = ffmpegState.stderr.slice(-MAX_STDERR_BYTES)
+      }
+
+      let lines: string[]
+      ;[lines, stderrBuf] = flushLines(stderrBuf, chunk)
+
+      for (const line of lines) {
+        if (!line.trim()) continue
+
+        const ffmpegChanged = parseFfmpegProgress(line, task, ffmpegState)
+        let dlChanged = false
+        if (task.status === 'downloading') {
+          dlChanged = parseDownloadProgress(line, task)
+        }
+
+        if (ffmpegChanged || dlChanged) {
+          const now = nowMs()
+          if (now - lastUpdateAtMs > 200) {
+            task.updatedAtMs = now
+            lastUpdateAtMs = now
+            ctx.sendUpdate(task)
+          }
+        }
+
+        const { detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
+        if (detectedPath) detectedFinalPath = detectedPath
+      }
+    })
+
+    // ── STDOUT Handler ────────────────────────────────────────────────
+    proc.stdout.on('data', (data: Buffer) => {
+      let lines: string[]
+      ;[lines, stdoutBuf] = flushLines(stdoutBuf, data.toString())
+
+      let stateChanged = false
+      for (const line of lines) {
+        if (!line.trim()) continue
+
+        const { transitioned, detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
+        if (detectedPath) detectedFinalPath = detectedPath
+        if (transitioned) { stateChanged = true; continue }
+
+        if (task.status === 'downloading' && parseDownloadProgress(line, task)) stateChanged = true
+        if (parseFfmpegProgress(line, task, ffmpegState)) stateChanged = true
+      }
+
+      const now = nowMs()
+      if (stateChanged && now - lastUpdateAtMs > 200) {
+        task.updatedAtMs = now
+        lastUpdateAtMs = now
+        ctx.sendUpdate(task)
+        if (Math.random() < 0.02) ctx.saveState()
+      }
+    })
+
+    // ── Wait for Exit ─────────────────────────────────────────────────
+    const exitCode: number = await new Promise((resolve) => {
+      proc.on('close', (code) => resolve(code ?? 1))
+      proc.on('error', () => resolve(1))
+    })
+
+    if (runtime.abortController?.signal.aborted) return
+
+    // ── Success ───────────────────────────────────────────────────────
+    if (exitCode === 0) {
+      await renameDownloadedFile(task, detectedFinalPath)
+
+      task.status = 'completed'
+      task.updatedAtMs = nowMs()
+      runtime.retries = 0
+
+      try {
+        const finalSize = await getFileSizeIfExists(task.filePath)
+        if (finalSize > 0) {
+          task.totalBytes = finalSize
+          task.downloadedBytes = finalSize
+          ctx.sendStats(task.id, finalSize)
+        }
+      } catch { /* ignore */ }
+
+      ctx.flushSave()
+      ctx.sendUpdate(task)
+      sendNotification('Download Complete', `${task.title || task.filename} downloaded successfully.`)
+      return
+    }
+
+    // ── Error Handling ────────────────────────────────────────────────
+    const stderr = ffmpegState.stderr
+    let finalMessage = buildErrorMessage(exitCode, stderr)
+
+    // Retry with exponential backoff — YouTube is prone to bot/network disconnects
+    const MAX_RETRIES = 5
+    if (runtime.retries < MAX_RETRIES) {
+      runtime.retries++
+      const backoffMs = Math.min(3000 * 2 ** (runtime.retries - 1), 60_000)
+      task.status = 'queued'
+      task.errorMessage = `Download failed, retrying (${runtime.retries}/${MAX_RETRIES})...`
+      task.updatedAtMs = nowMs()
+      ctx.sendUpdate(task)
+      await delay(backoffMs)
+      return
+    }
+
+    task.status = 'error'
+    task.errorMessage = finalMessage
+    task.updatedAtMs = nowMs()
+    ctx.flushSave()
+    ctx.sendUpdate(task)
+    sendNotification('Download Failed', `Failed to download ${task.title || task.filename}`)
+
+  } catch (err) {
+    task.status = 'error'
+    task.errorMessage = err instanceof Error ? err.message : 'Unexpected error'
+    ctx.flushSave()
+    ctx.sendUpdate(task)
+  } finally {
+    runtime.child = null
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Post-Download File Rename
+// ═══════════════════════════════════════════════════════════════════════════
+//
+//  yt-dlp downloads use the task ID as filename (pure ASCII) to avoid
+//  Windows CLI encoding issues. After download, we rename to the
+//  sanitized title with the correct extension.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function renameDownloadedFile(
+  task: DownloadTask,
+  detectedFinalPath: string | null,
+): Promise<void> {
+  // Step 1: Find the downloaded file by task.id prefix
+  let downloadedFilePath: string | null = null
+  let downloadedExt: string | null = null
+  try {
+    const files = await fs.readdir(task.directory)
+    for (const file of files) {
+      if (file.startsWith(`${task.id}.`)) {
+        downloadedFilePath = path.join(task.directory, file)
+        downloadedExt = path.extname(file)
+        break
+      }
+    }
+  } catch { /* ignore read errors */ }
+
+  // Step 2: Rename to sanitized title
+  if (downloadedFilePath && downloadedExt) {
+    const originalBasename = path.basename(task.filename, path.extname(task.filename))
+    const safeBasename = sanitizeFilename(originalBasename).replace(/\s+/g, '_')
+    const finalFilename = `${safeBasename}${downloadedExt}`
+    let targetPath = path.join(task.directory, finalFilename)
+
+    // Handle name collisions
+    let counter = 1
+    while (existsSync(targetPath) && targetPath !== downloadedFilePath) {
+      targetPath = path.join(task.directory, `${safeBasename}_${counter}${downloadedExt}`)
+      counter++
+    }
+
+    try {
+      if (downloadedFilePath !== targetPath) {
+        await fs.rename(downloadedFilePath, targetPath)
+      }
+      task.filePath = targetPath
+      task.filename = path.basename(targetPath)
+    } catch {
+      // Fall back to task.id-based filename if rename fails
+      task.filePath = downloadedFilePath
+      task.filename = path.basename(downloadedFilePath)
+    }
+    return
+  }
+
+  // Fallback: use detected path from yt-dlp stdout
+  if (detectedFinalPath) {
+    const resolvedFinal = path.isAbsolute(detectedFinalPath)
+      ? detectedFinalPath
+      : path.join(task.directory, detectedFinalPath)
+    if (existsSync(resolvedFinal)) {
+      task.filePath = resolvedFinal
+      task.filename = path.basename(resolvedFinal)
+      return
+    }
+  }
+
+  // Last resort: scan directory for common extensions
+  if (!existsSync(task.filePath)) {
+    const extensions = ['ogg', 'opus', 'mp3', 'm4a', 'wav', 'flac', 'webm', 'mp4', 'mkv', 'avi', 'mov']
+    for (const ext of extensions) {
+      const candidate = path.join(task.directory, `${task.id}.${ext}`)
+      if (existsSync(candidate)) {
+        task.filePath = candidate
+        task.filename = path.basename(candidate)
+        break
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Error Message Builder
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildErrorMessage(exitCode: number, stderr: string): string {
+  if (stderr.includes('HTTP Error 403') || stderr.includes('403: Forbidden')) {
+    return 'Error 403 (Access Denied): The server rejected the request. Try updating cookies or changing your IP.'
+  }
+
+  if (stderr.includes('Sign in to confirm you') || stderr.includes('not a bot')) {
+    return getCookiesPath()
+      ? 'YouTube requires verification despite cookies. The cookies may be expired or invalid.'
+      : 'YouTube requires verification (bot detection). Place a cookies.txt file in the app directory or select your browser for cookie extraction.'
+  }
+
+  if (stderr.includes('No supported JavaScript runtime')) {
+    return 'Missing JavaScript Runtime. Place deno.exe in the bin directory to bypass YouTube protection.'
+  }
+
+  // Extract clean error line from yt-dlp output
+  const cleanError = stderr.split('\n').filter(l => l.startsWith('ERROR:')).pop()
+  if (cleanError) {
+    return `yt-dlp error: ${cleanError.replace('ERROR:', '').trim()}`
+  }
+
+  return `Download failed (exit code ${exitCode})`
+}
