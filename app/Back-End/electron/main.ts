@@ -1,3 +1,10 @@
+import log from 'electron-log'
+
+// Configure pure electron-log globally FIRST
+log.initialize({ preload: true })
+log.transports.file.level = 'info'
+Object.assign(console, log.functions)
+
 import { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu, nativeImage } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -8,16 +15,6 @@ import type { DownloadManager } from './downloadManager'
 import type { StartInput } from './types'
 import { analyzeUrlForHls } from './hls'
 import { analyzeWithYtdlp, isYtdlpAvailable, checkJsRuntime, updateYtdlp, getYtdlpVersion } from './ytdlp'
-import log from 'electron-log'
-
-// Configure pure electron-log immediately
-log.initialize({ preload: true })
-log.transports.file.level = 'info'
-
-// Override default console methods to capture backend logs automatically
-console.log = log.log
-console.warn = log.warn
-console.error = log.error
 
 // Global Error Catchers
 process.on('uncaughtException', (error) => {

@@ -14,9 +14,9 @@
  *  - ytdlpEngine.ts   → YouTube, social media, etc.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-import { BrowserWindow, app } from 'electron'
+import { BrowserWindow } from 'electron'
 import {
-  existsSync, readFileSync, readdirSync, unlinkSync, renameSync
+  existsSync, readdirSync, unlinkSync
 } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -52,10 +52,8 @@ export class DownloadManager {
   // Adjusting at runtime would require a setter and re-scheduling logic.
   // For now, the default is set to 3.
   private active = new Set<string>()
-  private storagePath: string
 
   constructor() {
-    this.storagePath = path.join(app.getPath('userData'), 'tasks.json')
     this.loadState()
   }
 
@@ -65,11 +63,9 @@ export class DownloadManager {
 
   private loadState(): void {
     try {
-      console.log('Loading tasks from SQLite (Phase 1 Migration Ready if needed)')
-      // First, migrate if tasks.json exists and we haven't done it yet
-      this.migrateFromJson()
+      console.log('[DownloadManager] Initializing tasks exclusively from SQLite DB...')
 
-      // Load items from database
+      // Load items from database ONLY
       const rows = taskDb.getAllTasks.all() as { full_payload: string }[]
       for (const row of rows) {
         try {
@@ -86,46 +82,10 @@ export class DownloadManager {
           console.error('Failed to parse task from DB row:', e)
         }
       }
-      console.log(`Loaded ${this.tasks.size} tasks successfully from database`)
+      console.log(`[DownloadManager] Loaded ${this.tasks.size} tasks successfully from SQLite database.`)
       this.cleanupOrphanFiles()
     } catch (err) {
       console.error('Error loading tasks from DB:', err)
-    }
-  }
-
-  /**
-   * Migrate old tasks.json file to the robust SQLite database.
-   */
-  private migrateFromJson() {
-    if (!existsSync(this.storagePath)) return
-    
-    console.log('Old tasks.json detected. Migrating to SQLite...')
-    try {
-      const data = readFileSync(this.storagePath, 'utf-8')
-      const rawTasks: DownloadTask[] = JSON.parse(data)
-      if (Array.isArray(rawTasks)) {
-        const trans = db.transaction((tasks: DownloadTask[]) => {
-          for (const t of tasks) {
-            taskDb.upsertTask.run({
-              id: t.id,
-              title: t.title || t.filename,
-              url: t.url,
-              status: t.status,
-              progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
-              size: t.totalBytes || 0,
-              thumbnail: t.thumbnail || '',
-              engine: t.engine,
-              full_payload: JSON.stringify(t)
-            })
-          }
-        })
-        trans(rawTasks)
-        console.log(`Migrated ${rawTasks.length} tasks to SQLite! Renaming tasks.json out of the way.`)
-        // Rename the old file so we don't migrate again on restart
-        renameSync(this.storagePath, this.storagePath + '.bak')
-      }
-    } catch (e) {
-      console.error('Migration failed:', e)
     }
   }
 
