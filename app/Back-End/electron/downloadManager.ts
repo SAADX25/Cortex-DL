@@ -16,13 +16,13 @@
  */
 import { BrowserWindow, app } from 'electron'
 import {
-  existsSync, readFileSync, readdirSync, unlinkSync,
-  openSync, writeSync, fsyncSync, closeSync, renameSync,
+  existsSync, readFileSync, readdirSync, unlinkSync, renameSync
 } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
+import { db, taskDb } from './db'
 import type {
   DownloadTask, TaskRuntime, StartInput, EngineContext,
   DownloadEngine, AudioFormat,
@@ -53,8 +53,6 @@ export class DownloadManager {
   // For now, the default is set to 3.
   private active = new Set<string>()
   private storagePath: string
-  private savePending = false
-  private saveTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor() {
     this.storagePath = path.join(app.getPath('userData'), 'tasks.json')
@@ -67,47 +65,67 @@ export class DownloadManager {
 
   private loadState(): void {
     try {
-      console.log('Loading tasks from:', this.storagePath)
-      if (!existsSync(this.storagePath)) {
-        console.log('No tasks.json found, starting fresh')
-        return
-      }
+      console.log('Loading tasks from SQLite (Phase 1 Migration Ready if needed)')
+      // First, migrate if tasks.json exists and we haven't done it yet
+      this.migrateFromJson()
 
-      const data = readFileSync(this.storagePath, 'utf-8')
-      if (!data || data.trim() === '') {
-        console.warn('Tasks file is empty')
-        return
-      }
-
-      let rawTasks: DownloadTask[]
-      try {
-        rawTasks = JSON.parse(data)
-      } catch (e) {
-        console.error('Failed to parse tasks.json:', e)
-        return
-      }
-
-      if (!Array.isArray(rawTasks)) {
-        console.warn('tasks.json content is not an array')
-        return
-      }
-
-      for (const task of rawTasks) {
-        if (!task.id || !task.url) continue
-        // Reset active statuses on cold start (app was killed mid-download)
-        if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
-          task.status = 'paused'
-          task.speedBytesPerSec = null
+      // Load items from database
+      const rows = taskDb.getAllTasks.all() as { full_payload: string }[]
+      for (const row of rows) {
+        try {
+          const task: DownloadTask = JSON.parse(row.full_payload)
+          if (!task.id || !task.url) continue
+          // Reset active statuses on cold start
+          if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
+            task.status = 'paused'
+            task.speedBytesPerSec = null
+          }
+          this.tasks.set(task.id, task)
+          this.runtime.set(task.id, this.freshRuntime())
+        } catch (e) {
+          console.error('Failed to parse task from DB row:', e)
         }
-        this.tasks.set(task.id, task)
-        this.runtime.set(task.id, this.freshRuntime())
       }
-      console.log(`Loaded ${this.tasks.size} tasks successfully`)
-
-      // Clean up orphaned temp files from crashed yt-dlp downloads
+      console.log(`Loaded ${this.tasks.size} tasks successfully from database`)
       this.cleanupOrphanFiles()
     } catch (err) {
-      console.error('Failed to load tasks:', err)
+      console.error('Error loading tasks from DB:', err)
+    }
+  }
+
+  /**
+   * Migrate old tasks.json file to the robust SQLite database.
+   */
+  private migrateFromJson() {
+    if (!existsSync(this.storagePath)) return
+    
+    console.log('Old tasks.json detected. Migrating to SQLite...')
+    try {
+      const data = readFileSync(this.storagePath, 'utf-8')
+      const rawTasks: DownloadTask[] = JSON.parse(data)
+      if (Array.isArray(rawTasks)) {
+        const trans = db.transaction((tasks: DownloadTask[]) => {
+          for (const t of tasks) {
+            taskDb.upsertTask.run({
+              id: t.id,
+              title: t.title || t.filename,
+              url: t.url,
+              status: t.status,
+              progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
+              size: t.totalBytes || 0,
+              thumbnail: t.thumbnail || '',
+              engine: t.engine,
+              full_payload: JSON.stringify(t)
+            })
+          }
+        })
+        trans(rawTasks)
+        console.log(`Migrated ${rawTasks.length} tasks to SQLite! Renaming tasks.json out of the way.`)
+        // Rename the old file so we don't migrate again on restart
+        renameSync(this.storagePath, this.storagePath + '.bak')
+      }
+    } catch (e) {
+      console.error('Migration failed:', e)
     }
   }
 
@@ -147,56 +165,62 @@ export class DownloadManager {
   }
 
   /**
-   * Crash-safe atomic write: tmp → fsync → rename.
-   * Called directly for lifecycle events (pause / cancel / complete / delete).
+   * Instantly update active tasks to the database. Phase 1 SQLite integration.
    */
-  private saveStateImmediate(): void {
+  private saveStateImmediate(taskId?: string): void {
     try {
-      const dir = path.dirname(this.storagePath)
-      if (!existsSync(dir)) {
-        fs.mkdir(dir, { recursive: true }).catch(err =>
-          console.error('Failed to create config directory:', err)
-        )
+      if (taskId) {
+        const task = this.tasks.get(taskId)
+        if (task) this.upsertTaskToDb(task)
+      } else {
+        const trans = db.transaction((tasks: DownloadTask[]) => {
+          for (const t of tasks) this.upsertTaskToDb(t)
+        })
+        trans(Array.from(this.tasks.values()))
       }
-      const tmpPath = this.storagePath + '.tmp'
-      const json = JSON.stringify(Array.from(this.tasks.values()), null, 2)
-      const fd = openSync(tmpPath, 'w')
-      try {
-        writeSync(fd, json)
-        fsyncSync(fd)
-      } finally {
-        closeSync(fd)
-      }
-      renameSync(tmpPath, this.storagePath)
     } catch (err) {
-      console.error('Failed to save tasks:', err)
+      console.error('Failed to save tasks to SQLite:', err)
+    }
+  }
+
+  private upsertTaskToDb(t: DownloadTask) {
+    taskDb.upsertTask.run({
+      id: t.id,
+      title: t.title || t.filename,
+      url: t.url,
+      status: t.status,
+      progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
+      size: t.totalBytes || 0,
+      thumbnail: t.thumbnail || '',
+      engine: t.engine,
+      full_payload: JSON.stringify(t)
+    })
+  }
+
+  /**
+   * Debounced save is largely obsolete with SQLite WAL, but kept for interface compatibility
+   * until engines are refactored to stop calling it.
+   */
+  private saveStateDebounced(): void {
+    // With WAL mode SQLite, we can just do it instantly. 
+    // We only update active tasks here to save cycles.
+    try {
+      const trans = db.transaction((activeIds: string[]) => {
+        for (const id of activeIds) {
+          const t = this.tasks.get(id)
+          if (t) this.upsertTaskToDb(t)
+        }
+      })
+      trans(Array.from(this.active))
+    } catch (e) {
+      console.error('DB debounced save error', e)
     }
   }
 
   /**
-   * Debounced save — coalesces high-frequency progress saves into at most
-   * one disk write per second.  Engines call this on every progress tick.
-   */
-  private saveStateDebounced(): void {
-    if (this.savePending) return
-    this.savePending = true
-    this.saveTimer = setTimeout(() => {
-      this.savePending = false
-      this.saveTimer = null
-      this.saveStateImmediate()
-    }, 1000)
-  }
-
-  /**
-   * Cancel any pending debounced save and write immediately.
    * Used before app quit so the last state isn't lost.
    */
   flushPendingSave(): void {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer)
-      this.saveTimer = null
-      this.savePending = false
-    }
     this.saveStateImmediate()
   }
 
@@ -387,7 +411,7 @@ export class DownloadManager {
 
     this.tasks.delete(id)
     this.active.delete(id)
-    this.saveStateImmediate()
+    try { taskDb.deleteTask.run(id) } catch { console.error('DB delete failed') }
     this.schedule()
   }
 
@@ -400,7 +424,7 @@ export class DownloadManager {
       this.tasks.delete(id)
       this.runtime.delete(id)
     }
-    this.saveStateImmediate()
+    try { taskDb.clearCompleted.run() } catch { console.error('DB clearCompleted failed') }
   }
 
   async pauseAll(): Promise<void> {
@@ -455,9 +479,21 @@ export class DownloadManager {
         const rt = this.runtime.get(taskId)
         if (rt) throttledSendUpdate(this.win, t, rt)
         else sendUpdate(this.win, t)
+        
+        // Instantly write to SQLite on each progress tick (fast via WAL)
+        try {
+          taskDb.updateStatusAndProgress.run({
+            id: t.id,
+            status: t.status,
+            progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
+            full_payload: JSON.stringify(t)
+          })
+        } catch (dbErr) {
+          console.error('DB Update Error:', dbErr)
+        }
       },
       saveState: () => this.saveStateDebounced(),
-      flushSave: () => this.saveStateImmediate(),
+      flushSave: () => this.saveStateImmediate(taskId),
       sendStats: (id, addedBytes) => {
         if (this.win && !this.win.isDestroyed()) {
           this.win.webContents.send(STATS_CHANNEL, { id, addedBytes })

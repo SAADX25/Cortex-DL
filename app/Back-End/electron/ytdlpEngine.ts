@@ -30,6 +30,7 @@ import {
   parseStateTransition, flushLines,
 } from './progressParser'
 import type { FfmpegState } from './progressParser'
+import log from 'electron-log'
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  yt-dlp Spawn — builds the argument list and spawns the process
@@ -210,10 +211,13 @@ export async function runYtdlpDownload(
   const ytdlpPath = getBinaryPath('yt-dlp')
   const ffmpegPath = getBinaryPath('ffmpeg')
 
+  log.info(`[ytdlpEngine] Starting download for task ${task.id} (${task.url.slice(0, 60)}...)`)
+
   if (!existsSync(ytdlpPath)) {
     task.status = 'error'
     task.errorMessage = 'yt-dlp binary is missing from the bin directory.'
     ctx.sendUpdate(task)
+    log.error(`[ytdlpEngine] yt-dlp binary missing at ${ytdlpPath}`)
     return
   }
 
@@ -221,6 +225,7 @@ export async function runYtdlpDownload(
     task.status = 'error'
     task.errorMessage = 'ffmpeg binary is missing. High quality downloads (4K/1080p) require it.'
     ctx.sendUpdate(task)
+    log.warn(`[ytdlpEngine] ffmpeg binary missing at ${ffmpegPath}`)
     return
   }
 
@@ -237,6 +242,7 @@ export async function runYtdlpDownload(
 
   try {
     // ── Pre-fetch metadata (title, thumbnail) so UI shows real info early
+    log.info(`[ytdlpEngine] Pre-fetching metadata for task ${task.id}...`)
     try {
       const META_TIMEOUT_MS = 15_000
       const metaArgs = ['--dump-single-json', '--no-warnings', '--no-playlist', task.url]
@@ -265,15 +271,21 @@ export async function runYtdlpDownload(
             task.filename = `${sanitizeFilename(task.title)}${ext || ''}`
           }
           if (info?.thumbnail) task.thumbnail = String(info.thumbnail)
+          
+          log.info(`[ytdlpEngine] Metadata extracted for ${task.id}: Title="${task.title}", Thumbnail found: ${!!task.thumbnail}`)
           task.updatedAtMs = nowMs()
           ctx.sendUpdate(task)
-        } catch { /* ignore malformed json */ }
+        } catch { 
+           log.warn(`[ytdlpEngine] Failed to parse metadata JSON for task ${task.id}`)
+        }
       }
-    } catch (metaErr) {
+    } catch (metaErr: any) {
       // Non-fatal: continue without metadata
-      console.warn('[ytdlp] metadata fetch failed', metaErr)
+      log.warn(`[ytdlpEngine] Metadata fetch failed or timed out for task ${task.id}:`, metaErr.message)
     }
+
     // ── Spawn yt-dlp ──────────────────────────────────────────────────
+    log.info(`[ytdlpEngine] Spawning yt-dlp download process for task ${task.id}...`)
     const proc = spawnYtdlp(
       task.url, task.filePath, task.targetFormat, task.id,
       task.ytdlpFormatId, task.cookieBrowser,
@@ -391,6 +403,7 @@ export async function runYtdlpDownload(
 
       ctx.flushSave()
       ctx.sendUpdate(task)
+      log.info(`[ytdlpEngine] Task ${task.id} completed successfully. Final size: ${task.totalBytes} bytes.`)
       sendNotification('Download Complete', `${task.title || task.filename} downloaded successfully.`)
       return
     }
@@ -398,12 +411,14 @@ export async function runYtdlpDownload(
     // ── Error Handling ────────────────────────────────────────────────
     const stderr = ffmpegState.stderr
     let finalMessage = buildErrorMessage(exitCode, stderr)
+    log.error(`[ytdlpEngine] Task ${task.id} exited with code ${exitCode}. Error Message: ${finalMessage}`)
 
     // Retry with exponential backoff — YouTube is prone to bot/network disconnects
     const MAX_RETRIES = 5
     if (runtime.retries < MAX_RETRIES) {
       runtime.retries++
       const backoffMs = Math.min(3000 * 2 ** (runtime.retries - 1), 60_000)
+      log.info(`[ytdlpEngine] Retrying task ${task.id} in ${backoffMs}ms... (Attempt ${runtime.retries}/${MAX_RETRIES})`)
       task.status = 'queued'
       task.errorMessage = `Download failed, retrying (${runtime.retries}/${MAX_RETRIES})...`
       task.updatedAtMs = nowMs()

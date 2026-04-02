@@ -826,7 +826,7 @@ function App() {
                         <div className="playlist-items">
                           {analyzeResult.items.slice(0, 10).map((item) => (
                             <div key={item.id} className="playlist-item">
-                              {item.thumbnail && <SmartImage src={item.thumbnail} alt="" />}
+                              {item.thumbnail && <SmartImage src={item.thumbnail} alt="thumbnail" style={{ width: 56, height: 32, objectFit: 'cover', borderRadius: '4px' }} />}
                               <span title={item.title}>{item.title}</span>
                             </div>
                           ))}

@@ -115,7 +115,11 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
       {/* ── Thumbnail ─────────────────────────────────────────── */}
       <div className="dc-thumb">
         {vm.thumbnail ? (
-          <SmartImage src={vm.thumbnail} alt="" />
+          <SmartImage 
+            src={vm.thumbnail} 
+            alt="thumbnail" 
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px' }} 
+          />
         ) : (
           <div className="dc-thumb-placeholder">
             {vm.formatTag === 'mp3' || vm.formatTag === 'wav' || vm.formatTag === 'm4a' || vm.formatTag === 'ogg' || vm.formatTag === 'flac' ? '🎵' : '🎬'}

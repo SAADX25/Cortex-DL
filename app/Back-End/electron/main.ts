@@ -8,15 +8,32 @@ import type { DownloadManager } from './downloadManager'
 import type { StartInput } from './types'
 import { analyzeUrlForHls } from './hls'
 import { analyzeWithYtdlp, isYtdlpAvailable, checkJsRuntime, updateYtdlp, getYtdlpVersion } from './ytdlp'
-// import { autoUpdater } from 'electron-updater' // Lazy loaded
-// import log from 'electron-log' // Lazy loaded
+import log from 'electron-log'
+
+// Configure pure electron-log immediately
+log.initialize({ preload: true })
+log.transports.file.level = 'info'
+
+// Override default console methods to capture backend logs automatically
+console.log = log.log
+console.warn = log.warn
+console.error = log.error
+
+// Global Error Catchers
+process.on('uncaughtException', (error) => {
+  log.error('UNCAUGHT EXCEPTION:', error)
+  // Optional: app.quit() based on severity, but logging is the priority here.
+})
+
+process.on('unhandledRejection', (reason, _promise) => {
+  log.error('UNHANDLED REJECTION:', reason)
+})
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Global Lazy-Loaded Variables (Strictly Typed)
 let downloads: DownloadManager | null = null
 let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
-let log: typeof import('electron-log').default | null = null
 
 // Service Ready Promise (Fixes Race Condition)
 let serviceReadyResolve: () => void
@@ -39,16 +56,13 @@ function cleanupUpdaterCache() {
 
 async function loadBackendServices() {
   // 1. Dynamic Imports
-  const { default: electronLog } = await import('electron-log')
   const { autoUpdater: electronUpdater } = await import('electron-updater')
   const { DownloadManager } = await import('./downloadManager')
 
   // 2. Initialize Globals
-  log = electronLog
   autoUpdater = electronUpdater
 
-  // 3. Configure Logging
-  log.transports.file.level = 'info'
+  // 3. Configure AutoUpdater logging
   autoUpdater.logger = log
 
   // 4. Setup AutoUpdater Listeners
@@ -97,6 +111,15 @@ async function loadBackendServices() {
     log.error('Deferred update check failed:', err)
   }
 }
+
+ipcMain.on('log-message', (_event, level, message) => {
+  if (log && log[level as keyof typeof log]) {
+    // @ts-ignore
+    log[level](`[Renderer] ${message}`)
+  } else {
+    log?.info(`[Renderer] ${message}`)
+  }
+})
 
 ipcMain.handle('cortexdl:check-for-updates', async () => {
   autoUpdater?.checkForUpdates()
