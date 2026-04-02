@@ -278,8 +278,13 @@ export async function runYtdlpDownload(
             const ext = path.extname(task.filename)
             task.filename = `${sanitizeFilename(task.title)}${ext || ''}`
           }
-          if (info?.thumbnail) task.thumbnail = String(info.thumbnail)
           
+          let extractedThumbnail = info?.thumbnail;
+          if (!extractedThumbnail && info?.thumbnails && info.thumbnails.length > 0) {
+              extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
+          }
+          if (extractedThumbnail) task.thumbnail = String(extractedThumbnail);
+
           log.info(`[ytdlpEngine] Metadata extracted for ${task.id}: Title="${task.title}", Thumbnail found: ${!!task.thumbnail}`)
           task.updatedAtMs = nowMs()
           ctx.sendUpdate(task)
