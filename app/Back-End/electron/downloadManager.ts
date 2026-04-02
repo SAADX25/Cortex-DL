@@ -5,7 +5,7 @@
  *  Responsibilities:
  *  - Task lifecycle (add, pause, resume, cancel, delete)
  *  - Concurrent download queue (max 2 simultaneous downloads)
- *  - Persistent state (tasks.json in userData)
+ *  - Persistent state in SQLite database
  *  - Engine dispatch (delegates actual downloading to engine modules)
  *
  *  All download logic lives in dedicated engine modules:
@@ -15,6 +15,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import { BrowserWindow } from 'electron'
+import log from 'electron-log'
 import {
   existsSync, readdirSync, unlinkSync
 } from 'node:fs'
@@ -63,7 +64,7 @@ export class DownloadManager {
 
   private loadState(): void {
     try {
-      console.log('[DownloadManager] Initializing tasks exclusively from SQLite DB...')
+      log.info('[DownloadManager] Initializing tasks exclusively from SQLite DB...')
 
       // Load items from database ONLY
       const rows = taskDb.getAllTasks.all() as { full_payload: string }[]
@@ -79,13 +80,13 @@ export class DownloadManager {
           this.tasks.set(task.id, task)
           this.runtime.set(task.id, this.freshRuntime())
         } catch (e) {
-          console.error('Failed to parse task from DB row:', e)
+          log.error('Failed to parse task from DB row:', e)
         }
       }
-      console.log(`[DownloadManager] Loaded ${this.tasks.size} tasks successfully from SQLite database.`)
+      log.info(`[DownloadManager] Loaded ${this.tasks.size} tasks successfully from SQLite database.`)
       this.cleanupOrphanFiles()
     } catch (err) {
-      console.error('Error loading tasks from DB:', err)
+      log.error('Error loading tasks from DB:', err)
     }
   }
 
@@ -117,7 +118,7 @@ export class DownloadManager {
           const orphanPath = path.join(dir, file)
           try {
             unlinkSync(orphanPath)
-            console.log(`[Cleanup] Deleted orphan: ${file}`)
+            log.info(`[Cleanup] Deleted orphan: ${file}`)
           } catch { /* in-use or permission — skip */ }
         }
       } catch { /* directory read failed — skip */ }
@@ -139,7 +140,7 @@ export class DownloadManager {
         trans(Array.from(this.tasks.values()))
       }
     } catch (err) {
-      console.error('Failed to save tasks to SQLite:', err)
+      log.error('Failed to save tasks to SQLite:', err)
     }
   }
 
@@ -173,7 +174,7 @@ export class DownloadManager {
       })
       trans(Array.from(this.active))
     } catch (e) {
-      console.error('DB debounced save error', e)
+      log.error('DB debounced save error', e)
     }
   }
 
@@ -271,7 +272,7 @@ export class DownloadManager {
     this.tasks.set(id, task)
     this.runtime.set(id, this.freshRuntime())
     this.saveStateImmediate()
-    console.log(`[DM] Task added: ${id} engine=${engine} format=${targetFormat} url=${input.url.slice(0, 60)}`)
+    log.info(`[DM] Task added: ${id} engine=${engine} format=${targetFormat} url=${input.url.slice(0, 60)}`)
     sendUpdate(this.win, task)
     this.schedule()
     return task
@@ -371,7 +372,7 @@ export class DownloadManager {
 
     this.tasks.delete(id)
     this.active.delete(id)
-    try { taskDb.deleteTask.run(id) } catch { console.error('DB delete failed') }
+    try { taskDb.deleteTask.run(id) } catch { log.error('DB delete failed') }
     this.schedule()
   }
 
@@ -384,7 +385,7 @@ export class DownloadManager {
       this.tasks.delete(id)
       this.runtime.delete(id)
     }
-    try { taskDb.clearCompleted.run() } catch { console.error('DB clearCompleted failed') }
+    try { taskDb.clearCompleted.run() } catch { log.error('DB clearCompleted failed') }
   }
 
   async pauseAll(): Promise<void> {
@@ -449,7 +450,7 @@ export class DownloadManager {
             full_payload: JSON.stringify(t)
           })
         } catch (dbErr) {
-          console.error('DB Update Error:', dbErr)
+          log.error('DB Update Error:', dbErr)
         }
       },
       saveState: () => this.saveStateDebounced(),
@@ -473,7 +474,7 @@ export class DownloadManager {
       .sort((a, b) => a.createdAtMs - b.createdAtMs)
 
     for (const task of candidates.slice(0, available)) {
-      console.log(`[DM] Scheduling task ${task.id} engine=${task.engine}`)
+      log.info(`[DM] Scheduling task ${task.id} engine=${task.engine}`)
       this.active.add(task.id)
       void this.executeEngine(task.id)
     }
@@ -489,7 +490,7 @@ export class DownloadManager {
       return
     }
 
-    console.log(`[DM] Executing engine '${task.engine}' for task ${id}`)
+    log.info(`[DM] Executing engine '${task.engine}' for task ${id}`)
     try {
       const ctx = this.createContext(task.id)
       switch (task.engine) {
@@ -497,10 +498,10 @@ export class DownloadManager {
         case 'ffmpeg':  await runFfmpegDownload(task, runtime, ctx); break
         case 'ytdlp':   await runYtdlpDownload(task, runtime, ctx); break
       }
-      console.log(`[DM] Engine '${task.engine}' finished for task ${id} → status=${task.status}`)
+      log.info(`[DM] Engine '${task.engine}' finished for task ${id} → status=${task.status}`)
     } catch (err) {
       // Catches errors that escape the individual engine's own try/catch
-      console.error(`[DM] Engine '${task.engine}' threw unexpectedly for task ${id}:`, err)
+      log.error(`[DM] Engine '${task.engine}' threw unexpectedly for task ${id}:`, err)
       task.status = 'error'
       task.errorMessage = err instanceof Error ? err.message : 'Unexpected engine error'
       task.updatedAtMs = nowMs()
@@ -514,3 +515,4 @@ export class DownloadManager {
     }
   }
 }
+

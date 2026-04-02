@@ -36,7 +36,7 @@ function getCachedAnalysis(url: string): AnalyzeResult | null {
     analysisCache.delete(key)
     return null
   }
-  console.log(`[ytdlp] Cache HIT for: ${key.slice(0, 80)}...`)
+  log.info(`[ytdlp] Cache HIT for: ${key.slice(0, 80)}...`)
   return entry.result
 }
 
@@ -70,10 +70,10 @@ export async function getYtdlpVersion(): Promise<string> {
   
   try {
     const binaryPath = getBinaryPath('yt-dlp')
-    console.log(`[ytdlp] Checking version at: ${binaryPath}`)
+    log.info(`[ytdlp] Checking version at: ${binaryPath}`)
     
     if (!existsSync(binaryPath)) {
-      console.log('[ytdlp] Binary not found')
+      log.info('[ytdlp] Binary not found')
       return 'Not Installed'
     }
     
@@ -106,7 +106,7 @@ export async function getYtdlpVersion(): Promise<string> {
     }
     return 'Unknown'
   } catch (err) {
-    console.error('[ytdlp] Version check error:', err)
+    log.error('[ytdlp] Version check error:', err)
     return 'Error'
   }
 }
@@ -204,15 +204,15 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
   const binaryPath = path.join(binDir, 'yt-dlp.exe')
   const tempPath = path.join(binDir, 'yt-dlp_new.exe')
   
-  console.log(`[ytdlp] Update: binDir=${binDir}, binaryPath=${binaryPath}`)
+  log.info(`[ytdlp] Update: binDir=${binDir}, binaryPath=${binaryPath}`)
 
   try {
     // Step 1: Fetch latest release info from GitHub API
-    console.log('[ytdlp] Fetching latest release from GitHub...')
+    log.info('[ytdlp] Fetching latest release from GitHub...')
     const releaseData = await fetchJson('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest')
     
     const latestVersion = releaseData.tag_name || releaseData.name
-    console.log(`[ytdlp] Latest version: ${latestVersion}`)
+    log.info(`[ytdlp] Latest version: ${latestVersion}`)
     
     // Find the Windows executable asset
     const asset = releaseData.assets?.find((a: any) => 
@@ -224,10 +224,10 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
     }
     
     const downloadUrl = asset.browser_download_url
-    console.log(`[ytdlp] Download URL: ${downloadUrl}`)
+    log.info(`[ytdlp] Download URL: ${downloadUrl}`)
     
     // Step 2: Download new binary to temp file
-    console.log('[ytdlp] Downloading new binary...')
+    log.info('[ytdlp] Downloading new binary...')
     await downloadFile(downloadUrl, tempPath)
     
     // Verify download succeeded
@@ -243,7 +243,7 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
     }
     
     // Step 3: Delete old binary (if exists)
-    console.log('[ytdlp] Replacing old binary...')
+    log.info('[ytdlp] Replacing old binary...')
     if (existsSync(binaryPath)) {
       try {
         await unlink(binaryPath)
@@ -271,11 +271,11 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
       await fs.unlink(binaryPath + '.old').catch(() => {})
     }
     
-    console.log(`[ytdlp] Update successful! Version: ${latestVersion}`)
+    log.info(`[ytdlp] Update successful! Version: ${latestVersion}`)
     return { success: true, message: `Updated successfully to ${latestVersion}!`, version: latestVersion }
     
   } catch (err) {
-    console.error('[ytdlp] Update error:', err)
+    log.error('[ytdlp] Update error:', err)
     // Cleanup temp file if exists
     if (existsSync(tempPath)) {
       await unlink(tempPath).catch(() => {})
@@ -367,7 +367,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
     // Cookie Logic: Prioritize manual cookie file in root, then passed cookieFile, then browser
     const globalCookies = getCookiesPath()
     if (globalCookies) {
-      console.log(`[ytdlp Analysis] Using global cookies from: ${globalCookies}`)
+      log.info(`[ytdlp Analysis] Using global cookies from: ${globalCookies}`)
       args.push('--cookies', globalCookies)
     } else if (cookieFile) {
       args.push('--cookies', cookieFile)
@@ -378,7 +378,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
     args.push(url)
 
     const startMs = Date.now()
-    console.log(`[ytdlp] Spawning analysis for: ${url.slice(0, 80)}...`)
+    log.info(`[ytdlp] Spawning analysis for: ${url.slice(0, 80)}...`)
 
     const p = spawn(ytdlpPath, args, { windowsHide: true, detached: false })
 
@@ -395,10 +395,10 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
 
     p.on('close', (code) => {
       const elapsedMs = Date.now() - startMs
-      console.log(`[ytdlp] Analysis finished in ${elapsedMs}ms (exit ${code})`)
+      log.info(`[ytdlp] Analysis finished in ${elapsedMs}ms (exit ${code})`)
 
       if (code !== 0) {
-        console.error('yt-dlp analysis failed:', stderr)
+        log.error('yt-dlp analysis failed:', stderr)
         // JS runtime warning may appear on YouTube. Do not hard-fail here; try to surface the real error if any.
         if (isYouTubeUrl(url) && (stderr.includes('Sign in to confirm you') || stderr.includes('not a bot'))) {
           const hasCookies = !!getCookiesPath()
@@ -478,9 +478,10 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
         setCachedAnalysis(url, result)
         resolve(result)
       } catch (err) {
-        console.error('Failed to parse yt-dlp output:', err)
+        log.error('Failed to parse yt-dlp output:', err)
         resolve({ kind: 'unknown' })
       }
     })
   })
 }
+

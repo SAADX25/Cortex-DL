@@ -3,7 +3,6 @@ import log from 'electron-log'
 // Configure pure electron-log globally FIRST
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
-Object.assign(console, log.functions)
 
 import { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu, nativeImage } from 'electron'
 import { fileURLToPath } from 'node:url'
@@ -135,15 +134,15 @@ ipcMain.handle('cortexdl:uninstall-app', () => {
     // 2. Path to User Data (AppData/Roaming/Cortex DL)
     const userDataPath = app.getPath('userData')
 
-    console.log('Initiating Self-Destruct...')
+    log.info('Initiating Self-Destruct...')
 
     // 3. Wipe User Data (Force delete everything in AppData)
     if (existsSync(userDataPath)) {
       try {
         rmSync(userDataPath, { recursive: true, force: true })
-        console.log('UserData wiped successfully.')
+        log.info('UserData wiped successfully.')
       } catch (err) {
-        console.error('Failed to wipe UserData:', err)
+        log.error('Failed to wipe UserData:', err)
       }
     }
 
@@ -155,17 +154,17 @@ ipcMain.handle('cortexdl:uninstall-app', () => {
       })
       child.unref() // Allow uninstaller to run independently
     } else {
-      console.error('Uninstaller not found at:', uninstallerPath)
+      log.error('Uninstaller not found at:', uninstallerPath)
       // Fallback: Open Add/Remove programs if uninstaller is missing
       shell.openExternal('ms-settings:appsfeatures')
     }
 
     // 5. KILL THE APP IMMEDIATELY
-    console.log('Exiting app...')
+    log.info('Exiting app...')
     app.exit(0) // Better than app.quit() for immediate termination
 
   } catch (error) {
-    console.error('Uninstall error:', error)
+    log.error('Uninstall error:', error)
   }
 })
 
@@ -248,7 +247,7 @@ function createWindow() {
     win.setMenu(null)
   } catch (err) {
     // ignore if setting the menu fails in some environments
-    console.warn('Failed to remove menu:', err)
+    log.warn('Failed to remove menu:', err)
   }
 
   // Show window as soon as it's ready, to prevent "splash freeze"
@@ -377,7 +376,7 @@ ipcMain.handle('cortexdl:open-folder', async (_event, filePath: string) => {
       }
     }
   } catch (err) {
-    console.error('Failed to open folder:', err)
+    log.error('Failed to open folder:', err)
     // Fallback: Try to open the parent directory if showing item failed
     try {
       const dir = path.dirname(filePath)
@@ -386,7 +385,7 @@ ipcMain.handle('cortexdl:open-folder', async (_event, filePath: string) => {
         return
       }
     } catch (e) {
-      console.error('Fallback open folder failed:', e)
+      log.error('Fallback open folder failed:', e)
     }
     throw err
   }
@@ -403,7 +402,7 @@ ipcMain.handle('cortexdl:open-file', async (_event, filePath: string) => {
       throw new Error(`File not found on disk: ${normalizedPath}`)
     }
   } catch (err) {
-    console.error('Failed to open file:', err)
+    log.error('Failed to open file:', err)
     throw err
   }
 })
@@ -412,12 +411,12 @@ ipcMain.handle('cortexdl:open-external', async (_event, url: string) => {
   try {
     const parsed = new URL(url)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      console.warn('[Security] Blocked openExternal with non-http protocol:', parsed.protocol)
+      log.warn('[Security] Blocked openExternal with non-http protocol:', parsed.protocol)
       return
     }
     await shell.openExternal(url)
   } catch {
-    console.warn('[Security] Blocked openExternal with invalid URL')
+    log.warn('[Security] Blocked openExternal with invalid URL')
   }
 })
 
@@ -436,7 +435,7 @@ ipcMain.handle('cortexdl:analyze-url', async (_event, url: string, browser?: str
 
     return hlsResult // fallback to direct/unknown
   } catch (err) {
-    console.error('Analysis error:', err)
+    log.error('Analysis error:', err)
     throw err // Propagate the error to the frontend
   }
 })
@@ -460,7 +459,7 @@ ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
     const base64 = buf.toString('base64')
     return `data:${contentType};base64,${base64}`
   } catch (err) {
-    console.error('[fetch-thumbnail] failed for', url, err)
+    log.error('[fetch-thumbnail] failed for', url, err)
     throw err
   }
 })
@@ -582,7 +581,7 @@ function startMediaStreamingServer(): void {
         }
       }
     } catch (err) {
-      console.error('[MediaServer] Error:', err)
+      log.error('[MediaServer] Error:', err)
       if (!res.headersSent) {
         res.writeHead(500)
         res.end('Internal server error')
@@ -591,11 +590,11 @@ function startMediaStreamingServer(): void {
   })
 
   mediaServer.on('error', (err) => {
-    console.error('[MediaServer] Server error:', err)
+    log.error('[MediaServer] Server error:', err)
   })
 
   mediaServer.listen(MEDIA_SERVER_PORT, '127.0.0.1', () => {
-    console.log(`[MediaServer] Streaming server ready at http://127.0.0.1:${MEDIA_SERVER_PORT}`)
+    log.info(`[MediaServer] Streaming server ready at http://127.0.0.1:${MEDIA_SERVER_PORT}`)
   })
 }
 
@@ -643,10 +642,11 @@ if (!gotTheLock) {
     // 3. Defer heavy checks to avoid splash freeze
     setTimeout(() => {
       loadBackendServices().catch((err) => {
-        console.error('[Backend] loadBackendServices failed — downloads will not work:', err)
+        log.error('[Backend] loadBackendServices failed — downloads will not work:', err)
         // Always resolve so IPC handlers don\'t deadlock waiting forever
         serviceReadyResolve()
       })
     }, 1500)
   })
 }
+
