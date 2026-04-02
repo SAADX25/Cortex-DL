@@ -283,7 +283,30 @@ export async function runYtdlpDownload(
           if (!extractedThumbnail && info?.thumbnails && info.thumbnails.length > 0) {
               extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
           }
-          if (extractedThumbnail) task.thumbnail = String(extractedThumbnail);
+          if (extractedThumbnail) {
+              task.thumbnail = String(extractedThumbnail);
+              log.info('Extracted Thumbnail URL:', task.thumbnail);
+
+              // Force full SQLite save so thumbnail column is definitely populated
+              try {
+                  const dbModule = require('./db');
+                  if (dbModule && dbModule.taskDb) {
+                      dbModule.taskDb.upsertTask.run({
+                          id: task.id,
+                          title: task.title || task.filename,
+                          url: task.url,
+                          status: task.status,
+                          progress: Math.min(100, Math.round(((task.downloadedBytes || 0) / (task.totalBytes || 1)) * 100)) || 0,
+                          size: task.totalBytes || 0,
+                          thumbnail: task.thumbnail || '',
+                          engine: task.engine,
+                          full_payload: JSON.stringify(task)
+                      });
+                  }
+              } catch (saveErr: any) {
+                  log.warn(`[ytdlpEngine] Failed to force-save thumbnail to DB: ${saveErr.message}`);
+              }
+          }
 
           log.info(`[ytdlpEngine] Metadata extracted for ${task.id}: Title="${task.title}", Thumbnail found: ${!!task.thumbnail}`)
           task.updatedAtMs = nowMs()

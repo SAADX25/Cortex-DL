@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { AnalyzeResult } from './types'
+import log from 'electron-log'
 import path from 'node:path'
 import { existsSync, createWriteStream } from 'node:fs'
 import { get } from 'node:https'
@@ -418,15 +419,24 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
 
       try {
         const info = JSON.parse(stdout)
-        
+
         // Handle Playlist
         if (info._type === 'playlist') {
-          const items = (info.entries || []).map((entry: any) => ({
-              id: entry.id,
-              title: entry.title || 'Unknown Title',
-              url: entry.url || entry.webpage_url,
-              thumbnail: entry.thumbnail ? String(entry.thumbnail) : (entry.thumbnails?.[0]?.url ? String(entry.thumbnails[0].url) : undefined)
-          }))
+          const items = (info.entries || []).map((entry: any) => {
+              let extractedThumbnail = entry.thumbnail;
+              if (!extractedThumbnail && entry.thumbnails && entry.thumbnails.length > 0) {
+                  extractedThumbnail = entry.thumbnails[entry.thumbnails.length - 1].url;
+              }
+              if (extractedThumbnail) {
+                  log.info('Extracted Thumbnail URL:', extractedThumbnail);
+              }
+              return {
+                  id: entry.id,
+                  title: entry.title || 'Unknown Title',
+                  url: entry.url || entry.webpage_url,
+                  thumbnail: extractedThumbnail ? String(extractedThumbnail) : undefined
+              };
+          })
           const result: AnalyzeResult = {
             kind: 'playlist',
             title: info.title || 'Playlist',
@@ -451,12 +461,20 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
           // Sort by height descending, then by bitrate (tbr) descending
           .sort((a: any, b: any) => b.height - a.height || b.tbr - a.tbr)
 
+        let extractedThumbnail = info.thumbnail;
+        if (!extractedThumbnail && info.thumbnails && info.thumbnails.length > 0) {
+            extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
+        }
+
         const result: AnalyzeResult = {
           kind: 'ytdlp',
           title: info.title || 'Unknown Title',
-          thumbnail: info.thumbnail ? String(info.thumbnail) : (info.thumbnails?.[0]?.url ? String(info.thumbnails[0].url) : undefined),
+          thumbnail: extractedThumbnail ? String(extractedThumbnail) : undefined,
           formats,
         }
+        
+        log.info('Extracted Thumbnail URL:', result.thumbnail)
+        
         setCachedAnalysis(url, result)
         resolve(result)
       } catch (err) {
