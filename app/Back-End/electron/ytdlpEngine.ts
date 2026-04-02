@@ -133,11 +133,19 @@ function spawnYtdlp(
   args.push('--paths', `temp:${downloadDir}`)
   args.push('-o', path.join(downloadDir, `${taskId}.%(ext)s`), url)
 
-  return spawn(getBinaryPath('yt-dlp'), args, {
+  log.info(`[ytdlpEngine] Spawning yt-dlp with arguments: \n  ${args.join(' ')}`)
+
+  const ytProcess = spawn(getBinaryPath('yt-dlp'), args, {
     windowsHide: true,
     detached: false,
     env: { ...process.env, PYTHONUNBUFFERED: '1' },
   })
+  
+  ytProcess.on('spawn', () => {
+    log.info(`[ytdlpEngine] Child process spawned successfully (PID: ${ytProcess.pid}) for task ${taskId}`)
+  })
+  
+  return ytProcess
 }
 
 /**
