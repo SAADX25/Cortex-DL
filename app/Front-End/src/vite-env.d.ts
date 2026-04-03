@@ -1,37 +1,23 @@
 /// <reference types="vite/client" />
 
+import type {
+  DownloadStatus as SharedDownloadStatus,
+  VideoFormat as SharedVideoFormat,
+  AudioFormat as SharedAudioFormat,
+  TargetFormat as SharedTargetFormat,
+  DownloadTask as SharedDownloadTask,
+} from '../../Shared/types'
+
 declare global {
   const __APP_VERSION__: string
 
-  type DownloadStatus = 'queued' | 'downloading' | 'paused' | 'completed' | 'error' | 'canceled' | 'merging' | 'converting'
+  type DownloadStatus = SharedDownloadStatus
+  type DownloadTask = SharedDownloadTask
 
-  type VideoFormat = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'gif'
-  type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac'
-  type TargetFormat = VideoFormat | AudioFormat
-
-  type DownloadTask = {
-    id: string
-    url: string
-    directory: string
-    filename: string
-    filePath: string
-    engine: 'direct' | 'ffmpeg' | 'ytdlp'
-    targetFormat: TargetFormat
-    status: DownloadStatus
-    totalBytes: number | null
-    downloadedBytes: number
-    speedBytesPerSec: number | null
-    errorMessage: string | null
-    createdAtMs: number
-    updatedAtMs: number
-    title?: string
-    thumbnail?: string
-    cookieBrowser?: string
-    startTime?: string
-    endTime?: string
-    convertingPercent?: number
-    downloadPercent?: number
-  }
+  // These are kept in global scope for convenience in other type annotations.
+  type VideoFormat = SharedVideoFormat
+  type AudioFormat = SharedAudioFormat
+  type TargetFormat = SharedTargetFormat
 
   type HlsVariant = {
     bandwidth: number | null
@@ -52,7 +38,15 @@ declare global {
     | { kind: 'direct' }
     | { kind: 'hls-media'; url: string }
     | { kind: 'hls-master'; variants: HlsVariant[] }
-    | { kind: 'ytdlp'; title: string; thumbnail?: string; formats: YtdlpFormat[] }
+    | { 
+        kind: 'ytdlp'; 
+        title: string; 
+        thumbnail?: string; 
+        formats: YtdlpFormat[];
+        views?: number;
+        likes?: number;
+        comments?: { author: string; text: string; likeCount: number }[];
+      }
     | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
 
   interface Window {

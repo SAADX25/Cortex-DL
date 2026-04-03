@@ -1,20 +1,24 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  DownloadList — Container component for the downloads tab.
+ *  DownloadList — Container component for the downloads tab (optimized).
  *
  *  Responsibilities:
  *  ─ Reads the ordered task ID list from the store
- *  ─ Handles search filtering (by title match on the store)
+ *  ─ Handles search filtering with DEBOUNCING (300ms delay)
  *  ─ Renders bulk action buttons (pause all, resume all, clear)
  *  ─ Maps taskIds → <DownloadCard /> instances
  *
- *  This component only re-renders when the ID list or search query changes,
- *  NOT when individual task progress updates.
+ *  Performance:
+ *  ─ Search input changes are debounced to prevent excessive filtering
+ *  ─ Only re-filters when user stops typing for 300ms
+ *  ─ This component only re-renders when the ID list or debounced search changes,
+ *    NOT when individual task progress updates (handled by useHighFrequencyIPC).
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import React, { useState, useMemo } from 'react'
 import { X } from 'lucide-react'
 import { useTaskIds, getTasksSnapshot } from '../stores/downloadStore'
+import { useDebounce } from '../hooks/useDebounce'
 import DownloadCard from './DownloadCard'
 import type { Language } from '../translations'
 import { translations } from '../translations'
@@ -31,13 +35,19 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
   const { lang, onOpenFile, onOpenFolder, onDelete, onError } = props
   const t = translations[lang]
   const taskIds = useTaskIds()
-  const [searchQuery, setSearchQuery] = useState('')
+  
+  // ── High-Performance Search with Debouncing ──────────────────────────────
+  // User input is stored immediately (for responsive UI), but filtering is
+  // debounced by 300ms to avoid re-filtering on every single keystroke.
+  const [searchInput, setSearchInput] = useState('')
+  const debouncedSearchQuery = useDebounce(searchInput, 300)
 
   // Filter task IDs by search query.
   // We read the full map snapshot only when filtering (not subscribed).
+  // This runs only when debouncedSearchQuery changes (max 3-4 times per second).
   const filteredIds = useMemo(() => {
-    if (!searchQuery.trim()) return taskIds
-    const q = searchQuery.toLowerCase()
+    if (!debouncedSearchQuery.trim()) return taskIds
+    const q = debouncedSearchQuery.toLowerCase()
     const tasks = getTasksSnapshot()
     return taskIds.filter((id) => {
       const task = tasks.get(id)
@@ -47,7 +57,7 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
         (task.url || '').toLowerCase().includes(q)
       )
     })
-  }, [taskIds, searchQuery])
+  }, [taskIds, debouncedSearchQuery])
 
   const totalCount = taskIds.length
 
@@ -60,20 +70,20 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
           <p className="muted">{t.total_tasks}: {totalCount}</p>
         </div>
 
-        {/* Search bar */}
+        {/* Search bar with debouncing */}
         <div className="search-bar-centered" style={{ width: '100%', display: 'flex', justifyContent: 'center', margin: '1rem 0' }}>
           <div className="search-bar-container" style={{ position: 'relative', width: '100%', maxWidth: '500px' }}>
             <input
               type="text"
               placeholder={t.search_placeholder}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="search-input-centered"
             />
-            {searchQuery && (
+            {searchInput && (
               <button
                 className="clear-search-btn"
-                onClick={() => setSearchQuery('')}
+                onClick={() => setSearchInput('')}
                 style={{
                   position: 'absolute',
                   right: '15px',

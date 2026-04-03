@@ -8,65 +8,17 @@
  */
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
-// ── Status & Engine ──────────────────────────────────────────────────────────
+import type {
+  DownloadTask,
+  DownloadStatus,
+  DownloadEngine,
+  VideoFormat,
+  AudioFormat,
+  TargetFormat,
+} from '../../Shared/types'
 
-export type DownloadStatus =
-  | 'queued'
-  | 'downloading'
-  | 'merging'
-  | 'converting'
-  | 'paused'
-  | 'completed'
-  | 'error'
-  | 'canceled'
-
-export type DownloadEngine = 'direct' | 'ffmpeg' | 'ytdlp'
-
-// ── Format Types ─────────────────────────────────────────────────────────────
-
-export type VideoFormat = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'gif'
-export type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac'
-export type TargetFormat = VideoFormat | AudioFormat
-
-export const VIDEO_FORMATS: VideoFormat[] = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'gif']
-export const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'wav', 'm4a', 'ogg', 'flac']
-
-// ── IPC Channels ─────────────────────────────────────────────────────────────
-
-export const UPDATE_CHANNEL = 'cortexdl:download-updated'
-export const PROGRESS_CHANNEL = 'cortexdl:download-progress'
-export const STATS_CHANNEL = 'cortexdl:download-stats-updated'
-
-// ── Download Task ────────────────────────────────────────────────────────────
-
-export type DownloadTask = {
-  id: string
-  url: string
-  directory: string
-  filename: string
-  filePath: string
-  engine: DownloadEngine
-  targetFormat: TargetFormat
-  status: DownloadStatus
-  totalBytes: number | null
-  downloadedBytes: number
-  speedBytesPerSec: number | null
-  errorMessage: string | null
-  createdAtMs: number
-  updatedAtMs: number
-  title?: string
-  thumbnail?: string
-  cookieBrowser?: string
-  cookieFile?: string
-  username?: string
-  password?: string
-  speedLimit?: string
-  startTime?: string
-  endTime?: string
-  convertingPercent?: number
-  downloadPercent?: number
-  ytdlpFormatId?: string
-}
+export type { DownloadTask, DownloadStatus, DownloadEngine, VideoFormat, AudioFormat, TargetFormat }
+export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 
 // ── Add-Download Input ───────────────────────────────────────────────────────
 
@@ -105,6 +57,12 @@ export type TaskRuntime = {
 export interface EngineContext {
   /** Throttled — safe to call on every chunk / progress tick. */
   sendUpdate: (task: DownloadTask) => void
+  /**
+   * Runtime state for the specific task id.
+   * Engines that manage child processes (ffmpeg, yt-dlp wrappers, etc.)
+   * use this to support pause/stop and progress throttling.
+   */
+  runtime: TaskRuntime
   /** Debounced — coalesced to max 1 write/sec.  Use flushSave() for immediate. */
   saveState: () => void
   /** Immediate, crash-safe write.  Call on lifecycle transitions only. */
@@ -133,5 +91,13 @@ export type AnalyzeResult =
   | { kind: 'direct' }
   | { kind: 'hls-media'; url: string }
   | { kind: 'hls-master'; variants: HlsVariant[] }
-  | { kind: 'ytdlp'; title: string; thumbnail?: string; formats: YtdlpFormat[] }
+  | { 
+      kind: 'ytdlp'; 
+      title: string; 
+      thumbnail?: string; 
+      formats: YtdlpFormat[];
+      views?: number;
+      likes?: number;
+      comments?: { author: string; text: string; likeCount: number }[];
+    }
   | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }

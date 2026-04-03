@@ -25,9 +25,25 @@ export default defineConfig(({ command, mode }) => {
       electron({
         main: {
           entry: path.join(__dirname, 'Back-End', 'electron', 'main.ts'),
+          vite: {
+            build: {
+              outDir: path.join(__dirname, 'dist-electron'),
+              rollupOptions: {
+                external: ['better-sqlite3']
+              }
+            }
+          }
         },
         preload: {
           input: path.join(__dirname, 'Back-End', 'electron', 'preload.ts'),
+          vite: {
+            build: {
+              outDir: path.join(__dirname, 'dist-electron'),
+              rollupOptions: {
+                external: ['better-sqlite3']
+              }
+            }
+          }
         },
       }),
       isBuild && obfuscator({

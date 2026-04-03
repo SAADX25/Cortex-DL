@@ -332,7 +332,11 @@ ipcMain.handle('cortexdl:check-engines', async () => {
 })
 
 ipcMain.handle('cortexdl:update-engine', async () => {
-  return updateYtdlp()
+    if (downloads && downloads.getActiveCount() > 0) {
+      log.warn('[ytdlp] Engine auto-update aborted because active downloads are running.')
+      return { success: false, message: 'Wait for downloads to complete before updating engine.' }
+    }
+    return await updateYtdlp()
 })
 
 ipcMain.handle('cortexdl:get-engine-version', async () => {

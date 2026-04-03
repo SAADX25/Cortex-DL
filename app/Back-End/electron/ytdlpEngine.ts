@@ -365,7 +365,7 @@ export async function runYtdlpDownload(
 
       for (const line of lines) {
         if (!line.trim()) continue
-
+        log.error(`[ytdlp stderr] ${line}`) 
         const ffmpegChanged = parseFfmpegProgress(line, task, ffmpegState)
         let dlChanged = false
         if (task.status === 'downloading') {
@@ -394,7 +394,7 @@ export async function runYtdlpDownload(
       let stateChanged = false
       for (const line of lines) {
         if (!line.trim()) continue
-
+        log.info(`[ytdlp stdout] ${line}`)  
         const { transitioned, detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
         if (detectedPath) detectedFinalPath = detectedPath
         if (transitioned) { stateChanged = true; continue }

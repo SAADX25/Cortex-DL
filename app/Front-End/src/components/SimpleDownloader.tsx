@@ -1,94 +1,144 @@
 import { useEffect, useState, useRef } from 'react'
+import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
+import { useTask } from '../stores/downloadStore'
 
-type ProgressEvent = {
-  id?: string
-  fileName?: string
-  percentage?: number
-  speed?: number // bytes/sec
-  bytes?: number
-  totalBytes?: number | null
-}
-
+/**
+ * SimpleDownloader — High-Performance URL Input with Uncontrolled Component.
+ *
+ * Deep-clean: no direct IPC subscriptions here.
+ * Volatile updates are handled exclusively by `useHighFrequencyIPC.ts`.
+ */
 export default function SimpleDownloader() {
-  const [url, setUrl] = useState('')
   const [status, setStatus] = useState('idle')
-  const [percent, setPercent] = useState(0)
-  const [speed, setSpeed] = useState(0)
   const [fileName, setFileName] = useState('')
-  const disposeRef = useRef<(() => void) | undefined>()
+  const [activeTaskId, setActiveTaskId] = useState<string | undefined>(undefined)
+
+  const task = useTask(activeTaskId || '')
+
+  // Uncontrolled URL Input
+  const urlInputRef = useRef<HTMLInputElement>(null)
+
+  // Direct DOM refs for volatile metrics
+  const progressBarRef = useRef<HTMLDivElement>(null)
+  const percentTextRef = useRef<HTMLSpanElement>(null)
+  const speedTextRef = useRef<HTMLSpanElement>(null)
+
+  // DOM-fast-path driven by the single shared IPC listeners.
+  useHighFrequencyIPC(activeTaskId, {
+    progressBarRef,
+    speedTextRef,
+    percentTextRef,
+  })
 
   useEffect(() => {
-    // Subscribe to progress events from main
-    const disposer = window.cortexDl.onDownloadProgress((data: ProgressEvent) => {
-      // data shape depends on engine; we expect percentage & speed
-      if (data.fileName) setFileName(data.fileName)
-      if (typeof data.percentage === 'number') setPercent(data.percentage)
-      if (typeof data.speed === 'number') setSpeed(data.speed)
-      if (data.percentage === 100) setStatus('completed')
-      else if (data.percentage && data.percentage > 0) setStatus('downloading')
-    })
-    disposeRef.current = disposer
-    return () => { disposeRef.current?.() }
-  }, [])
-
-  function formatSpeed(bytesPerSec: number) {
-    if (!bytesPerSec || bytesPerSec <= 0) return '0 B/s'
-    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-    let i = 0
-    let v = bytesPerSec
-    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
-    return `${v.toFixed(2)} ${units[i]}`
-  }
+    if (!task) return
+    setFileName(task.title || task.filename || '')
+    setStatus(task.status)
+  }, [task?.id, task?.title, task?.filename, task?.status])
 
   async function onDownload() {
-    if (!url || url.trim() === '') return
+    const url = urlInputRef.current?.value?.trim() || ''
+    if (!url) return
+
     setStatus('queued')
-    setPercent(0)
-    setSpeed(0)
     setFileName('')
+    setActiveTaskId(undefined)
+
+    // Reset DOM
+    if (progressBarRef.current) progressBarRef.current.style.width = '0%'
+    if (percentTextRef.current) percentTextRef.current.innerText = '0%'
+    if (speedTextRef.current) speedTextRef.current.innerText = '0 B/s'
 
     try {
-      // Provide a simple StartInput. You may want to let users choose directory elsewhere in your app.
       const directory = (await window.cortexDl.selectFolder()) || ''
       if (!directory) return
 
-      await window.cortexDl.addDownload({
-        url: url.trim(),
+      const newTask = await window.cortexDl.addDownload({
+        url,
         directory,
         engine: 'auto',
-        targetFormat: 'mp4'
+        targetFormat: 'mp4',
       })
 
-      // The main process will emit progress events which we subscribed to above
+      setActiveTaskId(newTask.id)
+
+      // Clear input only on successful submission
+      if (urlInputRef.current) urlInputRef.current.value = ''
     } catch (err) {
       console.error(err)
       setStatus('error')
     }
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') void onDownload()
+  }
+
   return (
     <div style={{ display: 'grid', gap: 8, width: 480 }}>
       <div style={{ display: 'flex', gap: 8 }}>
         <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste URL to download"
-          style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: '#1f2937', color: '#fff', border: '1px solid #374151' }}
+          ref={urlInputRef}
+          onKeyDown={handleKeyDown}
+          placeholder="Paste URL to download (press Enter to submit)"
+          style={{
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: '#1f2937',
+            color: '#fff',
+            border: '1px solid #374151',
+          }}
         />
         <button
-          onClick={onDownload}
-          style={{ padding: '10px 14px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none' }}
-        >Download</button>
+          onClick={() => void onDownload()}
+          style={{
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: '#2563eb',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          Add Link
+        </button>
       </div>
 
-      <div style={{ height: 12, background: '#111827', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ width: `${percent}%`, height: '100%', background: '#10b981', transition: 'width 200ms' }} />
+      <div
+        style={{
+          height: 12,
+          background: '#111827',
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          ref={progressBarRef}
+          style={{
+            width: '0%',
+            height: '100%',
+            background: '#10b981',
+            transition: 'width 200ms',
+          }}
+        />
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af', fontSize: 13 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          color: '#9ca3af',
+          fontSize: 13,
+        }}
+      >
         <div>{fileName || status}</div>
-        <div>{formatSpeed(speed)}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span ref={speedTextRef}>0 B/s</span>
+          <span ref={percentTextRef}>0%</span>
+        </div>
       </div>
     </div>
   )
 }
+

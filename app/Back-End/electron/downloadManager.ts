@@ -26,24 +26,40 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { db, taskDb } from './db'
 import type {
   DownloadTask, TaskRuntime, StartInput, EngineContext,
-  DownloadEngine, AudioFormat,
+  DownloadEngine,
 } from './types'
-import { AUDIO_FORMATS, STATS_CHANNEL } from './types'
+import { STATS_CHANNEL } from './types'
 import {
-  sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl, isM3u8Url,
+  sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
   killProcessTree,
 } from './utils'
-import { runDirectDownload } from './directEngine'
-import { runFfmpegDownload } from './ffmpegEngine'
-import { runYtdlpDownload } from './ytdlpEngine'
 
-// Re-export for backward compatibility (used by main.ts check-engines handler)
-export { isFfmpegAvailable } from './ffmpegEngine'
+// Clean Architecture Engines
+import type { IEngine } from './engines/IEngine'
+import { DirectEngine } from './engines/DirectEngine'
+import { YoutubeEngine } from './engines/YoutubeEngine'
+import { FfmpegEngine } from './engines/FfmpegEngine'
+
+type EngineEntry = {
+  create: () => IEngine
+  start: (engine: IEngine, task: DownloadTask, context: EngineContext) => Promise<void>
+}
+
+const engines = new Map<DownloadEngine, EngineEntry>([
+  ['direct', { create: () => new DirectEngine(), start: (e, t, c) => e.download(t, c) }],
+  ['ytdlp', { create: () => new YoutubeEngine(), start: (e, t, c) => e.download(t, c) }],
+  ['ffmpeg', { create: () => new FfmpegEngine(), start: (e, t, c) => e.download(t, c) }],
+])
+
+const filenameTransforms: Partial<Record<DownloadEngine, (filename: string) => string>> = {
+  ytdlp: (name) => name.replace(/\s+/g, '_'),
+}
 
 export class DownloadManager {
   private tasks = new Map<string, DownloadTask>()
   private runtime = new Map<string, TaskRuntime>()
+  private engines = new Map<string, IEngine>() // Track active engine instances
   private win: BrowserWindow | null = null
   private maxConcurrent = 3
   // Default concurrency limit — set to 3 to keep parallel downloads reasonable.
@@ -64,8 +80,6 @@ export class DownloadManager {
 
   private loadState(): void {
     try {
-      log.info('[DownloadManager] Initializing tasks exclusively from SQLite DB...')
-
       // Load items from database ONLY
       const rows = taskDb.getAllTasks.all() as { full_payload: string }[]
       for (const row of rows) {
@@ -83,7 +97,6 @@ export class DownloadManager {
           log.error('Failed to parse task from DB row:', e)
         }
       }
-      log.info(`[DownloadManager] Loaded ${this.tasks.size} tasks successfully from SQLite database.`)
       this.cleanupOrphanFiles()
     } catch (err) {
       log.error('Error loading tasks from DB:', err)
@@ -199,7 +212,9 @@ export class DownloadManager {
   // ═══════════════════════════════════════════════════════════════════════
   //  Public API
   // ═══════════════════════════════════════════════════════════════════════
-
+  getActiveCount(): number {
+    return this.active.size
+  }
   attachWindow(win: BrowserWindow): void {
     this.win = win
   }
@@ -227,16 +242,14 @@ export class DownloadManager {
     const id = randomUUID()
     const targetFormat = input.targetFormat ?? 'mp4'
     const requestedEngine = input.engine ?? 'auto'
-    const isAudioFormat = AUDIO_FORMATS.includes(targetFormat as AudioFormat)
-
     const engine: DownloadEngine =
       requestedEngine === 'auto'
-        ? this.detectEngine(input.url, isAudioFormat)
+        ? this.detectEngine(input.url)
         : requestedEngine
 
     // Build safe filename
     let filename = sanitizeFilename(input.filename || input.title || getDefaultFilename(input.url))
-    if (engine === 'ytdlp') filename = filename.replace(/\s+/g, '_')
+    filename = filenameTransforms[engine]?.(filename) ?? filename
     filename = withExtension(filename, targetFormat)
 
     const filePath = path.join(finalDirectory, filename)
@@ -285,6 +298,12 @@ export class DownloadManager {
       || task.status === 'converting'
     if (!isPauseable) return task
 
+    const engine = this.engines.get(id)
+    if (engine) {
+      engine.pause()
+      this.engines.delete(id)
+    }
+
     const runtime = this.mustGetRuntime(id)
     runtime.abortController?.abort()
     killProcessTree(runtime.child)
@@ -294,6 +313,7 @@ export class DownloadManager {
     task.speedBytesPerSec = null
     this.saveStateImmediate()
     sendUpdate(this.win, task)
+    this.active.delete(id) // Ensure it's removed from active set
     this.schedule()
     return task
   }
@@ -319,6 +339,12 @@ export class DownloadManager {
   async cancel(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
     const runtime = this.mustGetRuntime(id)
+
+    const engine = this.engines.get(id)
+    if (engine) {
+      engine.stop()
+      this.engines.delete(id)
+    }
 
     runtime.abortController?.abort()
     killProcessTree(runtime.child)
@@ -412,13 +438,13 @@ export class DownloadManager {
   //  Internals
   // ═══════════════════════════════════════════════════════════════════════
 
-  private detectEngine(url: string, isAudioFormat: boolean): DownloadEngine {
+  private detectEngine(url: string): DownloadEngine {
     const low = url.toLowerCase()
     if (
       low.includes('youtube.com') || low.includes('youtu.be') ||
-      low.includes('facebook.com') || low.includes('instagram.com')
+      low.includes('facebook.com') || low.includes('instagram.com') ||
+      low.includes('twitter.com') || low.includes('tiktok.com')
     ) return 'ytdlp'
-    if (isM3u8Url(url) || isAudioFormat) return 'ffmpeg'
     return 'direct'
   }
 
@@ -435,24 +461,31 @@ export class DownloadManager {
   }
 
   private createContext(taskId: string): EngineContext {
+    const runtime = this.mustGetRuntime(taskId)
     return {
       sendUpdate: (t) => {
-        const rt = this.runtime.get(taskId)
-        if (rt) throttledSendUpdate(this.win, t, rt)
-        else sendUpdate(this.win, t)
-        
-        // Instantly write to SQLite on each progress tick (fast via WAL)
-        try {
-          taskDb.updateStatusAndProgress.run({
-            id: t.id,
-            status: t.status,
-            progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
-            full_payload: JSON.stringify(t)
-          })
-        } catch (dbErr) {
-          log.error('DB Update Error:', dbErr)
+        let shouldUpdateDb = true
+        if (runtime) {
+          shouldUpdateDb = throttledSendUpdate(this.win, t, runtime)
+        } else {
+          sendUpdate(this.win, t)
+        }
+
+        // Only write to SQLite when UI is updated (throttled to 5 times/sec) to avoid DB lock/CPU spike
+        if (shouldUpdateDb) {
+          try {
+            taskDb.updateStatusAndProgress.run({
+              id: t.id,
+              status: t.status,
+              progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
+              full_payload: JSON.stringify(t)
+            })
+          } catch (dbErr) {
+            log.error('DB Update Error:', dbErr)
+          }
         }
       },
+      runtime,
       saveState: () => this.saveStateDebounced(),
       flushSave: () => this.saveStateImmediate(taskId),
       sendStats: (id, addedBytes) => {
@@ -482,7 +515,6 @@ export class DownloadManager {
 
   private async executeEngine(id: string): Promise<void> {
     const task = this.mustGet(id)
-    const runtime = this.mustGetRuntime(id)
 
     if (task.status !== 'queued') {
       this.active.delete(id)
@@ -492,25 +524,42 @@ export class DownloadManager {
 
     log.info(`[DM] Executing engine '${task.engine}' for task ${id}`)
     try {
-      const ctx = this.createContext(task.id)
-      switch (task.engine) {
-        case 'direct':  await runDirectDownload(task, runtime, ctx); break
-        case 'ffmpeg':  await runFfmpegDownload(task, runtime, ctx); break
-        case 'ytdlp':   await runYtdlpDownload(task, runtime, ctx); break
-      }
-      log.info(`[DM] Engine '${task.engine}' finished for task ${id} → status=${task.status}`)
-    } catch (err) {
-      // Catches errors that escape the individual engine's own try/catch
-      log.error(`[DM] Engine '${task.engine}' threw unexpectedly for task ${id}:`, err)
-      task.status = 'error'
-      task.errorMessage = err instanceof Error ? err.message : 'Unexpected engine error'
+      task.status = 'downloading'
       task.updatedAtMs = nowMs()
-      try { this.saveStateImmediate() } catch { /* ignore */ }
       sendUpdate(this.win, task)
+      
+      const entry = engines.get(task.engine)
+      if (!entry) throw new Error(`[DM] No engine registered for '${task.engine}'`)
+
+      const engine = entry.create()
+      this.engines.set(id, engine)
+
+      // Create context for the engine to report progress and update state
+      const context = this.createContext(id)
+
+      await entry.start(engine, task, context)
+      this.engines.delete(id)
+
+      // Post-download processing (e.g., merging for High-Res Youtube)
+      // If task requires merge, we could call this.mediaProcessor.merge(...) here.
+
+      // If the user paused/canceled the task while the engine was running,
+      // the engine should not overwrite that state with "completed".
+      if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
+        task.status = 'completed'
+        task.updatedAtMs = nowMs()
+        log.info(`[DM] Task ${id} completed successfully`)
+      }
+
+    } catch (err: any) {
+      log.error(`[DM] Task ${id} failed:`, err)
+      task.status = 'error'
+      task.errorMessage = err.message || 'Unknown engine error'
+      this.engines.delete(id)
     } finally {
-      runtime.abortController = null
-      runtime.child = null
       this.active.delete(id)
+      this.saveStateImmediate(id)
+      sendUpdate(this.win, task)
       this.schedule()
     }
   }

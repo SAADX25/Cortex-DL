@@ -836,14 +836,55 @@ function App() {
                         </div>
                       </div>
                     ) : (
-                      <div className="video-preview-large">
+                      <div className="video-preview-large" style={{ alignItems: 'flex-start' }}>
                         {analyzeResult.kind === 'ytdlp' && analyzeResult.thumbnail && (
                           <SmartImage src={analyzeResult.thumbnail} alt="thumb" className="preview-thumb-large" />
                         )}
-                        <div className="preview-info-large">
-                          <div className="preview-title-large">
+                        <div className="preview-info-large" style={{ flex: 1, minWidth: 0 }}>
+                          <div className="preview-title-large" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : 'HLS Stream'}
                           </div>
+
+                          {/* 👀 Views & Likes */}
+                          {analyzeResult.kind === 'ytdlp' && (
+                            <div className="preview-metadata">
+                              {analyzeResult.views !== undefined && (
+                                <div className="metadata-badge" title={lang === 'ar' ? 'المشاهدات' : 'Views'}>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                  <span>{analyzeResult.views.toLocaleString()}</span>
+                                </div>
+                              )}
+                              {analyzeResult.likes !== undefined && (
+                                <div className="metadata-badge" title={lang === 'ar' ? 'الإعجابات' : 'Likes'}>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+                                  <span>{analyzeResult.likes.toLocaleString()}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* 💬 Comments */}
+                          {analyzeResult.kind === 'ytdlp' && analyzeResult.comments && analyzeResult.comments.length > 0 && (
+                            <div className="preview-comments custom-scrollbar">
+                              <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>
+                                💬 {lang === 'ar' ? 'تعليقات' : 'Comments'}
+                              </h4>
+                              <div className="comments-list">
+                                {analyzeResult.comments.map((comment, i) => (
+                                  <div key={i} className="comment-item">
+                                    <div className="comment-header">
+                                      <span className="comment-author">{comment.author}</span>
+                                      <span className="comment-likes">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+                                        {comment.likeCount > 0 ? comment.likeCount.toLocaleString() : 0}
+                                      </span>
+                                    </div>
+                                    <p className="comment-text" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{comment.text}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

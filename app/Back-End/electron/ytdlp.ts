@@ -5,7 +5,7 @@ import path from 'node:path'
 import { existsSync, createWriteStream } from 'node:fs'
 import { get } from 'node:https'
 import { chmodSync } from 'node:fs'
-import { unlink } from 'node:fs/promises'
+import { unlink, rename, stat } from 'node:fs/promises'
 import { getBinaryPath, getBinDirectory, getCookiesPath } from './paths'
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -180,12 +180,31 @@ function downloadFile(url: string, destPath: string): Promise<void> {
       }
       
       const file = createWriteStream(destPath)
+      
+      const totalSize = parseInt(response.headers['content-length'] || '0', 10)
+      let downloaded = 0
+      let lastLogTime = Date.now()
+
+      response.on('data', (chunk: Buffer) => {
+        downloaded += chunk.length
+        const now = Date.now()
+        if (now - lastLogTime > 2000) {
+          const percent = totalSize ? ((downloaded / totalSize) * 100).toFixed(1) : '?'
+          const mb = (downloaded / (1024 * 1024)).toFixed(2)
+          log.info(`[ytdlp updater] Download progress: ${mb}MB (${percent}%)`)
+          lastLogTime = now
+        }
+      })
+
       response.pipe(file)
+
       file.on('finish', () => {
+        log.info(`[ytdlp updater] Finished downloading to ${destPath}`)
         file.close()
         resolve()
       })
       file.on('error', (err: Error) => {
+        log.error(`[ytdlp updater] Failed to write download:`, err)
         file.close()
         reject(err)
       })
@@ -235,13 +254,12 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
       return { success: false, message: 'Download failed - temp file not created.' }
     }
     
-    const fs = await import('node:fs/promises')
-    const stats = await fs.stat(tempPath)
+const stats = await stat(tempPath)
     if (stats.size < 1000000) { // yt-dlp.exe should be at least 1MB
-      await fs.unlink(tempPath).catch(() => {})
+      await unlink(tempPath).catch(() => {})
       return { success: false, message: 'Download appears corrupted (file too small).' }
     }
-    
+
     // Step 3: Delete old binary (if exists)
     log.info('[ytdlp] Replacing old binary...')
     if (existsSync(binaryPath)) {
@@ -250,26 +268,38 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
       } catch (err) {
         // Try to rename old file instead
         try {
-          await fs.rename(binaryPath, binaryPath + '.old')
-        } catch {
-          await fs.unlink(tempPath).catch(() => {})
+          await rename(binaryPath, binaryPath + '.old')
+        } catch (renameErr) {
+          log.error('======================================================')
+          log.error('[yt-dlp UPDATER FATAL ERROR]')
+          log.error('Failed to replace the old binary! It is likely locked.')
+          log.error('Unlink Error:', err)
+          log.error('Rename Error:', renameErr)
+          log.error('Binary Path:', binaryPath)
+          log.error('======================================================')
+          await unlink(tempPath).catch(() => {})
           return { success: false, message: 'Failed to remove old binary. Make sure no downloads are active.' }
         }
       }
     }
-    
+
     // Step 4: Rename temp to final
-    await fs.rename(tempPath, binaryPath)
-    
+    try {
+      await rename(tempPath, binaryPath)
+    } catch (renameFinalErr) {
+      log.error('======================================================')
+      log.error('[yt-dlp UPDATER FATAL ERROR]')
+      log.error('Failed to rename the new temp binary to the final path!')
+      log.error('Rename Error:', renameFinalErr)
+      log.error('From:', tempPath, 'To:', binaryPath)
+      log.error('======================================================')
+      return { success: false, message: 'Failed to rename new binary.' }
+    }
+
     // Step 5: Set executable permissions (for non-Windows)
     try {
       chmodSync(binaryPath, 0o755)
     } catch { /* ignore on Windows */ }
-    
-    // Cleanup old backup if exists
-    if (existsSync(binaryPath + '.old')) {
-      await fs.unlink(binaryPath + '.old').catch(() => {})
-    }
     
     log.info(`[ytdlp] Update successful! Version: ${latestVersion}`)
     return { success: true, message: `Updated successfully to ${latestVersion}!`, version: latestVersion }
@@ -355,8 +385,9 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
       '--no-cache-dir',
       // YouTube-specific: use lightweight Android client & skip heavy webpage/JS parsing
       '--extractor-args', isYT
-        ? 'youtube:player_client=android,player_skip=webpage'
-        : 'youtube:player_client=android',
+        ? 'youtube:player_client=android,player_skip=webpage;youtube:max_comments=15'
+        : 'youtube:player_client=android;youtube:max_comments=15',
+      '--write-comments',
       // Stealth/Bypass Arguments
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     ]
@@ -385,8 +416,17 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
     let stdout = ''
     let stderr = ''
 
-    p.stdout.on('data', (data) => (stdout += data.toString()))
-    p.stderr.on('data', (data) => (stderr += data.toString()))
+    p.stdout.on('data', (data) => {
+      const chunk = data.toString()
+      stdout += chunk
+      log.info(`[ytdlp stdout] ${chunk.trim()}`)
+    })
+    
+    p.stderr.on('data', (data) => {
+      const chunk = data.toString()
+      stderr += chunk
+      log.error(`[ytdlp stderr] ${chunk.trim()}`)
+    })
 
     // Handle spawn errors (e.g., ENOENT if binary is corrupted/missing at runtime)
     p.on('error', (err) => {
@@ -419,6 +459,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
 
       try {
         const info = JSON.parse(stdout)
+        log.info(`[ytdlp Debug] Info parsed. Views: ${info.view_count}, Likes: ${info.like_count}, Comments: ${info.comments ? info.comments.length : 0}`)
 
         // Handle Playlist
         if (info._type === 'playlist') {
@@ -466,11 +507,20 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
             extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
         }
 
+        const parsedComments = info.comments ? info.comments.slice(0, 15).map((c: any) => ({
+          author: c.author || 'مجهول',
+          text: c.text || '',
+          likeCount: c.like_count || 0
+        })) : [];
+
         const result: AnalyzeResult = {
           kind: 'ytdlp',
           title: info.title || 'Unknown Title',
           thumbnail: extractedThumbnail ? String(extractedThumbnail) : undefined,
           formats,
+          views: info.view_count,
+          likes: info.like_count,
+          comments: parsedComments,
         }
         
         log.info('Extracted Thumbnail URL:', result.thumbnail)

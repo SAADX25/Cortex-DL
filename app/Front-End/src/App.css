@@ -1118,6 +1118,78 @@ body {
   line-height: 1.4;
 }
 
+/* --- Video Metadata (Views, Likes, Comments) --- */
+.preview-metadata {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.metadata-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.preview-comments {
+  margin-top: 14px;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 110px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.comment-item {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.comment-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.comment-author {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.comment-likes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #9ca3af;
+}
+
+.comment-text {
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Modern Task Card Refactoring */
 .task-grid {
   display: flex;

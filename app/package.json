@@ -18,6 +18,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "axios": "^1.14.0",
     "better-sqlite3": "^12.8.0",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",

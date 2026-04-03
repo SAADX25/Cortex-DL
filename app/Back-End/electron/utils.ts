@@ -138,15 +138,17 @@ export function throttledSendUpdate(
   win: BrowserWindow | null,
   task: DownloadTask,
   runtime: TaskRuntime,
-): void {
-  if (!win || win.isDestroyed()) return
+): boolean {
+  if (!win || win.isDestroyed()) return false
   const now = Date.now()
   // Always send lifecycle / state-change updates immediately
   const isProgress = task.status === 'downloading' || task.status === 'merging' || task.status === 'converting'
   if (!isProgress || now - runtime.lastIpcAtMs >= IPC_THROTTLE_MS) {
     runtime.lastIpcAtMs = now
     win.webContents.send(UPDATE_CHANNEL, task)
+    return true
   }
+  return false
 }
 
 export function sendNotification(title: string, body: string): void {
@@ -169,6 +171,14 @@ export function killProcessTree(child: ChildProcessWithoutNullStreams | null): v
     try { child.kill('SIGKILL') } catch { /* already dead */ }
     return
   }
+  
+  // Check if process is still running to avoid "Process not found" spam
+  try {
+    process.kill(pid, 0)
+  } catch {
+    return // Process is already dead
+  }
+
   if (process.platform === 'win32') {
     const killer = spawn('taskkill', ['/F', '/T', '/PID', String(pid)], {
       windowsHide: true,
