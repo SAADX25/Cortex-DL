@@ -19,12 +19,12 @@ export type DownloadStatus =
 export type DownloadEngine = 'direct' | 'ffmpeg' | 'ytdlp'
 
 // ── Format Types ─────────────────────────────────────────────────────────────
-export type VideoFormat = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'gif'
-export type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac'
+export type VideoFormat = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'ogv' | 'm4v' | 'gif'
+export type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac' | 'aac' | 'opus' | 'wma'
 export type TargetFormat = VideoFormat | AudioFormat
 
-export const VIDEO_FORMATS: VideoFormat[] = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'gif']
-export const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'wav', 'm4a', 'ogg', 'flac']
+export const VIDEO_FORMATS: VideoFormat[] = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'ogv', 'm4v', 'gif']
+export const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'opus', 'wma']
 
 // ── IPC Channels ─────────────────────────────────────────────────────────────
 export const UPDATE_CHANNEL = 'cortexdl:download-updated'

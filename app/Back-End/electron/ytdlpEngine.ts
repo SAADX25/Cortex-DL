@@ -119,7 +119,10 @@ function spawnYtdlp(
 
   // ── Format Selection & Container Strategy ──────────────────────────────
   if (AUDIO_FORMATS.includes(format as AudioFormat)) {
-    const audioFormatArg = format === 'ogg' ? 'vorbis' : format
+    let audioFormatArg = format as string
+    if (audioFormatArg === 'ogg') audioFormatArg = 'vorbis'
+    if (audioFormatArg === 'wma') audioFormatArg = 'wav' // processed manually in renameDownloadedFile
+
     args.push('-x', '--audio-format', audioFormatArg, '-f', 'bestaudio/best')
     // Use good logic for audio: set quality 0 to get best VBR audio
     args.push('--audio-quality', '0')
@@ -180,20 +183,24 @@ function buildVideoFormatArgs(args: string[], format: VideoFormat, formatId?: st
   }
 
   // Container / post-processing strategy
-  switch (format) {
+  switch (format as string) {
     case 'mkv':
-      args.push('--merge-output-format', 'mkv')
+    case 'ogg':
+    case 'webm':
+    case 'flv':
+      args.push('--merge-output-format', format)
       args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
       break
     case 'mp4':
+    case 'm4v':
     case 'mov':
       args.push('--merge-output-format', 'mkv')
-      args.push('--remux-video', format)
+      args.push('--remux-video', format === 'm4v' ? 'mp4' : format)
       args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
       break
-    case 'webm':
+    case 'ogv':
       args.push('--merge-output-format', 'mkv')
-      args.push('--remux-video', 'webm')
+      args.push('--recode-video', 'ogg') // renamed to ogv in post
       args.push('--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
       break
     case 'avi':
@@ -202,9 +209,8 @@ function buildVideoFormatArgs(args: string[], format: VideoFormat, formatId?: st
       args.push('--postprocessor-args', 'ffmpeg:-c:v mpeg4 -q:v 5 -c:a mp3 -threads 0')
       break
     case 'gif':
-      args.push('--merge-output-format', 'mkv')
-      args.push('--recode-video', 'gif')
-      args.push('--postprocessor-args', 'ffmpeg:-vf fps=15,scale=480:-1:flags=lanczos -threads 0')
+      // Handled manually in renameDownloadedFile
+      args.push('--merge-output-format', 'mp4')
       break
   }
 }
@@ -512,15 +518,53 @@ async function renameDownloadedFile(
 
   // Step 2: Rename to sanitized title
   if (downloadedFilePath && downloadedExt) {
+    let finalExt = downloadedExt
+    const desiredExt = path.extname(task.filename).toLowerCase()
+
+    let needsFfmpeg = false
+    let ffmpegArgs: string[] = []
+
+    if (desiredExt === '.gif' && downloadedExt.toLowerCase() !== '.gif') {
+      needsFfmpeg = true
+      ffmpegArgs = ['-y', '-i', downloadedFilePath, '-vf', 'fps=15,scale=480:-1:flags=lanczos', downloadedFilePath.replace(new RegExp(`${downloadedExt}$`, 'i'), '.gif')]
+      finalExt = '.gif'
+    } else if (desiredExt === '.wma' && downloadedExt.toLowerCase() !== '.wma') {
+      needsFfmpeg = true
+      ffmpegArgs = ['-y', '-i', downloadedFilePath, '-c:a', 'wmav2', '-b:a', '192k', downloadedFilePath.replace(new RegExp(`${downloadedExt}$`, 'i'), '.wma')]
+      finalExt = '.wma'
+    } else if (desiredExt === '.ogv' || desiredExt === '.m4v') {
+      // Just rename the file extension
+      finalExt = desiredExt
+    } else if (desiredExt && desiredExt !== downloadedExt) {
+      // Default to target extension if different natively
+      finalExt = desiredExt
+    }
+
+    if (needsFfmpeg && ffmpegArgs.length > 0) {
+      log.info(`[ytdlpEngine] Executing FFMPEG for ${desiredExt} conversion...`)
+      const success = await new Promise<boolean>((resolve) => {
+        const p = spawn(getBinaryPath('ffmpeg'), ffmpegArgs, { windowsHide: true })
+        p.on('close', (code) => resolve(code === 0))
+        p.on('error', () => resolve(false))
+      })
+      if (success) {
+        fs.unlink(downloadedFilePath).catch(() => {})
+        downloadedFilePath = ffmpegArgs[ffmpegArgs.length - 1]
+        downloadedExt = finalExt
+      } else {
+        log.warn(`[ytdlpEngine] Failed to convert ${downloadedFilePath} to ${desiredExt}`)
+      }
+    }
+
     const originalBasename = path.basename(task.filename, path.extname(task.filename))
     const safeBasename = sanitizeFilename(originalBasename).replace(/\s+/g, '_')
-    const finalFilename = `${safeBasename}${downloadedExt}`
+    const finalFilename = `${safeBasename}${finalExt}`
     let targetPath = path.join(task.directory, finalFilename)
 
     // Handle name collisions
     let counter = 1
     while (existsSync(targetPath) && targetPath !== downloadedFilePath) {
-      targetPath = path.join(task.directory, `${safeBasename}_${counter}${downloadedExt}`)
+      targetPath = path.join(task.directory, `${safeBasename}_${counter}${finalExt}`)
       counter++
     }
 

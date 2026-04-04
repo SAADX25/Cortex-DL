@@ -1144,8 +1144,8 @@ function App() {
                                 value={item.format}
                                 onChange={(v) => setBatchItems(prev => prev.map(b => b.id === item.id ? { ...b, format: v as TargetFormat } : b))}
                                 groups={[
-                                  { label: 'Video', options: [ { value: 'mp4', label: 'MP4' }, { value: 'webm', label: 'WEBM' }, { value: 'mkv', label: 'MKV' } ] },
-                                  { label: 'Audio', options: [ { value: 'mp3', label: 'MP3' }, { value: 'm4a', label: 'M4A' }, { value: 'wav', label: 'WAV' }, { value: 'flac', label: 'FLAC' } ] }
+                                  { label: 'Video', options: [ { value: 'mp4', label: 'MP4' }, { value: 'mkv', label: 'MKV' }, { value: 'avi', label: 'AVI' }, { value: 'mov', label: 'MOV' }, { value: 'webm', label: 'WEBM' }, { value: 'ogv', label: 'OGV' }, { value: 'm4v', label: 'M4V' } ] },
+                                  { label: 'Audio', options: [ { value: 'mp3', label: 'MP3' }, { value: 'wav', label: 'WAV' }, { value: 'm4a', label: 'M4A' }, { value: 'ogg', label: 'OGG' }, { value: 'flac', label: 'FLAC' }, { value: 'aac', label: 'AAC' }, { value: 'opus', label: 'OPUS' }, { value: 'wma', label: 'WMA' } ] }
                                 ]}
                               />
                             </div>

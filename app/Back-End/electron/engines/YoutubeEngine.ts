@@ -415,11 +415,32 @@ export class YoutubeEngine implements IEngine {
       default: {
         // Conservative defaults for other target formats.
         if (AUDIO_FORMATS.includes(task.targetFormat as AudioFormat)) {
-          ytArgs.push('-x', '--audio-format', task.targetFormat, '-f', 'bestaudio/best')
+          let audioFmt = task.targetFormat as string
+          if (audioFmt === 'ogg') audioFmt = 'vorbis'
+          if (audioFmt === 'wma') audioFmt = 'wav' // converted post-download
+          
+          ytArgs.push('-x', '--audio-format', audioFmt, '-f', 'bestaudio/best')
           if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
         } else if (VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
           ytArgs.push('-f', 'bestvideo+bestaudio/best', '-S', 'res,fps')
-          ytArgs.push('--merge-output-format', task.targetFormat)
+          
+          let mergeFmt = 'mkv'
+          if (['mp4', 'mkv', 'webm', 'ogg', 'flv'].includes(task.targetFormat)) {
+            mergeFmt = task.targetFormat
+          } else if (task.targetFormat === 'ogv') {
+            mergeFmt = 'ogg' // renamed post-download
+            ytArgs.push('--recode-video', 'ogg')
+          } else if (task.targetFormat === 'm4v') {
+            mergeFmt = 'mp4' // renamed post-download
+          }
+          ytArgs.push('--merge-output-format', mergeFmt)
+          
+          if (task.targetFormat === 'avi' || task.targetFormat === 'mov') {
+            ytArgs.push('--recode-video', task.targetFormat)
+          } else if (task.targetFormat === 'gif') {
+            // GIF will be converted manually from MP4 in post-download
+            ytArgs.push('--merge-output-format', 'mp4')
+          }
         }
         break
       }
@@ -453,6 +474,34 @@ export class YoutubeEngine implements IEngine {
     }
 
     if (!downloadedPath || !existsSync(downloadedPath)) return
+
+    // ── FFMPEG POST-PROCESS FOR UNSUPPORTED FORMATS ──
+    const dExt = path.extname(downloadedPath).toLowerCase()
+    let needsFfmpeg = false
+    let ffmpegArgs: string[] = []
+
+    if (desiredExt === '.gif' && dExt !== '.gif') {
+      needsFfmpeg = true
+      ffmpegArgs = ['-y', '-i', downloadedPath, '-vf', 'fps=15,scale=480:-1:flags=lanczos', downloadedPath.replace(dExt, '.gif')]
+    } else if (desiredExt === '.wma' && dExt !== '.wma') {
+      needsFfmpeg = true
+      ffmpegArgs = ['-y', '-i', downloadedPath, '-c:a', 'wmav2', '-b:a', '192k', downloadedPath.replace(dExt, '.wma')]
+    }
+
+    if (needsFfmpeg && ffmpegArgs.length > 0) {
+      log.info(`[YoutubeEngine] Executing FFMPEG for ${desiredExt} conversion...`)
+      const success = await new Promise<boolean>((resolve) => {
+        const p = spawn(getBinaryPath('ffmpeg'), ffmpegArgs, { windowsHide: true })
+        p.on('close', (code) => resolve(code === 0))
+        p.on('error', () => resolve(false))
+      })
+      if (success) {
+        fsPromises.unlink(downloadedPath).catch(() => {})
+        downloadedPath = ffmpegArgs[ffmpegArgs.length - 1]
+      } else {
+        log.warn(`[YoutubeEngine] Failed to convert ${downloadedPath} to ${desiredExt}`)
+      }
+    }
 
     // Handle name collisions.
     let targetPath = targetPathBase

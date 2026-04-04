@@ -131,12 +131,17 @@
 .dc-format-tag.avi { background: rgba(250, 204, 21, 0.15); color: #facc15; }
 .dc-format-tag.mov { background: rgba(52, 211, 153, 0.15); color: #34d399; }
 .dc-format-tag.webm { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
+.dc-format-tag.ogv { background: rgba(251, 113, 133, 0.15); color: #fb7185; }
+.dc-format-tag.m4v { background: rgba(244, 114, 182, 0.15); color: #f472b6; }
 .dc-format-tag.gif { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
 .dc-format-tag.mp3 { background: rgba(129, 140, 248, 0.15); color: var(--accent-secondary, #818cf8); }
 .dc-format-tag.wav { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 .dc-format-tag.m4a { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
 .dc-format-tag.ogg { background: rgba(234, 179, 8, 0.15); color: #eab308; }
 .dc-format-tag.flac { background: rgba(20, 184, 166, 0.15); color: #14b8a6; }
+.dc-format-tag.aac { background: rgba(14, 165, 233, 0.15); color: #0ea5e9; }
+.dc-format-tag.opus { background: rgba(163, 230, 53, 0.15); color: #a3e635; }
+.dc-format-tag.wma { background: rgba(248, 113, 113, 0.15); color: #f87171; }
 
 /* ── Meta row (phase badge + stats) ────────────────────────────────────────── */
 
