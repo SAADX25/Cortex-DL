@@ -90,7 +90,7 @@ export class YoutubeEngine implements IEngine {
     const proc = spawn(ytDlpPath, args, {
       windowsHide: true,
       detached: false,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' },
     })
 
     this.childProcess = proc
@@ -290,7 +290,7 @@ export class YoutubeEngine implements IEngine {
       task.url,
     ]
 
-    const proc = spawn(ytDlpPath, metaArgs, { windowsHide: true, detached: false, env: { ...process.env, PYTHONUNBUFFERED: '1' } })
+    const proc = spawn(ytDlpPath, metaArgs, { windowsHide: true, detached: false, env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' } })
 
     const metaOut = await Promise.race<string>([
       (async () => {

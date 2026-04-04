@@ -12,7 +12,6 @@
   "dist-electron/**/*",
   "node_modules/**/*",
   "package.json",
-  "bin/**/*",
   "!**/*.ts",
   "!**/*.map",
   "!Front-End/src/**/*",

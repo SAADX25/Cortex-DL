@@ -144,7 +144,7 @@ function spawnYtdlp(
   const ytProcess = spawn(getBinaryPath('yt-dlp'), args, {
     windowsHide: true,
     detached: false,
-    env: { ...process.env, PYTHONUNBUFFERED: '1' },
+    env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' },
   })
   
   ytProcess.on('spawn', () => {
@@ -263,7 +263,7 @@ export async function runYtdlpDownload(
     try {
       const META_TIMEOUT_MS = 15_000
       const metaArgs = ['--dump-single-json', '--no-warnings', '--no-playlist', task.url]
-      const metaProc = spawn(getBinaryPath('yt-dlp'), metaArgs, { windowsHide: true, detached: false, env: { ...process.env, PYTHONUNBUFFERED: '1' } })
+      const metaProc = spawn(getBinaryPath('yt-dlp'), metaArgs, { windowsHide: true, detached: false, env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' } })
       let metaOut = ''
       const collectMeta = async () => {
         for await (const chunk of metaProc.stdout) {

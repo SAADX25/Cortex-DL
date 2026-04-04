@@ -317,7 +317,7 @@ const stats = await stat(tempPath)
 export async function checkJsRuntime(): Promise<{ available: boolean; name: string }> {
   try {
     const args = [...getJsRuntimeArgs(), '--version']
-    const p = spawn(getBinaryPath('yt-dlp'), args, { windowsHide: true, detached: false })
+    const p = spawn(getBinaryPath('yt-dlp'), args, { windowsHide: true, detached: false, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
     
     let stderr = ''
     p.stderr.on('data', (data) => stderr += data.toString())
@@ -351,8 +351,8 @@ export function getJsRuntimeArgs(): string[] {
   if (existsSync(nodePath)) {
     return ['--js-runtimes', `node:${nodePath}`]
   }
-  // Fallback: try to use system node
-  return ['--js-runtimes', 'node']
+  // Using Electron's executable as Node.js for yt-dlp decryption
+  return ['--js-runtimes', `node:${process.execPath}`]
 }
 
 export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile?: string): Promise<AnalyzeResult> {
@@ -402,7 +402,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
     const startMs = Date.now()
     log.info(`[ytdlp] Spawning analysis for: ${url.slice(0, 80)}...`)
 
-    const p = spawn(ytdlpPath, args, { windowsHide: true, detached: false })
+    const p = spawn(getBinaryPath('yt-dlp'), args, { windowsHide: true, detached: false, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
 
     let stdout = ''
     let stderr = ''

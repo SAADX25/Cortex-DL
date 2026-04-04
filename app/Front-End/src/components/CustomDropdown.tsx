@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { Video, Music, Check, ChevronDown } from 'lucide-react'
 
 type Group = {
   label?: string
@@ -88,7 +89,8 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
         padding: 4,
         zIndex: 9999,
         minWidth: menuPos.minWidth,
-        overflow: 'hidden',
+        maxHeight: 300,
+        overflowY: 'auto',
       }}
     >
       {groups.map((g, gi) => (
@@ -122,15 +124,15 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
             >
               <span style={{ width: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                 {g.label && /video/i.test(g.label) ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z" stroke="#9fbffb" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/><path d="M8 9l6 3-6 3V9z" fill="#60a5fa"/></svg>
+                  <Video size={14} color="#60a5fa" strokeWidth={2.5} />
                 ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v10" stroke="#ffb27a" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M19 7a4 4 0 0 1-4 4H9v6a3 3 0 0 1-3 3" stroke="#f59e0b" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <Music size={14} color="#f59e0b" strokeWidth={2.5} />
                 )}
               </span>
               <span style={{ flex: 1, fontSize: 12 }}>{opt.label}</span>
               <span style={{ width: 10, height: 10, borderRadius: 6, background: /video/i.test(g.label || '') ? '#2563eb' : '#f97316', display: 'inline-block', marginLeft: 6 }} />
               {value === opt.value && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12l4 4L19 6" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <Check size={16} color="#60a5fa" strokeWidth={2.5} />
               )}
             </div>
           ))}
@@ -166,9 +168,7 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
       >
         <span style={{ width: 10, height: 10, borderRadius: 6, background: currentColor, display: 'inline-block' }} />
         <span style={{ fontSize: 12 }}>{currentLabel()}</span>
-        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M5 7l5 5 5-5" stroke="#cbd5e1" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <ChevronDown size={14} color="#cbd5e1" strokeWidth={2.5} />
       </button>
 
       {menu}
