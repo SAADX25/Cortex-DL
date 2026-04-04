@@ -37,3 +37,11 @@ bin/*.zip
 .env
 .env.*
 !.env.example
+
+# Media Files
+*.mkv
+*.mp4
+*.mp3
+*.part
+*.ytdl
+
