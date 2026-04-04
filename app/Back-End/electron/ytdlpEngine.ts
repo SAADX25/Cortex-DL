@@ -134,10 +134,15 @@ function spawnYtdlp(
     args.push('--merge-output-format', 'mkv', '--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy')
   }
 
-  // Output: use task ID as filename (ASCII-safe), rename after download
+  // Output: Keep temp files hidden in .cortex_temp so the user's directory stays clean.
+  // Final combined media will be immediately moved to 'home:' via yt-dlp internal mechanisms.
   const downloadDir = path.dirname(outputPath)
-  args.push('--paths', `temp:${downloadDir}`)
-  args.push('-o', path.join(downloadDir, `${taskId}.%(ext)s`), url)
+  const tempDir = path.join(downloadDir, '.cortex_temp')
+  
+  args.push('--paths', `temp:${tempDir}`)
+  args.push('--paths', `home:${downloadDir}`)
+  args.push('-o', `${taskId}.%(ext)s`)
+  args.push(url)
 
   log.info(`[ytdlpEngine] Spawning yt-dlp with arguments: \n  ${args.join(' ')}`)
 

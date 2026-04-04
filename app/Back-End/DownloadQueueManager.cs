@@ -1,17 +1,17 @@
 using System;
 using System.Buffers;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 /// <summary>
 /// A robust download queue manager for sequential (or limited concurrent) downloads.
 /// - Shared HttpClient
-/// - SemaphoreSlim for concurrency control
-/// - ConcurrentQueue for thread-safe queueing
+/// - System.Threading.Channels for zero-CPU idling
+/// - Safe dynamic concurrency controls
 /// - IProgress<DownloadProgress> for UI-safe progress reporting
 /// - Cancellation + Pause/Resume support
 /// </summary>
@@ -19,8 +19,22 @@ public class DownloadQueueManager
 {
     private static readonly HttpClient _httpClient = new HttpClient();
 
-    private readonly ConcurrentQueue<string> _queue = new ConcurrentQueue<string>();
-    private SemaphoreSlim _concurrencySemaphore;
+    private class DownloadRequest
+    {
+        public string Url { get; }
+        public IProgress<DownloadProgress> Progress { get; }
+        public DownloadRequest(string url, IProgress<DownloadProgress> progress)
+        {
+            Url = url;
+            Progress = progress;
+        }
+    }
+
+    private readonly Channel<DownloadRequest> _channel;
+    private int _maxConcurrency;
+    private readonly SemaphoreSlim _concurrencySemaphore;
+    private readonly object _concurrencyLock = new object();
+    
     private CancellationTokenSource _cts = new CancellationTokenSource();
     private readonly string _destinationFolder;
 
@@ -40,7 +54,16 @@ public class DownloadQueueManager
         if (maxConcurrency < 1) throw new ArgumentOutOfRangeException(nameof(maxConcurrency));
         _destinationFolder = destinationFolder ?? throw new ArgumentNullException(nameof(destinationFolder));
         Directory.CreateDirectory(_destinationFolder);
-        _concurrencySemaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+        
+        _channel = Channel.CreateUnbounded<DownloadRequest>(new UnboundedChannelOptions 
+        { 
+            SingleReader = true 
+        });
+        
+        _maxConcurrency = maxConcurrency;
+        // By setting maxCount to Int32.MaxValue, we can safely increase concurrency dynamically via SetMaxConcurrency
+        _concurrencySemaphore = new SemaphoreSlim(maxConcurrency, int.MaxValue);
+        
         // Ensure pause starts in non-paused state
         _pauseTcs.TrySetResult(true);
     }
@@ -67,12 +90,23 @@ public class DownloadQueueManager
     }
 
     /// <summary>
-    /// Enqueue a URL for download.
+    /// Enqueue a URL for download without custom progress reporting.
     /// </summary>
     public void Enqueue(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) throw new ArgumentNullException(nameof(url));
-        _queue.Enqueue(url);
+        _channel.Writer.TryWrite(new DownloadRequest(url, null));
+        EnsureProcessing();
+    }
+
+    /// <summary>
+    /// Enqueue a URL and start downloading with dedicated progress reporting. (No underlying dropping of items).
+    /// </summary>
+    public void EnqueueAndStart(string url, IProgress<DownloadProgress> progress = null)
+    {
+        if (string.IsNullOrWhiteSpace(url)) throw new ArgumentNullException(nameof(url));
+        // Pack the URL along with the requested Progress. The consumer loop safely processes it.
+        _channel.Writer.TryWrite(new DownloadRequest(url, progress));
         EnsureProcessing();
     }
 
@@ -85,7 +119,11 @@ public class DownloadQueueManager
     {
         if (_processingTask == null || _processingTask.IsCompleted)
         {
-            _cts = new CancellationTokenSource();
+            if (_cts.IsCancellationRequested)
+            {
+                _cts.Dispose();
+                _cts = new CancellationTokenSource();
+            }
             _processingTask = Task.Run(() => ProcessingLoopAsync(_cts.Token));
         }
     }
@@ -123,86 +161,69 @@ public class DownloadQueueManager
     }
 
     /// <summary>
-    /// Updates the maximum concurrency at runtime.
-    /// Note: this creates a new SemaphoreSlim and does not affect already started tasks.
+    /// Updates the maximum concurrency at runtime safely avoiding exceptions.
     /// </summary>
-    public void SetMaxConcurrency(int maxConcurrency)
+    public void SetMaxConcurrency(int newConcurrency)
     {
-        if (maxConcurrency < 1) throw new ArgumentOutOfRangeException(nameof(maxConcurrency));
-        lock (_concurrencySemaphore)
+        if (newConcurrency < 1) throw new ArgumentOutOfRangeException(nameof(newConcurrency));
+        
+        lock (_concurrencyLock)
         {
-            _concurrencySemaphore?.Dispose();
-            _concurrencySemaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+            if (newConcurrency > _maxConcurrency)
+            {
+                // Release extra permits to increase concurrency allowed
+                _concurrencySemaphore.Release(newConcurrency - _maxConcurrency);
+            }
+            else if (newConcurrency < _maxConcurrency)
+            {
+                // To safely decrease limit without disposing an active semaphore, we issue
+                // dummy wait tasks. They will silently eat tokens as active downloads finish.
+                int tokensToRemove = _maxConcurrency - newConcurrency;
+                for (int i = 0; i < tokensToRemove; i++)
+                {
+                    _ = ConsumeTokenAsync(_cts.Token);
+                }
+            }
+            _maxConcurrency = newConcurrency;
         }
+    }
+
+    private async Task ConsumeTokenAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _concurrencySemaphore.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch { /* ignored if cancellation kicks in */ }
     }
 
     private async Task ProcessingLoopAsync(CancellationToken token)
     {
         try
         {
-            while (!token.IsCancellationRequested)
+            // Threading.Channels acts as an ideal producer-consumer queue without CPU busy-waiting
+            await foreach (var request in _channel.Reader.ReadAllAsync(token).ConfigureAwait(false))
             {
-                if (_queue.TryDequeue(out var url))
+                // Wait for resume if paused
+                await _pauseTcs.Task.ConfigureAwait(false);
+
+                // Respect concurrency via semaphore
+                await _concurrencySemaphore.WaitAsync(token).ConfigureAwait(false);
+
+                // Start the download on background without awaiting so more items can loop
+                _ = Task.Run(async () =>
                 {
-                    // Wait for resume if paused
-                    await _pauseTcs.Task.ConfigureAwait(false);
-
-                    // Respect concurrency via semaphore
-                    await _concurrencySemaphore.WaitAsync(token).ConfigureAwait(false);
-
-                    // Start the download on background without awaiting so more items can be dequeued
-                    _ = Task.Run(async () =>
+                    try
                     {
-                        try
-                        {
-                            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-                            await DownloadFileAsync(url, linkedCts.Token, null).ConfigureAwait(false);
-                        }
-                        catch { }
-                        finally { _concurrencySemaphore.Release(); }
-                    }, token);
-                }
-                else
-                {
-                    // queue empty; wait a bit until new items appear or cancellation
-                    await Task.Delay(250, token).ConfigureAwait(false);
-                }
+                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+                        await DownloadFileAsync(request.Url, linkedCts.Token, request.Progress).ConfigureAwait(false);
+                    }
+                    catch { }
+                    finally { _concurrencySemaphore.Release(); }
+                }, token);
             }
         }
         catch (OperationCanceledException) { }
-    }
-
-    /// <summary>
-    /// Enqueue and start downloading with progress reporting.
-    /// </summary>
-    public void EnqueueAndStart(string url, IProgress<DownloadProgress> progress = null)
-    {
-        if (string.IsNullOrWhiteSpace(url)) throw new ArgumentNullException(nameof(url));
-        _queue.Enqueue(url);
-        EnsureProcessing();
-        // Kick off a dedicated worker that will pick this item and report progress
-        _ = Task.Run(async () =>
-        {
-            // wait until this url gets picked and is being downloaded by internal loop; instead use custom consumer
-            while (!_cts.IsCancellationRequested)
-            {
-                // simple attempt to start a download when semaphore permits
-                if (_queue.TryDequeue(out var dequeuedUrl) && dequeuedUrl == url)
-                {
-                    await _concurrencySemaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
-                    try
-                    {
-                        await DownloadFileAsync(url, _cts.Token, progress).ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        _concurrencySemaphore.Release();
-                    }
-                    break;
-                }
-                await Task.Delay(100, _cts.Token).ConfigureAwait(false);
-            }
-        }, _cts.Token);
     }
 
     /// <summary>
@@ -229,7 +250,6 @@ public class DownloadQueueManager
             try
             {
                 int read;
-                var lastReportTime = sw.Elapsed;
                 while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false)) > 0)
                 {
                     await fileStream.WriteAsync(buffer, 0, read, ct).ConfigureAwait(false);

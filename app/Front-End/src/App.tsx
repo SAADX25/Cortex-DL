@@ -9,7 +9,7 @@ import CustomDropdown from './components/CustomDropdown'
 import AnimatedSegmentedControl from './components/AnimatedSegmentedControl'
 import { initDownloadStore, useDownloadStore, getTasksSnapshot } from './stores/downloadStore'
 import { formatBytes } from './hooks/useDownloadCardVM'
-
+import React from 'react';
 // formatBytes is now imported from hooks/useDownloadCardVM
 // formatSpeed and statusLabel are no longer needed in App.tsx — they live in the ViewModel hook
 
@@ -73,6 +73,71 @@ type BatchItem = {
   quality?: string | null
 }
 
+const UrlInputBar = React.memo(({
+  analyzing,
+  batchCount,
+  maxBatchItems,
+  placeholderText,
+  pasteAndGoText,
+  onPasteAndAnalyze,
+  onAnalyze,
+  onClear,
+  initialUrl = ''
+}: {
+  analyzing: boolean
+  batchCount: number
+  maxBatchItems: number
+  placeholderText: string
+  pasteAndGoText: string
+  onPasteAndAnalyze: () => void
+  onAnalyze: (url: string) => void
+  onClear: () => void
+  initialUrl: string
+}) => {
+  const [localUrl, setLocalUrl] = useState(initialUrl)
+
+  useEffect(() => {
+    setLocalUrl(initialUrl)
+  }, [initialUrl])
+
+  return (
+    <div className="hero-input-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
+      <input
+        className="hero-input"
+        value={localUrl}
+        onChange={(e) => setLocalUrl(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && localUrl.trim() && !analyzing) onAnalyze(localUrl) }}
+        placeholder={batchCount >= maxBatchItems ? `Batch full (${maxBatchItems}/${maxBatchItems}). Start download to clear.` : placeholderText}
+        dir="auto"
+      />
+      {localUrl && (
+        <button className="hero-clear-btn" onClick={() => { setLocalUrl(''); onClear(); }}>
+          <X size={20} />
+        </button>
+      )}
+      <button
+        className="hero-action-btn"
+        onClick={localUrl.trim().length === 0 ? onPasteAndAnalyze : () => onAnalyze(localUrl)}
+        disabled={analyzing}
+      >
+        {analyzing ? (
+          <div className="spinner-sm"></div>
+        ) : localUrl.trim().length === 0 ? (
+          <>
+            <ClipboardPaste size={20} />
+            <span>{pasteAndGoText}</span>
+          </>
+        ) : (
+          <>
+            <span>🔍</span>
+            <span>Analyze</span>
+          </>
+        )}
+      </button>
+    </div>
+  )
+})
+
 function App() {
   const MAX_BATCH_ITEMS = 50
   const [url, setUrl] = useState('')
@@ -93,8 +158,8 @@ function App() {
   const [subfolderName, setSubfolderName] = useState('')
   const [cookieBrowser] = useState<string>(() => localStorage.getItem('cortex-cookie-browser') || 'none')
   const [cookieFile] = useState<string | null>(() => localStorage.getItem('cortex-cookie-file'))
-  const [username] = useState<string>(() => localStorage.getItem('cortex-username') || '')
-  const [password] = useState<string>(() => localStorage.getItem('cortex-password') || '')
+  const [username, setUsername] = useState<string>('')
+  const [password, setPassword] = useState<string>('')
   const [activeTab, setActiveTab] = useState<'add' | 'downloads' | 'settings'>('add')
   const [lang, setLang] = useState<Language>(() => {
     return (localStorage.getItem('language') as Language) || 'en'
@@ -117,6 +182,8 @@ function App() {
   const [updateStatus, setUpdateStatus] = useState<{ status: string; percent?: number; error?: string } | null>(null)
   const [engineVersion, setEngineVersion] = useState<string>('...')
   const [isCommentsDownloading, setIsCommentsDownloading] = useState(false)
+  const [commentsSuccessPath, setCommentsSuccessPath] = useState<string | null>(null)
+  const [commentsProgress, setCommentsProgress] = useState<{ current: number, total: number } | null>(null)
   const [engineUpdateStatus, setEngineUpdateStatus] = useState<{ updating: boolean; message?: string; success?: boolean } | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [batchItems, setBatchItems] = useState<BatchItem[]>([])
@@ -243,11 +310,26 @@ function App() {
   }, [lang])
 
   useEffect(() => {
+    let cleanupStarted: (() => void) | undefined
+    let cleanupProgress: (() => void) | undefined
+
     if (window.cortexDl.onCommentsExtractionStarted) {
-      const cleanup = window.cortexDl.onCommentsExtractionStarted(() => {
+      cleanupStarted = window.cortexDl.onCommentsExtractionStarted(() => {
+        setCommentsProgress(null)
+        setCommentsSuccessPath(null)
         setIsCommentsDownloading(true)
       })
-      return cleanup
+    }
+    
+    if (window.cortexDl.onCommentsProgress) {
+      cleanupProgress = window.cortexDl.onCommentsProgress((current, total) => {
+        setCommentsProgress({ current, total })
+      })
+    }
+    
+    return () => {
+      cleanupStarted && cleanupStarted()
+      cleanupProgress && cleanupProgress()
     }
   }, [])
 
@@ -274,12 +356,33 @@ function App() {
     else localStorage.removeItem('cortex-cookie-file')
   }, [cookieFile])
 
+  // Initial load of secure credentials via IPC
   useEffect(() => {
-    localStorage.setItem('cortex-username', username)
+    const loadCredentials = async () => {
+      try {
+        const [savedUser, savedPass] = await Promise.all([
+          window.cortexDl.getSecureData('cortex-username'),
+          window.cortexDl.getSecureData('cortex-password')
+        ])
+        if (savedUser) setUsername(savedUser)
+        if (savedPass) setPassword(savedPass)
+        
+        // Remove legacy unencrypted data if present
+        localStorage.removeItem('cortex-username')
+        localStorage.removeItem('cortex-password')
+      } catch (err) {
+        console.error('Failed to load secure credentials', err)
+      }
+    }
+    loadCredentials()
+  }, [])
+
+  useEffect(() => {
+    if (username !== '') window.cortexDl.saveSecureData('cortex-username', username)
   }, [username])
 
   useEffect(() => {
-    localStorage.setItem('cortex-password', password)
+    if (password !== '') window.cortexDl.saveSecureData('cortex-password', password)
   }, [password])
 
   useEffect(() => {
@@ -291,7 +394,10 @@ function App() {
   }, [concurrentDownloads])
 
   useEffect(() => {
-    localStorage.setItem('cortex-total-bytes', String(totalDownloadedBytes))
+    const timer = setTimeout(() => {
+      localStorage.setItem('cortex-total-bytes', String(totalDownloadedBytes))
+    }, 1000)
+    return () => clearTimeout(timer)
   }, [totalDownloadedBytes])
 
   // ── Download Store initialization (replaces old IPC listener spaghetti) ──
@@ -558,12 +664,13 @@ function App() {
     if (count === 0) return
 
     try {
-      for (const item of batchItems) {
+      // Unblock the UI thread by eagerly returning promises
+      await Promise.all(batchItems.map(item => {
         const finalUrl = item.url
         const engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(finalUrl) ? 'ytdlp' : 'auto'
-        await window.cortexDl.addDownload({
+        return window.cortexDl.addDownload({
           url: finalUrl,
-          directory: resolvedDirectory,
+          directory: resolvedDirectory!,
           subfolderName: subfolderName.trim() || undefined,
           filename: undefined,
           engine,
@@ -579,7 +686,7 @@ function App() {
           startTime: startTime.trim() || undefined,
           endTime: endTime.trim() || undefined,
         })
-      }
+      }))
 
       showToast(`${count} items added to Queue!`)
       setBatchItems([])
@@ -761,40 +868,17 @@ function App() {
 
                 {/* STEP 1: URL Input */}
                 <div className="w-full">
-                  <div className="hero-input-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      className="hero-input"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && url.trim() && !analyzing) handleAnalyzeUrlDirectly(url) }}
-                      placeholder={batchItems.length >= MAX_BATCH_ITEMS ? `Batch full (${MAX_BATCH_ITEMS}/${MAX_BATCH_ITEMS}). Start download to clear.` : t.url_placeholder}
-                      dir="auto"
-                    />
-                    {url && (
-                      <button className="hero-clear-btn" onClick={() => setUrl('')}>
-                        <X size={20} />
-                      </button>
-                    )}
-                    <button
-                      className="hero-action-btn"
-                      onClick={url.trim().length === 0 ? onPasteAndAnalyze : () => handleAnalyzeUrlDirectly(url)}
-                      disabled={analyzing}
-                    >
-                      {analyzing ? (
-                        <div className="spinner-sm"></div>
-                      ) : url.trim().length === 0 ? (
-                        <>
-                          <ClipboardPaste size={20} />
-                          <span>{t.paste_and_go}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>🔍</span>
-                          <span>Analyze</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  <UrlInputBar
+                    analyzing={analyzing}
+                    batchCount={batchItems.length}
+                    maxBatchItems={MAX_BATCH_ITEMS}
+                    placeholderText={t.url_placeholder}
+                    pasteAndGoText={t.paste_and_go || 'Paste & Go'}
+                    onPasteAndAnalyze={onPasteAndAnalyze}
+                    onAnalyze={handleAnalyzeUrlDirectly}
+                    onClear={() => setUrl('')}
+                    initialUrl={url}
+                  />
                 </div>
 
                 {/* STEP 2: Global Settings Row */}
@@ -938,15 +1022,19 @@ function App() {
                                       onClick={async (e) => {
                                         e.stopPropagation();
                                         const res = await window.cortexDl.downloadComments(url);
-                                        setIsCommentsDownloading(false);
                                         if (typeof res === 'object' && res !== null) {
                                           if (res.success) {
+                                            setCommentsSuccessPath(res.filePath || null);
                                             showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
-                                          } else if (!res.canceled) {
-                                            showToast(lang === 'ar' ? 'حدث خطأ أثناء استخراج التعليقات.' : 'Failed to extract comments.');
+                                          } else {
+                                            setIsCommentsDownloading(false);
+                                            if (!res.canceled) showToast(lang === 'ar' ? 'حدث خطأ أثناء استخراج التعليقات.' : 'Failed to extract comments.');
                                           }
                                         } else if (res) {
+                                          setCommentsSuccessPath(null); // Fallback if no path is returned
                                           showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
+                                        } else {
+                                          setIsCommentsDownloading(false);
                                         }
                                       }}
                                     >
@@ -1390,13 +1478,54 @@ function App() {
       {isCommentsDownloading && (
         <div className="modal-overlay" style={{ zIndex: 9999 }}>
           <div className="modal-container" style={{ width: '400px', padding: '32px', textAlign: 'center' }}>
-            <div className="spinner-sm" style={{ margin: '0 auto 16px auto', borderTopColor: '#3b82f6', width: '36px', height: '36px', borderWidth: '3px' }}></div>
-            <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600 }}>
-              {lang === 'ar' ? 'جاري تحميل ملف التعليقات...' : 'Downloading comments file...'}
-            </h3>
-            <p style={{ marginTop: '12px', color: '#94a3b8', fontSize: '0.95rem', marginBottom: 0 }}>
-              {lang === 'ar' ? 'يرجى الانتظار، قد يستغرق ذلك بضع ثوانٍ.' : 'Please wait, this may take a few seconds.'}
-            </p>
+            {!commentsSuccessPath ? (
+              <>
+                <div className="spinner-sm" style={{ margin: '0 auto 16px auto', borderTopColor: '#3b82f6', width: '36px', height: '36px', borderWidth: '3px' }}></div>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600 }}>
+                  {lang === 'ar' ? 'جاري تحميل ملف التعليقات...' : 'Downloading comments file...'}
+                </h3>
+                <p className="animate-pulse" style={{ marginTop: '12px', color: '#94a3b8', fontSize: '0.95rem', marginBottom: 0, animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
+                  {lang === 'ar'
+                    ? (commentsProgress ? `جاري استخراج التعليقات... ${commentsProgress.current} / ~${commentsProgress.total}` : 'جاري الاتصال...')
+                    : (commentsProgress ? `Extracting comments... ${commentsProgress.current} / ~${commentsProgress.total}` : 'Connecting...')}
+                </p>
+              </>
+            ) : (
+              <>
+                <div style={{ margin: '0 auto 16px auto', width: '48px', height: '48px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600, marginBottom: '24px' }}>
+                  {lang === 'ar' ? 'تم تحميل التعليقات بنجاح!' : 'Comments downloaded successfully!'}
+                </h3>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={() => {
+                      if (commentsSuccessPath) {
+                         window.cortexDl.openFile(commentsSuccessPath);
+                      }
+                      setIsCommentsDownloading(false);
+                      setCommentsSuccessPath(null);
+                    }}
+                    style={{ padding: '8px 16px', fontSize: '0.9rem' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: lang === 'ar' ? '0' : '6px', marginLeft: lang === 'ar' ? '6px' : '0' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    {lang === 'ar' ? 'فتح الملف' : 'Open File'}
+                  </button>
+                  <button 
+                    className="btn" 
+                    onClick={() => {
+                      setIsCommentsDownloading(false);
+                      setCommentsSuccessPath(null);
+                    }}
+                    style={{ padding: '8px 16px', fontSize: '0.9rem', backgroundColor: '#334155', color: '#f8fafc', border: '1px solid #475569' }}
+                  >
+                    {lang === 'ar' ? 'إغلاق' : 'Close'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

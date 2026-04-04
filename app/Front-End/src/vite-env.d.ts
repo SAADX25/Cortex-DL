@@ -54,11 +54,12 @@ declare global {
     | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
 
   interface Window {
-    cortexDl: {
-      selectFolder: () => Promise<string | null>
+    cortexDl: {      saveSecureData(key: string, value: string): Promise<boolean>;
+      getSecureData(key: string): Promise<string>;      selectFolder: () => Promise<string | null>
       selectCookiesFile: () => Promise<string | null>
-      downloadComments: (url: string) => Promise<boolean | { success: boolean; canceled?: boolean; error?: string }>
+      downloadComments: (url: string) => Promise<boolean | { success: boolean; canceled?: boolean; error?: string; filePath?: string }>
       onCommentsExtractionStarted: (callback: () => void) => () => void
+      onCommentsProgress: (callback: (current: number, total: number) => void) => () => void
       analyzeUrl: (url: string, browser?: string) => Promise<AnalyzeResult>
       listDownloads: () => Promise<DownloadTask[]>
       addDownload: (input: { 

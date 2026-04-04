@@ -446,9 +446,13 @@ export class YoutubeEngine implements IEngine {
       }
     }
 
-    // Output: write to task.id-based temp filename, then rename to sanitized title.
-    ytArgs.push('--paths', `temp:${task.directory}`)
-    ytArgs.push('-o', path.join(task.directory, `${task.id}.%(ext)s`))
+    // Hide messy temporary parts inside a dedicated hidden temp folder
+    const tempDir = path.join(task.directory, '.cortex_temp')
+    ytArgs.push('--paths', `temp:${tempDir}`)
+    ytArgs.push('--paths', `home:${task.directory}`)
+    
+    // Set output format to task ID (will be fully renamed post-download)
+    ytArgs.push('-o', `${task.id}.%(ext)s`)
     ytArgs.push(task.url)
 
     return ytArgs

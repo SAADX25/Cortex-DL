@@ -4,7 +4,7 @@ import log from 'electron-log'
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
-import { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu, nativeImage, safeStorage } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { existsSync, rmSync, statSync, createReadStream } from 'node:fs'
@@ -311,6 +311,36 @@ ipcMain.handle('cortexdl:select-cookies-file', async () => {
   return result.filePaths[0] ?? null
 })
 
+// SafeStorage for Secure Credentials
+ipcMain.handle('cortexdl:secure-save', (_event, _key: string, value: string) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) {
+      // Fallback for systems lacking keychain/encryption support
+      log.warn('[safeStorage] Encryption not available. Returning failure.')
+      return false
+    }
+    const encrypted = safeStorage.encryptString(value)
+    // We store the encrypted buffer as Base64 in standard config files/store or localStorage proxy.
+    // However, it's safer to use Electron's `store` or just let the frontend store the encrypted Base64 string in localStorage.
+    // For simplicity of this proxy, we return the base64 payload to the frontend.
+    return encrypted.toString('base64')
+  } catch (error) {
+    log.error('[safeStorage] Failed to encrypt data', error)
+    return false
+  }
+})
+
+ipcMain.handle('cortexdl:secure-get', (_event, base64Value: string) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable() || !base64Value) return ''
+    const buffer = Buffer.from(base64Value, 'base64')
+    return safeStorage.decryptString(buffer)
+  } catch (error) {
+    log.error('[safeStorage] Failed to decrypt data', error)
+    return ''
+  }
+})
+
 ipcMain.handle('cortexdl:check-engines', async () => {
   // Delay initial check slightly to allow UI to render first
   await new Promise(resolve => setTimeout(resolve, 500))
@@ -438,10 +468,12 @@ ipcMain.handle('cortexdl:download-comments', async (_event, url: string) => {
     // Send an event to say we are starting the actual extraction
     win.webContents.send('cortexdl:comments-extraction-started')
 
-    const result = await extractAndSaveComments(url, filePath)
+    const result = await extractAndSaveComments(url, filePath, (current, total) => {
+      win?.webContents.send('cortexdl:comments-progress', current, total)
+    })
     if (result) {
       // DONT show message box. Front-end handles it.
-      return { success: true }
+      return { success: true, filePath }
     } else {
       // DONT show message box. Front-end handles it.
       return { success: false, error: 'Extraction failed' }
