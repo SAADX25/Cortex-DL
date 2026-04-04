@@ -1,0 +1,7 @@
+node_modules/
+node_modules
+*.mkv
+*.mp4
+*.mp3
+*.part
+*.ytdl
