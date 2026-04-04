@@ -1102,12 +1102,14 @@ body {
   padding: 1.25rem;
   border-radius: 1rem;
   align-items: center;
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
 }
 
 .preview-thumb-large {
-  width: 180px;
-  height: 101px;
-  border-radius: 0.5rem;
+    width: 200px;
+    min-height: 110px;
+    height: auto;
   object-fit: cover;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
@@ -1121,20 +1123,35 @@ body {
 /* --- Video Metadata (Views, Likes, Comments) --- */
 .preview-metadata {
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 14px;
   font-size: 0.85rem;
   color: #9ca3af;
 }
+
+.preview-metadata-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
 
 .metadata-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.metadata-badge:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .preview-comments {

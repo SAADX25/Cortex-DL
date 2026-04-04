@@ -31,6 +31,8 @@ declare global {
     resolution: string
     filesize: number | null
     description: string
+    height?: number
+    fps?: number
   }
 
   type AnalyzeResult =
@@ -45,6 +47,8 @@ declare global {
         formats: YtdlpFormat[];
         views?: number;
         likes?: number;
+        dislikes?: number;
+        duration?: number;
         comments?: { author: string; text: string; likeCount: number }[];
       }
     | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
@@ -53,6 +57,8 @@ declare global {
     cortexDl: {
       selectFolder: () => Promise<string | null>
       selectCookiesFile: () => Promise<string | null>
+      downloadComments: (url: string) => Promise<boolean | { success: boolean; canceled?: boolean; error?: string }>
+      onCommentsExtractionStarted: (callback: () => void) => () => void
       analyzeUrl: (url: string, browser?: string) => Promise<AnalyzeResult>
       listDownloads: () => Promise<DownloadTask[]>
       addDownload: (input: { 

@@ -32,19 +32,40 @@
 
 .dc-thumb {
   width: 260px;
-  min-height: 180px;
+  align-self: stretch;
   position: relative;
   background: #000;
   flex-shrink: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.dc-thumb img {
+.dc-thumb-bg {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  filter: blur(18px) brightness(0.5);
+  opacity: 0.6 !important;
+  z-index: 1 !important;
+  transform: scale(1.1); /* eliminate blur vignette edges */
+}
+
+.dc-thumb img:not(.dc-thumb-bg) {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.9;
+  opacity: 0.95;
   transition: transform 0.5s ease;
+  z-index: 2;
 }
 
 .dc-card:hover .dc-thumb img {

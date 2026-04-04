@@ -14,6 +14,7 @@ import type { DownloadManager } from './downloadManager'
 import type { StartInput } from './types'
 import { analyzeUrlForHls } from './hls'
 import { analyzeWithYtdlp, isYtdlpAvailable, checkJsRuntime, updateYtdlp, getYtdlpVersion } from './ytdlp'
+import { extractAndSaveComments } from './commentsExtractor'
 
 // Global Error Catchers
 process.on('uncaughtException', (error) => {
@@ -421,6 +422,33 @@ ipcMain.handle('cortexdl:open-external', async (_event, url: string) => {
     await shell.openExternal(url)
   } catch {
     log.warn('[Security] Blocked openExternal with invalid URL')
+  }
+})
+
+ipcMain.handle('cortexdl:download-comments', async (_event, url: string) => {
+  try {
+    if (!win) return { success: false, error: 'No main window' }
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: 'Save Comments',
+      defaultPath: 'comments.txt',
+      filters: [{ name: 'Text Files', extensions: ['txt'] }]
+    })
+    if (canceled || !filePath) return { success: false, canceled: true }
+
+    // Send an event to say we are starting the actual extraction
+    win.webContents.send('cortexdl:comments-extraction-started')
+
+    const result = await extractAndSaveComments(url, filePath)
+    if (result) {
+      // DONT show message box. Front-end handles it.
+      return { success: true }
+    } else {
+      // DONT show message box. Front-end handles it.
+      return { success: false, error: 'Extraction failed' }
+    }
+  } catch (e: any) {
+    log.error('[main] Error in download-comments:', e)
+    return { success: false, error: e.message }
   }
 })
 

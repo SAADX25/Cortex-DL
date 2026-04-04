@@ -15,6 +15,7 @@ import {
 } from '../progressParser'
 import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
+import { getJsRuntimeArgs } from '../ytdlp'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -381,14 +382,11 @@ export class YoutubeEngine implements IEngine {
       '--no-warnings',
       '--progress-template', 'download:CORTEX_DL:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s:%(progress.speed)s',
       '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
-      '--concurrent-fragments', '6',
       '--resize-buffer',
-      '--http-chunk-size', '10M',
-      '--buffer-size', '16M',
       '--file-access-retries', '5',
-      '--socket-timeout', '5',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      '--socket-timeout', '10',
       ...this.buildAuthArgs(task),
+      ...getJsRuntimeArgs(),
     ]
 
     // FFmpeg location helps yt-dlp find ffmpeg reliably in packaged setups.

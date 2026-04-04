@@ -9,6 +9,14 @@ contextBridge.exposeInMainWorld('cortexDl', {
   selectCookiesFile(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-cookies-file')
   },
+  downloadComments(url: string): Promise<boolean | { success: boolean; canceled?: boolean; error?: string }> {
+    return ipcRenderer.invoke('cortexdl:download-comments', url)
+  },
+  onCommentsExtractionStarted(callback: () => void) {
+    const fn = () => callback()
+    ipcRenderer.on('cortexdl:comments-extraction-started', fn)
+    return () => ipcRenderer.off('cortexdl:comments-extraction-started', fn)
+  },
   analyzeUrl(url: string, browser?: string): Promise<AnalyzeResult> {
     return ipcRenderer.invoke('cortexdl:analyze-url', url, browser)
   },

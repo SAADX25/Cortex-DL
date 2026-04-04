@@ -98,6 +98,8 @@ export type AnalyzeResult =
       formats: YtdlpFormat[];
       views?: number;
       likes?: number;
+      dislikes?: number;
+      duration?: number;
       comments?: { author: string; text: string; likeCount: number }[];
     }
   | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }

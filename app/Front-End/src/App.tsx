@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { X, Youtube, Facebook, Instagram, Clapperboard, ClipboardPaste, RefreshCw, AlertTriangle, ShieldAlert, FolderPlus } from 'lucide-react'
 import './App.css'
 import { translations, Language } from './translations'
@@ -116,10 +116,46 @@ function App() {
   })
   const [updateStatus, setUpdateStatus] = useState<{ status: string; percent?: number; error?: string } | null>(null)
   const [engineVersion, setEngineVersion] = useState<string>('...')
+  const [isCommentsDownloading, setIsCommentsDownloading] = useState(false)
   const [engineUpdateStatus, setEngineUpdateStatus] = useState<{ updating: boolean; message?: string; success?: boolean } | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [batchItems, setBatchItems] = useState<BatchItem[]>([])
   const t = translations[lang]
+
+  const availableVideoQualities = useMemo(() => {
+    if (analyzeResult?.kind !== 'ytdlp') return null;
+    
+    // Convert YouTube's weird "Premium" resolutions to standard ones
+    const normalizeHeight = (h: number) => {
+      if (h >= 4320) return 4320;
+      if (h >= 2160 || h >= 2026) return 2160;
+      if (h >= 1440 || h >= 1350) return 1440;
+      if (h >= 1080 || h >= 1012) return 1080;
+      if (h >= 720 || h >= 676) return 720;
+      if (h >= 480 || h >= 450) return 480;
+      if (h >= 360 || h >= 338) return 360;
+      if (h >= 240 || h >= 224) return 240;
+      return 144;
+    };
+
+    const formats = analyzeResult.formats;
+    const unique = new Map<number, number>();
+    
+    for (const f of formats) {
+      if (!f.height || f.height < 140) continue;
+      
+      const standardHeight = normalizeHeight(f.height);
+      const fps = f.fps || Math.round(Number((f.description?.match(/(\d+)fps/) || [])[1])) || 0;
+      
+      if (!unique.has(standardHeight) || fps > (unique.get(standardHeight) || 0)) {
+        unique.set(standardHeight, fps);
+      }
+    }
+    
+    return Array.from(unique.entries())
+      .map(([height, fps]) => ({ height, fps }))
+      .sort((a, b) => b.height - a.height);
+  }, [analyzeResult]);
 
   const THUMB_FALLBACK_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90'><rect width='100%' height='100%' fill='%23081126'/><text x='50%' y='50%' font-size='12' fill='%239ca3af' dominant-baseline='middle' text-anchor='middle'>No image</text></svg>"
 
@@ -205,6 +241,15 @@ function App() {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
     localStorage.setItem('language', lang)
   }, [lang])
+
+  useEffect(() => {
+    if (window.cortexDl.onCommentsExtractionStarted) {
+      const cleanup = window.cortexDl.onCommentsExtractionStarted(() => {
+        setIsCommentsDownloading(true)
+      })
+      return cleanup
+    }
+  }, [])
 
   // Listen for auto-update events
   useEffect(() => {
@@ -836,35 +881,85 @@ function App() {
                         </div>
                       </div>
                     ) : (
-                      <div className="video-preview-large" style={{ alignItems: 'flex-start' }}>
+                      <div className="video-preview-large" style={{ alignItems: 'stretch' }}>
                         {analyzeResult.kind === 'ytdlp' && analyzeResult.thumbnail && (
                           <SmartImage src={analyzeResult.thumbnail} alt="thumb" className="preview-thumb-large" />
                         )}
-                        <div className="preview-info-large" style={{ flex: 1, minWidth: 0 }}>
-                          <div className="preview-title-large" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        <div className="preview-info-large" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <div className="preview-title-large" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: '8px' }}>
                             {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : 'HLS Stream'}
                           </div>
 
                           {/* 👀 Views & Likes */}
                           {analyzeResult.kind === 'ytdlp' && (
                             <div className="preview-metadata">
-                              {analyzeResult.views !== undefined && (
-                                <div className="metadata-badge" title={lang === 'ar' ? 'المشاهدات' : 'Views'}>
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                                  <span>{analyzeResult.views.toLocaleString()}</span>
+                                <div className="preview-metadata-row">
+                                  {analyzeResult.views != null && (
+                                    <div className="metadata-badge" title={lang === 'ar' ? 'المشاهدات' : 'Views'}>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                      <span>{analyzeResult.views.toLocaleString()}</span>
+                                    </div>
+                                  )}
+                                  {analyzeResult.duration != null && (
+                                    <div className="metadata-badge" title={lang === 'ar' ? 'المدة' : 'Duration'}>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                      <span>{
+                                        (() => {
+                                          const d = analyzeResult.duration as number;
+                                          const h = Math.floor(d / 3600);
+                                          const m = Math.floor((d % 3600) / 60);
+                                          const s = d % 60;
+                                          return h > 0 
+                                            ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+                                            : `${m}:${s.toString().padStart(2, '0')}`;
+                                        })()
+                                      }</span>
+                                    </div>
+                                  )}
+                                  {analyzeResult.likes != null && (
+                                    <div className="metadata-badge" title={lang === 'ar' ? 'الإعجابات' : 'Likes'}>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+                                      <span>{analyzeResult.likes.toLocaleString()}</span>
+                                    </div>
+                                  )}
+                                  {analyzeResult.dislikes != null && analyzeResult.dislikes > 0 && (
+                                    <div className="metadata-badge" title={lang === 'ar' ? 'عدم الإعجاب' : 'Dislikes'}>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>
+                                      <span>{analyzeResult.dislikes.toLocaleString()}</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                              {analyzeResult.likes !== undefined && (
-                                <div className="metadata-badge" title={lang === 'ar' ? 'الإعجابات' : 'Likes'}>
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
-                                  <span>{analyzeResult.likes.toLocaleString()}</span>
+                                <div className="preview-metadata-row" style={{ marginTop: '2px' }}>
+                                  {(url.includes('youtube.com') || url.includes('youtu.be')) && (
+                                    <div 
+                                      className="metadata-badge" 
+                                      style={{ cursor: 'pointer', backgroundColor: '#3b82f6', color: '#fff', border: 'none' }}
+                                      title={lang === 'ar' ? 'تحميل جميع التعليقات بملف نصي' : 'Download all comments to text file'}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const res = await window.cortexDl.downloadComments(url);
+                                        setIsCommentsDownloading(false);
+                                        if (typeof res === 'object' && res !== null) {
+                                          if (res.success) {
+                                            showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
+                                          } else if (!res.canceled) {
+                                            showToast(lang === 'ar' ? 'حدث خطأ أثناء استخراج التعليقات.' : 'Failed to extract comments.');
+                                          }
+                                        } else if (res) {
+                                          showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
+                                        }
+                                      }}
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+                                      <span>{lang === 'ar' ? 'تحميل التعليقات' : 'Save Comments'}</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          )}
+                              </div>
+                            )}
 
                           {/* 💬 Comments */}
-                          {analyzeResult.kind === 'ytdlp' && analyzeResult.comments && analyzeResult.comments.length > 0 && (
+                          {analyzeResult.kind === 'ytdlp' && (url.includes('youtube.com') || url.includes('youtu.be')) && analyzeResult.comments && analyzeResult.comments.length > 0 && (
                             <div className="preview-comments custom-scrollbar">
                               <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>
                                 💬 {lang === 'ar' ? 'تعليقات' : 'Comments'}
@@ -939,10 +1034,20 @@ function App() {
                               }}
                             >
                               <option value="">{t.quality_best || 'Best Auto'}</option>
-                              <option value="2160p">{t.quality_4k || '4K'}</option>
-                              <option value="1440p">{t.quality_2k || '2K'}</option>
-                              <option value="1080p">{t.quality_1080p || '1080p'}</option>
-                              <option value="720p">{t.quality_720p || '720p'}</option>
+                              {availableVideoQualities && availableVideoQualities.length > 0 ? (
+                                availableVideoQualities.map((q) => (
+                                  <option key={`${q.height}p`} value={`${q.height}p`}>
+                                    {q.height}p {q.fps > 0 ? `(${q.fps}fps)` : ''}
+                                  </option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="2160p">{t.quality_4k || '4K'}</option>
+                                  <option value="1440p">{t.quality_2k || '2K'}</option>
+                                  <option value="1080p">{t.quality_1080p || '1080p'}</option>
+                                  <option value="720p">{t.quality_720p || '720p'}</option>
+                                </>
+                              )}
                             </select>
                           </div>
                         )}
@@ -1281,6 +1386,20 @@ function App() {
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
         onClose={() => setMediaPlayerFile(null)}
       />
+
+      {isCommentsDownloading && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="modal-container" style={{ width: '400px', padding: '32px', textAlign: 'center' }}>
+            <div className="spinner-sm" style={{ margin: '0 auto 16px auto', borderTopColor: '#3b82f6', width: '36px', height: '36px', borderWidth: '3px' }}></div>
+            <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600 }}>
+              {lang === 'ar' ? 'جاري تحميل ملف التعليقات...' : 'Downloading comments file...'}
+            </h3>
+            <p style={{ marginTop: '12px', color: '#94a3b8', fontSize: '0.95rem', marginBottom: 0 }}>
+              {lang === 'ar' ? 'يرجى الانتظار، قد يستغرق ذلك بضع ثوانٍ.' : 'Please wait, this may take a few seconds.'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -342,7 +342,7 @@ function isYouTubeUrl(url: string): boolean {
   return low.includes('youtube.com') || low.includes('youtu.be')
 }
 
-function getJsRuntimeArgs(): string[] {
+export function getJsRuntimeArgs(): string[] {
   const denoPath = getBinaryPath('deno')
   if (existsSync(denoPath)) {
     return ['--js-runtimes', `deno:${denoPath}`]
@@ -369,8 +369,6 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
   // the analysis spawn itself will fail and we handle ENOENT/exit-code below.
 
   return new Promise((resolve, reject) => {
-    const isYT = isYouTubeUrl(url)
-
     // ── Aggressive speed flags ──
     const args = [
       '--dump-json',
@@ -382,14 +380,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
       '--ignore-errors',
       // Network speed: tight socket timeout + no disk cache (avoids lock contention)
       '--socket-timeout', '10',
-      '--no-cache-dir',
-      // YouTube-specific: use lightweight Android client & skip heavy webpage/JS parsing
-      '--extractor-args', isYT
-        ? 'youtube:player_client=android,player_skip=webpage;youtube:max_comments=15'
-        : 'youtube:player_client=android;youtube:max_comments=15',
-      '--write-comments',
-      // Stealth/Bypass Arguments
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      '--no-cache-dir'
     ]
 
     const jsRuntimeArgs = getJsRuntimeArgs()
@@ -433,7 +424,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
       reject(new Error(`فشل تشغيل yt-dlp: ${err.message}`))
     })
 
-    p.on('close', (code) => {
+    p.on('close', async (code) => {
       const elapsedMs = Date.now() - startMs
       log.info(`[ytdlp] Analysis finished in ${elapsedMs}ms (exit ${code})`)
 
@@ -489,7 +480,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
         }
 
         const formats = (info.formats || [])
-          .filter((f: any) => (f.vcodec !== 'none' || f.acodec !== 'none') && f.protocol !== 'm3u8_native')
+          .filter((f: any) => f.vcodec !== 'none' || f.acodec !== 'none')
           .map((f: any) => ({
             formatId: f.format_id,
             ext: f.ext,
@@ -497,7 +488,8 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
             filesize: f.filesize || f.filesize_approx || null,
             description: `${f.format_note || ''} ${f.fps ? f.fps + 'fps' : ''} ${f.tbr ? Math.round(f.tbr) + 'kbps' : ''} ${f.vcodec !== 'none' && f.acodec !== 'none' ? '(Muxed)' : ''}`.trim(),
             tbr: f.tbr || 0,
-            height: f.height || 0
+            height: f.height || 0,
+            fps: f.fps || 0
           }))
           // Sort by height descending, then by bitrate (tbr) descending
           .sort((a: any, b: any) => b.height - a.height || b.tbr - a.tbr)
@@ -507,11 +499,19 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
             extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
         }
 
-        const parsedComments = info.comments ? info.comments.slice(0, 15).map((c: any) => ({
-          author: c.author || 'مجهول',
-          text: c.text || '',
-          likeCount: c.like_count || 0
-        })) : [];
+        // Fetch actual dislikes from Return YouTube Dislike API
+        let finalDislikes = info.dislike_count;
+        if (isYouTubeUrl(url) && info.id) {
+          try {
+            const rydResponse = await fetchJson(`https://returnyoutubedislikeapi.com/votes?videoId=${info.id}`);
+            if (rydResponse && typeof rydResponse.dislikes === 'number') {
+              finalDislikes = rydResponse.dislikes;
+              log.info(`[RYD API] Fetched actual dislikes: ${finalDislikes}`);
+            }
+          } catch (rydErr) {
+            log.warn('[RYD API] Failed to fetch dislikes:', rydErr);
+          }
+        }
 
         const result: AnalyzeResult = {
           kind: 'ytdlp',
@@ -520,13 +520,12 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
           formats,
           views: info.view_count,
           likes: info.like_count,
-          comments: parsedComments,
-        }
-        
-        log.info('Extracted Thumbnail URL:', result.thumbnail)
-        
-        setCachedAnalysis(url, result)
-        resolve(result)
+          dislikes: finalDislikes,
+          duration: info.duration
+        };
+
+        setCachedAnalysis(url, result);
+        resolve(result);
       } catch (err) {
         log.error('Failed to parse yt-dlp output:', err)
         resolve({ kind: 'unknown' })

@@ -43,17 +43,27 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
   }, [src])
 
   return (
-    // eslint-disable-next-line jsx-a11y/alt-text
-    <img
-      src={imgSrc || THUMB_FALLBACK_DATA_URI}
-      alt={alt || ''}
-      className={className}
-      style={style}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={(e: any) => { e.currentTarget.onerror = null; e.currentTarget.src = THUMB_FALLBACK_DATA_URI }}
-      {...rest}
-    />
+    <>
+      <img
+        src={imgSrc || THUMB_FALLBACK_DATA_URI}
+        alt="bg-blur"
+        className="dc-thumb-bg"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        aria-hidden="true"
+        onError={(e: any) => { e.currentTarget.style.display = 'none' }}
+      />
+      <img
+        src={imgSrc || THUMB_FALLBACK_DATA_URI}
+        alt={alt || ''}
+        className={className}
+        style={style}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={(e: any) => { e.currentTarget.onerror = null; e.currentTarget.src = THUMB_FALLBACK_DATA_URI }}
+        {...rest}
+      />
+    </>
   )
 }
 
@@ -148,7 +158,7 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           <SmartImage 
             src={vm.thumbnail} 
             alt="thumbnail" 
-            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px' }} 
+            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }} 
           />
         ) : (
           <div className="dc-thumb-placeholder">

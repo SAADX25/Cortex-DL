@@ -69,9 +69,11 @@ function spawnYtdlp(
     '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
     // Performance optimizations
     '--concurrent-fragments', fragments,
-    '--resize-buffer',
+    '--aria2c-args', '--min-split-size=1M --max-connection-per-server=16 --max-concurrent-downloads=8 --split=8',
+    '--downloader', 'aria2c',
+    '--downloader', 'dash,m3u8:native',
     '--http-chunk-size', '10M',
-    '--buffer-size', '16M',
+    '--buffer-size', '32M',
     '--file-access-retries', '5',
     '--socket-timeout', '5',
     '--compat-options', 'no-live-chat',
@@ -119,7 +121,8 @@ function spawnYtdlp(
   if (AUDIO_FORMATS.includes(format as AudioFormat)) {
     const audioFormatArg = format === 'ogg' ? 'vorbis' : format
     args.push('-x', '--audio-format', audioFormatArg, '-f', 'bestaudio/best')
-    if (format === 'mp3') args.push('--audio-quality', '0')
+    // Use good logic for audio: set quality 0 to get best VBR audio
+    args.push('--audio-quality', '0')
   } else if (VIDEO_FORMATS.includes(format as VideoFormat)) {
     buildVideoFormatArgs(args, format as VideoFormat, formatId)
   } else {
