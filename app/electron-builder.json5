@@ -84,7 +84,7 @@
     {
       "provider": "github",
       "owner": "SAADX25",
-      "repo": "Cortex-DL-Releases",
+      "repo": "Cortex-DL",
       "private": false,
       "releaseType": "release"
     }
