@@ -71,9 +71,9 @@ async function loadBackendServices() {
     if (win) {
       const result = await dialog.showMessageBox(win, {
         type: 'question',
-        title: 'اكتمل التحميل - Update Ready',
-        message: 'تم تحميل التحديث بنجاح. هل تريد إعادة تشغيل البرنامج لتثبيته الآن؟\nThe update has been downloaded. Restart the app to install it now?',
-        buttons: ['إعادة التشغيل الآن (Restart Now)', 'لاحقاً (Later)'],
+        title: 'Update Ready',
+        message: 'The update has been downloaded. Restart the app to install it now?',
+        buttons: ['Restart Now', 'Later'],
         defaultId: 0,
         cancelId: 1
       })
@@ -94,9 +94,9 @@ async function loadBackendServices() {
     if (win) {
       const result = await dialog.showMessageBox(win, {
         type: 'info',
-        title: 'تحديث جديد متوفر - Update Available',
-        message: `نسخة جديدة (${info.version}) متوفرة للتحميل. هل تريد تحديث البرنامج الآن؟\nA new version (${info.version}) is available. Would you like to download it now?`,
-        buttons: ['تحديث الآن (Update Now)', 'لاحقاً (Later)'],
+        title: 'Update Available',
+        message: `A new version (${info.version}) of Cortex DL is available. Would you like to download it now?`,
+        buttons: ['Update Now', 'Later'],
         defaultId: 0,
         cancelId: 1
       })
@@ -561,7 +561,8 @@ ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
     throw err
   }
 })
-
+  // Disable Hardware Acceleration for lower-end devices to prevent UI lag/artifacts
+  app.disableHardwareAcceleration()
 const gotTheLock = app.requestSingleInstanceLock()
 // ─── Local Media Streaming Server ────────────────────────────────────────────
 // A lightweight HTTP server that streams local files with proper 206 Partial

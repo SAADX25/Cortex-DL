@@ -16,6 +16,7 @@ export class MediaProcessor {
       const ffmpeg = getBinaryPath('ffmpeg');
       const args = [
         '-y',
+        '-threads', '2',
         '-i', videoPath,
         '-i', audioPath,
         '-c', 'copy',
@@ -54,7 +55,7 @@ export class MediaProcessor {
   async convert(inputPath: string, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const ffmpeg = getBinaryPath('ffmpeg');
-      const args = ['-y', '-i', inputPath, outputPath];
+      const args = ['-y', '-threads', '2', '-i', inputPath, outputPath];
 
       log.info(`[MediaProcessor] Converting: ${inputPath} -> ${outputPath}`);
 

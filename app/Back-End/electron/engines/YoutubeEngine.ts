@@ -381,7 +381,7 @@ export class YoutubeEngine implements IEngine {
       '--force-ipv4',
       '--no-warnings',
       '--force-overwrites',
-      '--postprocessor-args', 'ffmpeg:-y',
+      '--postprocessor-args', 'ffmpeg:-y -threads 2',
       '--progress-template', 'download:CORTEX_DL:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s:%(progress.speed)s',
       '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
       '--resize-buffer',
@@ -488,10 +488,10 @@ export class YoutubeEngine implements IEngine {
 
     if (desiredExt === '.gif' && dExt !== '.gif') {
       needsFfmpeg = true
-      ffmpegArgs = ['-y', '-i', downloadedPath, '-vf', 'fps=15,scale=480:-1:flags=lanczos', downloadedPath.replace(dExt, '.gif')]
+      ffmpegArgs = ['-y', '-threads', '2', '-i', downloadedPath, '-vf', 'fps=15,scale=480:-1:flags=lanczos', downloadedPath.replace(dExt, '.gif')]
     } else if (desiredExt === '.wma' && dExt !== '.wma') {
       needsFfmpeg = true
-      ffmpegArgs = ['-y', '-i', downloadedPath, '-c:a', 'wmav2', '-b:a', '192k', downloadedPath.replace(dExt, '.wma')]
+      ffmpegArgs = ['-y', '-threads', '2', '-i', downloadedPath, '-c:a', 'wmav2', '-b:a', '192k', downloadedPath.replace(dExt, '.wma')]
     }
 
     if (needsFfmpeg && ffmpegArgs.length > 0) {

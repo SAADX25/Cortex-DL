@@ -74,7 +74,7 @@ function spawnFfmpeg(
   endTime?: string,
 ): ChildProcessWithoutNullStreams {
   // Pre-input flags: overwrite, progress, fast input seek
-  const pre = ['-y', '-progress', 'pipe:2']
+    const pre = ['-y', '-threads', '2', '-progress', 'pipe:2']
   if (startTime) pre.push('-ss', startTime)   // input seek (fast)
   pre.push('-i', url)
 
@@ -102,7 +102,7 @@ function spawnFfmpeg(
       case 'mkv':  tail = ['-c', 'copy', outputPath]; break
       case 'avi':  tail = ['-c:v', 'copy', '-c:a', 'mp3', outputPath]; break
       case 'mov':  tail = ['-c', 'copy', '-movflags', '+faststart', outputPath]; break
-      case 'webm': tail = ['-c:v', 'libvpx-vp9', '-c:a', 'libopus', '-b:v', '0', '-crf', '30', outputPath]; break
+      case 'webm': tail = ['-c:v', 'libvpx-vp9', '-c:a', 'libopus', '-b:v', '0', '-crf', '30', '-threads', '2', '-speed', '4', outputPath]; break
       case 'gif':  tail = ['-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0', outputPath]; break
       default:     tail = ['-c', 'copy', '-bsf:a', 'aac_adtstoasc', outputPath]
     }
