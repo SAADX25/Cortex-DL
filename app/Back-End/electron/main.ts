@@ -33,6 +33,10 @@ process.on('unhandledRejection', (reason, _promise) => {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Global Lazy-Loaded Variables (Strictly Typed)
+let downloads: DownloadManager | null = null
+let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
+
 // Service Ready Promise (Fixes Race Condition)
 let serviceReadyResolve: () => void
 const serviceReadyPromise = new Promise<void>(resolve => {
