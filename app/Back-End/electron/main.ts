@@ -1,12 +1,17 @@
 import log from 'electron-log'
+import * as dotenv from 'dotenv'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// Initialization: set __dirname and load .env
+const __dirname_env = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
 
 // Configure pure electron-log globally FIRST
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
 import { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu, nativeImage, safeStorage } from 'electron'
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
 import { existsSync, rmSync, statSync, createReadStream } from 'node:fs'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
@@ -27,10 +32,6 @@ process.on('unhandledRejection', (reason, _promise) => {
 })
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-// Global Lazy-Loaded Variables (Strictly Typed)
-let downloads: DownloadManager | null = null
-let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
 
 // Service Ready Promise (Fixes Race Condition)
 let serviceReadyResolve: () => void
@@ -571,7 +572,8 @@ const gotTheLock = app.requestSingleInstanceLock()
 // basic custom protocol or raw file:// URLs in the renderer.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const MEDIA_SERVER_PORT = 58888
+// Media Server Port (default to constant value if not found in .env)
+export const MEDIA_SERVER_PORT = Number(process.env.MEDIA_SERVER_PORT) || 58888
 let mediaServer: http.Server | null = null
 
 const MIME_TYPES: Record<string, string> = {

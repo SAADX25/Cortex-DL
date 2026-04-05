@@ -228,7 +228,8 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
   try {
     // Step 1: Fetch latest release info from GitHub API
     log.info('[ytdlp] Fetching latest release from GitHub...')
-    const releaseData = await fetchJson('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest')
+    const releaseUrl = process.env.GITHUB_RELEASE_API || 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'
+    const releaseData = await fetchJson(releaseUrl)
     
     const latestVersion = releaseData.tag_name || releaseData.name
     log.info(`[ytdlp] Latest version: ${latestVersion}`)
@@ -503,7 +504,8 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
         let finalDislikes = info.dislike_count;
         if (isYouTubeUrl(url) && info.id) {
           try {
-            const rydResponse = await fetchJson(`https://returnyoutubedislikeapi.com/votes?videoId=${info.id}`);
+            const rydApiBase = process.env.RYD_API_URL || 'https://returnyoutubedislikeapi.com/votes?videoId='
+            const rydResponse = await fetchJson(`${rydApiBase}${info.id}`);
             if (rydResponse && typeof rydResponse.dislikes === 'number') {
               finalDislikes = rydResponse.dislikes;
               log.info(`[RYD API] Fetched actual dislikes: ${finalDislikes}`);
