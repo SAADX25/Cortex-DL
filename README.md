@@ -1,6 +1,6 @@
 <div align="center">
   
-  # 🚀 Cortex-DL
+  #  Cortex-DL
 
   **A modern, fast, and elegant download manager for Windows.**
 
