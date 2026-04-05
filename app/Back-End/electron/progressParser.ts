@@ -33,17 +33,22 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
     const totalEst = parseFloat(tplMatch[2])
     const speed = parseFloat(tplMatch[3])
 
-    if (!isNaN(dlBytes) && dlBytes > 0) {
+    if (!isNaN(dlBytes) && dlBytes >= 0) {
       task.downloadedBytes = Math.round(dlBytes)
       changed = true
     }
-    if (!isNaN(totalEst) && totalEst > 0 && (!task.totalBytes || totalEst > task.totalBytes)) {
-      task.totalBytes = Math.round(totalEst)
-      changed = true
+    if (!isNaN(totalEst) && totalEst > 0) {
+      if (task.totalBytes !== Math.round(totalEst)) {
+        task.totalBytes = Math.round(totalEst)
+        changed = true
+      }
     }
-    if (!isNaN(speed) && speed > 0) {
-      task.speedBytesPerSec = Math.round(speed)
-      changed = true
+    if (!isNaN(speed) && speed >= 0) {
+      const roundedSpeed = Math.round(speed)
+      if (task.speedBytesPerSec !== roundedSpeed) {
+        task.speedBytesPerSec = roundedSpeed
+        changed = true
+      }
     }
 
     if (task.totalBytes && task.totalBytes > 0 && task.downloadedBytes > 0) {
@@ -64,7 +69,7 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
       : unit === 'gib' ? 1024 ** 3
       : unit === 'tib' ? 1024 ** 4 : 1
     const calculatedTotal = Math.round(totalVal * multiplier)
-    if (calculatedTotal > 0 && (!task.totalBytes || calculatedTotal > task.totalBytes)) {
+    if (calculatedTotal > 0 && calculatedTotal !== task.totalBytes) {
       task.totalBytes = calculatedTotal
       changed = true
     }

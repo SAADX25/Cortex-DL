@@ -5,6 +5,7 @@ import axios from 'axios';
 import { createWriteStream } from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
 import { nowMs } from '../utils';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -128,30 +129,33 @@ export class DirectEngine implements IEngine {
 
     const writer = createWriteStream(task.filePath);
 
-    response.data.on('data', (chunk: Buffer) => {
-      task.downloadedBytes += chunk.length;
-      
-      const now = nowMs();
-      // Send update every 100ms or every 1MB
-      const bytesSinceLast = task.downloadedBytes - this.lastProgressUpdateBytes;
-      if (now - this.lastProgressUpdate > 100 || bytesSinceLast > 1024 * 1024) {
-        if (context?.sendUpdate) {
-          context.sendUpdate(task);
-        } else {
-          const progress = task.totalBytes && task.totalBytes > 0 
-            ? (task.downloadedBytes / task.totalBytes) * 100 
-            : 0;
-          log.info(
-            `[DirectEngine] Task ${task.id} Progress: ${progress.toFixed(2)}% ` +
-            `(${this.formatBytes(task.downloadedBytes)}/${this.formatBytes(task.totalBytes || 0)})`
-          );
+    const progressStream = new Transform({
+      transform: (chunk: Buffer, _encoding, callback) => {
+        task.downloadedBytes += chunk.length;
+        
+        const now = nowMs();
+        // Send update every 100ms or every 1MB
+        const bytesSinceLast = task.downloadedBytes - this.lastProgressUpdateBytes;
+        if (now - this.lastProgressUpdate > 100 || bytesSinceLast > 1024 * 1024) {
+          if (context?.sendUpdate) {
+            context.sendUpdate(task);
+          } else {
+            const progress = task.totalBytes && task.totalBytes > 0 
+              ? (task.downloadedBytes / task.totalBytes) * 100 
+              : 0;
+            log.info(
+              `[DirectEngine] Task ${task.id} Progress: ${progress.toFixed(2)}% ` +
+              `(${this.formatBytes(task.downloadedBytes)}/${this.formatBytes(task.totalBytes || 0)})`
+            );
+          }
+          this.lastProgressUpdate = now;
+          this.lastProgressUpdateBytes = task.downloadedBytes;
         }
-        this.lastProgressUpdate = now;
-        this.lastProgressUpdateBytes = task.downloadedBytes;
+        callback(null, chunk);
       }
     });
 
-    await pipeline(response.data, writer);
+    await pipeline(response.data, progressStream, writer);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -165,8 +169,10 @@ export class DirectEngine implements IEngine {
   ): Promise<void> {
     log.info(`[DirectEngine] Task ${task.id}: Using 8-chunk parallel download`);
 
-    // Ensure the file exists with correct size
-    await fsPromises.writeFile(task.filePath, Buffer.alloc(totalBytes));
+    // Ensure the file exists with correct size without allocating memory
+    const fh = await fsPromises.open(task.filePath, 'w');
+    await fh.truncate(totalBytes);
+    await fh.close();
     
     // Create chunks
     this.chunks = this.createChunks(totalBytes);
@@ -194,10 +200,12 @@ export class DirectEngine implements IEngine {
       log.info(`[DirectEngine] Task ${task.id}: All ${this.chunks.length} chunks completed successfully`);
 
     } catch (error) {
-      // Clean up partial file on failure
-      try {
-        await fsPromises.unlink(task.filePath);
-      } catch { /* ignore */ }
+      // Clean up partial file on failure ONLY if not aborted
+      if (!this.abortController?.signal.aborted && !axios.isCancel(error)) {
+        try {
+          await fsPromises.unlink(task.filePath);
+        } catch { /* ignore */ }
+      }
       throw error;
     }
   }
@@ -265,32 +273,36 @@ export class DirectEngine implements IEngine {
 
     let chunkDownloadedBytes = 0;
 
-    response.data.on('data', (buffer: Buffer) => {
-      chunkDownloadedBytes += buffer.length;
-      chunk.downloadedBytes = chunkDownloadedBytes;
+    const progressStream = new Transform({
+      transform: (buffer: Buffer, _encoding, callback) => {
+        chunkDownloadedBytes += buffer.length;
+        chunk.downloadedBytes = chunkDownloadedBytes;
 
-      // Update overall progress
-      task.downloadedBytes = this.calculateTotalProgress();
-      
-      const now = nowMs();
-      // Send update every 150ms
-      if (now - this.lastProgressUpdate > 150) {
-        if (context?.sendUpdate) {
-          context.sendUpdate(task);
-        } else {
-          const progress = (task.downloadedBytes / (task.totalBytes || 1)) * 100;
-          log.info(
-            `[DirectEngine] Task ${task.id} Progress: ${progress.toFixed(2)}% ` +
-            `(${this.formatBytes(task.downloadedBytes)}/${this.formatBytes(task.totalBytes || 0)})`
-          );
+        // Update overall progress
+        task.downloadedBytes = this.calculateTotalProgress();
+        
+        const now = nowMs();
+        // Send update every 150ms
+        if (now - this.lastProgressUpdate > 150) {
+          if (context?.sendUpdate) {
+            context.sendUpdate(task);
+          } else {
+            const progress = (task.downloadedBytes / (task.totalBytes || 1)) * 100;
+            log.info(
+              `[DirectEngine] Task ${task.id} Progress: ${progress.toFixed(2)}% ` +
+              `(${this.formatBytes(task.downloadedBytes)}/${this.formatBytes(task.totalBytes || 0)})`
+            );
+          }
+          this.lastProgressUpdate = now;
         }
-        this.lastProgressUpdate = now;
+        callback(null, buffer);
       }
     });
 
     // Write chunk data to file at the correct position
     await pipeline(
       response.data,
+      progressStream,
       createWriteStream(task.filePath, { start: chunk.start, flags: 'r+' })
     );
 

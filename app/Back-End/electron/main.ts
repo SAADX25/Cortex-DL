@@ -61,19 +61,53 @@ async function loadBackendServices() {
 
   // 3. Configure AutoUpdater logging
   autoUpdater.logger = log
+  autoUpdater.autoDownload = false // Pre-prompt before downloading
 
   // 4. Setup AutoUpdater Listeners
-  autoUpdater.on('update-downloaded', () => {
-    log?.info('Update downloaded. Installing silently...')
+  autoUpdater.on('update-downloaded', async () => {
+    log?.info('Update downloaded. Prompting for install...')
     if (win) win.webContents.send('update-status', { status: 'downloaded' })
+
+    if (win) {
+      const result = await dialog.showMessageBox(win, {
+        type: 'question',
+        title: 'اكتمل التحميل - Update Ready',
+        message: 'تم تحميل التحديث بنجاح. هل تريد إعادة تشغيل البرنامج لتثبيته الآن؟\nThe update has been downloaded. Restart the app to install it now?',
+        buttons: ['إعادة التشغيل الآن (Restart Now)', 'لاحقاً (Later)'],
+        defaultId: 0,
+        cancelId: 1
+      })
+
+      if (result.response === 0) {
+        autoUpdater?.quitAndInstall()
+      }
+    }
   })
 
   autoUpdater.on('checking-for-update', () => {
     if (win) win.webContents.send('update-status', { status: 'checking' })
   })
 
-  autoUpdater.on('update-available', () => {
+  autoUpdater.on('update-available', async (info: any) => {
     if (win) win.webContents.send('update-status', { status: 'available' })
+
+    if (win) {
+      const result = await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'تحديث جديد متوفر - Update Available',
+        message: `نسخة جديدة (${info.version}) متوفرة للتحميل. هل تريد تحديث البرنامج الآن؟\nA new version (${info.version}) is available. Would you like to download it now?`,
+        buttons: ['تحديث الآن (Update Now)', 'لاحقاً (Later)'],
+        defaultId: 0,
+        cancelId: 1
+      })
+
+      if (result.response === 0) {
+        if (win) win.webContents.send('update-status', { status: 'downloading-started' })
+        autoUpdater?.downloadUpdate()
+      } else {
+        if (win) win.webContents.send('update-status', { status: 'not-available' })
+      }
+    }
   })
 
   autoUpdater.on('update-not-available', () => {

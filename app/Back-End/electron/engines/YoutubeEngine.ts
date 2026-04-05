@@ -380,6 +380,8 @@ export class YoutubeEngine implements IEngine {
       '--geo-bypass',
       '--force-ipv4',
       '--no-warnings',
+      '--force-overwrites',
+      '--postprocessor-args', 'ffmpeg:-y',
       '--progress-template', 'download:CORTEX_DL:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s:%(progress.speed)s',
       '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
       '--resize-buffer',
