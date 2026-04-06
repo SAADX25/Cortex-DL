@@ -1,7 +1,7 @@
 {
   "name": "cortex-dl",
   "private": true,
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Cortex DL - Advanced Video and Audio Downloader",
   "repository": {
     "type": "git",

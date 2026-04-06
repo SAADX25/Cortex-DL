@@ -567,7 +567,8 @@ ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
   }
 })
   // Disable Hardware Acceleration for lower-end devices to prevent UI lag/artifacts
-  app.disableHardwareAcceleration()
+// Hardware acceleration is actively enabled for smooth UI/video playback
+// app.disableHardwareAcceleration()
 const gotTheLock = app.requestSingleInstanceLock()
 // ─── Local Media Streaming Server ────────────────────────────────────────────
 // A lightweight HTTP server that streams local files with proper 206 Partial

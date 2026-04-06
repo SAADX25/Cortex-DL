@@ -31,7 +31,7 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-const MEDIA_SERVER_PORT = 58888
+const MEDIA_SERVER_PORT = 3345
 
 function toStreamUrl(filePath: string): string {
   if (!filePath) return ''
@@ -125,7 +125,7 @@ interface VideoViewProps {
   showControls: boolean
   isZenMode: boolean
   videoRef: React.RefObject<HTMLVideoElement>
-  ambilightRef: React.RefObject<HTMLVideoElement>
+  ambilightRef: React.RefObject<HTMLCanvasElement>
   togglePlay: () => void
   onSeek: (e: React.ChangeEvent<HTMLInputElement>) => void
   onVolumeChange: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -153,14 +153,10 @@ function VideoPlayerView({
       {/* ── Video body (fills entire container) ── */}
       <div className="player-body">
         <div className="video-wrapper">
-          {/* Ambilight background */}
-          <video
+          {/* Ambilight background (Canvas for better CPU/GPU performance) */}
+          <canvas
             ref={ambilightRef}
             className="ambilight-video"
-            src={fileUrl}
-            muted
-            playsInline
-            loop
           />
           {/* Main video — click to play/pause or exit zen */}
           <video
@@ -359,7 +355,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const audioRef = useRef<HTMLAudioElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const ambilightRef = useRef<HTMLVideoElement>(null)
+  const ambilightRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -403,10 +399,18 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     let rafId: number
 
     try {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const cached = (audioEl as any).__audioCache
+      if (cached && cached.ctx.state !== 'closed') {
+        audioCtx = cached.ctx
+        source = cached.source
+      } else {
+        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        source = audioCtx.createMediaElementSource(audioEl)
+        ;(audioEl as any).__audioCache = { ctx: audioCtx, source }
+      }
+      
       analyser = audioCtx.createAnalyser()
       analyser.fftSize = 256
-      source = audioCtx.createMediaElementSource(audioEl)
       source.connect(analyser)
       analyser.connect(audioCtx.destination)
     } catch (e) {
@@ -482,9 +486,13 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     return () => {
       cancelAnimationFrame(rafId)
       animationFrameRef.current = null
-      try { source.disconnect() } catch (_) {}
-      try { analyser.disconnect() } catch (_) {}
-      try { audioCtx.close() } catch (_) {}
+      
+      // IMPORTANT: DO NOT disconnect the source from context or close the context entirely!
+      // In React 18 strict mode, the DOM node is preserved and re-used for the next effect run.
+      // If we close the context, the audio element gets permanently muted.
+      try { if (source && analyser) source.disconnect(analyser) } catch (_) {}
+      try { if (analyser) analyser.disconnect() } catch (_) {}
+      
       audioContextRef.current = null
       analyserRef.current = null
       sourceRef.current = null
@@ -539,11 +547,16 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   /* ── Reset on close & release file locks ── */
   useEffect(() => {
     if (!isOpen) {
-      const release = (el: HTMLVideoElement | HTMLAudioElement | null) => {
+      const release = (el: HTMLVideoElement | HTMLAudioElement | HTMLCanvasElement | null) => {
         if (!el) return
-        el.pause()
-        el.removeAttribute('src')
-        el.load()
+        if ('pause' in el) { // Audio or Video
+          el.pause()
+          el.removeAttribute('src')
+          el.load()
+        } else if (el.tagName === 'CANVAS') {
+          const ctx = (el as HTMLCanvasElement).getContext('2d')
+          ctx?.clearRect(0, 0, el.width, el.height)
+        }
       }
       release(videoRef.current)
       release(audioRef.current)
@@ -581,18 +594,46 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     }
   }, [isPlaying, mediaType, clearHideTimer, startHideTimer])
 
-  /* ── Sync ambilight video with main video ── */
+  /* ── Sync ambilight background using canvas to drastically reduce CPU/GPU ── */
   useEffect(() => {
     if (mediaType !== 'video') return
-    if (videoRef.current && ambilightRef.current) {
-      ambilightRef.current.currentTime = videoRef.current.currentTime
-      if (isPlaying && ambilightRef.current.paused) {
-        ambilightRef.current.play()
-      } else if (!isPlaying && !ambilightRef.current.paused) {
-        ambilightRef.current.pause()
+
+    let rafId: number
+    let isActive = true
+
+    const drawAmbilightFrame = () => {
+      if (!isActive) return
+
+      const video = videoRef.current
+      const canvas = ambilightRef.current
+      
+      if (video && canvas && !video.paused && !video.ended) {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          if (canvas.width !== 160) {
+             canvas.width = 160
+             canvas.height = Math.round((160 * video.videoHeight) / video.videoWidth)
+          }
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          }
+        }
+      }
+      
+      if (isActive) {
+        rafId = requestAnimationFrame(drawAmbilightFrame)
       }
     }
-  }, [isPlaying, currentTime, mediaType])
+
+    if (isPlaying) {
+      rafId = requestAnimationFrame(drawAmbilightFrame)
+    }
+
+    return () => {
+      isActive = false
+      if (rafId) cancelAnimationFrame(rafId)
+    }
+  }, [isPlaying, mediaType])
 
   /* ───────────────────────────────────────────────────────────
      Action handlers
