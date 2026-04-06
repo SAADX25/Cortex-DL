@@ -222,6 +222,17 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
   const binDir = getBinDirectory()
   const binaryPath = path.join(binDir, 'yt-dlp.exe')
   const tempPath = path.join(binDir, 'yt-dlp_new.exe')
+  const oldPath = binaryPath + '.old'
+
+  // Cleanup old files from previous updates
+  try {
+    if (existsSync(oldPath)) {
+      await unlink(oldPath)
+      log.info(`[ytdlp] Cleaned up old binary: ${oldPath}`)
+    }
+  } catch (cleanupErr) {
+    log.warn(`[ytdlp] Failed to clean up old binary: ${oldPath}`, cleanupErr)
+  }
   
   log.info(`[ytdlp] Update: binDir=${binDir}, binaryPath=${binaryPath}`)
 

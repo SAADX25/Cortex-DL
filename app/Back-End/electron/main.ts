@@ -602,9 +602,22 @@ const MIME_TYPES: Record<string, string> = {
 function startMediaStreamingServer(): void {
   if (mediaServer) return // already running
 
+  // The allowed origin is VITE_DEV_SERVER_URL in dev, and 'file://' in production.
+  const devUrl = VITE_DEV_SERVER_URL ? VITE_DEV_SERVER_URL.replace(/\/$/, '') : null
+  const appOrigin = devUrl || 'file://'
+
   mediaServer = http.createServer((req, res) => {
-    // CORS pre-flight (needed when renderer is on http://localhost:5173 in dev)
-    res.setHeader('Access-Control-Allow-Origin', '*')
+    // 1. Origin Validation
+    const requestOrigin = req.headers.origin
+    
+    if (requestOrigin !== appOrigin) {
+      res.writeHead(403)
+      res.end('Unauthorized origin')
+      return
+    }
+
+    // CORS pre-flight
+    res.setHeader('Access-Control-Allow-Origin', appOrigin)
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Range')
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length')
