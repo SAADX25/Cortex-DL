@@ -169,6 +169,7 @@ function VideoPlayerView({
             onEnded={onEnded}
             onPlay={onPlay}
             onPause={onPause}
+            crossOrigin="anonymous"
             playsInline
           />
         </div>
