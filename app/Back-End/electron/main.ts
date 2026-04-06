@@ -578,7 +578,7 @@ const gotTheLock = app.requestSingleInstanceLock()
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Media Server Port (default to constant value if not found in .env)
-export const MEDIA_SERVER_PORT = Number(process.env.MEDIA_SERVER_PORT) || 58888
+export const MEDIA_SERVER_PORT = Number(process.env.MEDIA_SERVER_PORT) || 3345
 let mediaServer: http.Server | null = null
 
 const MIME_TYPES: Record<string, string> = {
