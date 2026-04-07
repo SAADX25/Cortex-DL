@@ -610,14 +610,17 @@ function startMediaStreamingServer(): void {
     // 1. Origin Validation
     const requestOrigin = req.headers.origin
     
-    if (requestOrigin !== appOrigin) {
+    // Media elements (video/audio) may send null or missing origin in file:// context.
+    if (requestOrigin && requestOrigin !== appOrigin && requestOrigin !== 'null') {
       res.writeHead(403)
       res.end('Unauthorized origin')
       return
     }
 
     // CORS pre-flight
-    res.setHeader('Access-Control-Allow-Origin', appOrigin)
+    // Use the actual requestOrigin to satisfy CORS constraints, fallback to '*' or appOrigin.
+    const corsOrigin = requestOrigin && requestOrigin !== 'null' ? requestOrigin : '*'
+    res.setHeader('Access-Control-Allow-Origin', corsOrigin)
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Range')
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length')
