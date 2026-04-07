@@ -743,6 +743,7 @@ body {
   flex: 1;
 }
 
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -753,25 +754,61 @@ body {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); /* تحويل أنعم وأطول للأنيميشن */
   font-size: 0.95rem;
   font-weight: 500;
   text-align: right;
   position: relative;
+  overflow: hidden; /* لمنع خروج تأثيرات اللمعان */
 }
 
+/* تأثير عند المرور بالماوس: ارتداد خفيفولمعان */
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-main);
+  transform: translateY(-2px) scale(1.02); /* بروز النبضة الأولى */
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.03);
 }
 
+/* عنصر النبض الخاص بالقائمة النشطة */
 .nav-item.active {
   background: rgba(56, 189, 248, 0.1);
   color: var(--accent-primary);
+  /* حركة تنبض بالحياة للزر النشط */
+  animation: pulse-active 3s infinite ease-in-out;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
+}
+
+/* الأيقونات تنبض بالون عند التفعيل */
+.nav-item.active .nav-icon {
+  animation: float-icon 3s infinite ease-in-out;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
+}
+
+/* مفتاح الحركة النابضة بالحياة */
+@keyframes pulse-active {
+  0% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.3);
+    background: rgba(56, 189, 248, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px 0 rgba(56, 189, 248, 0.15);
+    background: rgba(56, 189, 248, 0.18);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+    background: rgba(56, 189, 248, 0.1);
+  }
+}
+
+@keyframes float-icon {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.1); }
 }
 
 .nav-icon {
   font-size: 1.2rem;
+  transition: all 0.3s ease;
 }
 
 .nav-badge {
@@ -829,6 +866,18 @@ body {
   align-items: center;
   gap: 2rem;
   flex-wrap: wrap;
+}
+
+/* اجعل الهيدر وشريط البحث ثابتين في قائمة التحميلات */
+.content-header.sticky-search-header {
+  position: sticky;
+  top: -2rem; /* يلتصق بأعلى الصفحة تماماً مع تعويض ال padding الخاص بـ main-content */
+  z-index: 50; /* تأكد من بقائه فوق عناصر القائمة */
+  background-color: var(--bg-main); /* لون صلب ومطابق للخلفية لإخفاء العناصر أسفله تماماً */
+  padding: 2rem 0 1rem 0; /* مسافات داخلية لحفظ الشكل */
+  margin-top: -2rem; /* مسافة سالبة لتعويض المساحة و الالتصاق مباشرة */
+  margin-bottom: 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* خط صغير في الأسفل */
 }
 
 .content-header h1 {
@@ -1606,38 +1655,56 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8rem 2rem;
+  padding: 4rem 2rem; /* تم تقليل الطول المبالغ فيه لتصبح مناسبة وأنيقة */
   text-align: center;
-  gap: 1.5rem;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 2rem;
-  border: 2px dashed rgba(255, 255, 255, 0.05);
-  margin: 2rem 0;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.03); /* إطار ناعم بدلاً من المتقطع */
+  box-shadow: inset 0 2px 20px rgba(255, 255, 255, 0.02), 0 10px 30px rgba(0, 0, 0, 0.2);
+  margin: 2rem auto;
+  max-width: 500px; /* حجم مربع متوسط ليس بالصغير ولا بالكبير */
 }
 
-.empty-icon {
-  font-size: 5rem;
-  margin-bottom: 0.5rem;
-  filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.2));
+/* حاوية الأيقونة */
+.empty-icon-container {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 30px rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.empty-icon-svg {
+  color: var(--accent-primary);
   animation: float 3s ease-in-out infinite;
 }
 
 @keyframes float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  50% { transform: translateY(-8px); }
 }
 
 .empty-state h3 {
-  font-size: 1.75rem;
+  font-size: 1.6rem;
   font-weight: 700;
-  color: var(--text-main);
-  margin: 0;
+  margin: 0 0 0.75rem 0;
+  background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .empty-state p {
   color: var(--text-muted);
-  max-width: 400px;
-  font-size: 1.1rem;
+  max-width: 380px;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .primary-btn {

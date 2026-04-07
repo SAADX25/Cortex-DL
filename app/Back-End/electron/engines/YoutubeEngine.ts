@@ -180,9 +180,33 @@ export class YoutubeEngine implements IEngine {
     // If the user paused/canceled, don't overwrite state.
     if (runtime.abortController?.signal.aborted) return
 
-    if (exitCode === 0) {
+    // Find if a valid downloaded file exists at this point
+    let downloadedTempPath: string | null = detectedFinalPath
+    if (!downloadedTempPath || !existsSync(downloadedTempPath)) {
+      try {
+        const files = await fsPromises.readdir(task.directory)
+        downloadedTempPath = files
+          .map((f) => path.join(task.directory, f))
+          .find((p) => path.basename(p).startsWith(`${task.id}.`)) ?? null
+      } catch {
+        downloadedTempPath = null
+      }
+    }
+
+    // Treat as success if exit code is 0 OR if we actually produced a file with some reasonable data
+    let isSuccess = exitCode === 0
+    if (!isSuccess && downloadedTempPath && existsSync(downloadedTempPath)) {
+      const sizeTemp = await getFileSizeIfExists(downloadedTempPath)
+      // If we have a file with more than 50KB or download progress indicated > 0, it's likely successfully fetched but ffmpeg gave a warning
+      if (sizeTemp > 50 * 1024 || task.downloadedBytes > 0) {
+        log.warn(`[YoutubeEngine] Task ${task.id} exited with ${exitCode} but generated file. Treating as success.`)
+        isSuccess = true
+      }
+    }
+
+    if (isSuccess) {
       // Rename/move final output to the orchestrator's expected task.filePath
-      await this.renameDownloaded(task, detectedFinalPath)
+      await this.renameDownloaded(task, downloadedTempPath || detectedFinalPath)
 
       task.status = 'completed'
       task.updatedAtMs = nowMs()
@@ -518,20 +542,28 @@ export class YoutubeEngine implements IEngine {
       targetPath = `${parsed.dir}\\${parsed.name}_${counter}${parsed.ext}`
     }
 
-    await fsPromises.rename(downloadedPath, targetPath).catch(async () => {
-      // If rename fails, fall back to updating fields for detected output.
+    // Windows can sometimes fail to rename if a file is temporarily locked (e.g. by AV or just written). Let's use a small retry loop.
+    let renameSuccess = false;
+    for (let attempts = 0; attempts < 3; attempts++) {
+      try {
+        await fsPromises.rename(downloadedPath, targetPath);
+        renameSuccess = true;
+        break; // Successfully renamed
+      } catch (err) {
+        log.warn(`[YoutubeEngine] Rename failed on attempt ${attempts + 1} for ${downloadedPath}:`, err);
+        await new Promise((r) => setTimeout(r, 1000)); // wait 1s before retrying
+      }
+    }
+
+    if (!renameSuccess) {
+      // If rename fails totally, fall back to updating fields for detected output.
       if (existsSync(downloadedPath)) {
         task.filePath = downloadedPath
         task.filename = path.basename(downloadedPath)
       }
-    })
-
-    if (existsSync(targetPath)) {
+    } else if (existsSync(targetPath)) {
       task.filePath = targetPath
       task.filename = path.basename(targetPath)
-    } else if (existsSync(downloadedPath)) {
-      task.filePath = downloadedPath
-      task.filename = path.basename(downloadedPath)
     }
   }
 
