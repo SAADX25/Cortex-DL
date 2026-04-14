@@ -3,7 +3,6 @@ import path from 'node:path'
 import fs from 'node:fs'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
-import obfuscator from 'rollup-plugin-obfuscator'
 
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'))
 

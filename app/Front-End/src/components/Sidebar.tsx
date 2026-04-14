@@ -1,23 +1,26 @@
 import React from 'react'
 import { Plus, DownloadCloud, Settings } from 'lucide-react'
 import { Language, translations } from '../translations'
+import { useUIStore } from '../stores/useUIStore'
+import { useDownloadStore } from '../stores/downloadStore'
 
 interface SidebarProps {
-  activeTab: 'add' | 'downloads' | 'settings'
-  setActiveTab: (tab: 'add' | 'downloads' | 'settings') => void
-  activeDownloadCount: number
   enginesStatus: { ytdlp: boolean; ffmpeg: boolean; jsRuntime: boolean; jsRuntimeName: string }
   lang: Language
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
-  activeTab,
-  setActiveTab,
-  activeDownloadCount,
   enginesStatus,
   lang,
 }) => {
   const t = translations[lang]
+
+  // Subscribe directly to the store — only re-renders when these slices change
+  const activeTab = useUIStore((s) => s.activeTab)
+  const setActiveTab = useUIStore((s) => s.setActiveTab)
+  const activeDownloadCount = useDownloadStore(
+    (s) => Array.from(s.tasks.values()).filter((t) => t.status === 'downloading').length
+  )
 
   return (
     <aside className="sidebar">

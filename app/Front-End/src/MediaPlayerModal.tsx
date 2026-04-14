@@ -31,11 +31,12 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-const MEDIA_SERVER_PORT = 3345
+// Default port — will be overridden by the actual port from main process
+const DEFAULT_MEDIA_SERVER_PORT = 3345
 
-function toStreamUrl(filePath: string): string {
+function toStreamUrl(filePath: string, port: number): string {
   if (!filePath) return ''
-  return `http://127.0.0.1:${MEDIA_SERVER_PORT}/?path=${encodeURIComponent(filePath)}`
+  return `http://127.0.0.1:${port}/?path=${encodeURIComponent(filePath)}`
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -348,6 +349,15 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [isZenMode, setIsZenMode] = useState(false)
+  const [mediaPort, setMediaPort] = useState(DEFAULT_MEDIA_SERVER_PORT)
+
+  // Fetch the actual media server port once on mount
+  useEffect(() => {
+    const w = window as any
+    if (w.cortexDl?.getMediaPort) {
+      w.cortexDl.getMediaPort().then((port: number) => setMediaPort(port)).catch(() => {})
+    }
+  }, [])
 
   // ── Refs ──
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -363,7 +373,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
 
   const mediaType = getMediaType(filePath)
-  const fileUrl = toStreamUrl(filePath)
+  const fileUrl = toStreamUrl(filePath, mediaPort)
   const displayTitle = title || ''
 
   /* ── Helper: clear the auto-hide timer ── */

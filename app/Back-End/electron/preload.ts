@@ -113,6 +113,9 @@ contextBridge.exposeInMainWorld('cortexDl', {
     ipcRenderer.on('cortexdl:download-stats-updated', listener)
     return () => ipcRenderer.off('cortexdl:download-stats-updated', listener)
   },
+  getMediaPort(): Promise<number> {
+    return ipcRenderer.invoke('cortexdl:get-media-port')
+  },
   fetchThumbnail(url: string): Promise<string> {
     return ipcRenderer.invoke('cortexdl:fetch-thumbnail', url)
   },

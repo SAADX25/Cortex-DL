@@ -12,7 +12,8 @@ log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
 import { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu, nativeImage, safeStorage } from 'electron'
-import { existsSync, rmSync, statSync, createReadStream } from 'node:fs'
+import { existsSync, rmSync, statSync, createReadStream, writeFileSync, mkdirSync } from 'node:fs'
+import os from 'node:os'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import type { DownloadManager } from './downloadManager'
@@ -559,14 +560,38 @@ ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
     const contentType = res.headers.get('content-type') || 'image/jpeg'
     const arr = await res.arrayBuffer()
     const buf = Buffer.from(arr)
-    const base64 = buf.toString('base64')
-    return `data:${contentType};base64,${base64}`
+
+    // Determine file extension from content-type
+    const extMap: Record<string, string> = {
+      'image/jpeg': '.jpg', 'image/jpg': '.jpg',
+      'image/png': '.png', 'image/webp': '.webp',
+      'image/gif': '.gif', 'image/avif': '.avif',
+    }
+    const ext = extMap[contentType] || '.jpg'
+
+    // Save to a temp directory under our app's namespace to avoid collisions
+    const thumbCacheDir = path.join(os.tmpdir(), 'cortexdl-thumbs')
+    if (!existsSync(thumbCacheDir)) mkdirSync(thumbCacheDir, { recursive: true })
+
+    // Hash the URL to create a deterministic, collision-free filename
+    const hash = Buffer.from(url).toString('base64url').slice(0, 32)
+    const filePath = path.join(thumbCacheDir, `${hash}${ext}`)
+
+    // Only write if not already cached
+    if (!existsSync(filePath)) {
+      writeFileSync(filePath, buf)
+    }
+
+    return filePath
   } catch (err) {
     log.error('[fetch-thumbnail] failed for', url, err)
     throw err
   }
 })
   // Disable Hardware Acceleration for lower-end devices to prevent UI lag/artifacts
+
+// IPC handler: expose the dynamically resolved media server port to the renderer
+ipcMain.handle('cortexdl:get-media-port', () => MEDIA_SERVER_PORT)
 // Hardware acceleration is actively enabled for smooth UI/video playback
 // app.disableHardwareAcceleration()
 const gotTheLock = app.requestSingleInstanceLock()
@@ -578,7 +603,10 @@ const gotTheLock = app.requestSingleInstanceLock()
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Media Server Port (default to constant value if not found in .env)
-export const MEDIA_SERVER_PORT = Number(process.env.MEDIA_SERVER_PORT) || 3345
+// Uses `let` so it can be reassigned when the preferred port is busy.
+const MEDIA_SERVER_PORT_BASE = Number(process.env.MEDIA_SERVER_PORT) || 3345
+const MEDIA_SERVER_PORT_MAX_TRIES = 10
+export let MEDIA_SERVER_PORT = MEDIA_SERVER_PORT_BASE
 let mediaServer: http.Server | null = null
 
 const MIME_TYPES: Record<string, string> = {
@@ -597,6 +625,13 @@ const MIME_TYPES: Record<string, string> = {
   '.aac':  'audio/aac',
   '.opus': 'audio/opus',
   '.wma':  'audio/x-ms-wma',
+  // Image types — used by the thumbnail proxy
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png':  'image/png',
+  '.webp': 'image/webp',
+  '.gif':  'image/gif',
+  '.avif': 'image/avif',
 }
 
 function startMediaStreamingServer(): void {
@@ -606,7 +641,7 @@ function startMediaStreamingServer(): void {
   const devUrl = VITE_DEV_SERVER_URL ? VITE_DEV_SERVER_URL.replace(/\/$/, '') : null
   const appOrigin = devUrl || 'file://'
 
-  mediaServer = http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
     // 1. Origin Validation
     const requestOrigin = req.headers.origin
     
@@ -711,13 +746,40 @@ function startMediaStreamingServer(): void {
     }
   })
 
-  mediaServer.on('error', (err) => {
-    log.error('[MediaServer] Server error:', err)
+  /**
+   * Attempt to listen on MEDIA_SERVER_PORT. If the port is already in use
+   * (EADDRINUSE), automatically try the next port up to MEDIA_SERVER_PORT_MAX_TRIES
+   * attempts before giving up.
+   */
+  let attempt = 0
+
+  const tryListen = (port: number) => {
+    MEDIA_SERVER_PORT = port
+    server.listen(port, '127.0.0.1')
+  }
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      attempt++
+      const nextPort = MEDIA_SERVER_PORT_BASE + attempt
+      if (attempt < MEDIA_SERVER_PORT_MAX_TRIES) {
+        log.warn(`[MediaServer] Port ${MEDIA_SERVER_PORT} in use, trying ${nextPort}…`)
+        server.close() // Release before retrying
+        tryListen(nextPort)
+      } else {
+        log.error(`[MediaServer] All ports ${MEDIA_SERVER_PORT_BASE}–${nextPort} are in use. Media server could not start.`)
+      }
+    } else {
+      log.error('[MediaServer] Server error:', err)
+    }
   })
 
-  mediaServer.listen(MEDIA_SERVER_PORT, '127.0.0.1', () => {
+  server.on('listening', () => {
+    mediaServer = server
     log.info(`[MediaServer] Streaming server ready at http://127.0.0.1:${MEDIA_SERVER_PORT}`)
   })
+
+  tryListen(MEDIA_SERVER_PORT)
 }
 
 if (!gotTheLock) {
@@ -757,8 +819,8 @@ if (!gotTheLock) {
 
   // Optimized Startup: Non-Blocking Initialization
   app.whenReady().then(async () => {
-    startMediaStreamingServer() // 0. Start media streaming server
-    createWindow()              // 1. Show UI immediately
+    startMediaStreamingServer()  // 0. Start media streaming server (auto-finds port)
+    createWindow()               // 1. Show UI immediately
     if (!tray) createTray()     // 2. Initialize System Tray
 
     // 3. Defer heavy checks to avoid splash freeze

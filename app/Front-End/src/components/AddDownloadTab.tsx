@@ -3,6 +3,7 @@ import { Language, translations } from '../translations'
 import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus } from 'lucide-react'
 import CustomDropdown from './CustomDropdown'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
+import { useUIStore } from '../stores/useUIStore'
 
 // Local or exported types needed
 export type BatchItem = {
@@ -16,12 +17,7 @@ export type BatchItem = {
 }
 
 interface AddDownloadTabProps {
-  url: string
-  setUrl: (val: string) => void
-  batchItems: BatchItem[]
-  setBatchItems: React.Dispatch<React.SetStateAction<BatchItem[]>>
   MAX_BATCH_ITEMS: number
-  directory: string | null
   subfolderName: string
   setSubfolderName: (val: string) => void
   speedLimit: string
@@ -32,15 +28,12 @@ interface AddDownloadTabProps {
   setIsAudioMode: (val: boolean) => void
   selectedQuality: string
   setSelectedQuality: (val: string) => void
-  analyzeResult: any
   selectedVariantUrl: string | null
   setSelectedVariantUrl: (val: string | null) => void
   startTime: string
   setStartTime: (val: string) => void
   endTime: string
   setEndTime: (val: string) => void
-  globalError: string | null
-  analyzing: boolean
   availableVideoQualities: any[] | null
   setSelectedYtdlpFormatId: (val: string | null) => void
   setTargetResolution: (val: number | null) => void
@@ -52,7 +45,6 @@ interface AddDownloadTabProps {
   onStartBatchDownload: () => void
   onOpenExternal: (url: string) => void
   setCommentsSuccessPath: (val: string | null) => void
-  showToast: (msg: string) => void
   setIsCommentsDownloading: (val: boolean) => void
   lang: Language
   SmartImage: React.FC<any>
@@ -62,12 +54,7 @@ interface AddDownloadTabProps {
 }
 
 const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
-  url,
-  setUrl,
-  batchItems,
-  setBatchItems,
   MAX_BATCH_ITEMS,
-  directory,
   subfolderName,
   setSubfolderName,
   speedLimit,
@@ -78,15 +65,12 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   setIsAudioMode,
   selectedQuality,
   setSelectedQuality,
-  analyzeResult,
   selectedVariantUrl,
   setSelectedVariantUrl,
   startTime,
   setStartTime,
   endTime,
   setEndTime,
-  globalError,
-  analyzing,
   availableVideoQualities,
   setSelectedYtdlpFormatId,
   setTargetResolution,
@@ -98,7 +82,6 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   onStartBatchDownload,
   onOpenExternal,
   setCommentsSuccessPath,
-  showToast,
   setIsCommentsDownloading,
   lang,
   SmartImage,
@@ -107,6 +90,17 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   YouTubeMusicIcon
 }) => {
   const t = translations[lang]
+
+  // Read from Zustand store directly — no prop drilling needed
+  const url = useUIStore((s) => s.url)
+  const setUrl = useUIStore((s) => s.setUrl)
+  const directory = useUIStore((s) => s.directory)
+  const batchItems = useUIStore((s) => s.batchItems)
+  const setBatchItems = useUIStore((s) => s.setBatchItems)
+  const globalError = useUIStore((s) => s.globalError)
+  const analyzeResult = useUIStore((s) => s.analyzeResult)
+  const analyzing = useUIStore((s) => s.analyzing)
+  const showToast = useUIStore((s) => s.showToast)
 
   return (
     <div className="tab-content fade-in centered-layout flex flex-col h-full">

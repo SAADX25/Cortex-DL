@@ -18,6 +18,7 @@
 import React, { useState, useMemo } from 'react'
 import { X, Trash2, DownloadCloud } from 'lucide-react'
 import { useTaskIds, getTasksSnapshot, useDownloadStore } from '../stores/downloadStore'
+import { useUIStore } from '../stores/useUIStore'
 import { useDebounce } from '../hooks/useDebounce'
 import DownloadCard from './DownloadCard'
 import type { Language } from '../translations'
@@ -28,11 +29,11 @@ interface DownloadListProps {
   onOpenFile: (filePath: string, title?: string) => void
   onOpenFolder: (filePath: string) => void
   onDelete: (id: string, deleteFile: boolean) => void
-  onError: (msg: string) => void
 }
 
 const DownloadList: React.FC<DownloadListProps> = (props) => {
-  const { lang, onOpenFile, onOpenFolder, onDelete, onError } = props
+  const { lang, onOpenFile, onOpenFolder, onDelete } = props
+  const onError = useUIStore((s) => s.setGlobalError)
   const t = translations[lang]
   const taskIds = useTaskIds()
   

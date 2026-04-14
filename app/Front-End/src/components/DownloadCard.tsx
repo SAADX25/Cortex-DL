@@ -26,21 +26,35 @@ const THUMB_FALLBACK_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.
 
 const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
   const [imgSrc, setImgSrc] = React.useState<string | undefined>(src)
+  const [thumbPort, setThumbPort] = React.useState(3345)
+
+  // Resolve the dynamic media server port once
+  React.useEffect(() => {
+    const w = window as any
+    if (w.cortexDl?.getMediaPort) {
+      w.cortexDl.getMediaPort().then((port: number) => setThumbPort(port)).catch(() => {})
+    }
+  }, [])
+
   React.useEffect(() => {
     let cancelled = false
     setImgSrc(src)
     if (src && /instagram|cdninstagram/i.test(src)) {
       ;(async () => {
         try {
-          const dataUri = await (window as any).cortexDl.fetchThumbnail(src)
-          if (!cancelled && dataUri) setImgSrc(dataUri)
+          const filePath = await (window as any).cortexDl.fetchThumbnail(src)
+          if (!cancelled && filePath) {
+            // filePath is a local temp file — serve via the media streaming server
+            const streamUrl = `http://127.0.0.1:${thumbPort}/?path=${encodeURIComponent(filePath)}`
+            setImgSrc(streamUrl)
+          }
         } catch (err) {
           // ignore — fallback will show placeholder
         }
       })()
     }
     return () => { cancelled = true }
-  }, [src])
+  }, [src, thumbPort])
 
   return (
     <>
