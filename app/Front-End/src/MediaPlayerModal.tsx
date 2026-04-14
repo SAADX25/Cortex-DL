@@ -353,9 +353,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
   // Fetch the actual media server port once on mount
   useEffect(() => {
-    const w = window as any
-    if (w.cortexDl?.getMediaPort) {
-      w.cortexDl.getMediaPort().then((port: number) => setMediaPort(port)).catch(() => {})
+    if (window.cortexDl?.getMediaPort) {
+      window.cortexDl.getMediaPort().then((port) => setMediaPort(port)).catch(() => {})
     }
   }, [])
 
@@ -410,14 +409,14 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     let rafId: number
 
     try {
-      const cached = (audioEl as any).__audioCache
+      const cached = (audioEl as HTMLAudioElement & { __audioCache?: { ctx: AudioContext; source: MediaElementAudioSourceNode } }).__audioCache
       if (cached && cached.ctx.state !== 'closed') {
         audioCtx = cached.ctx
         source = cached.source
       } else {
-        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
         source = audioCtx.createMediaElementSource(audioEl)
-        ;(audioEl as any).__audioCache = { ctx: audioCtx, source }
+        ;(audioEl as HTMLAudioElement & { __audioCache?: { ctx: AudioContext; source: MediaElementAudioSourceNode } }).__audioCache = { ctx: audioCtx, source }
       }
       
       analyser = audioCtx.createAnalyser()

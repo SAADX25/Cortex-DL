@@ -63,7 +63,7 @@ export function startHighFrequencyIPCListeners(opts: {
     maybeUpsertToZustand(task, opts)
   })
 
-  const disposeProgress = window.cortexDl.onDownloadProgress((data: any) => {
+  const disposeProgress = window.cortexDl.onDownloadProgress((data: DownloadProgressData) => {
     const id: string | undefined = data?.id ?? data?.Id
     if (!id) return
 

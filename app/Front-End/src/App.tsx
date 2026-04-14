@@ -126,7 +126,7 @@ function createSmartImage(thumbPort: number) {
       if (src && /instagram|cdninstagram/i.test(src)) {
         ;(async () => {
           try {
-            const filePath = await (window as any).cortexDl.fetchThumbnail(src)
+            const filePath = await window.cortexDl.fetchThumbnail(src)
             if (!cancelled && filePath) {
               const streamUrl = `http://127.0.0.1:${thumbPort}/?path=${encodeURIComponent(filePath)}`
               setImgSrc(streamUrl)

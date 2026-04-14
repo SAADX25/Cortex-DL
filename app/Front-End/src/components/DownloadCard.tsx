@@ -30,9 +30,8 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
 
   // Resolve the dynamic media server port once
   React.useEffect(() => {
-    const w = window as any
-    if (w.cortexDl?.getMediaPort) {
-      w.cortexDl.getMediaPort().then((port: number) => setThumbPort(port)).catch(() => {})
+    if (window.cortexDl?.getMediaPort) {
+      window.cortexDl.getMediaPort().then((port) => setThumbPort(port)).catch(() => {})
     }
   }, [])
 
@@ -42,7 +41,7 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
     if (src && /instagram|cdninstagram/i.test(src)) {
       ;(async () => {
         try {
-          const filePath = await (window as any).cortexDl.fetchThumbnail(src)
+          const filePath = await window.cortexDl.fetchThumbnail(src)
           if (!cancelled && filePath) {
             // filePath is a local temp file — serve via the media streaming server
             const streamUrl = `http://127.0.0.1:${thumbPort}/?path=${encodeURIComponent(filePath)}`
