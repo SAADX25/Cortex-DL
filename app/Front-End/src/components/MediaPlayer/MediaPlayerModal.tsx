@@ -71,6 +71,19 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
   const toggleMiniMode = () => setIsMiniMode(prev => !prev);
 
+  // Reset states and perform cleanup when switching between files
+  useEffect(() => {
+    if (mediaRef.current) {
+      mediaRef.current.pause();
+      try { mediaRef.current.currentTime = 0; } catch (e) {}
+    }
+    if (videoRef.current) videoRef.current.pause();
+    if (audioRef.current) audioRef.current.pause();
+
+    setIsPlaying(false);
+    setIsMiniMode(false);
+  }, [filePath]);
+
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
