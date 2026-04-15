@@ -32,6 +32,7 @@ function toStreamUrl(filePath: string, port: number): string {
 export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir = 'ltr' }: MediaPlayerModalProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMiniMode, setIsMiniMode] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState('midnight');
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -70,6 +71,14 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   }, [isMiniMode]);
 
   const toggleMiniMode = () => setIsMiniMode(prev => !prev);
+  
+  const toggleTheme = () => {
+    const themes = ['midnight', 'crimson', 'emerald', 'onyx'];
+    setCurrentTheme(prev => {
+      const idx = themes.indexOf(prev);
+      return themes[(idx + 1) % themes.length];
+    });
+  };
 
   // Reset states and perform cleanup when switching between files
   useEffect(() => {
@@ -496,6 +505,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
             onClose={onClose}
             isMiniMode={isMiniMode}
             toggleMiniMode={toggleMiniMode}
+            currentTheme={currentTheme}
+            toggleTheme={toggleTheme}
           />
         )}
 

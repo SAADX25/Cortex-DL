@@ -29,6 +29,8 @@ interface AudioViewProps {
   onClose: () => void;
   isMiniMode?: boolean;
   toggleMiniMode?: () => void;
+  currentTheme?: string;
+  toggleTheme?: () => void;
 }
 
 export function AudioPlayerView({
@@ -36,7 +38,7 @@ export function AudioPlayerView({
   audioRef, mediaRef, canvasRef,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings,
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose,
-  isMiniMode, toggleMiniMode
+  isMiniMode, toggleMiniMode, currentTheme = 'midnight', toggleTheme
 }: AudioViewProps) {
   return (
     <div className={`audio-view-wrapper ${isMiniMode ? 'mini-mode' : 'fullscreen-mode'}`}>
@@ -68,7 +70,7 @@ export function AudioPlayerView({
         </div>
       </div>
 
-      <div className="audio-player-body">
+      <div className={`audio-player-body theme-${currentTheme}`}>
         <div className={`audio-ambient-bg ${isPlaying ? 'active' : ''}`} />
         <div className="audio-center-stage">
           <div className={`vinyl-record ${isPlaying ? 'spinning' : ''}`}>
@@ -129,6 +131,8 @@ export function AudioPlayerView({
           onSpeedChange={onSpeedChange}
           toggleSettings={toggleSettings}
           togglePiP={toggleMiniMode}
+          currentTheme={currentTheme}
+          onToggleTheme={toggleTheme}
         />
       </div>
     </div>

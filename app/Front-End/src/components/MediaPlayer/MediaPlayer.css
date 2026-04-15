@@ -191,11 +191,18 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: #020617; /* Very dark slate */
+  background: #020617; /* Fallback */
   position: relative;
   overflow: hidden;
   padding-bottom: 160px; /* Shift content up to avoid overlapping with bottom controls */
+  transition: background 0.5s ease-in-out;
 }
+
+/* Audio Player Themes */
+.audio-player-body.theme-midnight { background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%); }
+.audio-player-body.theme-crimson { background: radial-gradient(circle at center, #450a0a 0%, #050000 100%); }
+.audio-player-body.theme-emerald { background: radial-gradient(circle at center, #064e3b 0%, #020617 100%); }
+.audio-player-body.theme-onyx { background: radial-gradient(circle at center, #1f2937 0%, #000000 100%); }
 
 .audio-center-stage {
   z-index: 10;

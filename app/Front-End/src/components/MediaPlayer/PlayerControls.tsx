@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture, Palette } from 'lucide-react';
 
 interface PlayerControlsProps {
   mediaRef: React.RefObject<HTMLVideoElement | HTMLAudioElement | null>;
@@ -19,6 +19,8 @@ interface PlayerControlsProps {
   toggleSettings: () => void;
   toggleFullscreen?: () => void;
   togglePiP?: () => void;
+  currentTheme?: string;
+  onToggleTheme?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -30,7 +32,7 @@ function formatTime(seconds: number): string {
 
 export function PlayerControls({
   mediaRef, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, mediaType, isFullscreen,
-  togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP
+  togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP, currentTheme, onToggleTheme
 }: PlayerControlsProps) {
   const progressRef = useRef<HTMLInputElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
@@ -123,6 +125,12 @@ export function PlayerControls({
                </div>
              )}
           </div>
+
+          {mediaType === 'audio' && onToggleTheme && (
+            <button className="control-btn" onClick={onToggleTheme} title={`Theme: ${currentTheme}`}>
+              <Palette size={20} />
+            </button>
+          )}
 
           {togglePiP && (
             <button className="control-btn" onClick={togglePiP} title={mediaType === 'video' ? "Picture in Picture" : "Mini Player"}>
