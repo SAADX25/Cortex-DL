@@ -124,8 +124,8 @@ export function PlayerControls({
              )}
           </div>
 
-          {mediaType === 'video' && togglePiP && (
-            <button className="control-btn" onClick={togglePiP} title="Picture in Picture">
+          {togglePiP && (
+            <button className="control-btn" onClick={togglePiP} title={mediaType === 'video' ? "Picture in Picture" : "Mini Player"}>
               <PictureInPicture size={20} />
             </button>
           )}

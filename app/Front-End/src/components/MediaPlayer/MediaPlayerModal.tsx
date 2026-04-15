@@ -31,6 +31,7 @@ function toStreamUrl(filePath: string, port: number): string {
 
 export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir = 'ltr' }: MediaPlayerModalProps) {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMiniMode, setIsMiniMode] = useState(false);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -62,6 +63,13 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const mediaType = getMediaType(filePath);
   const fileUrl = toStreamUrl(filePath, mediaPort);
   const displayTitle = title || '';
+
+  const isMiniModeRef = useRef(isMiniMode);
+  useEffect(() => {
+    isMiniModeRef.current = isMiniMode;
+  }, [isMiniMode]);
+
+  const toggleMiniMode = () => setIsMiniMode(prev => !prev);
 
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
@@ -127,6 +135,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     const draw = () => {
       rafId = requestAnimationFrame(draw);
       animationFrameRef.current = rafId;
+
+      if (isMiniModeRef.current) return;
 
       analyser.getByteFrequencyData(dataArray);
 
@@ -251,6 +261,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       setShowControls(true);
       setIsIdle(false);
       setPlaybackSpeed(1);
+      setIsMiniMode(false);
     }
   }, [isOpen, clearHideTimer]);
 
@@ -401,15 +412,15 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
   return (
     <div
-      className="media-player-overlay"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      className={`media-player-overlay ${isMiniMode ? 'mini-mode-overlay' : ''}`}
+      onClick={e => { if (e.target === e.currentTarget && !isMiniMode) onClose() }}
       dir={dir}
     >
       <div
         ref={containerRef}
-        className={`media-player-container ${mediaType} ${isIdle ? 'idle-hide' : ''}`}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        className={`media-player-container ${mediaType} ${isIdle && !isMiniMode ? 'idle-hide' : ''} ${isMiniMode ? 'mini-mode-container' : ''}`}
+        onMouseMove={isMiniMode ? undefined : handleMouseMove}
+        onMouseLeave={isMiniMode ? undefined : handleMouseLeave}
       >
         {mediaType === 'video' && (
           <VideoPlayerView
@@ -470,6 +481,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onClose={onClose}
+            isMiniMode={isMiniMode}
+            toggleMiniMode={toggleMiniMode}
           />
         )}
 

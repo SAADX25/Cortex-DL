@@ -1,5 +1,6 @@
 import React from 'react';
 import { PlayerControls } from './PlayerControls';
+import { Play, Pause, Maximize, X } from 'lucide-react';
 
 interface AudioViewProps {
   fileUrl: string;
@@ -26,16 +27,19 @@ interface AudioViewProps {
   onPlay: () => void;
   onPause: () => void;
   onClose: () => void;
+  isMiniMode?: boolean;
+  toggleMiniMode?: () => void;
 }
 
 export function AudioPlayerView({
   fileUrl, title, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, showControls,
   audioRef, mediaRef, canvasRef,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings,
-  onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
+  onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose,
+  isMiniMode, toggleMiniMode
 }: AudioViewProps) {
   return (
-    <>
+    <div className={`audio-view-wrapper ${isMiniMode ? 'mini-mode' : 'fullscreen-mode'}`}>
       <audio
         ref={audioRef}
         src={fileUrl}
@@ -46,6 +50,19 @@ export function AudioPlayerView({
         onPause={onPause}
         crossOrigin="anonymous"
       />
+
+      {/* Mini Mode Controls */}
+      <div className="mini-player-controls">
+        <button className="mini-control-btn" onClick={togglePlay} title={isPlaying ? "Pause" : "Play"}>
+          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+        </button>
+        <button className="mini-control-btn" onClick={toggleMiniMode} title="Expand">
+          <Maximize size={20} />
+        </button>
+        <button className="mini-control-btn close" onClick={onClose} title="Close">
+          <X size={20} />
+        </button>
+      </div>
 
       <div
         className="player-header"
@@ -111,8 +128,9 @@ export function AudioPlayerView({
           toggleMute={toggleMute}
           onSpeedChange={onSpeedChange}
           toggleSettings={toggleSettings}
+          togglePiP={toggleMiniMode}
         />
       </div>
-    </>
+    </div>
   );
 }
