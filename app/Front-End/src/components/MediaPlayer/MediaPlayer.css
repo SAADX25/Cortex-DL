@@ -129,6 +129,7 @@
   justify-content: flex-start;
   flex: 1;
   min-width: 0; 
+  padding-bottom: 0;
 }
 
 .audio-view-wrapper.mini-mode .audio-center-stage {
@@ -201,6 +202,7 @@
   background-color: #020617; /* Very dark slate */
   position: relative;
   overflow: hidden;
+  padding-bottom: 160px; /* Shift content up to avoid overlapping with bottom controls */
 }
 
 .audio-center-stage {

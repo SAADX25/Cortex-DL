@@ -92,7 +92,7 @@ export function AudioPlayerView({
               <div className="vinyl-center-dot" />
             </div>
           </div>
-          <p className="audio-track-name audio-track-name-spaced">{title || 'Now Playing'}</p>
+          {isMiniMode && <p className="audio-track-name audio-track-name-spaced">{title || 'Now Playing'}</p>}
         </div>
       </div>
 
