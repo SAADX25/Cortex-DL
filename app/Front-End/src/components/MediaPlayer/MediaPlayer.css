@@ -97,9 +97,9 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  width: 330px;
-  height: 85px;
-  border-radius: 16px;
+  width: max-content;
+  height: auto;
+  border-radius: 40px;
   backdrop-filter: blur(20px);
   background: rgba(15, 15, 15, 0.85);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -107,7 +107,8 @@
   z-index: 10001;
   display: flex;
   align-items: center;
-  padding: 10px 20px;
+  padding: 12px 20px;
+  gap: 16px;
   transition: all 0.3s ease;
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -126,8 +127,8 @@
   height: auto;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-start;
-  flex: 1;
+  justify-content: center; /* Keep tight */
+  flex: 0 0 auto;
   min-width: 0; 
   padding-bottom: 0;
 }
@@ -135,26 +136,17 @@
 .audio-view-wrapper.mini-mode .audio-center-stage {
   flex-direction: row;
   align-items: center;
-  gap: 15px;
-  width: 100%;
+  gap: 0;
+  width: auto;
 }
 
 .audio-view-wrapper.mini-mode .vinyl-record {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
   margin-bottom: 0;
   box-shadow: 0 4px 10px rgba(0,0,0,0.8);
   flex-shrink: 0;
-}
-
-.audio-view-wrapper.mini-mode .audio-track-name {
-  font-size: 1rem;
-  text-align: left;
-  margin: 0;
-  max-width: 110px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  border-radius: 50%;
 }
 
 /* Mini Player Action Controls */
@@ -165,8 +157,8 @@
 .audio-view-wrapper.mini-mode .mini-player-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-left: max(10px, auto);
+  gap: 12px;
+  margin-left: 0;
 }
 
 .mini-control-btn {

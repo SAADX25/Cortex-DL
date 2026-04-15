@@ -51,18 +51,6 @@ export function AudioPlayerView({
         crossOrigin="anonymous"
       />
 
-      {/* Mini Mode Controls */}
-      <div className="mini-player-controls">
-        <button className="mini-control-btn" onClick={togglePlay} title={isPlaying ? "Pause" : "Play"}>
-          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-        </button>
-        <button className="mini-control-btn" onClick={toggleMiniMode} title="Expand">
-          <Maximize size={20} />
-        </button>
-        <button className="mini-control-btn close" onClick={onClose} title="Close">
-          <X size={20} />
-        </button>
-      </div>
 
       <div
         className="player-header"
@@ -92,8 +80,20 @@ export function AudioPlayerView({
               <div className="vinyl-center-dot" />
             </div>
           </div>
-          {isMiniMode && <p className="audio-track-name audio-track-name-spaced">{title || 'Now Playing'}</p>}
         </div>
+      </div>
+
+      {/* Mini Mode Controls */}
+      <div className="mini-player-controls">
+        <button className="mini-control-btn" onClick={togglePlay} title={isPlaying ? "Pause" : "Play"}>
+          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+        </button>
+        <button className="mini-control-btn" onClick={toggleMiniMode} title="Expand">
+          <Maximize size={20} />
+        </button>
+        <button className="mini-control-btn close" onClick={onClose} title="Close">
+          <X size={20} />
+        </button>
       </div>
 
       <div className="audio-visualizer-strip">
