@@ -42,6 +42,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const [showControls, setShowControls] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
   const [mediaPort, setMediaPort] = useState(DEFAULT_MEDIA_SERVER_PORT);
+  const [hideForPiP, setHideForPiP] = useState(false);
 
   useEffect(() => {
     if (window.cortexDl?.getMediaPort) {
@@ -222,7 +223,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
         case 'Escape':
-          isFullscreen ? document.exitFullscreen?.() : onClose();
+          isFullscreen ? document.exitFullscreen?.() : handleClose();
           break;
         case ' ':
           e.preventDefault();
@@ -284,8 +285,42 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       setIsIdle(false);
       setPlaybackSpeed(1);
       setIsMiniMode(false);
+      setHideForPiP(false);
     }
   }, [isOpen, clearHideTimer]);
+
+  /* ── Force Cleanup on Unmount ── */
+  useEffect(() => {
+    return () => {
+      const releaseStrict = (el: HTMLVideoElement | HTMLAudioElement | null) => {
+        if (el && typeof el.pause === 'function') {
+          el.pause();
+          el.removeAttribute('src');
+          el.load();
+        }
+      };
+      releaseStrict(mediaRef.current);
+      releaseStrict(videoRef.current);
+      releaseStrict(audioRef.current);
+    };
+  }, []);
+
+  /* ── Native PiP Sync ── */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    const handleLeavePiP = () => {
+       setIsMiniMode(false);
+       setHideForPiP(false);
+       if (window.cortexDl?.showMainWindow) {
+         window.cortexDl.showMainWindow().catch(console.error);
+       }
+    };
+    
+    video.addEventListener('leavepictureinpicture', handleLeavePiP);
+    return () => video.removeEventListener('leavepictureinpicture', handleLeavePiP);
+  }, [isOpen, mediaType]);
 
   useEffect(() => {
     mediaRef.current = mediaType === 'video' ? videoRef.current : audioRef.current;
@@ -430,12 +465,21 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     if (mediaRef.current) mediaRef.current.currentTime = 0;
   };
 
+  const handleClose = () => {
+    if (mediaType === 'video' && document.pictureInPictureElement === videoRef.current) {
+      setHideForPiP(true);
+    } else {
+      onClose();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div
       className={`media-player-overlay ${isMiniMode ? 'mini-mode-overlay' : ''}`}
-      onClick={e => { if (e.target === e.currentTarget && !isMiniMode) onClose() }}
+      onClick={e => { if (e.target === e.currentTarget && !isMiniMode) handleClose() }}
+      style={hideForPiP ? { opacity: 0, pointerEvents: 'none' } : undefined}
       dir={dir}
     >
       <div
@@ -473,7 +517,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
             onEnded={handleEnded}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
-            onClose={onClose}
+            onClose={handleClose}
           />
         )}
 
@@ -502,7 +546,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
             onEnded={handleEnded}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
-            onClose={onClose}
+            onClose={handleClose}
             isMiniMode={isMiniMode}
             toggleMiniMode={toggleMiniMode}
             currentTheme={currentTheme}

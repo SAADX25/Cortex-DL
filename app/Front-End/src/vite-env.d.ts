@@ -122,6 +122,7 @@ declare global {
       openFolder: (filePath: string) => Promise<void>
       openFile: (filePath: string) => Promise<void>
       openExternal: (url: string) => Promise<void>
+      showMainWindow: () => Promise<void>
 
       // ── Engines ──
       checkEngines: () => Promise<{ ytdlp: boolean; ffmpeg: boolean; jsRuntime: boolean; jsRuntimeName: string }>

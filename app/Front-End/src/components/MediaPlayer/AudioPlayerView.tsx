@@ -87,13 +87,13 @@ export function AudioPlayerView({
 
       {/* Mini Mode Controls */}
       <div className="mini-player-controls">
-        <button className="mini-control-btn" onClick={togglePlay} title={isPlaying ? "Pause" : "Play"}>
+        <button className="mini-control-btn" onClick={(e) => { e.stopPropagation(); togglePlay(); }} title={isPlaying ? "Pause" : "Play"}>
           {isPlaying ? <Pause size={20} /> : <Play size={20} />}
         </button>
-        <button className="mini-control-btn" onClick={toggleMiniMode} title="Expand">
+        <button className="mini-control-btn" onClick={(e) => { e.stopPropagation(); toggleMiniMode?.(); }} title="Expand">
           <Maximize size={20} />
         </button>
-        <button className="mini-control-btn close" onClick={onClose} title="Close">
+        <button className="mini-control-btn close" onClick={(e) => { e.stopPropagation(); onClose(); }} title="Close">
           <X size={20} />
         </button>
       </div>

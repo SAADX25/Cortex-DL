@@ -495,6 +495,14 @@ ipcMain.handle('cortexdl:open-external', async (_event, url: string) => {
   }
 })
 
+ipcMain.handle('cortexdl:show-main-window', () => {
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    if (!win.isVisible()) win.show()
+    win.focus()
+  }
+})
+
 ipcMain.handle('cortexdl:download-comments', async (_event, url: string) => {
   try {
     if (!win) return { success: false, error: 'No main window' }
