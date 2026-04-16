@@ -18,7 +18,7 @@
 Here is a look at the Cortex-DL interface:
 
 <p align="center">
-  <img width="800" alt="Cortex-DL Main Interface" src="https://github.com/user-attachments/assets/70fd01b1-e065-4edd-9556-b1a3674c6153" />
+  <img width="1079" height="755" alt="DL1" src="https://github.com/user-attachments/assets/d7692668-ff2b-4552-af72-44b0d51a313e" />
 </p>
 
 <p align="center">
