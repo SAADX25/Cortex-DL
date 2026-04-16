@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  DownloadCard — High-Performance Download Card with Direct DOM Updates
  *
  *  Responsibilities:
@@ -12,7 +11,6 @@
  *  ─ React.memo prevents re-render unless props change
  *  ─ useHighFrequencyIPC bypasses React reconciliation for progress updates
  *  ─ Direct DOM mutation keeps UI at 60 FPS with 20+ concurrent downloads
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import React, { useRef, useState } from 'react'
 import { Play, FolderOpen, Trash2 } from 'lucide-react'
@@ -39,7 +37,7 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
     let cancelled = false
     setImgSrc(src)
     if (src && /instagram|cdninstagram/i.test(src)) {
-      ;(async () => {
+      (async () => {
         try {
           const filePath = await window.cortexDl.fetchThumbnail(src)
           if (!cancelled && filePath) {

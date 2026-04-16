@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  useSettingsController — Settings, engines, credentials, and preferences.
  *
  *  Owns:
@@ -12,7 +11,6 @@
  *  ─ Download stats tracking (totalDownloadedBytes)
  *  ─ localStorage syncs for all settings
  *  ─ Actions: update engine, check updates, reset stats, uninstall
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
@@ -20,14 +18,12 @@ import { translations } from '../translations'
 import type { Language } from '../translations'
 import type { ModalConfig } from './types'
 
-// ─── Dependencies ────────────────────────────────────────────────────────────
-
+// 
 export interface SettingsControllerDeps {
   setModalConfig: Dispatch<SetStateAction<ModalConfig>>
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
-
+// 
 export function useSettingsController({ setModalConfig }: SettingsControllerDeps) {
   // ── Language ──
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en')
@@ -53,8 +49,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
 
-  // ─── Side Effects ───────────────────────────────────────────────────────────
-
+  // 
   // Engine status polling
   useEffect(() => {
     const check = async () => {
@@ -68,7 +63,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
 
   // Engine version
   useEffect(() => {
-    ;(async () => {
+    (async () => {
       try { setEngineVersion(await window.cortexDl.getEngineVersion()) }
       catch { setEngineVersion('Error') }
     })()
@@ -105,7 +100,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
 
   // Secure credentials
   useEffect(() => {
-    ;(async () => {
+    (async () => {
       try {
         const [savedUser, savedPass] = await Promise.all([
           window.cortexDl.getSecureData('cortex-username'),
@@ -129,8 +124,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     return () => { statsDispose() }
   }, [])
 
-  // ─── Action Handlers ────────────────────────────────────────────────────────
-
+  // 
   const onCheckForUpdates = async () => {
     setUpdateStatus({ status: 'checking' })
     try { await window.cortexDl.checkForUpdates() }
@@ -194,8 +188,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     })
   }
 
-  // ─── Return API ─────────────────────────────────────────────────────────────
-
+  // 
   return {
     // Language
     lang, setLang, t,

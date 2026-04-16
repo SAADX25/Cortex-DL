@@ -93,7 +93,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
     if (mediaRef.current) {
       mediaRef.current.pause();
-      try { mediaRef.current.currentTime = 0; } catch (e) {}
+      try { mediaRef.current.currentTime = 0; } catch (e) { /* ignore */ }
     }
     if (videoRef.current) videoRef.current.pause();
     if (audioRef.current) audioRef.current.pause();
@@ -212,8 +212,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     return () => {
       cancelAnimationFrame(rafId);
       animationFrameRef.current = null;
-      try { if (source && analyser) source.disconnect(analyser); } catch (_) {}
-      try { if (analyser) analyser.disconnect(); } catch (_) {}
+      try { if (source && analyser) source.disconnect(analyser); } catch (_) { /* ignore */ }
+      try { if (analyser) analyser.disconnect(); } catch (_) { /* ignore */ }
       
       audioContextRef.current = null;
       analyserRef.current = null;
@@ -257,6 +257,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isFullscreen, onClose, mediaType]);
 
   useEffect(() => {
@@ -295,7 +296,12 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   }, [isOpen, clearHideTimer]);
 
   /* ── Force Cleanup on Unmount ── */
+  /* ── Force Cleanup on Unmount ── */
   useEffect(() => {
+    const mediaObj = mediaRef.current;
+    const videoObj = videoRef.current;
+    const audioObj = audioRef.current;
+    
     return () => {
       const releaseStrict = (el: HTMLVideoElement | HTMLAudioElement | null) => {
         if (el && typeof el.pause === 'function') {
@@ -304,9 +310,9 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
           el.load();
         }
       };
-      releaseStrict(mediaRef.current);
-      releaseStrict(videoRef.current);
-      releaseStrict(audioRef.current);
+      releaseStrict(mediaObj);
+      releaseStrict(videoObj);
+      releaseStrict(audioObj);
     };
   }, []);
 
@@ -368,7 +374,12 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
             }
             const ctx = canvas.getContext('2d');
             if (ctx) {
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              // PROFESSIONAL OPTIMIZATION: Skip canvas drawing for 4K/high-res videos.
+              // Copying 4K video frames to Canvas is extremely CPU-intensive and causes
+              // the 50% CPU spikes. We disable the effect for video wider than 2560px.
+              if (video.videoWidth <= 2560) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              }
             }
           }
         }

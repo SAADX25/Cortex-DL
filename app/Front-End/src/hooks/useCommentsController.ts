@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  useCommentsController — Comments extraction domain.
  *
  *  Owns:
@@ -7,12 +6,10 @@
  *  ─ Local state: downloading flag, success path, progress counters
  *
  *  This is the smallest, most self-contained controller hook.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { useState, useEffect } from 'react'
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
-
+// 
 export function useCommentsController() {
   const [isCommentsDownloading, setIsCommentsDownloading] = useState(false)
   const [commentsSuccessPath, setCommentsSuccessPath] = useState<string | null>(null)
@@ -43,8 +40,7 @@ export function useCommentsController() {
     }
   }, [])
 
-  // ─── Return API ─────────────────────────────────────────────────────────────
-
+  // 
   return {
     isCommentsDownloading, setIsCommentsDownloading,
     commentsSuccessPath, setCommentsSuccessPath,

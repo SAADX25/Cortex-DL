@@ -5,7 +5,7 @@ import { getBinaryPath } from './paths'
 import { getJsRuntimeArgs } from './ytdlp'
 
 export async function extractAndSaveComments(url: string, outputPath: string, onProgress?: (current: number, total: number) => void): Promise<boolean> {
-  return new Promise((resolve, _reject) => {
+  return new Promise((resolve) => {
     log.info(`[CommentsExtractor] Starting comment extraction for ${url}`)
     const ytDlpPath = getBinaryPath('yt-dlp')
 
@@ -23,7 +23,6 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
     const proc = spawn(ytDlpPath, args, { windowsHide: true })
     
     const stdoutChunks: Buffer[] = []
-    let stderrData = ''
 
     proc.stdout.on('data', (chunk) => {
       stdoutChunks.push(Buffer.from(chunk))
@@ -31,7 +30,6 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
 
     proc.stderr.on('data', (chunk) => {
       const text = chunk.toString()
-      stderrData += text
       console.log('[YTDLP RAW]:', text.trim())
 
       // The Ultimate Failsafe: aggressively kill if yt-dlp attempts to download the video anyway
@@ -60,7 +58,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
         } else {
           // Track API Batches instead of exact numbers by parsing pagination requests in verbose logs
           // Extract the true progress output, e.g., "Downloading comment API JSON page 47 (1011/~1863)"
-          const match = text.match(/\((\d+)\/\~?(\d+)\)/)
+          const match = text.match(/\((\d+)\/~?(\d+)\)/)
           
           if (match && match[1] && match[2]) {
             const current = parseInt(match[1], 10)
@@ -96,6 +94,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
 
         log.info(`[CommentsExtractor] Found ${info.comments.length} comments. Formatting...`)
 
+         
         const formattedComments = info.comments.map((c: any) => {
           const author = c.author || 'Unknown'
           const text = c.text || ''

@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  useHighFrequencyIPC — Zero-Copy DOM Mutation on IPC Progress Events
  *
  *  Listens to high-frequency progress events and DIRECTLY mutates DOM elements
@@ -25,7 +24,6 @@
  *  Only triggers React state changes (re-renders) for structural changes like:
  *    - Status transitions (downloading → completed)
  *    - Phase badge changes
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { useEffect, RefObject } from 'react'
 import type { DownloadTask } from '../../../Shared/types'

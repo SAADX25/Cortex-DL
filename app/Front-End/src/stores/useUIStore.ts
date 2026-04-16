@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  UI Store — Global UI state managed by Zustand.
  *
  *  These states were previously scattered across useState hooks in
@@ -8,7 +7,6 @@
  *  component can subscribe to ONLY the slices it needs via selectors.
  *
  *  Pattern: matches the existing downloadStore.ts approach.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { create } from 'zustand'
 import type { BatchItem } from '../components/AddDownloadTab'

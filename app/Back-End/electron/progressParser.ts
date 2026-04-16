@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  Progress Parser — Extracts download progress from yt-dlp & FFmpeg output.
  *
  *  Handles both structured --progress-template output (machine-parseable)
@@ -7,7 +6,6 @@
  *
  *  Dual-stream parsing: progress can arrive on EITHER stdout or stderr
  *  depending on yt-dlp version and configuration.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import type { DownloadTask } from './types'
 import { parseTimeToSeconds } from './utils'

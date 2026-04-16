@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  useDebounce — High-performance debounce hook
  *
  *  Delays updating state until after the user stops typing/changing for
@@ -9,7 +8,6 @@
  *    const [input, setInput] = useState('')
  *    const debouncedValue = useDebounce(input, 300)
  *    // Re-render only when typing pauses for 300ms
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { useState, useEffect } from 'react'
 

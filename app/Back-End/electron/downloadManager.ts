@@ -1,18 +1,16 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- *  Download Manager — Clean orchestrator for the download queue.
+ * Download Manager — Clean orchestrator for the download queue.
  *
- *  Responsibilities:
- *  - Task lifecycle (add, pause, resume, cancel, delete)
- *  - Concurrent download queue (max 2 simultaneous downloads)
- *  - Persistent state in SQLite database
- *  - Engine dispatch (delegates actual downloading to engine modules)
+ * Responsibilities:
+ * - Task lifecycle (add, pause, resume, cancel, delete)
+ * - Concurrent download queue
+ * - Persistent state in SQLite database
+ * - Engine dispatch
  *
- *  All download logic lives in dedicated engine modules:
- *  - directEngine.ts  → HTTP direct downloads
- *  - ffmpegEngine.ts  → HLS/M3U8 + audio extraction
- *  - ytdlpEngine.ts   → YouTube, social media, etc.
- * ═══════════════════════════════════════════════════════════════════════════
+ * Engines:
+ * - directEngine.ts  → HTTP direct downloads
+ * - ffmpegEngine.ts  → HLS/M3U8 + audio extraction
+ * - ytdlpEngine.ts   → YouTube, social media, etc.
  */
 import { BrowserWindow } from 'electron'
 import log from 'electron-log'
@@ -74,9 +72,7 @@ export class DownloadManager {
     this.loadState()
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  //  State Persistence
-  // ═══════════════════════════════════════════════════════════════════════
+  // State Persistence
 
   private loadState(): void {
     try {
@@ -209,9 +205,7 @@ export class DownloadManager {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  //  Public API
-  // ═══════════════════════════════════════════════════════════════════════
+  // Public API
   getActiveCount(): number {
     return this.active.size
   }
@@ -233,6 +227,7 @@ export class DownloadManager {
     }
     // Apply optional subfolder (sanitized to prevent directory traversal)
     const rawSubfolder = (input.subfolderName ?? '').trim()
+    // eslint-disable-next-line no-useless-escape
     const safeSubfolder = rawSubfolder.replace(/[\/\\:*?"<>|]/g, '').trim()
     const finalDirectory = safeSubfolder
       ? path.join(input.directory, safeSubfolder)
@@ -384,9 +379,9 @@ export class DownloadManager {
         if (existsSync(task.filePath)) {
           await fs.unlink(task.filePath)
         }
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
-          const isLocked = err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES'
+      } catch (err: unknown) {
+        if (err instanceof Error && (err as any).code !== 'ENOENT') {
+          const isLocked = (err as any).code === 'EBUSY' || (err as any).code === 'EPERM' || (err as any).code === 'EACCES'
           throw new Error(
             isLocked
               ? 'File is currently in use. Close any player or app using it, then try again.'
@@ -434,9 +429,7 @@ export class DownloadManager {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  //  Internals
-  // ═══════════════════════════════════════════════════════════════════════
+  // Internals
 
   private detectEngine(url: string): DownloadEngine {
     const low = url.toLowerCase()
@@ -551,10 +544,10 @@ export class DownloadManager {
         log.info(`[DM] Task ${id} completed successfully`)
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error(`[DM] Task ${id} failed:`, err)
       task.status = 'error'
-      task.errorMessage = err.message || 'Unknown engine error'
+      task.errorMessage = err instanceof Error ? err.message : 'Unknown engine error'
       this.engines.delete(id)
     } finally {
       this.active.delete(id)

@@ -1,20 +1,15 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- *  useDownloadController — Download operations domain.
+ * useDownloadController — Download operations domain.
  *
- *  Owns:
- *  ─ URL analysis and variant selection
- *  ─ Format/quality/speed settings for downloads
- *  ─ Batch operations (add to list, start batch)
- *  ─ Single download (analyze → download now)
- *  ─ Download store initialization
- *  ─ Drag-and-drop URL handling
- *  ─ File/folder operations (open, delete)
- *  ─ Media player state
- *
- *  Receives cross-cutting dependencies (auth, modal, translations)
- *  from the composition shell via the `DownloadControllerDeps` interface.
- * ═══════════════════════════════════════════════════════════════════════════
+ * Owns:
+ * - URL analysis and variant selection
+ * - Format/quality/speed settings for downloads
+ * - Batch operations (add to list, start batch)
+ * - Single download (analyze -> download now)
+ * - Download store initialization
+ * - Drag-and-drop URL handling
+ * - File/folder operations (open, delete)
+ * - Media player state
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
@@ -24,7 +19,7 @@ import { initDownloadStore, useDownloadStore, getTasksSnapshot } from '../stores
 import { useUIStore } from '../stores/useUIStore'
 import type { ModalConfig } from './types'
 
-// ─── Helpers (pure, no React) ────────────────────────────────────────────────
+// Helpers
 
 function isYtdlpUrl(url: string): boolean {
   const lowUrl = url.toLowerCase()
@@ -49,7 +44,7 @@ function isYtdlpUrl(url: string): boolean {
   return true
 }
 
-// ─── Dependencies ────────────────────────────────────────────────────────────
+// Dependencies
 
 export interface DownloadControllerDeps {
   cookieBrowser: string
@@ -61,7 +56,7 @@ export interface DownloadControllerDeps {
   t: Translations
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
+// Hook
 
 export function useDownloadController({
   cookieBrowser, cookieFile, username, password,
@@ -88,8 +83,8 @@ export function useDownloadController({
   const analyzing = useUIStore((s) => s.analyzing)
   const setAnalyzing = useUIStore((s) => s.setAnalyzing)
 
-  // ── Local state ──
-  const [_filename, setFilename] = useState('')
+  // Local state
+  const [, setFilename] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [selectedVariantUrl, setSelectedVariantUrl] = useState<string | null>(null)
@@ -97,14 +92,14 @@ export function useDownloadController({
   const [isAudioMode, setIsAudioMode] = useState(false)
   const [selectedQuality, setSelectedQuality] = useState<string>('')
   const [selectedYtdlpFormatId, setSelectedYtdlpFormatId] = useState<string | null>(null)
-  const [_targetResolution, setTargetResolution] = useState<number | null>(null)
+  const [, setTargetResolution] = useState<number | null>(null)
   const [speedLimit, setSpeedLimit] = useState<string>(() => localStorage.getItem('cortex-speed-limit') || 'auto')
   const [subfolderName, setSubfolderName] = useState('')
 
   // ── Media player state ──
   const [mediaPlayerFile, setMediaPlayerFile] = useState<{ filePath: string; title?: string } | null>(null)
 
-  // ─── Derived / Computed ─────────────────────────────────────────────────────
+  // Derived / Computed
 
   const availableVideoQualities = useMemo(() => {
     if (analyzeResult?.kind !== 'ytdlp') return null
@@ -142,7 +137,7 @@ export function useDownloadController({
     (s) => Array.from(s.tasks.values()).filter((t) => t.status === 'downloading').length
   )
 
-  // ─── Side Effects ───────────────────────────────────────────────────────────
+  // Side Effects
 
   // Download store init
   useEffect(() => {
@@ -156,6 +151,7 @@ export function useDownloadController({
     setSelectedVariantUrl(null)
     setTargetResolution(null)
     setSelectedYtdlpFormatId(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
   // Drag-and-drop URL
@@ -175,9 +171,10 @@ export function useDownloadController({
       window.removeEventListener('dragover', handleDragOver)
       window.removeEventListener('drop', handleDrop)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ─── Action Handlers ────────────────────────────────────────────────────────
+  // Action Handlers
 
   async function onPickFolder(): Promise<string | null> {
     setGlobalError(null)
@@ -431,6 +428,7 @@ export function useDownloadController({
         }
       }
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t])
 
   async function onOpenFile(filePath: string, title?: string) {
@@ -455,7 +453,7 @@ export function useDownloadController({
     catch (err) { console.error('Failed to open external URL:', err) }
   }
 
-  // ─── Return API ─────────────────────────────────────────────────────────────
+  // Return API
 
   return {
     // Constants

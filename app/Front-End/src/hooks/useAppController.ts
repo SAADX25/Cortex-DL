@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  useAppController — Composition shell.
  *
  *  Composes useDownloadController, useSettingsController, and
@@ -11,7 +10,6 @@
  *
  *  The returned object has the same shape as the original monolithic hook,
  *  preserving full backward compatibility with App.tsx.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { useState, useEffect } from 'react'
 import { translations } from '../translations'
@@ -21,8 +19,7 @@ import { useDownloadController } from './useDownloadController'
 import { useSettingsController } from './useSettingsController'
 import { useCommentsController } from './useCommentsController'
 
-// ─── Re‑export pure helpers consumed by App.tsx ──────────────────────────────
-
+// 
 export function variantLabel(v: any, lang: Language): string {
   const res = v.resolution ? `${v.resolution.height}p` : null
   const bw = v.bandwidth ? `${Math.round(v.bandwidth / 1000)} kbps` : null
@@ -32,8 +29,7 @@ export function variantLabel(v: any, lang: Language): string {
   return translations[lang].quality_placeholder
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
-
+// 
 export function useAppController() {
   // ── Shared: Confirm modal (used by both downloads and settings) ──
   const [modalConfig, setModalConfig] = useState<ModalConfig>({
@@ -66,8 +62,7 @@ export function useAppController() {
 
   const comments = useCommentsController()
 
-  // ─── Return flat API (same shape as the original) ─────────────────────────
-
+  // 
   return {
     // Constants
     MAX_BATCH_ITEMS: downloads.MAX_BATCH_ITEMS,

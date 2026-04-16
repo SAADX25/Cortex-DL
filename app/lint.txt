@@ -1,0 +1,120 @@
+﻿
+> cortex-dl@1.0.0 lint
+> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+
+
+G:\Cortex DL\app\Back-End\electron\commentsExtractor.ts
+   8:32  error  '_reject' is defined but never used              @typescript-eslint/no-unused-vars
+  26:9   error  'stderrData' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  63:46  error  Unnecessary escape character: \~                 no-useless-escape
+  99:57  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Back-End\electron\downloadManager.ts
+  236:50  error  Unnecessary escape character: \/          no-useless-escape
+  387:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  554:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Back-End\electron\engines\DirectEngine.ts
+   68:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  231:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Back-End\electron\engines\YoutubeEngine.ts
+  335:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Back-End\electron\main.ts
+   43:43  error  '_promise' is defined but never used                                                                                 @typescript-eslint/no-unused-vars
+  109:51  error  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  166:5   error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  541:15  error  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  576:10  error  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  808:30  error  '_event' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+  808:38  error  '_commandLine' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+  808:52  error  '_workingDirectory' is defined but never used                                                                        @typescript-eslint/no-unused-vars
+
+G:\Cortex DL\app\Back-End\electron\preload.ts
+   35:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   99:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  110:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Back-End\electron\ytdlp.ts
+  117:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  129:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  152:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  167:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  213:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  249:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  469:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  495:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  496:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  507:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  507:29  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Front-End\src\App.tsx
+   31:79  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  121:71  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+  127:9   error  Unnecessary semicolon                                  no-extra-semi
+  143:7   error  Definition for rule 'jsx-a11y/alt-text' was not found  jsx-a11y/alt-text
+  151:22  error  Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Front-End\src\components\AddDownloadTab.tsx
+   16:11   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:17   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   30:26   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   41:28   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   54:24   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:25   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:21   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   57:30   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:66   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  306:65   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  355:63   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  431:55   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  504:126  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Front-End\src\components\DownloadCard.tsx
+  27:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  42:7   error  Unnecessary semicolon                     no-extra-semi
+  67:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Front-End\src\components\MediaPlayer\MediaPlayerModal.tsx
+   96:59  error    Empty block statement                                                                                                                                                                                                                                            no-empty
+  141:64  error    Unexpected any. Specify a different type                                                                                                                                                                                                                         @typescript-eslint/no-explicit-any
+  215:78  error    Empty block statement                                                                                                                                                                                                                                            no-empty
+  216:62  error    Empty block statement                                                                                                                                                                                                                                            no-empty
+  260:6   warning  React Hook useEffect has missing dependencies: 'handleClose' and 'togglePlay'. Either include them or remove the dependency array                                                                                                                                react-hooks/exhaustive-deps
+  308:30  warning  The ref value 'videoRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'videoRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+  309:30  warning  The ref value 'audioRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'audioRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+G:\Cortex DL\app\Front-End\src\components\SettingsTab.tsx
+  15:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Front-End\src\components\SimpleDownloader.tsx
+  37:6  warning  React Hook useEffect has a missing dependency: 'task'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\Cortex DL\app\Front-End\src\hooks\useAppController.ts
+  26:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+G:\Cortex DL\app\Front-End\src\hooks\useDownloadController.ts
+   92:10  error    '_filename' is assigned a value but never used                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+  100:10  error    '_targetResolution' is assigned a value but never used                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+  159:6   warning  React Hook useEffect has a missing dependency: 'setAnalyzeResult'. Either include it or remove the dependency array                                                                                                                                                   react-hooks/exhaustive-deps
+  178:6   warning  React Hook useEffect has missing dependencies: 'setActiveTab' and 'setUrl'. Either include them or remove the dependency array                                                                                                                                        react-hooks/exhaustive-deps
+  434:6   warning  React Hook useCallback has missing dependencies: 'setGlobalError' and 'setModalConfig'. Either include them or remove the dependency array. If 'setModalConfig' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+G:\Cortex DL\app\Front-End\src\hooks\useSettingsController.ts
+   71:5  error  Unnecessary semicolon  no-extra-semi
+  108:5  error  Unnecessary semicolon  no-extra-semi
+
+G:\Cortex DL\app\vite.config.ts
+  10:41  error  'mode' is defined but never used              @typescript-eslint/no-unused-vars
+  11:9   error  'isBuild' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+Γ£û 78 problems (71 errors, 7 warnings)
+  4 errors and 0 warnings potentially fixable with the `--fix` option.
+

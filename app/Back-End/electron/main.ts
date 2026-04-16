@@ -22,13 +22,25 @@ import { analyzeUrlForHls } from './hls'
 import { analyzeWithYtdlp, isYtdlpAvailable, checkJsRuntime, updateYtdlp, getYtdlpVersion } from './ytdlp'
 import { extractAndSaveComments } from './commentsExtractor'
 
+// ─── Force Hardware Acceleration (Professional Fix for 4K Video CPU Spikes) ───
+// Electron relies on Chromium, which sometimes blacklists certain GPUs or
+// falls back to CPU decoding. These flags force the GPU to handle media decoding and UI rendering.
+app.commandLine.appendSwitch('ignore-gpu-blocklist')
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
+app.commandLine.appendSwitch('disable-software-rasterizer')
+app.commandLine.appendSwitch('enable-hardware-overlays')
+// Enable modern video decoding features
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization')
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Global Error Catchers
 process.on('uncaughtException', (error) => {
   log.error('UNCAUGHT EXCEPTION:', error)
   // Optional: app.quit() based on severity, but logging is the priority here.
 })
 
-process.on('unhandledRejection', (reason, _promise) => {
+process.on('unhandledRejection', (reason) => {
   log.error('UNHANDLED REJECTION:', reason)
 })
 
@@ -151,7 +163,7 @@ async function loadBackendServices() {
 
 ipcMain.on('log-message', (_event, level, message) => {
   if (log && log[level as keyof typeof log]) {
-    // @ts-ignore
+    // @ts-expect-error log dynamic key
     log[level](`[Renderer] ${message}`)
   } else {
     log?.info(`[Renderer] ${message}`)
@@ -793,7 +805,7 @@ function startMediaStreamingServer(): void {
 if (!gotTheLock) {
   app.quit()
 } else {
-  app.on('second-instance', (_event, _commandLine, _workingDirectory) => {
+  app.on('second-instance', () => {
     // Someone tried to run a second instance, we should focus our window.
     if (win) {
       if (win.isMinimized()) win.restore()

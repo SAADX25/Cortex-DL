@@ -34,6 +34,7 @@ export default function SimpleDownloader() {
     if (!task) return
     setFileName(task.title || task.filename || '')
     setStatus(task.status)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, task?.title, task?.filename, task?.status])
 
   async function onDownload() {

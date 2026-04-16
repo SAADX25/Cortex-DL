@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  FFmpeg Engine — HLS (M3U8) and direct media conversion downloads.
  *
  *  Used for:
@@ -9,7 +8,6 @@
  *
  *  Supports all video formats (MP4, MKV, AVI, MOV, WEBM, GIF)
  *  and all audio formats (MP3, WAV, M4A, OGG, FLAC).
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'

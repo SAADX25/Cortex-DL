@@ -1,17 +1,11 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- *  App.tsx — View layer for Cortex DL.
+ * App.tsx — View layer for Cortex DL.
  *
- *  Responsibilities:
- *  ─ Calls useAppController for actions and local state
- *  ─ Renders SmartImage, UrlInputBar, and other presentational pieces
- *  ─ Distributes ONLY the props that aren't already in the Zustand store
- *  ─ Contains NO business logic or direct IPC calls
- *
- *  Global UI state (activeTab, directory, batchItems, globalError, url,
- *  analyzeResult, analyzing, toast) lives in useUIStore. Child components
- *  subscribe directly via selectors — no prop drilling.
- * ═══════════════════════════════════════════════════════════════════════════
+ * Responsibilities:
+ * - Calls useAppController for actions and local state
+ * - Renders SmartImage, UrlInputBar, and other presentational pieces
+ * - Distributes ONLY the props that aren't already in the Zustand store
+ * - Contains NO business logic or direct IPC calls
  */
 import { useState, useEffect } from 'react'
 import { X, ClipboardPaste } from 'lucide-react'
@@ -26,8 +20,9 @@ import { useAppController, variantLabel } from './hooks/useAppController'
 import { useUIStore } from './stores/useUIStore'
 import React from 'react'
 
-// ─── Presentational Components (no IPC, no complex logic) ────────────────────
+// Presentational Components
 
+ 
 export const YouTubeMusicIcon = ({ size = 22, ...props }: { size?: number } & any) => {
   return (
     <svg
@@ -111,20 +106,21 @@ export const UrlInputBar = React.memo(({
   )
 })
 
-// ─── Thumbnail fallback ──────────────────────────────────────────────────────
+// Thumbnail fallback
 
 const THUMB_FALLBACK_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90'><rect width='100%' height='100%' fill='%23081126'/><text x='50%' y='50%' font-size='12' fill='%239ca3af' dominant-baseline='middle' text-anchor='middle'>No image</text></svg>"
 
-// ─── SmartImage (needs thumbPort from the controller) ────────────────────────
+// SmartImage
 
 function createSmartImage(thumbPort: number) {
+   
   return function SmartImage({ src, alt, className, style, ...rest }: any) {
     const [imgSrc, setImgSrc] = useState<string | undefined>(src)
     useEffect(() => {
       let cancelled = false
       setImgSrc(src)
       if (src && /instagram|cdninstagram/i.test(src)) {
-        ;(async () => {
+        (async () => {
           try {
             const filePath = await window.cortexDl.fetchThumbnail(src)
             if (!cancelled && filePath) {
@@ -140,7 +136,6 @@ function createSmartImage(thumbPort: number) {
     }, [src])
 
     return (
-      // eslint-disable-next-line jsx-a11y/alt-text
       <img
         src={imgSrc || THUMB_FALLBACK_DATA_URI}
         alt={alt || ''}
@@ -148,6 +143,7 @@ function createSmartImage(thumbPort: number) {
         style={style}
         loading="lazy"
         referrerPolicy="no-referrer"
+         
         onError={(e: any) => { e.currentTarget.onerror = null; e.currentTarget.src = THUMB_FALLBACK_DATA_URI }}
         {...rest}
       />
@@ -155,7 +151,7 @@ function createSmartImage(thumbPort: number) {
   }
 }
 
-// ─── App Component ───────────────────────────────────────────────────────────
+// App Component
 
 function App() {
   const ctrl = useAppController()

@@ -1,9 +1,7 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  Utils — Shared utility functions used across all engine modules.
  *
  *  Pure functions + thin Electron wrappers. No business logic.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { Notification, BrowserWindow } from 'electron'
 import { spawn } from 'node:child_process'

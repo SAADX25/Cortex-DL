@@ -1,10 +1,8 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  Shared types for controller hooks.
  *
  *  Extracted here to avoid circular imports between the composition shell
  *  (useAppController) and the domain hooks that receive the modal setter.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 
 export type ModalConfig = {

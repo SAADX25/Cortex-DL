@@ -1,5 +1,4 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  DownloadList — Container component for the downloads tab (optimized).
  *
  *  Responsibilities:
@@ -13,7 +12,6 @@
  *  ─ Only re-filters when user stops typing for 300ms
  *  ─ This component only re-renders when the ID list or debounced search changes,
  *    NOT when individual task progress updates (handled by useHighFrequencyIPC).
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import React, { useState, useMemo } from 'react'
 import { X, Trash2, DownloadCloud } from 'lucide-react'

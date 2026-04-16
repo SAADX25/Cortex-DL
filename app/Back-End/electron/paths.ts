@@ -1,11 +1,9 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  Paths — Binary and resource path resolution for dev and production.
  *
  *  Used by every engine module and the analysis layer.
  *  Eliminates the duplicated getBinaryPath / getCookiesPath functions
  *  that were scattered across downloadManager.ts and ytdlp.ts.
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { app } from 'electron'
 import path from 'node:path'

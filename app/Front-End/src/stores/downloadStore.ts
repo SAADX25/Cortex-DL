@@ -1,12 +1,10 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
  *  Download Store — Single source of truth for all download tasks.
  *
  *  Architecture: Zustand Map store with per-task rendering via selectors.
  *
  *  IPC wiring is done via `initDownloadStore()` which starts the single
  *  app-wide high-frequency IPC listeners (DOM-fast-path + throttled store).
- * ═══════════════════════════════════════════════════════════════════════════
  */
 import { create } from 'zustand'
 import type { DownloadTask } from '../../../Shared/types'
