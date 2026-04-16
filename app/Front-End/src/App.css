@@ -317,6 +317,7 @@
 .brand-icon-btn.youtube { background: #ff0000; border-color: #ff0000; color: #ffffff; box-shadow: 0 6px 18px rgba(255, 0, 0, 0.18); }
 .brand-icon-btn.facebook { background: #1877f2; border-color: #1877f2; color: #ffffff; box-shadow: 0 6px 18px rgba(24, 119, 242, 0.18); }
 .brand-icon-btn.instagram { background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); border-color: transparent; color: #ffffff; box-shadow: 0 6px 18px rgba(220, 39, 67, 0.18); }
+.brand-icon-btn.reddit { background: #ff4500; border-color: #ff4500; color: #ffffff; box-shadow: 0 6px 18px rgba(255, 69, 0, 0.18); }
 .brand-icon-btn.tiktok { background: #010101; border-color: #010101; color: #ffffff; box-shadow: 0 6px 18px rgba(1,1,1,0.3); }
 .brand-icon-btn.x { background: #000000; border-color: #000000; color: #ffffff; box-shadow: 0 6px 18px rgba(255, 255, 255, 0.08); }
 
