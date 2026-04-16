@@ -7,13 +7,12 @@ const dbPath = path.join(userDataPath, 'tasks.sqlite')
 
 export const db = new Database(dbPath)
 
-// Enable WAL mode for maximum concurrency and performance
+// WAL mode for performance
 db.pragma('journal_mode = WAL')
 
-// Set auto_vacuum so the DB doesn't grow infinitely forever
 db.pragma('auto_vacuum = INCREMENTAL')
 
-// Initialize the table precisely matching the Phase 1 requirements + a payload column
+// Initialize tasks table
 db.exec(`
   CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
@@ -28,9 +27,8 @@ db.exec(`
   )
 `)
 
-// Prepared Statements for blazing fast execution
+// Prepared Statements
 export const taskDb = {
-  // Upsert a full task (used when saving pure state or inserting new ones)
   upsertTask: db.prepare(`
     INSERT INTO tasks (id, title, url, status, progress, size, thumbnail, engine, full_payload)
     VALUES (@id, @title, @url, @status, @progress, @size, @thumbnail, @engine, @full_payload)
@@ -45,7 +43,6 @@ export const taskDb = {
       full_payload = excluded.full_payload
   `),
 
-  // Surgical UPDATE for status and progress (highly concurrent / fast)
   updateStatusAndProgress: db.prepare(`
     UPDATE tasks 
     SET status = @status, progress = @progress, full_payload = @full_payload

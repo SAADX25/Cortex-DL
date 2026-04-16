@@ -1,17 +1,3 @@
-/**
- * Download Manager — Clean orchestrator for the download queue.
- *
- * Responsibilities:
- * - Task lifecycle (add, pause, resume, cancel, delete)
- * - Concurrent download queue
- * - Persistent state in SQLite database
- * - Engine dispatch
- *
- * Engines:
- * - directEngine.ts  → HTTP direct downloads
- * - ffmpegEngine.ts  → HLS/M3U8 + audio extraction
- * - ytdlpEngine.ts   → YouTube, social media, etc.
- */
 import { BrowserWindow } from 'electron'
 import log from 'electron-log'
 import {
@@ -33,7 +19,7 @@ import {
   killProcessTree,
 } from './utils'
 
-// Clean Architecture Engines
+// Engines
 import type { IEngine } from './engines/IEngine'
 import { DirectEngine } from './engines/DirectEngine'
 import { YoutubeEngine } from './engines/YoutubeEngine'
@@ -59,13 +45,7 @@ export class DownloadManager {
   private runtime = new Map<string, TaskRuntime>()
   private engines = new Map<string, IEngine>() // Track active engine instances
   private win: BrowserWindow | null = null
-  private maxConcurrent = 3
-  // Default concurrency limit — set to 3 to keep parallel downloads reasonable.
-  // Default concurrency limit — keep low to avoid server throttling and UI load.
-  // Set to 3 as a safe default per user request.
-  // Note: schedule() enforces this limit strictly by using this.active.size.
-  // Adjusting at runtime would require a setter and re-scheduling logic.
-  // For now, the default is set to 3.
+  private maxConcurrent = 3 // Concurrency limit
   private active = new Set<string>()
 
   constructor() {
@@ -73,7 +53,6 @@ export class DownloadManager {
   }
 
   // State Persistence
-
   private loadState(): void {
     try {
       // Load items from database ONLY
@@ -135,7 +114,7 @@ export class DownloadManager {
   }
 
   /**
-   * Instantly update active tasks to the database. Phase 1 SQLite integration.
+   * Save active tasks to database.
    */
   private saveStateImmediate(taskId?: string): void {
     try {
@@ -168,8 +147,7 @@ export class DownloadManager {
   }
 
   /**
-   * Debounced save is largely obsolete with SQLite WAL, but kept for interface compatibility
-   * until engines are refactored to stop calling it.
+   * Update active tasks in database.
    */
   private saveStateDebounced(): void {
     // With WAL mode SQLite, we can just do it instantly. 
@@ -489,8 +467,7 @@ export class DownloadManager {
     }
   }
 
-  // ── Queue Scheduler ────────────────────────────────────────────────────
-
+  // Queue Scheduler
   private schedule(): void {
     const available = this.maxConcurrent - this.active.size
     if (available <= 0) return

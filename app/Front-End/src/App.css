@@ -1,6 +1,6 @@
-/* Modern Minimalist Redesign - Add Page */
 
-/* 1. Centered Layout */
+
+
 .centered-layout {
   display: flex;
   flex-direction: column;
@@ -30,7 +30,7 @@
   letter-spacing: -1px;
 }
 
-/* 2. Minimal Panel (No Background) */
+
 .minimal-panel {
   width: 100%;
   display: flex;
@@ -38,7 +38,7 @@
   gap: 2rem;
 }
 
-/* 3. Hero Input Field */
+
 .hero-input-container {
   position: relative;
   width: 100%;
@@ -132,7 +132,7 @@
   cursor: wait;
 }
 
-/* 4. Modern Chips */
+
 .modern-chips-grid {
   display: flex;
   flex-direction: row !important;
@@ -181,7 +181,7 @@
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
-/* Unified Pill Styles for folder / subfolder inputs */
+
 .cortex-pill {
   display: flex;
   align-items: center;
@@ -191,7 +191,7 @@
   border-radius: 50px !important;
   height: 42px !important;
   padding: 0 15px !important;
-  /* Smooth, premium transition for all states */
+
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   transform: translateY(0) scale(1);
 }
@@ -199,9 +199,9 @@
 .cortex-pill:hover {
   border-color: rgba(56, 189, 248, 0.4) !important;
   background: rgba(255, 255, 255, 0.08) !important;
-  /* Lift up and slight scale */
+
   transform: translateY(-2px) scale(1.02);
-  /* Subtle cyan ambient glow */
+
   box-shadow: 0 8px 25px rgba(56, 189, 248, 0.15);
 }
 
@@ -219,7 +219,7 @@
   font-size: 0.85rem;
 }
 
-/* Speed Limit Select */
+
 .speed-select {
   appearance: none;
   -webkit-appearance: none;
@@ -235,7 +235,7 @@
   min-width: 110px;
 }
 
-/* Smart folder selection component styles */
+
 .smart-folder-container {
   display: flex;
   flex-direction: column;
@@ -285,7 +285,7 @@
   color: var(--text-main);
 }
 
-/* Quick Access Minimal */
+
 .quick-access-bar-minimal {
   margin-top: 3.5rem;
   display: flex;
@@ -313,7 +313,7 @@
   box-shadow: 0 10px 30px rgba(0,0,0,0.45);
 }
 
-/* Brand colors applied by default so icons are vibrant without hover */
+
 .brand-icon-btn.youtube { background: #ff0000; border-color: #ff0000; color: #ffffff; box-shadow: 0 6px 18px rgba(255, 0, 0, 0.18); }
 .brand-icon-btn.facebook { background: #1877f2; border-color: #1877f2; color: #ffffff; box-shadow: 0 6px 18px rgba(24, 119, 242, 0.18); }
 .brand-icon-btn.instagram { background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); border-color: transparent; color: #ffffff; box-shadow: 0 6px 18px rgba(220, 39, 67, 0.18); }
@@ -321,7 +321,7 @@
 .brand-icon-btn.tiktok { background: #010101; border-color: #010101; color: #ffffff; box-shadow: 0 6px 18px rgba(1,1,1,0.3); }
 .brand-icon-btn.x { background: #000000; border-color: #000000; color: #ffffff; box-shadow: 0 6px 18px rgba(255, 255, 255, 0.08); }
 
-/* YouTube Music - matches existing circular buttons but with a strong red/pink brand hover effect */
+
 .brand-icon-btn.ytmusic {
   /* Dynamic YouTube Music Pink-to-Red Gradient */
   background: linear-gradient(135deg, #e91e63 0%, #ff0000 100%) !important;
@@ -348,13 +348,13 @@
   animation: spin 0.8s linear infinite;
 }
 
-/* Shrink icons inside hero action and clear buttons for compact layout */
+
 .hero-action-btn svg, .hero-action-btn .lucide-icon, .hero-clear-btn svg, .hero-clear-btn .lucide-icon {
   width: 16px;
   height: 16px;
 }
 
-/* Compact remove button used for batch items */
+
 .batch-remove-btn {
   margin-left: 8px;
   background: transparent;
@@ -370,10 +370,10 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Hide elements helper */
+
 .hidden { display: none !important; }
 
-/* Settings Redesign */
+
 .settings-hero-stats {
   display: flex;
   flex-direction: column;
@@ -546,7 +546,7 @@
   font-size: 0.95rem;
 }
 
-/* Danger Zone */
+
 .danger-zone {
   margin-top: 2rem;
   border-top: 1px solid rgba(239, 68, 68, 0.2);
@@ -583,7 +583,7 @@
   animation: spin 1s linear infinite;
 }
 
-/* Custom Select - Modern Styled */
+
 .custom-select-wrapper {
   position: relative;
   display: inline-block;
@@ -638,7 +638,7 @@
   color: var(--text-main);
 }
 
-/* RTL Support for Custom Select */
+
 [dir="rtl"] .custom-select {
   padding: 0.75rem 1rem 0.75rem 2.5rem;
 }
@@ -650,7 +650,7 @@
   padding-left: 1rem;
 }
 
-/* Existing Styles... */
+
 :root {
   --bg-sidebar: #0f172a;
   --bg-main: #1e293b;
@@ -694,7 +694,7 @@ body {
   width: 100vw;
 }
 
-/* Sidebar Styling */
+
 .sidebar {
   width: var(--sidebar-width);
   background: var(--bg-sidebar);
@@ -721,7 +721,7 @@ body {
   background: none;
 }
 
-/* Bulletproof pure-CSS logo text for sidebar */
+
 .cortex-logo-text {
   font-size: 32px !important;
   font-weight: 900 !important;
@@ -847,7 +847,7 @@ body {
   box-shadow: 0 0 8px var(--success);
 }
 
-/* Main Content */
+
 .main-content {
   flex: 1;
   overflow-y: auto;
@@ -869,7 +869,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* اجعل الهيدر وشريط البحث ثابتين في قائمة التحميلات */
+
 .content-header.sticky-search-header {
   position: sticky;
   top: -2rem; /* يلتصق بأعلى الصفحة تماماً مع تعويض ال padding الخاص بـ main-content */
@@ -908,7 +908,7 @@ body {
   font-size: 0.9rem;
 }
 
-/* Panel & Inputs */
+
 .panel {
   background: var(--bg-card);
   padding: 2rem;
@@ -1026,7 +1026,7 @@ body {
   cursor: pointer;
 }
 
-/* Smart Time Trim */
+
 .time-trim-box {
   margin-top: 0.5rem;
 }
@@ -1130,7 +1130,7 @@ body {
   overflow: hidden;
 }
 
-/* Premium shine effect */
+
 .download-main-btn-large::after {
   content: '';
   position: absolute;
@@ -1167,7 +1167,7 @@ body {
   transform: none;
 }
 
-/* Video Preview */
+
 .video-preview-large {
   display: flex;
   gap: 1.5rem;
@@ -1193,7 +1193,7 @@ body {
   line-height: 1.4;
 }
 
-/* --- Video Metadata (Views, Likes, Comments) --- */
+
 .preview-metadata {
   display: flex;
   flex-direction: column;
@@ -1280,7 +1280,7 @@ body {
   word-break: break-word;
 }
 
-/* Modern Task Card Refactoring */
+
 .task-grid {
   display: flex;
   flex-direction: column;
@@ -1476,7 +1476,7 @@ body {
   overflow: hidden;
 }
 
-/* Stage 1 — explicit blue for downloading */
+
 .bar-fill.downloading {
   background: linear-gradient(90deg, #3b82f6, #60a5fa);
 }
@@ -1502,7 +1502,7 @@ body {
   100% { transform: translateX(100%); }
 }
 
-/* Stage 3 — green for completed */
+
 .bar-fill.completed { 
   background: linear-gradient(90deg, #22c55e, #4ade80); 
 }
@@ -1514,7 +1514,7 @@ body {
 .bar-fill.paused { background: var(--warning); }
 .bar-fill.paused::after { display: none; }
 
-/* All indeterminate bars: force full width, kill transition, hide shimmer pseudo */
+
 .bar-fill.indeterminate {
   width: 100% !important;
   transition: none !important;
@@ -1522,7 +1522,7 @@ body {
 }
 .bar-fill.indeterminate::after { display: none; }
 
-/* Stage 1 indeterminate — blue sweep for downloading at 0% */
+
 .bar-fill.downloading.indeterminate {
   background: linear-gradient(
     90deg,
@@ -1534,7 +1534,7 @@ body {
   animation: indeterminate-shimmer 1.5s infinite linear;
 }
 
-/* Stage 2 — purple for converting/merging/trimming post-processing */
+
 .bar-fill.converting,
 .bar-fill.merging {
   background: linear-gradient(90deg, #7c3aed, #a78bfa);
@@ -1550,7 +1550,7 @@ body {
   animation: progress-shimmer 1.5s infinite;
 }
 
-/* Stage 2 indeterminate — purple sweep for converting/merging */
+
 .bar-fill.converting.indeterminate,
 .bar-fill.merging.indeterminate {
   background: linear-gradient(
@@ -1673,7 +1673,7 @@ body {
 }
 
 
-/* Empty State */
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1742,7 +1742,7 @@ body {
   margin-top: 1rem;
 }
 
-/* Search */
+
 .search-container {
   position: relative;
   width: 320px;
@@ -1777,7 +1777,7 @@ body {
   pointer-events: none;
 }
 
-/* Search Centered - Google Style */
+
 .search-input-centered {
   width: 100%;
   /* Clearer, higher-contrast background to improve readability */
@@ -1814,7 +1814,7 @@ body {
   transform: translateY(-50%) scale(1.08) !important;
 }
 
-/* Settings */
+
 .settings-panel {
   display: flex;
   flex-direction: column;
@@ -1858,7 +1858,7 @@ body {
   opacity: 0.8;
 }
 
-/* Authentication Section Styles */
+
 .auth-section {
   background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
@@ -1985,7 +1985,7 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* Stats Card Styling */
+
 .stats-card {
   background: rgba(0, 0, 0, 0.25);
   border-radius: 12px;
@@ -2032,7 +2032,7 @@ body {
   transform: scale(1.1);
 }
 
-/* Icon Buttons */
+
 .btn-icon {
   width: 38px;
   height: 38px;
@@ -2097,7 +2097,7 @@ body {
   color: var(--error);
 }
 
-/* Icon Buttons - Ghost Style */
+
 .btn-icon.ghost-success {
   background: transparent;
   color: var(--success);
@@ -2131,7 +2131,7 @@ body {
   box-shadow: none;
 }
 
-/* Modal Styles */
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -2237,7 +2237,7 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Quick Access Toolbar */
+
 .quick-access-bar {
   display: flex;
   flex-direction: column;
@@ -2304,7 +2304,7 @@ body {
   color: #00f2ea;
 }
 
-/* Playlist Preview Styles */
+
 .playlist-preview {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
@@ -2397,7 +2397,7 @@ body {
   100% { opacity: 1; }
 }
 
-/* Custom Scrollbar */
+
 ::-webkit-scrollbar {
   width: 8px;
 }

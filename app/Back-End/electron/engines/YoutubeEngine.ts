@@ -19,17 +19,6 @@ import { getJsRuntimeArgs } from '../ytdlp'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
-/**
- * YoutubeEngine — professional yt-dlp adapter.
- *
- * Guarantees:
- * - yt-dlp binary is updated once per process (`yt-dlp --update`)
- * - metadata is fetched before download (`--dump-json`)
- * - optimized argument profiles:
- *   - Pro Audio (mp3): -x --audio-format mp3 --audio-quality 0 (requires FFmpeg)
- *   - Best Video (mp4): -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best" (requires FFmpeg)
- * - progress is parsed and pushed via EngineContext into the orchestrator/UI
- */
 export class YoutubeEngine implements IEngine {
   private static updatePromise: Promise<void> | null = null
   private childProcess: ChildProcessWithoutNullStreams | null = null
@@ -37,13 +26,13 @@ export class YoutubeEngine implements IEngine {
   async download(task: DownloadTask, context?: EngineContext): Promise<void> {
     if (!context) throw new Error('[YoutubeEngine] Missing EngineContext')
 
-    // 1) Keep yt-dlp binary fresh (silent, once per process)
+    // Ensure yt-dlp binary is present and updated
     await YoutubeEngine.ensureYtdlpFresh()
 
     const runtime = context.runtime
     this.childProcess = null
 
-    // 2) Dependency checks (especially FFmpeg for merge/audio)
+    // Check dependencies
     const ytDlpPath = getBinaryPath('yt-dlp')
     const ffmpegPath = getBinaryPath('ffmpeg')
     const ffmpegDir = path.dirname(ffmpegPath)
@@ -66,7 +55,7 @@ export class YoutubeEngine implements IEngine {
       return
     }
 
-    // 3) Initialize runtime
+    // Initialize runtime
     runtime.abortController?.abort()
     runtime.abortController = new AbortController()
     runtime.lastSpeedSampleAtMs = null
@@ -79,13 +68,13 @@ export class YoutubeEngine implements IEngine {
     task.updatedAtMs = nowMs()
     context.sendUpdate(task)
 
-    // 4) Metadata pre-fetch (title/duration/thumbnail) before starting download
+    // Prefetch metadata
     await this.prefetchMetadata(task, context, runtime).catch((e) => {
       // Non-fatal; continue without metadata.
       log.warn(`[YoutubeEngine] Metadata prefetch failed for ${task.id}:`, e instanceof Error ? e.message : e)
     })
 
-    // 5) Spawn yt-dlp with optimized arguments and machine-parseable progress templates
+    // Spawn yt-dlp
     const args = this.buildYtdlpArgs(task, profile, { ffmpegDir })
     const proc = spawn(ytDlpPath, args, {
       windowsHide: true,
@@ -505,7 +494,7 @@ export class YoutubeEngine implements IEngine {
 
     if (!downloadedPath || !existsSync(downloadedPath)) return
 
-    // ── FFMPEG POST-PROCESS FOR UNSUPPORTED FORMATS ──
+    // FFmpeg post-processing for specific formats
     const dExt = path.extname(downloadedPath).toLowerCase()
     let needsFfmpeg = false
     let ffmpegArgs: string[] = []

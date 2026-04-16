@@ -8,11 +8,7 @@ import { chmodSync } from 'node:fs'
 import { unlink, rename, stat } from 'node:fs/promises'
 import { getBinaryPath, getBinDirectory, getCookiesPath } from './paths'
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   In-Memory Analysis Cache (LRU with 5-minute TTL)
-   Stores parsed AnalyzeResult keyed by normalized URL.
-   Same URL within 5 min returns instantly without spawning yt-dlp.
-   ═══════════════════════════════════════════════════════════════════════════ */
+// In-Memory Analysis Cache (5-min TTL)
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 const ANALYSIS_CACHE_MAX = 50 // max entries to prevent unbounded growth
 
@@ -377,11 +373,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
     throw new Error('ملف yt-dlp.exe غير موجود في مجلد bin. يرجى التأكد من وجوده.')
   }
 
-  // NOTE: Removed redundant isYtdlpAvailable() spawn — if the binary is broken,
-  // the analysis spawn itself will fail and we handle ENOENT/exit-code below.
-
   return new Promise((resolve, reject) => {
-    // ── Aggressive speed flags ──
     const args = [
       '--dump-json',
       '--no-playlist',
@@ -390,13 +382,11 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
       '--force-ipv4',
       '--no-warnings',
       '--ignore-errors',
-      // Network speed: tight socket timeout + no disk cache (avoids lock contention)
       '--socket-timeout', '10',
       '--no-cache-dir'
     ]
 
-    const jsRuntimeArgs = getJsRuntimeArgs()
-    args.push(...jsRuntimeArgs)
+    args.push(...getJsRuntimeArgs())
 
     // Cookie Logic: Prioritize manual cookie file in root, then passed cookieFile, then browser
     const globalCookies = getCookiesPath()
@@ -442,7 +432,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
 
       if (code !== 0) {
         log.error('yt-dlp analysis failed:', stderr)
-        // JS runtime warning may appear on YouTube. Do not hard-fail here; try to surface the real error if any.
+        // Check for common YouTube bot/login blocks
         if (isYouTubeUrl(url) && (stderr.includes('Sign in to confirm you') || stderr.includes('not a bot'))) {
           const hasCookies = !!getCookiesPath()
           if (hasCookies) {

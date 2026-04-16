@@ -8,15 +8,7 @@ import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { nowMs } from '../utils';
 
-// DirectEngine: Multi-threaded 8-chunk downloader for direct HTTP URLs
-//
-// Features:
-// - HEAD request to detect Accept-Ranges support
-// - 8 concurrent chunks for maximum throughput
-// - Automatic fallback to single-stream for unsupported servers
-// - 3-retry logic per chunk with exponential backoff
-// - Real-time progress updates to UI and SQLite database
-// - Proper file handle lifecycle management
+
 
 interface ChunkInfo {
   index: number;
@@ -41,7 +33,7 @@ export class DirectEngine implements IEngine {
     this.abortController = new AbortController();
 
     try {
-      // Step 1: HEAD request to check Accept-Ranges support
+      // Check Accept-Ranges support via HEAD request
       let supportsRanges = false;
       let totalBytes: number | null = null;
 
@@ -76,7 +68,7 @@ export class DirectEngine implements IEngine {
         if (context?.sendUpdate) context.sendUpdate(task);
       }
 
-      // Step 2: Download using multi-chunk or single-stream
+      // Choose download strategy
       if (supportsRanges && totalBytes && totalBytes > 0) {
         await this.downloadWithChunking(task, totalBytes, context);
       } else {
@@ -99,7 +91,7 @@ export class DirectEngine implements IEngine {
     }
   }
 
-  // Single-Stream Fallback (for servers that don't support ranges)
+  // Single-Stream Fallback (no range support)
 
   private async downloadSingleStream(
     task: DownloadTask,
@@ -154,7 +146,7 @@ export class DirectEngine implements IEngine {
     await pipeline(response.data, progressStream, writer);
   }
 
-  // Multi-Chunk Downloader (8 concurrent chunks with retry logic)
+  // Multi-Chunk Downloader
 
   private async downloadWithChunking(
     task: DownloadTask,
@@ -204,7 +196,7 @@ export class DirectEngine implements IEngine {
     }
   }
 
-  // Chunk Download with Retry Logic (3 retries per chunk)
+  // Chunk Download with Retry
 
   private async downloadChunkWithRetry(
     task: DownloadTask,

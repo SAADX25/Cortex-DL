@@ -2,15 +2,7 @@ import { spawn } from 'node:child_process';
 import log from 'electron-log';
 import { getBinaryPath } from '../paths';
 
-/**
- * MediaProcessor: A separate utility for merging video+audio or format conversion.
- * It strictly uses FFmpeg.
- */
 export class MediaProcessor {
-  /**
-    * Merges video and audio files into a single output container.
-    * Returns after FFmpeg completes.
-    */
   async merge(videoPath: string, audioPath: string, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const ffmpeg = getBinaryPath('ffmpeg');

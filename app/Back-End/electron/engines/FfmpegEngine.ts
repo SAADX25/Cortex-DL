@@ -3,12 +3,6 @@ import log from 'electron-log'
 import { runFfmpegDownload } from '../ffmpegEngine'
 import type { IEngine } from './IEngine'
 
-/**
- * FfmpegEngine: IEngine wrapper around runFfmpegDownload().
- *
- * This adapter exists so the orchestrator can treat all engines uniformly
- * via the `IEngine` contract.
- */
 export class FfmpegEngine implements IEngine {
   private runtime: TaskRuntime | null = null
 

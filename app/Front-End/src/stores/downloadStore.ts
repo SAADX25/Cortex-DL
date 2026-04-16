@@ -83,15 +83,15 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
 
 // ── Selectors (equality-stable, used by components) ──────────────────────────
 
-/** Select a single task by ID — only re-renders when THAT task changes. */
+/** Select a single task by ID */
 export const useTask = (id: string) =>
   useDownloadStore((s) => s.tasks.get(id))
 
-/** Select ordered task IDs — only re-renders when IDs array changes. */
+/** Select ordered task IDs */
 export const useTaskIds = () =>
   useDownloadStore((s) => s.taskIds)
 
-/** Get the full tasks map without subscribing (for imperative reads). */
+/** Get the full tasks mapsnapshot */
 export const getTasksSnapshot = () =>
   useDownloadStore.getState().tasks
 

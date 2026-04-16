@@ -22,24 +22,15 @@ import { analyzeUrlForHls } from './hls'
 import { analyzeWithYtdlp, isYtdlpAvailable, checkJsRuntime, updateYtdlp, getYtdlpVersion } from './ytdlp'
 import { extractAndSaveComments } from './commentsExtractor'
 
-// ─── Force Hardware Acceleration (Professional Fix for 4K Video CPU Spikes) ───
-// Electron relies on Chromium, which sometimes blacklists certain GPUs or
-// falls back to CPU decoding. These flags force the GPU to handle media decoding and UI rendering.
+// GPU Hardware Acceleration
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
 app.commandLine.appendSwitch('disable-software-rasterizer')
 app.commandLine.appendSwitch('enable-hardware-overlays')
-// Enable modern video decoding features
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization')
-// ─────────────────────────────────────────────────────────────────────────────
 
 // Global Error Catchers
-process.on('uncaughtException', (error) => {
-  log.error('UNCAUGHT EXCEPTION:', error)
-  // Optional: app.quit() based on severity, but logging is the priority here.
-})
-
 process.on('unhandledRejection', (reason) => {
   log.error('UNHANDLED REJECTION:', reason)
 })
@@ -150,7 +141,7 @@ async function loadBackendServices() {
   // Signal that backend services are ready
   serviceReadyResolve()
 
-  // 6. Run Startup Checks
+  // Running startup checks
   log.info('Backend services loaded. Running startup checks...')
   cleanupUpdaterCache()
   
@@ -212,24 +203,15 @@ ipcMain.handle('cortexdl:uninstall-app', () => {
       shell.openExternal('ms-settings:appsfeatures')
     }
 
-    // 5. KILL THE APP IMMEDIATELY
+    // Exit immediately
     log.info('Exiting app...')
-    app.exit(0) // Better than app.quit() for immediate termination
+    app.exit(0)
 
   } catch (error) {
     log.error('Uninstall error:', error)
   }
 })
 
-// The built directory structure
-//
-// ├─┬─┬ dist
-// │ │ └── index.html
-// │ │
-// │ ├─┬ dist-electron
-// │ │ ├── main.js
-// │ │ └── preload.mjs
-// │
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
@@ -295,11 +277,10 @@ function createWindow() {
     },
   })
 
-  // Ensure the native menu bar is removed for a clean, custom UI
+  // Remove native menu bar
   try {
     win.setMenu(null)
   } catch (err) {
-    // ignore if setting the menu fails in some environments
     log.warn('Failed to remove menu:', err)
   }
 
@@ -608,19 +589,13 @@ ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
     throw err
   }
 })
-  // Disable Hardware Acceleration for lower-end devices to prevent UI lag/artifacts
 
 // IPC handler: expose the dynamically resolved media server port to the renderer
 ipcMain.handle('cortexdl:get-media-port', () => MEDIA_SERVER_PORT)
 // Hardware acceleration is actively enabled for smooth UI/video playback
 // app.disableHardwareAcceleration()
 const gotTheLock = app.requestSingleInstanceLock()
-// ─── Local Media Streaming Server ────────────────────────────────────────────
-// A lightweight HTTP server that streams local files with proper 206 Partial
-// Content (Range) support. This is required for HTML5 <video>/<audio> seeking,
-// duration detection, and chunk-based playback — none of which work with a
-// basic custom protocol or raw file:// URLs in the renderer.
-// ─────────────────────────────────────────────────────────────────────────────
+// Media Streaming Server
 
 // Media Server Port (default to constant value if not found in .env)
 // Uses `let` so it can be reassigned when the preferred port is busy.
@@ -830,24 +805,20 @@ if (!gotTheLock) {
   })
 
   app.on('activate', () => {
-    // On OS X it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
   })
 
-  // Optimized Startup: Non-Blocking Initialization
+  // Non-Blocking Initialization
   app.whenReady().then(async () => {
-    startMediaStreamingServer()  // 0. Start media streaming server (auto-finds port)
-    createWindow()               // 1. Show UI immediately
-    if (!tray) createTray()     // 2. Initialize System Tray
+    startMediaStreamingServer()
+    createWindow()
+    if (!tray) createTray()
 
-    // 3. Defer heavy checks to avoid splash freeze
     setTimeout(() => {
       loadBackendServices().catch((err) => {
         log.error('[Backend] loadBackendServices failed — downloads will not work:', err)
-        // Always resolve so IPC handlers don\'t deadlock waiting forever
         serviceReadyResolve()
       })
     }, 1500)

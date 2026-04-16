@@ -9,7 +9,7 @@ import { promises as fs } from 'node:fs'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { DownloadTask, TaskRuntime } from './types'
 import { UPDATE_CHANNEL } from './types'
-// ── Filename Handling ────────────────────────────────────────────────────────
+
 
 /**
  * Sanitizes a filename using a STRICT WHITELIST approach.
@@ -45,7 +45,7 @@ export function getDefaultFilename(inputUrl: string): string {
   return parseFilenameFromUrl(inputUrl) || 'download'
 }
 
-// ── URL Helpers ──────────────────────────────────────────────────────────────
+
 
 export function isHttpUrl(url: string): boolean {
   try {
@@ -60,7 +60,7 @@ export function isM3u8Url(url: string): boolean {
   return /\.m3u8(\?|#|$)/i.test(url)
 }
 
-// ── Time & Measurement ───────────────────────────────────────────────────────
+
 
 export function nowMs(): number {
   return Date.now()
@@ -92,7 +92,7 @@ export function computeSpeed(task: DownloadTask, runtime: TaskRuntime): void {
   runtime.lastSpeedSampleBytes = task.downloadedBytes
 }
 
-// ── File System ──────────────────────────────────────────────────────────────
+
 
 export async function ensureDirectoryExists(directory: string): Promise<void> {
   await fs.mkdir(directory, { recursive: true })
@@ -107,7 +107,7 @@ export async function getFileSizeIfExists(filePath: string): Promise<number> {
   }
 }
 
-// ── HTTP Helpers ─────────────────────────────────────────────────────────────
+
 
 export function parseTotalFromContentRange(value: string | null): number | null {
   if (!value) return null
@@ -117,9 +117,9 @@ export function parseTotalFromContentRange(value: string | null): number | null 
   return Number.isFinite(total) && total > 0 ? total : null
 }
 
-// ── IPC & Notifications ─────────────────────────────────────────────────────
 
-/** Raw IPC send — no throttle.  Prefer throttledSendUpdate() inside engines. */
+
+/** Raw IPC send */
 export function sendUpdate(win: BrowserWindow | null, task: DownloadTask): void {
   if (!win || win.isDestroyed()) return
   win.webContents.send(UPDATE_CHANNEL, task)
@@ -155,7 +155,7 @@ export function sendNotification(title: string, body: string): void {
   }
 }
 
-// ── Process Management ───────────────────────────────────────────────────────
+
 
 /**
  * Kills a child process AND its entire descendant tree.
