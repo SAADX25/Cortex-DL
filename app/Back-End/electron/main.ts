@@ -421,6 +421,15 @@ ipcMain.handle(
   },
 )
 
+ipcMain.handle(
+  'cortexdl:downloads:add-batch',
+  async (_event, inputs: StartInput[]) => {
+    await serviceReadyPromise
+    if (!downloads) throw new Error('Download Manager not initialized')
+    return downloads.addBatch(inputs)
+  },
+)
+
 ipcMain.handle('cortexdl:downloads:pause', async (_event, id: string) => downloads?.pause(id))
 ipcMain.handle('cortexdl:downloads:resume', async (_event, id: string) => downloads?.resume(id))
 ipcMain.handle('cortexdl:downloads:cancel', async (_event, id: string) => downloads?.cancel(id))
@@ -428,6 +437,16 @@ ipcMain.handle('cortexdl:downloads:delete', async (_event, id: string, deleteFil
 ipcMain.handle('cortexdl:downloads:clear-completed', async () => downloads?.clearCompleted())
 ipcMain.handle('cortexdl:downloads:pause-all', async () => downloads?.pauseAll())
 ipcMain.handle('cortexdl:downloads:resume-all', async () => downloads?.resumeAll())
+
+ipcMain.handle('cortexdl:set-concurrency', async (_event, value: number) => {
+  await serviceReadyPromise
+  downloads?.setMaxConcurrent(value)
+})
+
+ipcMain.handle('cortexdl:get-concurrency', async () => {
+  await serviceReadyPromise
+  return downloads?.getMaxConcurrent() ?? 3
+})
 
 ipcMain.handle('cortexdl:open-folder', async (_event, filePath: string) => {
   try {

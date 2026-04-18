@@ -193,6 +193,7 @@ function App() {
             UrlInputBar={UrlInputBar}
             variantLabel={variantLabel}
             YouTubeMusicIcon={YouTubeMusicIcon}
+            removeAnalyzedPlaylistVideo={ctrl.removeAnalyzedPlaylistVideo}
           />
         )}
 
@@ -213,6 +214,8 @@ function App() {
             onResetStats={ctrl.onResetStats}
             useInAppPlayer={ctrl.useInAppPlayer}
             setUseInAppPlayer={ctrl.setUseInAppPlayer}
+            concurrentDownloads={ctrl.concurrentDownloads}
+            setConcurrentDownloads={ctrl.setConcurrentDownloads}
             updateStatus={ctrl.updateStatus}
             onCheckForUpdates={ctrl.onCheckForUpdates}
             onRestartAndInstall={ctrl.onRestartAndInstall}

@@ -23,6 +23,9 @@ interface DownloadStoreState {
   /** Remove a task by ID */
   removeTask: (id: string) => void
 
+  /** Batch-insert multiple new tasks in a single atomic state update */
+  addMultipleTasks: (tasks: DownloadTask[]) => void
+
   /** Bulk-load from the initial IPC list call */
   loadTasks: (tasks: DownloadTask[]) => void
 
@@ -52,6 +55,20 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
       return {
         tasks: next,
         taskIds: state.taskIds.filter((tid) => tid !== id),
+      }
+    }),
+
+  addMultipleTasks: (tasks) =>
+    set((state) => {
+      const next = new Map(state.tasks)
+      const newIds: string[] = []
+      for (const t of tasks) {
+        if (!next.has(t.id)) newIds.push(t.id)
+        next.set(t.id, t)
+      }
+      return {
+        tasks: next,
+        taskIds: newIds.length > 0 ? [...newIds.reverse(), ...state.taskIds] : state.taskIds,
       }
     }),
 
@@ -91,7 +108,7 @@ export const useTask = (id: string) =>
 export const useTaskIds = () =>
   useDownloadStore((s) => s.taskIds)
 
-/** Get the full tasks mapsnapshot */
+/** Get the full tasks map snapshot */
 export const getTasksSnapshot = () =>
   useDownloadStore.getState().tasks
 
@@ -122,4 +139,3 @@ export function initDownloadStore(): () => void {
     ipcInitialized = false
   }
 }
-

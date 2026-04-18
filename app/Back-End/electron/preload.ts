@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld('cortexDl', {
   addDownload(input: StartInput): Promise<DownloadTask> {
     return ipcRenderer.invoke('cortexdl:downloads:add', input)
   },
+  addBatchDownloads(inputs: StartInput[]): Promise<DownloadTask[]> {
+    return ipcRenderer.invoke('cortexdl:downloads:add-batch', inputs)
+  },
   pauseDownload(id: string): Promise<DownloadTask> {
     return ipcRenderer.invoke('cortexdl:downloads:pause', id)
   },
@@ -65,6 +68,12 @@ contextBridge.exposeInMainWorld('cortexDl', {
   },
   resumeAll(): Promise<void> {
     return ipcRenderer.invoke('cortexdl:downloads:resume-all')
+  },
+  setConcurrency(value: number): Promise<void> {
+    return ipcRenderer.invoke('cortexdl:set-concurrency', value)
+  },
+  getConcurrency(): Promise<number> {
+    return ipcRenderer.invoke('cortexdl:get-concurrency')
   },
   openFolder(filePath: string): Promise<void> {
     return ipcRenderer.invoke('cortexdl:open-folder', filePath)

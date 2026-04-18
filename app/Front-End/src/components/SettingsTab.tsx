@@ -12,6 +12,8 @@ interface SettingsTabProps {
   onResetStats: () => void
   useInAppPlayer: boolean
   setUseInAppPlayer: (val: boolean) => void
+  concurrentDownloads: number
+  setConcurrentDownloads: (val: number) => void
   updateStatus: any
   onCheckForUpdates: () => void
   onRestartAndInstall: () => void
@@ -28,6 +30,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   onResetStats,
   useInAppPlayer,
   setUseInAppPlayer,
+  concurrentDownloads,
+  setConcurrentDownloads,
   updateStatus,
   onCheckForUpdates,
   onRestartAndInstall,
@@ -101,6 +105,31 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 }}
               >
                 <div className="toggle-switch-thumb" />
+              </div>
+            </div>
+          </div>
+
+          <div className="minimal-row">
+            <div className="row-info">
+              <span className="row-title">{t.concurrent_title}</span>
+              <span className="row-subtitle">{t.concurrent_desc}</span>
+            </div>
+            <div className="row-control">
+              <div className="custom-select-wrapper">
+                <select
+                  className="custom-select"
+                  value={concurrentDownloads}
+                  onChange={(e) => setConcurrentDownloads(Number(e.target.value))}
+                >
+                  <option value={3}>3</option>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                </select>
+                <div className="custom-select-icon">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>

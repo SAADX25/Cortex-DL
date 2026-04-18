@@ -55,6 +55,7 @@ interface AddDownloadTabProps {
   UrlInputBar: React.FC<any>
   variantLabel: (v: any, lang: Language) => string
   YouTubeMusicIcon: React.FC<any>
+  removeAnalyzedPlaylistVideo: (videoId: string) => void
 }
 
 const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
@@ -91,7 +92,8 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   SmartImage,
   UrlInputBar,
   variantLabel,
-  YouTubeMusicIcon
+  YouTubeMusicIcon,
+  removeAnalyzedPlaylistVideo
 }) => {
   const t = translations[lang]
 
@@ -202,16 +204,27 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                     <h3>🎬 {t.playlist_title}: {analyzeResult.title}</h3>
                     <span className="badge">{analyzeResult.items.length} {t.items_count}</span>
                   </div>
-                  <div className="playlist-items">
-                    {analyzeResult.items.slice(0, 10).map((item: any) => (
-                      <div key={item.id} className="playlist-item">
-                        {item.thumbnail && <SmartImage src={item.thumbnail} alt="thumbnail" style={{ width: 56, height: 32, objectFit: 'cover', borderRadius: '4px' }} />}
-                        <span title={item.title}>{item.title}</span>
+                  <div className="playlist-items custom-scrollbar" style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
+                    {analyzeResult.items.map((item: any) => (
+                      <div key={item.id} className="playlist-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 6, transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+                          {item.thumbnail && <SmartImage src={item.thumbnail} alt="thumbnail" style={{ width: 56, height: 32, objectFit: 'cover', borderRadius: '4px' }} />}
+                          <span title={item.title} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#d1d5db', fontSize: 13 }}>{item.title}</span>
+                        </div>
+                        <button
+                          onClick={() => removeAnalyzedPlaylistVideo(item.id)}
+                          style={{
+                            background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer',
+                            padding: '4px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = '#9ca3af'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                          title={t.btn_remove || "Remove"}
+                        >
+                          ✕
+                        </button>
                       </div>
                     ))}
-                    {analyzeResult.items.length > 10 && (
-                      <div className="playlist-more">+ {analyzeResult.items.length - 10} more...</div>
-                    )}
                   </div>
                 </div>
               ) : (

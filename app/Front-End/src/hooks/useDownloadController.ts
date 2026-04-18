@@ -248,10 +248,29 @@ export function useDownloadController({
       return
     }
 
+    if (analyzeResult?.kind === 'playlist') {
+      const remainingSlots = MAX_BATCH_ITEMS - batchItems.length
+      const itemsToAdd = analyzeResult.items.slice(0, remainingSlots).map((pItem: any) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        url: pItem.url,
+        title: pItem.title || 'Loading...',
+        thumbnail: pItem.thumbnail,
+        loading: false,
+        format: targetFormat,
+        quality: selectedYtdlpFormatId || selectedQuality || null,
+      }))
+      
+      setBatchItems((prev) => [...prev, ...itemsToAdd])
+      
+      if (analyzeResult.items.length > remainingSlots) {
+        showToast(`⚠️ Added ${remainingSlots} items. Batch limit reached!`)
+      }
+      resetInputState()
+      return
+    }
+
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    const knownTitle = analyzeResult?.kind === 'ytdlp' ? analyzeResult.title
-      : analyzeResult?.kind === 'playlist' ? analyzeResult.title
-      : undefined
+    const knownTitle = analyzeResult?.kind === 'ytdlp' ? analyzeResult.title : undefined
     const knownThumb = analyzeResult?.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined
     const item: BatchItem = {
       id,
@@ -291,71 +310,43 @@ export function useDownloadController({
     const count = currentBatchItems.length
     if (count === 0) return
 
-    const CONCURRENCY = 5
+    setBatchItems((prev) => prev.map(b => ({ ...b, status: 'processing' as const, errorMessage: undefined })))
 
-    // Reset all items to pending before starting
-    setBatchItems((prev) => prev.map(b => ({ ...b, status: 'pending' as const, errorMessage: undefined })))
-
-    const items = [...currentBatchItems]
-    let index = 0
-    let successCount = 0
-    let failCount = 0
-
-    const runNext = async (): Promise<void> => {
-      while (index < items.length) {
-        const i = index++
-        const item = items[i]
-
-        // Mark item as processing
-        setBatchItems((prev) => prev.map(b => b.id === item.id ? { ...b, status: 'processing' } : b))
-
-        try {
-          const finalUrl = item.url
-          const engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(finalUrl) ? 'ytdlp' : 'auto'
-          await window.cortexDl.addDownload({
-            url: finalUrl,
-            directory: resolvedDirectory!,
-            subfolderName: subfolderName.trim() || undefined,
-            filename: undefined,
-            engine,
-            targetFormat: item.format,
-            ytdlpFormatId: item.quality ? String(item.quality).replace('raw:', '') : undefined,
-            title: item.title || undefined,
-            thumbnail: item.thumbnail || undefined,
-            cookieBrowser,
-            cookieFile: cookieFile || undefined,
-            username: username || undefined,
-            password: password || undefined,
-            speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,
-            startTime: startTime.trim() || undefined,
-            endTime: endTime.trim() || undefined,
-          })
-
-          // Mark item as success
-          setBatchItems((prev) => prev.map(b => b.id === item.id ? { ...b, status: 'success' } : b))
-          successCount++
-        } catch (err) {
-          // Mark item as error — do NOT set globalError, let the batch continue
-          const msg = err instanceof Error ? err.message : 'Download failed'
-          setBatchItems((prev) => prev.map(b => b.id === item.id ? { ...b, status: 'error', errorMessage: msg } : b))
-          failCount++
+    try {
+      const inputs = currentBatchItems.map(item => {
+        const finalUrl = item.url
+        const engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(finalUrl) ? 'ytdlp' : 'auto'
+        return {
+          url: finalUrl,
+          directory: resolvedDirectory!,
+          subfolderName: subfolderName.trim() || undefined,
+          filename: undefined,
+          engine,
+          targetFormat: item.format,
+          ytdlpFormatId: item.quality ? String(item.quality).replace('raw:', '') : undefined,
+          title: item.title || undefined,
+          thumbnail: item.thumbnail || undefined,
+          cookieBrowser,
+          cookieFile: cookieFile || undefined,
+          username: username || undefined,
+          password: password || undefined,
+          speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,
+          startTime: startTime.trim() || undefined,
+          endTime: endTime.trim() || undefined,
         }
-      }
-    }
+      })
 
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, () => runNext()))
+      const createdTasks = await window.cortexDl.addBatchDownloads(inputs)
+      useDownloadStore.getState().addMultipleTasks(createdTasks)
 
-    // Remove successful items, keep only failed ones for retry
-    setBatchItems((prev) => prev.filter(b => b.status !== 'success'))
-
-    if (failCount === 0) {
-      showToast(`✅ ${successCount} items added to Queue!`)
+      setBatchItems([]) // Clear successful items entirely
+      showToast(`✅ ${count} items added to Queue!`)
       resetInputState()
       setActiveTab('downloads')
-    } else if (successCount > 0) {
-      showToast(`⚠️ ${successCount} queued, ${failCount} failed — fix and retry`)
-    } else {
-      showToast(`❌ All ${failCount} items failed`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Batch download failed'
+      showToast(`❌ ${msg}`)
+      setBatchItems((prev) => prev.map(b => ({ ...b, status: 'error', errorMessage: msg })))
     }
   }
 
@@ -369,33 +360,66 @@ export function useDownloadController({
       if (!resolvedDirectory) return
     }
     try {
-      let downloadUrl = trimmed
-      if (analyzeResult.kind === 'hls-media') downloadUrl = analyzeResult.url
-      else if (analyzeResult.kind === 'hls-master' && selectedVariantUrl) downloadUrl = selectedVariantUrl
-      const engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
-      const title = analyzeResult.kind === 'ytdlp' ? analyzeResult.title
-        : analyzeResult.kind === 'playlist' ? analyzeResult.title
-        : undefined
-      const thumbnail = analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined
-      await window.cortexDl.addDownload({
-        url: downloadUrl,
-        directory: resolvedDirectory,
-        subfolderName: subfolderName.trim() || undefined,
-        filename: undefined,
-        engine,
-        targetFormat,
-        ytdlpFormatId: selectedYtdlpFormatId || selectedQuality || undefined,
-        title,
-        thumbnail,
-        cookieBrowser,
-        cookieFile: cookieFile || undefined,
-        username: username || undefined,
-        password: password || undefined,
-        speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,
-        startTime: startTime.trim() || undefined,
-        endTime: endTime.trim() || undefined,
-      })
-      showToast('🚀 Download started!')
+      let engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
+      
+      if (analyzeResult.kind === 'playlist') {
+        const remainingSlots = Math.max(0, MAX_BATCH_ITEMS - activeDownloadCount)
+        const itemsToDownload = analyzeResult.items.slice(0, remainingSlots)
+        
+        if (itemsToDownload.length === 0) {
+          showToast(`⚠️ Max concurrent downloads reached!`)
+          return
+        }
+
+        const inputs = itemsToDownload.map((pItem: any) => ({
+          url: pItem.url,
+          directory: resolvedDirectory!,
+          subfolderName: subfolderName.trim() || undefined,
+          filename: undefined,
+          engine: 'ytdlp' as const,
+          targetFormat,
+          ytdlpFormatId: selectedYtdlpFormatId || selectedQuality || undefined,
+          title: pItem.title || undefined,
+          thumbnail: pItem.thumbnail || undefined,
+          cookieBrowser,
+          cookieFile: cookieFile || undefined,
+          username: username || undefined,
+          password: password || undefined,
+          speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,
+          startTime: startTime.trim() || undefined,
+          endTime: endTime.trim() || undefined,
+        }))
+
+        const createdTasks = await window.cortexDl.addBatchDownloads(inputs)
+        useDownloadStore.getState().addMultipleTasks(createdTasks)
+        showToast(`🚀 Started ${createdTasks.length} playlist downloads!`)
+
+      } else {
+        let downloadUrl = trimmed
+        if (analyzeResult.kind === 'hls-media') downloadUrl = analyzeResult.url
+        else if (analyzeResult.kind === 'hls-master' && selectedVariantUrl) downloadUrl = selectedVariantUrl
+        
+        await window.cortexDl.addDownload({
+          url: downloadUrl,
+          directory: resolvedDirectory!,
+          subfolderName: subfolderName.trim() || undefined,
+          filename: undefined,
+          engine,
+          targetFormat,
+          ytdlpFormatId: selectedYtdlpFormatId || selectedQuality || undefined,
+          title: analyzeResult.kind === 'ytdlp' ? analyzeResult.title : undefined,
+          thumbnail: analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined,
+          cookieBrowser,
+          cookieFile: cookieFile || undefined,
+          username: username || undefined,
+          password: password || undefined,
+          speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,
+          startTime: startTime.trim() || undefined,
+          endTime: endTime.trim() || undefined,
+        })
+        showToast('🚀 Download started!')
+      }
+      
       resetInputState()
       setActiveTab('downloads')
     } catch (err) {
@@ -453,6 +477,15 @@ export function useDownloadController({
     catch (err) { console.error('Failed to open external URL:', err) }
   }
 
+  const removeAnalyzedPlaylistVideo = useCallback((videoId: string) => {
+    if (analyzeResult?.kind === 'playlist') {
+      setAnalyzeResult({
+        ...analyzeResult,
+        items: analyzeResult.items.filter((p: any) => p.id !== videoId)
+      })
+    }
+  }, [analyzeResult, setAnalyzeResult])
+
   // Return API
 
   return {
@@ -499,5 +532,6 @@ export function useDownloadController({
     onOpenFile,
     onOpenFolder,
     onOpenExternal,
+    removeAnalyzedPlaylistVideo,
   }
 }

@@ -374,9 +374,11 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
   }
 
   return new Promise((resolve, reject) => {
+    const isPlaylist = url.toLowerCase().includes('list=') || url.toLowerCase().includes('/playlist')
+
     const args = [
-      '--dump-json',
-      '--no-playlist',
+      '--dump-single-json',
+      isPlaylist ? '--yes-playlist' : '--no-playlist',
       '--no-check-certificate',
       '--geo-bypass',
       '--force-ipv4',
@@ -385,6 +387,10 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
       '--socket-timeout', '10',
       '--no-cache-dir'
     ]
+
+    if (isPlaylist) {
+      args.push('--flat-playlist')
+    }
 
     args.push(...getJsRuntimeArgs())
 
@@ -412,7 +418,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
     p.stdout.on('data', (data) => {
       const chunk = data.toString()
       stdout += chunk
-      log.info(`[ytdlp stdout] ${chunk.trim()}`)
+      log.info(`[ytdlp stdout] received ${chunk.length} bytes`)
     })
     
     p.stderr.on('data', (data) => {
@@ -461,16 +467,24 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
               if (!extractedThumbnail && entry.thumbnails && entry.thumbnails.length > 0) {
                   extractedThumbnail = entry.thumbnails[entry.thumbnails.length - 1].url;
               }
-              if (extractedThumbnail) {
-                  log.info('Extracted Thumbnail URL:', extractedThumbnail);
+              
+              let entryUrl = entry.url || entry.webpage_url;
+              // If only id or incomplete URL is provided, reconstruct it for YouTube
+              if (!entryUrl && entry.id) {
+                entryUrl = `https://www.youtube.com/watch?v=${entry.id}`
+              } else if (entryUrl && !entryUrl.startsWith('http')) {
+                // E.g., for relative URLs returned by yt-dlp in some setups
+                entryUrl = `https://www.youtube.com/watch?v=${entryUrl}`
               }
+
               return {
                   id: entry.id,
                   title: entry.title || 'Unknown Title',
-                  url: entry.url || entry.webpage_url,
+                  url: entryUrl,
                   thumbnail: extractedThumbnail ? String(extractedThumbnail) : undefined
               };
-          })
+          }).filter((i: any) => !!i.url)
+
           const result: AnalyzeResult = {
             kind: 'playlist',
             title: info.title || 'Playlist',

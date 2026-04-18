@@ -110,6 +110,24 @@ declare global {
         startTime?: string;
         endTime?: string;
       }) => Promise<DownloadTask>
+      addBatchDownloads: (inputs: { 
+        url: string; 
+        directory: string; 
+        subfolderName?: string; 
+        filename?: string; 
+        engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'; 
+        targetFormat?: TargetFormat; 
+        ytdlpFormatId?: string; 
+        title?: string; 
+        thumbnail?: string; 
+        cookieBrowser?: string;
+        cookieFile?: string;
+        username?: string;
+        password?: string;
+        speedLimit?: string;
+        startTime?: string;
+        endTime?: string;
+      }[]) => Promise<DownloadTask[]>
       pauseDownload: (id: string) => Promise<DownloadTask>
       resumeDownload: (id: string) => Promise<DownloadTask>
       cancelDownload: (id: string) => Promise<DownloadTask>
@@ -117,6 +135,8 @@ declare global {
       clearCompleted: () => Promise<void>
       pauseAll: () => Promise<void>
       resumeAll: () => Promise<void>
+      setConcurrency: (value: number) => Promise<void>
+      getConcurrency: () => Promise<number>
 
       // ── Shell / filesystem ──
       openFolder: (filePath: string) => Promise<void>

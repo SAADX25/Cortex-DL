@@ -31,7 +31,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
 
   // ── Settings / engine state ──
   const [notificationsEnabled] = useState(true)
-  const [concurrentDownloads] = useState(3)
+  const [concurrentDownloads, setConcurrentDownloads] = useState(3)
   const [useInAppPlayer, setUseInAppPlayer] = useState<boolean>(() => localStorage.getItem('cortex-inapp-player') !== 'false')
   const [totalDownloadedBytes, setTotalDownloadedBytes] = useState<number>(() => parseInt(localStorage.getItem('cortex-total-bytes') || '0', 10))
   const [enginesStatus, setEnginesStatus] = useState<{ ytdlp: boolean; ffmpeg: boolean; jsRuntime: boolean; jsRuntimeName: string }>({
@@ -59,6 +59,13 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     check()
     const timer = setInterval(check, 10000)
     return () => clearInterval(timer)
+  }, [])
+
+  // Hydrate concurrency from backend on mount
+  useEffect(() => {
+    window.cortexDl.getConcurrency().then((val) => {
+      if ([3, 5, 10].includes(val)) setConcurrentDownloads(val)
+    }).catch(() => {})
   }, [])
 
   // Engine version
@@ -92,7 +99,10 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     else localStorage.removeItem('cortex-cookie-file')
   }, [cookieFile])
   useEffect(() => { localStorage.setItem('cortex-notifications', String(notificationsEnabled)) }, [notificationsEnabled])
-  useEffect(() => { localStorage.setItem('cortex-concurrent', String(concurrentDownloads)) }, [concurrentDownloads])
+  useEffect(() => {
+    localStorage.setItem('cortex-concurrent', String(concurrentDownloads))
+    window.cortexDl.setConcurrency(concurrentDownloads).catch(() => {})
+  }, [concurrentDownloads])
   useEffect(() => {
     const timer = setTimeout(() => localStorage.setItem('cortex-total-bytes', String(totalDownloadedBytes)), 1000)
     return () => clearTimeout(timer)
@@ -195,6 +205,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
 
     // Settings state
     useInAppPlayer, setUseInAppPlayer,
+    concurrentDownloads, setConcurrentDownloads,
     totalDownloadedBytes,
     enginesStatus,
     updateStatus,

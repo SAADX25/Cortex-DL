@@ -96,6 +96,7 @@ export function useAppController() {
 
     // Settings / engine
     useInAppPlayer: settings.useInAppPlayer, setUseInAppPlayer: settings.setUseInAppPlayer,
+    concurrentDownloads: settings.concurrentDownloads, setConcurrentDownloads: settings.setConcurrentDownloads,
     totalDownloadedBytes: settings.totalDownloadedBytes,
     enginesStatus: settings.enginesStatus,
     updateStatus: settings.updateStatus,
@@ -127,6 +128,7 @@ export function useAppController() {
     onOpenFile: downloads.onOpenFile,
     onOpenFolder: downloads.onOpenFolder,
     onOpenExternal: downloads.onOpenExternal,
+    removeAnalyzedPlaylistVideo: downloads.removeAnalyzedPlaylistVideo,
 
     // Actions (settings)
     onCheckForUpdates: settings.onCheckForUpdates,

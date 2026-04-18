@@ -45,11 +45,38 @@ export class DownloadManager {
   private runtime = new Map<string, TaskRuntime>()
   private engines = new Map<string, IEngine>() // Track active engine instances
   private win: BrowserWindow | null = null
-  private maxConcurrent = 3 // Concurrency limit
+  private maxConcurrent = 3
   private active = new Set<string>()
 
   constructor() {
     this.loadState()
+    this.hydrateConcurrency()
+  }
+
+  private hydrateConcurrency(): void {
+    try {
+      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('maxConcurrent') as { value: string } | undefined
+      if (row) {
+        const parsed = parseInt(row.value, 10)
+        if ([3, 5, 10].includes(parsed)) this.maxConcurrent = parsed
+      }
+    } catch { /* table may not exist yet — use default */ }
+  }
+
+  setMaxConcurrent(value: number): void {
+    if (![3, 5, 10].includes(value)) return
+    this.maxConcurrent = value
+    try {
+      db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('maxConcurrent', String(value))
+    } catch (err) {
+      log.error('[DM] Failed to persist maxConcurrent:', err)
+    }
+    this.schedule()
+  }
+
+  getMaxConcurrent(): number {
+    return this.maxConcurrent
   }
 
   // State Persistence
@@ -262,6 +289,77 @@ export class DownloadManager {
     sendUpdate(this.win, task)
     this.schedule()
     return task
+  }
+
+  async addBatch(inputs: StartInput[]): Promise<DownloadTask[]> {
+    const created: DownloadTask[] = []
+    for (const input of inputs) {
+      if (!isHttpUrl(input.url)) continue
+
+      const rawSubfolder = (input.subfolderName ?? '').trim()
+      // eslint-disable-next-line no-useless-escape
+      const safeSubfolder = rawSubfolder.replace(/[\/\\:*?"<>|]/g, '').trim()
+      const finalDirectory = safeSubfolder
+        ? path.join(input.directory, safeSubfolder)
+        : input.directory
+      await ensureDirectoryExists(finalDirectory)
+
+      const id = randomUUID()
+      const targetFormat = input.targetFormat ?? 'mp4'
+      const requestedEngine = input.engine ?? 'auto'
+      const engine: DownloadEngine =
+        requestedEngine === 'auto'
+          ? this.detectEngine(input.url)
+          : requestedEngine
+
+      let filename = sanitizeFilename(input.filename || input.title || getDefaultFilename(input.url))
+      filename = filenameTransforms[engine]?.(filename) ?? filename
+      filename = withExtension(filename, targetFormat)
+
+      const filePath = path.join(finalDirectory, filename)
+      const now = nowMs()
+
+      const task: DownloadTask = {
+        id,
+        url: input.url,
+        directory: finalDirectory,
+        filename,
+        filePath,
+        engine,
+        targetFormat,
+        status: 'queued',
+        totalBytes: null,
+        downloadedBytes: 0,
+        speedBytesPerSec: null,
+        errorMessage: null,
+        createdAtMs: now,
+        updatedAtMs: now,
+        title: input.title,
+        thumbnail: input.thumbnail,
+        cookieBrowser: input.cookieBrowser,
+        cookieFile: input.cookieFile,
+        username: input.username,
+        password: input.password,
+        speedLimit: input.speedLimit,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        ytdlpFormatId: input.ytdlpFormatId,
+      }
+
+      this.tasks.set(id, task)
+      this.runtime.set(id, this.freshRuntime())
+      created.push(task)
+      log.info(`[DM] Batch task added: ${id} engine=${engine} url=${input.url.slice(0, 60)}`)
+    }
+
+    if (created.length > 0) {
+      this.saveStateImmediate()
+      for (const task of created) sendUpdate(this.win, task)
+      // Small delay to let the frontend React closure cleanly unmount/resolve the batch adding logic
+      // before we fire status transitions to 'downloading' via IPC channels.
+      setTimeout(() => this.schedule(), 100)
+    }
+    return created
   }
 
   async pause(id: string): Promise<DownloadTask> {
