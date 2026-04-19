@@ -22,7 +22,7 @@ Here is a look at the Cortex-DL interface:
 </p>
 
 <p align="center">
-  <img width="800" alt="Cortex-DL Downloading" src="https://github.com/user-attachments/assets/291a8989-2e22-4d63-bd8d-51d4e977f779" />
+  <img width="1082" height="807" alt="DL6" src="https://github.com/user-attachments/assets/738865ca-d5f2-4fed-911a-b6f4775c3d4e" />
 </p>
 
 ---
