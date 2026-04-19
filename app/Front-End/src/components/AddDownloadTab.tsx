@@ -202,8 +202,15 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                 <div className="playlist-preview">
                   <div className="playlist-header">
                     <h3>🎬 {t.playlist_title}: {analyzeResult.title}</h3>
-                    <span className="badge">{analyzeResult.items.length} {t.items_count}</span>
+                    <span className="badge" style={{ backgroundColor: analyzeResult.items.length > MAX_BATCH_ITEMS ? '#ef4444' : undefined }}>
+                      {analyzeResult.items.length > MAX_BATCH_ITEMS ? `${analyzeResult.items.length} / ${MAX_BATCH_ITEMS} Max` : `${analyzeResult.items.length} ${t.items_count}`}
+                    </span>
                   </div>
+                  {analyzeResult.items.length > MAX_BATCH_ITEMS && (
+                    <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px', padding: '0 8px', fontWeight: 500 }}>
+                      ⚠️ {lang === 'ar' ? `يجب إزالة ${analyzeResult.items.length - MAX_BATCH_ITEMS} ملفات للبدء بالتحميل` : `Please remove ${analyzeResult.items.length - MAX_BATCH_ITEMS} items to start downloading`}
+                    </div>
+                  )}
                   <div className="playlist-items custom-scrollbar" style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
                     {analyzeResult.items.map((item: any) => (
                       <div key={item.id} className="playlist-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 6, transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
@@ -453,16 +460,33 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
               <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
                 <button
                   className="download-main-btn-large"
-                  style={{ flex: 1 }}
+                  style={{ 
+                    flex: 1, 
+                    opacity: analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS ? 0.4 : 1, 
+                    cursor: analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS ? 'not-allowed' : 'pointer' 
+                  }}
                   onClick={onDownloadNow}
+                  disabled={analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS}
                 >
                   🚀 Download Now
                 </button>
                 <button
-                  style={{ flex: 1, padding: '14px 20px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: '#d1d5db', fontWeight: 600, fontSize: 15, cursor: batchItems.length >= MAX_BATCH_ITEMS ? 'not-allowed' : 'pointer', opacity: batchItems.length >= MAX_BATCH_ITEMS ? 0.4 : 1, transition: 'background 0.2s' }}
+                  style={{ 
+                    flex: 1, 
+                    padding: '14px 20px', 
+                    borderRadius: 12, 
+                    border: '1px solid rgba(255,255,255,0.12)', 
+                    background: 'rgba(255,255,255,0.05)', 
+                    color: '#d1d5db', 
+                    fontWeight: 600, 
+                    fontSize: 15, 
+                    cursor: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS)) ? 'not-allowed' : 'pointer', 
+                    opacity: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS)) ? 0.4 : 1, 
+                    transition: 'background 0.2s' 
+                  }}
                   onClick={onAddToList}
-                  disabled={batchItems.length >= MAX_BATCH_ITEMS}
-                  onMouseEnter={(e) => { if (batchItems.length < MAX_BATCH_ITEMS) e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                  disabled={batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS)}
+                  onMouseEnter={(e) => { if (!(batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS))) e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
                 >
                   ➕ Add to Batch List

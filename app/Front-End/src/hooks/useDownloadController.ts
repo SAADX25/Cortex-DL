@@ -218,6 +218,8 @@ export function useDownloadController({
     setAnalyzing(true)
     setAnalyzeResult(null)
     setSelectedVariantUrl(null)
+    setUrl(inputUrl)
+
     try {
       const result = await window.cortexDl.analyzeUrl(inputUrl.trim(), cookieBrowser)
       setAnalyzeResult(result)
@@ -236,20 +238,13 @@ export function useDownloadController({
   }
 
   function onAddToList() {
-    const trimmed = url.trim()
-    if (!trimmed) return
-    if (batchItems.length >= MAX_BATCH_ITEMS) {
-      showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
-      return
-    }
-    if (!/^https?:\/\//i.test(trimmed)) {
-      setGlobalError('Invalid URL')
-      setTimeout(() => setGlobalError(null), 2500)
-      return
-    }
-
     if (analyzeResult?.kind === 'playlist') {
       const remainingSlots = MAX_BATCH_ITEMS - batchItems.length
+      if (remainingSlots <= 0) {
+        showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
+        return
+      }
+      
       const itemsToAdd = analyzeResult.items.slice(0, remainingSlots).map((pItem: any) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         url: pItem.url,
@@ -268,6 +263,20 @@ export function useDownloadController({
       resetInputState()
       return
     }
+
+    const trimmed = url.trim()
+    if (!trimmed) return
+    if (batchItems.length >= MAX_BATCH_ITEMS) {
+      showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
+      return
+    }
+    if (!/^https?:\/\//i.test(trimmed)) {
+      setGlobalError('Invalid URL')
+      setTimeout(() => setGlobalError(null), 2500)
+      return
+    }
+
+
 
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const knownTitle = analyzeResult?.kind === 'ytdlp' ? analyzeResult.title : undefined
@@ -352,16 +361,13 @@ export function useDownloadController({
 
   async function onDownloadNow() {
     if (!analyzeResult) return
-    const trimmed = url.trim()
-    if (!trimmed) return
+    
     let resolvedDirectory = useUIStore.getState().directory
     if (!resolvedDirectory) {
       resolvedDirectory = await onPickFolder()
       if (!resolvedDirectory) return
     }
     try {
-      let engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
-      
       if (analyzeResult.kind === 'playlist') {
         const remainingSlots = Math.max(0, MAX_BATCH_ITEMS - activeDownloadCount)
         const itemsToDownload = analyzeResult.items.slice(0, remainingSlots)
@@ -395,6 +401,10 @@ export function useDownloadController({
         showToast(`🚀 Started ${createdTasks.length} playlist downloads!`)
 
       } else {
+        const trimmed = url.trim()
+        if (!trimmed) return
+        let engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
+        
         let downloadUrl = trimmed
         if (analyzeResult.kind === 'hls-media') downloadUrl = analyzeResult.url
         else if (analyzeResult.kind === 'hls-master' && selectedVariantUrl) downloadUrl = selectedVariantUrl
