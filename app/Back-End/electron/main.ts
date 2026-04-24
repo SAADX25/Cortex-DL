@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process'
 import type { DownloadManager } from './downloadManager'
 import type { StartInput } from './types'
 import { analyzeUrlForHls } from './hls'
-import { analyzeWithYtdlp, isYtdlpAvailable, checkJsRuntime, updateYtdlp, getYtdlpVersion } from './ytdlp'
+import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion } from './ytdlp'
 import { extractAndSaveComments } from './commentsExtractor'
 
 // GPU Hardware Acceleration
@@ -371,27 +371,6 @@ ipcMain.handle('cortexdl:secure-get', (_event, base64Value: string) => {
   } catch (error) {
     log.error('[safeStorage] Failed to decrypt data', error)
     return ''
-  }
-})
-
-ipcMain.handle('cortexdl:check-engines', async () => {
-  // Delay initial check slightly to allow UI to render first
-  await new Promise(resolve => setTimeout(resolve, 500))
-  
-  // Lazy load isFfmpegAvailable from dedicated engine module
-  const { isFfmpegAvailable } = await import('./ffmpegEngine')
-
-  const [ytdlp, ffmpeg, jsRuntime] = await Promise.all([
-    isYtdlpAvailable(),
-    isFfmpegAvailable(),
-    checkJsRuntime()
-  ])
-  
-  return {
-    ytdlp,
-    ffmpeg,
-    jsRuntime: jsRuntime.available,
-    jsRuntimeName: jsRuntime.name
   }
 })
 

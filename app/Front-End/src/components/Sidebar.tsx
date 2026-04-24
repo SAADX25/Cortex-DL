@@ -5,12 +5,10 @@ import { useUIStore } from '../stores/useUIStore'
 import { useDownloadStore } from '../stores/downloadStore'
 
 interface SidebarProps {
-  enginesStatus: { ytdlp: boolean; ffmpeg: boolean; jsRuntime: boolean; jsRuntimeName: string }
   lang: Language
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
-  enginesStatus,
   lang,
 }) => {
   const t = translations[lang]
@@ -45,17 +43,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           <span className="nav-text">{t.nav_settings}</span>
         </button>
       </nav>
-
-      <div className="sidebar-footer">
-        <div className={`status-dot ${enginesStatus.ytdlp && enginesStatus.ffmpeg && enginesStatus.jsRuntime ? 'online' : 'offline'}`}></div>
-        <div className="status-details">
-          <div className="status-main">
-            {enginesStatus.ytdlp && enginesStatus.ffmpeg && enginesStatus.jsRuntime 
-              ? t.engine_ready 
-              : (!enginesStatus.ytdlp ? t.engine_missing_ytdlp : !enginesStatus.ffmpeg ? t.engine_missing_ffmpeg : 'JS Runtime Missing')}
-          </div>
-        </div>
-      </div>
     </aside>
   )
 }

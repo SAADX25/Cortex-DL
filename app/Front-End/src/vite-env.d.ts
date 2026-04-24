@@ -145,7 +145,6 @@ declare global {
       showMainWindow: () => Promise<void>
 
       // ── Engines ──
-      checkEngines: () => Promise<{ ytdlp: boolean; ffmpeg: boolean; jsRuntime: boolean; jsRuntimeName: string }>
       updateEngine: () => Promise<{ success: boolean; message: string; version?: string }>
       getEngineVersion: () => Promise<string>
 

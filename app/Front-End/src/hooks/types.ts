@@ -12,5 +12,6 @@ export type ModalConfig = {
   confirmText?: string
   cancelText?: string
   onConfirm: () => void
+  onCancel?: () => void
   type?: 'danger' | 'warning' | 'info'
 }

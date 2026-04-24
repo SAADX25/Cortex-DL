@@ -5,7 +5,6 @@ export interface Translations {
   nav_add: string;
   nav_downloads: string;
   nav_settings: string;
-  engine_ready: string;
   add_title: string;
   add_subtitle: string;
   url_placeholder: string;
@@ -88,8 +87,6 @@ export interface Translations {
   quality_480p: string;
   quality_360p: string;
   quality_240p: string;
-  engine_missing_ytdlp: string;
-  engine_missing_ffmpeg: string;
   auth_group: string;
   cookies_section_title: string;
   cookies_section_desc: string;
@@ -152,7 +149,6 @@ export const translations: Record<Language, Translations> = {
     nav_add: "إضافة رابط",
     nav_downloads: "التنزيلات",
     nav_settings: "الإعدادات",
-    engine_ready: "المحرك جاهز",
     add_title: "إضافة تنزيل جديد",
     add_subtitle: "أدخل رابط الفيديو أو الصوت من يوتيوب، فيسبوك، أو إنستغرام",
     url_placeholder: "الصق رابط أي فيديو أو مقطع صوتي هنا...",
@@ -235,8 +231,6 @@ export const translations: Record<Language, Translations> = {
     quality_480p: "SD (480p)",
     quality_360p: "منخفضة (360p)",
     quality_240p: "منخفضة جداً (240p)",
-    engine_missing_ytdlp: "yt-dlp.exe غير موجود",
-    engine_missing_ffmpeg: "ffmpeg.exe غير موجود",
     auth_group: "المصادقة (Authentication)",
     cookies_section_title: "الكوكيز (موصى به)",
     cookies_section_desc: "استخدام الكوكيز لتجاوز قيود المواقع وتحميل المحتوى الخاص.",
@@ -295,7 +289,6 @@ export const translations: Record<Language, Translations> = {
     nav_add: "Add Link",
     nav_downloads: "Downloads",
     nav_settings: "Settings",
-    engine_ready: "Engine Ready",
     add_title: "Add New Download",
     add_subtitle: "Enter video or audio link from YouTube, Facebook, or Instagram",
     url_placeholder: "Drop any video or audio link here...",
@@ -378,8 +371,6 @@ export const translations: Record<Language, Translations> = {
     quality_480p: "SD (480p)",
     quality_360p: "Low (360p)",
     quality_240p: "Very Low (240p)",
-    engine_missing_ytdlp: "yt-dlp.exe Missing",
-    engine_missing_ffmpeg: "ffmpeg.exe Missing",
     auth_group: "Authentication",
     cookies_section_title: "Cookies (Recommended)",
     cookies_section_desc: "Use cookies to bypass site restrictions and download private content.",

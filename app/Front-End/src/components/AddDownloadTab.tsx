@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { Language, translations } from '../translations'
-import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus } from 'lucide-react'
+import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, CheckSquare, Square, Trash2, Search } from 'lucide-react'
 import CustomDropdown from './CustomDropdown'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import { useUIStore } from '../stores/useUIStore'
+import { useDebounce } from '../hooks/useDebounce'
 
 // Local or exported types needed
 export type BatchItemStatus = 'pending' | 'processing' | 'success' | 'error'
@@ -55,7 +56,11 @@ interface AddDownloadTabProps {
   UrlInputBar: React.FC<any>
   variantLabel: (v: any, lang: Language) => string
   YouTubeMusicIcon: React.FC<any>
-  removeAnalyzedPlaylistVideo: (videoId: string) => void
+  removeAnalyzedPlaylistVideo: (index: number) => void
+  togglePlaylistItemSelected: (index: number) => void
+  selectAllPlaylistItems: (indices?: number[]) => void
+  deselectAllPlaylistItems: (indices?: number[]) => void
+  clearPlaylistItems: () => void
 }
 
 const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
@@ -93,7 +98,11 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   UrlInputBar,
   variantLabel,
   YouTubeMusicIcon,
-  removeAnalyzedPlaylistVideo
+  removeAnalyzedPlaylistVideo,
+  togglePlaylistItemSelected,
+  selectAllPlaylistItems,
+  deselectAllPlaylistItems,
+  clearPlaylistItems
 }) => {
   const t = translations[lang]
 
@@ -107,6 +116,29 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   const analyzeResult = useUIStore((s) => s.analyzeResult)
   const analyzing = useUIStore((s) => s.analyzing)
   const showToast = useUIStore((s) => s.showToast)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearch = useDebounce(searchQuery, 300)
+
+  const filteredPlaylistItems = useMemo(() => {
+    if (analyzeResult?.kind !== 'playlist' || !analyzeResult.items) return []
+    const itemsWithIndex = analyzeResult.items.map((item: any, originalIndex: number) => ({ item, originalIndex }))
+    if (!debouncedSearch) return itemsWithIndex
+    const lowerQ = debouncedSearch.toLowerCase()
+    return itemsWithIndex.filter(({ item }: any) => item.title?.toLowerCase().includes(lowerQ))
+  }, [analyzeResult, debouncedSearch])
+
+  const handleSelectAllVisible = () => {
+    if (filteredPlaylistItems.length > 0) {
+      selectAllPlaylistItems(filteredPlaylistItems.map(({ originalIndex }) => originalIndex))
+    }
+  }
+
+  const handleDeselectAllVisible = () => {
+    if (filteredPlaylistItems.length > 0) {
+      deselectAllPlaylistItems(filteredPlaylistItems.map(({ originalIndex }) => originalIndex))
+    }
+  }
 
   return (
     <div className="tab-content fade-in centered-layout flex flex-col h-full">
@@ -202,24 +234,61 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                 <div className="playlist-preview">
                   <div className="playlist-header">
                     <h3>🎬 {t.playlist_title}: {analyzeResult.title}</h3>
-                    <span className="badge" style={{ backgroundColor: analyzeResult.items.length > MAX_BATCH_ITEMS ? '#ef4444' : undefined }}>
-                      {analyzeResult.items.length > MAX_BATCH_ITEMS ? `${analyzeResult.items.length} / ${MAX_BATCH_ITEMS} Max` : `${analyzeResult.items.length} ${t.items_count}`}
-                    </span>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span className="badge" style={{ backgroundColor: analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS ? '#ef4444' : undefined }}>
+                        {analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS 
+                          ? `${analyzeResult.items.filter((i:any) => i.selected).length} / ${MAX_BATCH_ITEMS} Max Selected`
+                          : `${analyzeResult.items.filter((i:any) => i.selected).length} Selected`}
+                      </span>
+                    </div>
                   </div>
-                  {analyzeResult.items.length > MAX_BATCH_ITEMS && (
+
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', padding: '0 8px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button onClick={handleSelectAllVisible} style={{ background: '#3b82f6', color: 'white', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>Select All</button>
+                      <button onClick={handleDeselectAllVisible} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>Deselect All</button>
+                      <button onClick={clearPlaylistItems} style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', border: 'none', cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Trash2 size={14} /> Clear List
+                      </button>
+                    </div>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1, minWidth: '150px', maxWidth: '300px' }}>
+                      <Search size={14} style={{ position: 'absolute', left: '10px', color: '#9ca3af' }} />
+                      <input 
+                        type="text" 
+                        placeholder="Search..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                          width: '100%',
+                          background: 'rgba(0,0,0,0.2)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '6px',
+                          color: '#fff',
+                          padding: '6px 10px 6px 30px',
+                          fontSize: '13px',
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS && (
                     <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px', padding: '0 8px', fontWeight: 500 }}>
-                      ⚠️ {lang === 'ar' ? `يجب إزالة ${analyzeResult.items.length - MAX_BATCH_ITEMS} ملفات للبدء بالتحميل` : `Please remove ${analyzeResult.items.length - MAX_BATCH_ITEMS} items to start downloading`}
+                      ⚠️ {lang === 'ar' ? `يجب إزالة ${analyzeResult.items.filter((i:any) => i.selected).length - MAX_BATCH_ITEMS} ملفات للبدء بالتحميل` : `Please deselect ${analyzeResult.items.filter((i:any) => i.selected).length - MAX_BATCH_ITEMS} items to start downloading`}
                     </div>
                   )}
                   <div className="playlist-items custom-scrollbar" style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
-                    {analyzeResult.items.map((item: any) => (
-                      <div key={item.id} className="playlist-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 6, transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+                    {filteredPlaylistItems.map(({ item, originalIndex }: any) => (
+                      <div key={`${item.id}-${originalIndex}`} className="playlist-item" style={{ opacity: item.selected ? 1 : 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 6, transition: 'background 0.2s, opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', cursor: 'pointer', flex: 1 }} onClick={() => togglePlaylistItemSelected(originalIndex)}>
+                          <div style={{ color: item.selected ? '#3b82f6' : '#9ca3af', display: 'flex', alignItems: 'center' }}>
+                            {item.selected ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </div>
                           {item.thumbnail && <SmartImage src={item.thumbnail} alt="thumbnail" style={{ width: 56, height: 32, objectFit: 'cover', borderRadius: '4px' }} />}
                           <span title={item.title} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#d1d5db', fontSize: 13 }}>{item.title}</span>
                         </div>
                         <button
-                          onClick={() => removeAnalyzedPlaylistVideo(item.id)}
+                          onClick={() => removeAnalyzedPlaylistVideo(originalIndex)}
                           style={{
                             background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer',
                             padding: '4px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -232,6 +301,11 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                         </button>
                       </div>
                     ))}
+                    {filteredPlaylistItems.length === 0 && debouncedSearch && (
+                      <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '13px' }}>
+                        No results found for "{debouncedSearch}"
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -462,11 +536,11 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                   className="download-main-btn-large"
                   style={{ 
                     flex: 1, 
-                    opacity: analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS ? 0.4 : 1, 
-                    cursor: analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS ? 'not-allowed' : 'pointer' 
+                    opacity: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 0.4 : 1, 
+                    cursor: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 'not-allowed' : 'pointer' 
                   }}
                   onClick={onDownloadNow}
-                  disabled={analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS}
+                  disabled={analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0)}
                 >
                   🚀 Download Now
                 </button>
@@ -480,13 +554,13 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                     color: '#d1d5db', 
                     fontWeight: 600, 
                     fontSize: 15, 
-                    cursor: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS)) ? 'not-allowed' : 'pointer', 
-                    opacity: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS)) ? 0.4 : 1, 
+                    cursor: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 'not-allowed' : 'pointer', 
+                    opacity: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 0.4 : 1, 
                     transition: 'background 0.2s' 
                   }}
                   onClick={onAddToList}
-                  disabled={batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS)}
-                  onMouseEnter={(e) => { if (!(batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && analyzeResult.items.length > MAX_BATCH_ITEMS))) e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                  disabled={batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))}
+                  onMouseEnter={(e) => { if (!(batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0)))) e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
                 >
                   ➕ Add to Batch List

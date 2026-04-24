@@ -213,15 +213,21 @@ export function useDownloadController({
     }
   }
 
-  async function handleAnalyzeUrlDirectly(inputUrl: string) {
+  async function performAnalysis(urlToAnalyze: string) {
     setGlobalError(null)
     setAnalyzing(true)
     setAnalyzeResult(null)
     setSelectedVariantUrl(null)
-    setUrl(inputUrl)
+    setUrl(urlToAnalyze)
 
     try {
-      const result = await window.cortexDl.analyzeUrl(inputUrl.trim(), cookieBrowser)
+      const result = await window.cortexDl.analyzeUrl(urlToAnalyze.trim(), cookieBrowser)
+      
+      // NEW: Add default selected state to playlist items
+      if (result.kind === 'playlist') {
+        result.items = result.items.map((item: any) => ({ ...item, selected: true }))
+      }
+
       setAnalyzeResult(result)
       if (result.kind === 'hls-media') setSelectedVariantUrl(result.url)
       if (result.kind === 'hls-master') setSelectedVariantUrl(result.variants[0]?.url ?? null)
@@ -237,15 +243,47 @@ export function useDownloadController({
     }
   }
 
+  async function handleAnalyzeUrlDirectly(inputUrl: string) {
+    try {
+      const parsedUrl = new URL(inputUrl)
+      if (parsedUrl.searchParams.has('v') && (parsedUrl.searchParams.has('list') || parsedUrl.searchParams.has('list_id'))) {
+        setModalConfig({
+          isOpen: true,
+          title: 'Playlist Detected',
+          message: 'Do you want to download the entire playlist or just this single video?',
+          confirmText: 'Entire Playlist',
+          cancelText: 'Single Video',
+          type: 'info',
+          onConfirm: () => {
+            setModalConfig(prev => ({ ...prev, isOpen: false }))
+            performAnalysis(inputUrl)
+          },
+          onCancel: () => {
+            setModalConfig(prev => ({ ...prev, isOpen: false }))
+            parsedUrl.searchParams.delete('list')
+            parsedUrl.searchParams.delete('index')
+            performAnalysis(parsedUrl.toString())
+          }
+        })
+        return
+      }
+    } catch {
+      // Ignore URL parsing errors and let the analyzer handle it
+    }
+
+    performAnalysis(inputUrl)
+  }
+
   function onAddToList() {
     if (analyzeResult?.kind === 'playlist') {
+      const selectedItems = analyzeResult.items.filter((item: any) => item.selected)
       const remainingSlots = MAX_BATCH_ITEMS - batchItems.length
       if (remainingSlots <= 0) {
         showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
         return
       }
       
-      const itemsToAdd = analyzeResult.items.slice(0, remainingSlots).map((pItem: any) => ({
+      const itemsToAdd = selectedItems.slice(0, remainingSlots).map((pItem: any) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         url: pItem.url,
         title: pItem.title || 'Loading...',
@@ -257,7 +295,7 @@ export function useDownloadController({
       
       setBatchItems((prev) => [...prev, ...itemsToAdd])
       
-      if (analyzeResult.items.length > remainingSlots) {
+      if (selectedItems.length > remainingSlots) {
         showToast(`⚠️ Added ${remainingSlots} items. Batch limit reached!`)
       }
       resetInputState()
@@ -369,11 +407,12 @@ export function useDownloadController({
     }
     try {
       if (analyzeResult.kind === 'playlist') {
+        const selectedItems = analyzeResult.items.filter((item: any) => item.selected)
         const remainingSlots = Math.max(0, MAX_BATCH_ITEMS - activeDownloadCount)
-        const itemsToDownload = analyzeResult.items.slice(0, remainingSlots)
+        const itemsToDownload = selectedItems.slice(0, remainingSlots)
         
         if (itemsToDownload.length === 0) {
-          showToast(`⚠️ Max concurrent downloads reached!`)
+          showToast(selectedItems.length === 0 ? `⚠️ No items selected for download!` : `⚠️ Max concurrent downloads reached!`)
           return
         }
 
@@ -487,11 +526,59 @@ export function useDownloadController({
     catch (err) { console.error('Failed to open external URL:', err) }
   }
 
-  const removeAnalyzedPlaylistVideo = useCallback((videoId: string) => {
+  const removeAnalyzedPlaylistVideo = useCallback((index: number) => {
     if (analyzeResult?.kind === 'playlist') {
       setAnalyzeResult({
         ...analyzeResult,
-        items: analyzeResult.items.filter((p: any) => p.id !== videoId)
+        items: analyzeResult.items.filter((_: any, i: number) => i !== index)
+      })
+    }
+  }, [analyzeResult, setAnalyzeResult])
+
+  const togglePlaylistItemSelected = useCallback((index: number) => {
+    if (analyzeResult?.kind === 'playlist') {
+      setAnalyzeResult({
+        ...analyzeResult,
+        items: analyzeResult.items.map((p: any, i: number) => 
+          i === index ? { ...p, selected: !p.selected } : p
+        )
+      })
+    }
+  }, [analyzeResult, setAnalyzeResult])
+
+  const selectAllPlaylistItems = useCallback((indicesToSelect?: number[]) => {
+    if (analyzeResult?.kind === 'playlist') {
+      setAnalyzeResult({
+        ...analyzeResult,
+        items: analyzeResult.items.map((p: any, i: number) => {
+          if (!indicesToSelect || indicesToSelect.includes(i)) {
+            return { ...p, selected: true }
+          }
+          return p
+        })
+      })
+    }
+  }, [analyzeResult, setAnalyzeResult])
+
+  const deselectAllPlaylistItems = useCallback((indicesToDeselect?: number[]) => {
+    if (analyzeResult?.kind === 'playlist') {
+      setAnalyzeResult({
+        ...analyzeResult,
+        items: analyzeResult.items.map((p: any, i: number) => {
+          if (!indicesToDeselect || indicesToDeselect.includes(i)) {
+            return { ...p, selected: false }
+          }
+          return p
+        })
+      })
+    }
+  }, [analyzeResult, setAnalyzeResult])
+  
+  const clearPlaylistItems = useCallback(() => {
+    if (analyzeResult?.kind === 'playlist') {
+      setAnalyzeResult({
+        ...analyzeResult,
+        items: []
       })
     }
   }, [analyzeResult, setAnalyzeResult])
@@ -543,5 +630,9 @@ export function useDownloadController({
     onOpenFolder,
     onOpenExternal,
     removeAnalyzedPlaylistVideo,
+    togglePlaylistItemSelected,
+    selectAllPlaylistItems,
+    deselectAllPlaylistItems,
+    clearPlaylistItems,
   }
 }

@@ -87,9 +87,6 @@ contextBridge.exposeInMainWorld('cortexDl', {
   showMainWindow(): Promise<void> {
     return ipcRenderer.invoke('cortexdl:show-main-window')
   },
-  checkEngines(): Promise<{ ytdlp: boolean; ffmpeg: boolean; jsRuntime: boolean; jsRuntimeName: string }> {
-    return ipcRenderer.invoke('cortexdl:check-engines')
-  },
   updateEngine(): Promise<{ success: boolean; message: string }> {
     return ipcRenderer.invoke('cortexdl:update-engine')
   },

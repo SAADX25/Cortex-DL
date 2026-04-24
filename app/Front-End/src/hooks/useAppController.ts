@@ -98,7 +98,6 @@ export function useAppController() {
     useInAppPlayer: settings.useInAppPlayer, setUseInAppPlayer: settings.setUseInAppPlayer,
     concurrentDownloads: settings.concurrentDownloads, setConcurrentDownloads: settings.setConcurrentDownloads,
     totalDownloadedBytes: settings.totalDownloadedBytes,
-    enginesStatus: settings.enginesStatus,
     updateStatus: settings.updateStatus,
     engineVersion: settings.engineVersion,
     engineUpdateStatus: settings.engineUpdateStatus,
@@ -129,6 +128,10 @@ export function useAppController() {
     onOpenFolder: downloads.onOpenFolder,
     onOpenExternal: downloads.onOpenExternal,
     removeAnalyzedPlaylistVideo: downloads.removeAnalyzedPlaylistVideo,
+    togglePlaylistItemSelected: downloads.togglePlaylistItemSelected,
+    selectAllPlaylistItems: downloads.selectAllPlaylistItems,
+    deselectAllPlaylistItems: downloads.deselectAllPlaylistItems,
+    clearPlaylistItems: downloads.clearPlaylistItems,
 
     // Actions (settings)
     onCheckForUpdates: settings.onCheckForUpdates,

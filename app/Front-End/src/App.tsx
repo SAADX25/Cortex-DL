@@ -154,7 +154,6 @@ function App() {
   return (
     <div className="app-container" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <Sidebar 
-        enginesStatus={ctrl.enginesStatus}
         lang={lang}
       />
 
@@ -194,6 +193,10 @@ function App() {
             variantLabel={variantLabel}
             YouTubeMusicIcon={YouTubeMusicIcon}
             removeAnalyzedPlaylistVideo={ctrl.removeAnalyzedPlaylistVideo}
+            togglePlaylistItemSelected={ctrl.togglePlaylistItemSelected}
+            selectAllPlaylistItems={ctrl.selectAllPlaylistItems}
+            deselectAllPlaylistItems={ctrl.deselectAllPlaylistItems}
+            clearPlaylistItems={ctrl.clearPlaylistItems}
           />
         )}
 
@@ -236,7 +239,12 @@ function App() {
         type={ctrl.modalConfig.type}
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
         onConfirm={ctrl.modalConfig.onConfirm}
-        onCancel={ctrl.closeModal}
+        onCancel={() => {
+          ctrl.closeModal();
+          if (ctrl.modalConfig.onCancel) {
+            ctrl.modalConfig.onCancel();
+          }
+        }}
       />
 
       <MediaPlayerModal

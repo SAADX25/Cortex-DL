@@ -34,9 +34,6 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   const [concurrentDownloads, setConcurrentDownloads] = useState(3)
   const [useInAppPlayer, setUseInAppPlayer] = useState<boolean>(() => localStorage.getItem('cortex-inapp-player') !== 'false')
   const [totalDownloadedBytes, setTotalDownloadedBytes] = useState<number>(() => parseInt(localStorage.getItem('cortex-total-bytes') || '0', 10))
-  const [enginesStatus, setEnginesStatus] = useState<{ ytdlp: boolean; ffmpeg: boolean; jsRuntime: boolean; jsRuntimeName: string }>({
-    ytdlp: true, ffmpeg: true, jsRuntime: true, jsRuntimeName: 'None'
-  })
   const [updateStatus, setUpdateStatus] = useState<{ status: string; percent?: number; error?: string } | null>(null)
   const [engineVersion, setEngineVersion] = useState<string>('...')
   const [engineUpdateStatus, setEngineUpdateStatus] = useState<{ updating: boolean; message?: string; success?: boolean } | null>(null)
@@ -48,18 +45,6 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   // ── Credentials ──
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
-
-  // 
-  // Engine status polling
-  useEffect(() => {
-    const check = async () => {
-      try { setEnginesStatus(await window.cortexDl.checkEngines()) }
-      catch (err) { console.error('Failed to check engines:', err) }
-    }
-    check()
-    const timer = setInterval(check, 10000)
-    return () => clearInterval(timer)
-  }, [])
 
   // Hydrate concurrency from backend on mount
   useEffect(() => {
@@ -207,7 +192,6 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     useInAppPlayer, setUseInAppPlayer,
     concurrentDownloads, setConcurrentDownloads,
     totalDownloadedBytes,
-    enginesStatus,
     updateStatus,
     engineVersion,
     engineUpdateStatus,
