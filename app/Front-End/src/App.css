@@ -273,6 +273,95 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Developer Badge ─────────────────────────────────────────────── */
+
+@keyframes badge-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-3px); }
+}
+
+@keyframes badge-shimmer {
+  0%   { left: -80%; }
+  100% { left: 130%; }
+}
+
+@keyframes badge-glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(56, 189, 248, 0.15), inset 0 1px 0 rgba(56, 189, 248, 0.08); }
+  50%       { box-shadow: 0 0 20px rgba(56, 189, 248, 0.28), inset 0 1px 0 rgba(56, 189, 248, 0.15); }
+}
+
+.dev-badge {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: auto;
+  padding: 10px 22px;
+  border-radius: 14px;
+  background: rgba(56, 189, 248, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  text-decoration: none;
+  cursor: pointer;
+  animation: badge-float 5s ease-in-out infinite, badge-glow-pulse 5s ease-in-out infinite;
+  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dev-badge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(56, 189, 248, 0.12), transparent);
+  transform: skewX(-20deg);
+}
+
+.dev-badge:hover {
+  animation: none;
+  transform: translateY(-4px);
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.4),
+    0 0 25px rgba(56, 189, 248, 0.15),
+    inset 0 1px 0 rgba(56, 189, 248, 0.25);
+}
+
+.dev-badge:hover::before {
+  animation: badge-shimmer 0.65s ease-in-out forwards;
+}
+
+.dev-badge-icon {
+  color: rgba(56, 189, 248, 0.65);
+  width: 17px;
+  height: 17px;
+  transition: color 0.4s ease, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  z-index: 1;
+}
+
+.dev-badge:hover .dev-badge-icon {
+  color: #38bdf8;
+  transform: scale(1.18) rotate(-8deg);
+}
+
+.dev-badge-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: rgba(148, 163, 184, 0.75);
+  transition: color 0.4s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.dev-badge:hover .dev-badge-label {
+  color: #38bdf8;
+}
+
 .speed-select:hover,
 .speed-select:focus {
   border-color: var(--accent-primary);

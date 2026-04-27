@@ -1,5 +1,5 @@
 import React from 'react'
-import { Plus, DownloadCloud, Settings } from 'lucide-react'
+import { Plus, DownloadCloud, Settings, Github } from 'lucide-react'
 import { Language, translations } from '../translations'
 import { useUIStore } from '../stores/useUIStore'
 import { useDownloadStore } from '../stores/downloadStore'
@@ -43,6 +43,17 @@ const Sidebar: React.FC<SidebarProps> = ({
           <span className="nav-text">{t.nav_settings}</span>
         </button>
       </nav>
+
+      <a
+        href="https://github.com/SAADX25"
+        target="_blank"
+        rel="noreferrer"
+        title="Developed by SAADX25"
+        className="dev-badge"
+      >
+        <Github className="dev-badge-icon" />
+        <span className="dev-badge-label">SAADX25</span>
+      </a>
     </aside>
   )
 }
