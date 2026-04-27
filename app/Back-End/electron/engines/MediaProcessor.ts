@@ -62,4 +62,52 @@ export class MediaProcessor {
       });
     });
   }
+
+  /**
+   * Extracts the FPS of a video file using ffmpeg.
+   */
+  async getFps(filePath: string): Promise<number | null> {
+    return new Promise((resolve) => {
+      const ffmpeg = getBinaryPath('ffmpeg');
+      const args = ['-i', filePath];
+
+      log.info(`[MediaProcessor] Running ffmpeg for FPS: ${ffmpeg} ${args.join(' ')}`);
+      
+      const proc = spawn(ffmpeg, args, { windowsHide: true });
+      let output = '';
+
+      proc.stdout.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      proc.stderr.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      proc.on('close', () => {
+        if (output) {
+          try {
+            const match = output.match(/(\d+(?:\.\d+)?)\s*fps/i);
+            if (match && match[1]) {
+              const fps = Math.round(parseFloat(match[1]));
+              log.info(`[MediaProcessor] Evaluated FPS from ffmpeg output: ${fps}`);
+              resolve(fps);
+              return;
+            }
+            log.warn(`[MediaProcessor] Could not find FPS pattern in ffmpeg output.`);
+          } catch (err) {
+            log.warn(`[MediaProcessor] Failed to parse FPS: ${err}`);
+          }
+        } else {
+          log.warn(`[MediaProcessor] ffmpeg had no output`);
+        }
+        resolve(null);
+      });
+
+      proc.on('error', (err) => {
+        log.error(`[MediaProcessor] ffmpeg spawn error: ${err.message}`);
+        resolve(null);
+      });
+    });
+  }
 }

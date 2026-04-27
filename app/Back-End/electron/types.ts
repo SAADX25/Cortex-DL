@@ -37,6 +37,7 @@ export type StartInput = {
   speedLimit?: string
   startTime?: string
   endTime?: string
+  fps?: number | string
 }
 
 // ── Per-Task Runtime State ───────────────────────────────────────────────────
@@ -82,6 +83,9 @@ export type YtdlpFormat = {
   resolution: string
   filesize: number | null
   description: string
+  fps?: number
+  height?: number
+  tbr?: number
 }
 
 export type AnalyzeResult =

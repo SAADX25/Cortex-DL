@@ -128,4 +128,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
   fetchThumbnail(url: string): Promise<string> {
     return ipcRenderer.invoke('cortexdl:fetch-thumbnail', url)
   },
+  getMediaFps(filePath: string): Promise<number | null> {
+    return ipcRenderer.invoke('cortexdl:get-media-fps', filePath)
+  },
 })

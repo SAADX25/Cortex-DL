@@ -1,4 +1,5 @@
 import { Info } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface MediaInfoProps {
   title: string;
@@ -8,11 +9,32 @@ interface MediaInfoProps {
   mediaType: 'video' | 'audio';
   showOverlay: boolean;
   toggleOverlay: () => void;
+  taskFps?: number | string;
 }
 
-export function MediaInfoOverlay({ title, filePath, videoWidth, videoHeight, mediaType, showOverlay, toggleOverlay }: MediaInfoProps) {
+export function MediaInfoOverlay({ title, filePath, videoWidth, videoHeight, mediaType, showOverlay, toggleOverlay, taskFps }: MediaInfoProps) {
   const extension = filePath.split('.').pop()?.toUpperCase() || 'UNKNOWN';
-  
+  const [fps, setFps] = useState<number | string | null>(taskFps || null);
+
+  useEffect(() => {
+    if (showOverlay && mediaType === 'video' && !fps) {
+      if (window.cortexDl?.getMediaFps) {
+        console.log('[MediaInfoOverlay] Fetching FPS for:', filePath);
+        window.cortexDl.getMediaFps(filePath).then((val: number | null) => {
+          console.log('[MediaInfoOverlay] Received FPS:', val);
+          if (val) {
+            setFps(val);
+          } else {
+            setFps('Unknown');
+          }
+        }).catch(err => {
+          console.error('[MediaInfoOverlay] Error fetching FPS:', err);
+          setFps('Error');
+        });
+      }
+    }
+  }, [showOverlay, filePath, mediaType, fps]);
+
   return (
     <>
       <button 
@@ -40,8 +62,12 @@ export function MediaInfoOverlay({ title, filePath, videoWidth, videoHeight, med
               </>
             )}
             
-            <span className="info-label">Path</span>
-            <span className="info-value path-value" title={filePath}>{filePath}</span>
+            {mediaType === 'video' && (
+              <>
+                <span className="info-label">FPS</span>
+                <span className="info-value path-value">{fps ? `${fps} FPS` : 'Reading...'}</span>
+              </>
+            )}
           </div>
         </div>
       )}

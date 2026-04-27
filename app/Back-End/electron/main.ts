@@ -543,6 +543,17 @@ ipcMain.handle('cortexdl:analyze-url', async (_event, url: string, browser?: str
   }
 })
 
+ipcMain.handle('cortexdl:get-media-fps', async (_event, filePath: string) => {
+  try {
+    const { MediaProcessor } = await import('./engines/MediaProcessor')
+    const processor = new MediaProcessor()
+    return await processor.getFps(filePath)
+  } catch (err) {
+    log.error('Failed to get media FPS:', err)
+    return null
+  }
+})
+
 ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
   try {
     if (!url || typeof url !== 'string') throw new Error('Invalid URL')

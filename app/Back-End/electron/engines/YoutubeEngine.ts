@@ -374,6 +374,9 @@ export class YoutubeEngine implements IEngine {
       const start = task.startTime || '00:00:00'
       const end = task.endTime || 'inf'
       args.push('--download-sections', `*${start}-${end}`)
+      args.push('--force-keyframes-at-cuts')
+      // Force Chromium compatibility: clean AAC audio and faststart
+      args.push('--downloader-args', 'ffmpeg:-c:v copy -c:a aac -movflags +faststart')
     }
 
     return args
@@ -394,7 +397,6 @@ export class YoutubeEngine implements IEngine {
       '--force-ipv4',
       '--no-warnings',
       '--force-overwrites',
-      '--postprocessor-args', 'ffmpeg:-y -threads 2',
       '--progress-template', 'download:CORTEX_DL:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s:%(progress.speed)s',
       '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
       '--resize-buffer',
@@ -403,6 +405,12 @@ export class YoutubeEngine implements IEngine {
       ...this.buildAuthArgs(task),
       ...getJsRuntimeArgs(),
     ]
+
+    if (task.targetFormat === 'mp4') {
+      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 2 -c:a aac -movflags +faststart')
+    } else {
+      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 2')
+    }
 
     // FFmpeg location helps yt-dlp find ffmpeg reliably in packaged setups.
     const ffmpegExePath = getBinaryPath('ffmpeg')

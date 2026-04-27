@@ -156,6 +156,7 @@ declare global {
       // ── Media server ──
       getMediaPort: () => Promise<number>
       fetchThumbnail: (url: string) => Promise<string>
+      getMediaFps: (filePath: string) => Promise<number | null>
 
       // ── IPC event listeners (return dispose functions) ──
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void

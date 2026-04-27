@@ -280,6 +280,7 @@ export class DownloadManager {
       startTime: input.startTime,
       endTime: input.endTime,
       ytdlpFormatId: input.ytdlpFormatId,
+      fps: input.fps,
     }
 
     this.tasks.set(id, task)
@@ -344,6 +345,7 @@ export class DownloadManager {
         startTime: input.startTime,
         endTime: input.endTime,
         ytdlpFormatId: input.ytdlpFormatId,
+        fps: input.fps,
       }
 
       this.tasks.set(id, task)

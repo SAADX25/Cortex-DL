@@ -48,5 +48,6 @@ export type DownloadTask = {
   convertingPercent?: number
   downloadPercent?: number
   ytdlpFormatId?: string
+  fps?: number | string
 }
 
