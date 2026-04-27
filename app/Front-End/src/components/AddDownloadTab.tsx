@@ -701,6 +701,12 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
           <button className="brand-icon-btn tiktok" onClick={() => onOpenExternal('https://www.tiktok.com')} title="TikTok">
             <Clapperboard size={20} />
           </button>
+          <button className="brand-icon-btn kick" onClick={() => onOpenExternal('https://kick.com')} title="Kick">
+            {/* Official Kick shield logo */}
+            <svg width="20" height="20" viewBox="0 0 200 200" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M30 20 H90 V80 H120 L150 20 H200 L160 100 L200 180 H150 L120 120 H90 V180 H30 V20Z" />
+            </svg>
+          </button>
         </div>
       </div>
 

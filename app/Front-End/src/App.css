@@ -409,6 +409,8 @@
 .brand-icon-btn.reddit { background: #ff4500; border-color: #ff4500; color: #ffffff; box-shadow: 0 6px 18px rgba(255, 69, 0, 0.18); }
 .brand-icon-btn.tiktok { background: #010101; border-color: #010101; color: #ffffff; box-shadow: 0 6px 18px rgba(1,1,1,0.3); }
 .brand-icon-btn.x { background: #000000; border-color: #000000; color: #ffffff; box-shadow: 0 6px 18px rgba(255, 255, 255, 0.08); }
+.brand-icon-btn.kick { background: #1a1a1a; border-color: #53fc18; color: #53fc18; box-shadow: 0 6px 18px rgba(83, 252, 24, 0.2); }
+.brand-icon-btn.kick:hover { background: #53fc18; border-color: #53fc18; color: #000000; box-shadow: 0 10px 28px rgba(83, 252, 24, 0.45); transform: translateY(-6px) scale(1.08); }
 
 
 .brand-icon-btn.ytmusic {
