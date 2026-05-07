@@ -11,19 +11,6 @@
   
 </div>
 
----
-
-## 📸 Screenshots
-
-Here is a look at the Cortex-DL interface:
-
-<p align="center">
-  <img width="1081" height="678" alt="DL1" src="https://github.com/user-attachments/assets/f0397d30-8228-448c-bdd2-7147ad261d35" />
-</p>
-
-<p align="center">
-  <img width="1079" height="682" alt="DL6" src="https://github.com/user-attachments/assets/fc3ba7fe-6f58-46f2-99e8-7f67b3f21fb0" />
-</p>
 
 ---
 
