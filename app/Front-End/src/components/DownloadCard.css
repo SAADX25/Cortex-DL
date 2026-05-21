@@ -270,11 +270,13 @@
 
 .dc-bar-fill.merging,
 .dc-bar-fill.converting {
-  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  background: linear-gradient(90deg, #7c3aed, #8b5cf6, #a78bfa);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.5), 0 0 24px rgba(139, 92, 246, 0.2);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
 }
 .dc-bar-fill.merging::after,
 .dc-bar-fill.converting::after {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
   animation: dc-shimmer 1.5s infinite;
 }
 
@@ -327,6 +329,13 @@
 
 .dc-percent {
   color: var(--accent-primary);
+  transition: color 0.3s ease;
+}
+
+/* Purple percent text during merging/converting */
+.dc-card.merging .dc-percent,
+.dc-card.converting .dc-percent {
+  color: #a78bfa;
 }
 
 /* ── Error message ─────────────────────────────────────────────────────────── */

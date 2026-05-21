@@ -402,14 +402,17 @@ export class YoutubeEngine implements IEngine {
       '--resize-buffer',
       '--file-access-retries', '5',
       '--socket-timeout', '10',
+      // Max-speed: parallel fragment downloads (IDM-style)
+      '--concurrent-fragments', '5',
+      '--http-chunk-size', '5.0M',
       ...this.buildAuthArgs(task),
       ...getJsRuntimeArgs(),
     ]
 
     if (task.targetFormat === 'mp4') {
-      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 2 -c:a aac -movflags +faststart')
+      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 0 -c:a aac -movflags +faststart')
     } else {
-      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 2')
+      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 0')
     }
 
     // FFmpeg location helps yt-dlp find ffmpeg reliably in packaged setups.

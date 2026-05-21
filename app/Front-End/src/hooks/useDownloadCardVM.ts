@@ -133,6 +133,10 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       || (task.downloadPercent != null && task.downloadPercent > 0)
     if (task.status === 'downloading' && !hasProgress) {
       phase = 'starting'
+    } else if (task.status === 'downloading' && task.downloadPercent != null && task.downloadPercent >= 100) {
+      // Download bytes are done — yt-dlp is about to merge audio+video.
+      // Show merge phase immediately so user doesn't see a "stuck" bar.
+      phase = 'merging'
     } else if (task.status === 'converting' && (task.startTime || task.endTime)) {
       phase = 'trimming'
     } else {
@@ -213,10 +217,10 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
         percent = Math.min(99, basePercent + Math.round(POST_WEIGHT * convPct))
         percentLabel = `${percent}%`
       } else {
-        // ffmpeg merge started but no time= ticks yet — hold at 90% with indeterminate
+        // No real ffmpeg progress yet — bar starts at 90%.
+        // Simulated progress in useHighFrequencyIPC animates it 90% → 99%.
         percent = basePercent
         percentLabel = `${basePercent}%`
-        isIndeterminate = true
       }
     } else if (dlPct !== null && dlPct > 0) {
       // Downloading with known percent from backend — map to 0–90% range
