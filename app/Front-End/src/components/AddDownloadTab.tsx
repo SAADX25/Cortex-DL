@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { Language, translations } from '../translations'
-import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, CheckSquare, Square, Trash2, Search } from 'lucide-react'
+import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, CheckSquare, Square, Trash2, Search, Scissors } from 'lucide-react'
 import CustomDropdown from './CustomDropdown'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
+import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
 import { useUIStore } from '../stores/useUIStore'
 import { useDebounce } from '../hooks/useDebounce'
 
@@ -118,6 +119,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   const showToast = useUIStore((s) => s.showToast)
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [isTrimmerOpen, setIsTrimmerOpen] = useState(false)
   const debouncedSearch = useDebounce(searchQuery, 300)
 
   const filteredPlaylistItems = useMemo(() => {
@@ -127,6 +129,43 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
     const lowerQ = debouncedSearch.toLowerCase()
     return itemsWithIndex.filter(({ item }: any) => item.title?.toLowerCase().includes(lowerQ))
   }, [analyzeResult, debouncedSearch])
+
+  const trimmerSource = useMemo(() => {
+    if (isAudioMode || analyzeResult?.kind !== 'ytdlp' || !analyzeResult.duration) return null
+
+    const formatsWithUrls = analyzeResult.formats.filter((format) => Boolean(format.url))
+    if (formatsWithUrls.length === 0) return null
+
+    const selectedHeight = selectedQuality.endsWith('p')
+      ? Number(selectedQuality.replace('p', ''))
+      : null
+
+    const candidates = selectedHeight
+      ? formatsWithUrls.filter((format) => format.height === selectedHeight)
+      : formatsWithUrls
+
+    const sorted = [...(candidates.length > 0 ? candidates : formatsWithUrls)].sort((a, b) => {
+      const aMuxed = a.description.includes('(Muxed)') ? 1 : 0
+      const bMuxed = b.description.includes('(Muxed)') ? 1 : 0
+      if (aMuxed !== bMuxed) return bMuxed - aMuxed
+
+      const aMp4 = a.ext === 'mp4' ? 1 : 0
+      const bMp4 = b.ext === 'mp4' ? 1 : 0
+      if (aMp4 !== bMp4) return bMp4 - aMp4
+
+      return (b.height ?? 0) - (a.height ?? 0)
+    })
+
+    return {
+      videoUrl: sorted[0].url ?? '',
+      duration: analyzeResult.duration,
+    }
+  }, [analyzeResult, isAudioMode, selectedQuality])
+
+  const applyTrimRange = (range: TrimRange) => {
+    setStartTime(range.startTime)
+    setEndTime(range.endTime)
+  }
 
   const handleSelectAllVisible = () => {
     if (filteredPlaylistItems.length > 0) {
@@ -485,33 +524,45 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                   )}
                 </div>
 
-                {/* Smart Time Trimming */}
-                <div className="option-box time-trim-box">
-                  <label className="option-label">✂️ Smart Time Trim (optional)</label>
-                  <div className="time-trim-row">
-                    <div className="time-trim-field">
-                      <span className="time-trim-hint">Start</span>
-                      <input
-                        className="time-trim-input"
-                        type="text"
-                        placeholder="HH:MM:SS"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                      />
+                {/* Visual video trimming — toggle button + collapsible panel */}
+                {trimmerSource ? (
+                  <>
+                    <button
+                      type="button"
+                      className={`trimmer-toggle-btn${isTrimmerOpen ? ' trimmer-toggle-btn--active' : ''}`}
+                      onClick={() => {
+                        const next = !isTrimmerOpen
+                        setIsTrimmerOpen(next)
+                        if (!next) {
+                          // Reset trim range so download uses full video length
+                          setStartTime('')
+                          setEndTime('')
+                        }
+                      }}
+                    >
+                      <Scissors size={15} />
+                      <span>{isTrimmerOpen ? 'Close Trimmer' : 'Advanced Trim'}</span>
+                    </button>
+
+                    <div className={`trimmer-collapse${isTrimmerOpen ? ' trimmer-collapse--open' : ''}`}>
+                      {isTrimmerOpen && (
+                        <AdvancedTrimmer
+                          key={trimmerSource.videoUrl}
+                          videoUrl={trimmerSource.videoUrl}
+                          originalUrl={url}
+                          duration={trimmerSource.duration}
+                          initialStartTime={startTime}
+                          initialEndTime={endTime}
+                          onChange={applyTrimRange}
+                          onConfirm={(range) => {
+                            applyTrimRange(range)
+                            showToast(`Trim saved: ${range.startTime} - ${range.endTime}`)
+                          }}
+                        />
+                      )}
                     </div>
-                    <span className="time-trim-sep">→</span>
-                    <div className="time-trim-field">
-                      <span className="time-trim-hint">End</span>
-                      <input
-                        className="time-trim-input"
-                        type="text"
-                        placeholder="HH:MM:SS"
-                        value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
+                  </>
+                ) : null}
 
                 {/* HLS variant selector */}
                 {analyzeResult.kind === 'hls-master' && (

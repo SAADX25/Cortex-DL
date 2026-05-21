@@ -11,7 +11,7 @@ dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
-import { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu, nativeImage, safeStorage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell, Tray, Menu, nativeImage, safeStorage } from 'electron'
 import { existsSync, rmSync, statSync, createReadStream, writeFileSync, mkdirSync } from 'node:fs'
 import os from 'node:os'
 import http from 'node:http'
@@ -19,8 +19,9 @@ import { spawn } from 'node:child_process'
 import type { DownloadManager } from './downloadManager'
 import type { StartInput } from './types'
 import { analyzeUrlForHls } from './hls'
-import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion } from './ytdlp'
+import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl } from './ytdlp'
 import { extractAndSaveComments } from './commentsExtractor'
+
 
 // GPU Hardware Acceleration
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
@@ -320,6 +321,26 @@ function createWindow() {
     // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
+
+  // ── CORS bypass for remote media streams (YouTube CDN, etc.) ──────────
+  // The HTML5 <video> tag in the renderer needs to fetch remote streams
+  // (e.g. googlevideo.com). These servers don't send CORS headers, so
+  // Chromium blocks the response. Since this is a desktop app, we inject
+  // the permissive header at the session level.
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const url = details.url
+    // Only modify remote requests — skip local dev server and file:// URLs
+    if (url.startsWith('http') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Access-Control-Allow-Origin': ['*'],
+        },
+      })
+    } else {
+      callback({ responseHeaders: details.responseHeaders })
+    }
+  })
 }
 
 ipcMain.handle('cortexdl:select-folder', async () => {
@@ -543,6 +564,17 @@ ipcMain.handle('cortexdl:analyze-url', async (_event, url: string, browser?: str
   }
 })
 
+ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string, browser?: string) => {
+  try {
+    log.info(`[IPC] get-direct-stream-url called for: ${url.slice(0, 80)}...`)
+    const directUrl = await getDirectStreamUrl(url, browser)
+    return directUrl
+  } catch (err) {
+    log.error('[IPC] get-direct-stream-url error:', err)
+    throw err // Propagate the error to the frontend
+  }
+})
+
 ipcMain.handle('cortexdl:get-media-fps', async (_event, filePath: string) => {
   try {
     const { MediaProcessor } = await import('./engines/MediaProcessor')
@@ -553,6 +585,8 @@ ipcMain.handle('cortexdl:get-media-fps', async (_event, filePath: string) => {
     return null
   }
 })
+
+
 
 ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
   try {
@@ -833,4 +867,3 @@ if (!gotTheLock) {
     }, 1500)
   })
 }
-

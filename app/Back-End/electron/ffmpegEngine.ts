@@ -22,6 +22,7 @@ import type { FfmpegState } from './progressParser'
 
 // ── FFmpeg Availability Check ────────────────────────────────────────────────
 
+
 export async function isFfmpegAvailable(): Promise<boolean> {
   try {
     const p = spawn(getBinaryPath('ffmpeg'), ['-version'], { windowsHide: true, detached: false })

@@ -6,6 +6,7 @@ import type {
   AudioFormat as SharedAudioFormat,
   TargetFormat as SharedTargetFormat,
   DownloadTask as SharedDownloadTask,
+  ThumbnailDataUrl as SharedThumbnailDataUrl,
 } from '../../Shared/types'
 
 declare global {
@@ -18,6 +19,7 @@ declare global {
   type VideoFormat = SharedVideoFormat
   type AudioFormat = SharedAudioFormat
   type TargetFormat = SharedTargetFormat
+  type ThumbnailDataUrl = SharedThumbnailDataUrl
 
   type HlsVariant = {
     bandwidth: number | null
@@ -31,6 +33,7 @@ declare global {
     resolution: string
     filesize: number | null
     description: string
+    url?: string
     height?: number
     fps?: number
   }
@@ -157,6 +160,7 @@ declare global {
       getMediaPort: () => Promise<number>
       fetchThumbnail: (url: string) => Promise<string>
       getMediaFps: (filePath: string) => Promise<number | null>
+      getDirectStreamUrl: (url: string, browser?: string) => Promise<string>
 
       // ── IPC event listeners (return dispose functions) ──
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void

@@ -13,9 +13,24 @@ import type {
   VideoFormat,
   AudioFormat,
   TargetFormat,
+  ThumbnailDataUrl,
+  HlsVariant,
+  YtdlpFormat,
+  AnalyzeResult,
 } from '../../Shared/types'
 
-export type { DownloadTask, DownloadStatus, DownloadEngine, VideoFormat, AudioFormat, TargetFormat }
+export type {
+  DownloadTask,
+  DownloadStatus,
+  DownloadEngine,
+  VideoFormat,
+  AudioFormat,
+  TargetFormat,
+  ThumbnailDataUrl,
+  HlsVariant,
+  YtdlpFormat,
+  AnalyzeResult,
+}
 export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 
 // ── Add-Download Input ───────────────────────────────────────────────────────
@@ -69,39 +84,3 @@ export interface EngineContext {
   sendStats: (id: string, addedBytes: number) => void
 }
 
-// ── Analysis Types ───────────────────────────────────────────────────────────
-
-export type HlsVariant = {
-  bandwidth: number | null
-  resolution: { width: number; height: number } | null
-  url: string
-}
-
-export type YtdlpFormat = {
-  formatId: string
-  ext: string
-  resolution: string
-  filesize: number | null
-  description: string
-  fps?: number
-  height?: number
-  tbr?: number
-}
-
-export type AnalyzeResult =
-  | { kind: 'unknown' }
-  | { kind: 'direct' }
-  | { kind: 'hls-media'; url: string }
-  | { kind: 'hls-master'; variants: HlsVariant[] }
-  | { 
-      kind: 'ytdlp'; 
-      title: string; 
-      thumbnail?: string; 
-      formats: YtdlpFormat[];
-      views?: number;
-      likes?: number;
-      dislikes?: number;
-      duration?: number;
-      comments?: { author: string; text: string; likeCount: number }[];
-    }
-  | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }

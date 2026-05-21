@@ -131,4 +131,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getMediaFps(filePath: string): Promise<number | null> {
     return ipcRenderer.invoke('cortexdl:get-media-fps', filePath)
   },
+  getDirectStreamUrl(url: string, browser?: string): Promise<string> {
+    return ipcRenderer.invoke('cortexdl:get-direct-stream-url', url, browser)
+  },
 })

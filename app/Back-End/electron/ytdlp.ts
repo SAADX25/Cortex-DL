@@ -503,6 +503,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
             resolution: f.resolution || (f.vcodec !== 'none' ? `${f.width}x${f.height}` : 'audio only'),
             filesize: f.filesize || f.filesize_approx || null,
             description: `${f.format_note || ''} ${f.fps ? f.fps + 'fps' : ''} ${f.tbr ? Math.round(f.tbr) + 'kbps' : ''} ${f.vcodec !== 'none' && f.acodec !== 'none' ? '(Muxed)' : ''}`.trim(),
+            url: typeof f.url === 'string' ? f.url : undefined,
             tbr: f.tbr || 0,
             height: f.height || 0,
             fps: f.fps || 0
@@ -551,3 +552,134 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
   })
 }
 
+/**
+ * Extracts a direct, playable stream URL for a given video URL.
+ *
+ * Uses yt-dlp's `-g` (--get-url) flag to print the direct media URL
+ * instead of downloading. The format selector `b[ext=mp4]` requests
+ * the best single-file (muxed) MP4 stream — compatible with the
+ * standard HTML5 `<video>` tag without MSE or HLS players.
+ *
+ * Falls back through `b` → `best` if the mp4-specific selector
+ * yields no results.
+ */
+export async function getDirectStreamUrl(
+  url: string,
+  browser?: string,
+  cookieFile?: string,
+): Promise<string> {
+  const TIMEOUT_MS = 30_000 // 30 seconds — extraction can be slow
+
+  const ytdlpPath = getBinaryPath('yt-dlp')
+  if (!existsSync(ytdlpPath)) {
+    throw new Error('yt-dlp binary not found. Please ensure it exists in the bin directory.')
+  }
+
+  // Try format selectors in priority order:
+  //   1. 22/18        — YouTube native pre-merged h264+AAC (720p / 360p).
+  //                     These are single-URL, muxed MP4s that work in any
+  //                     HTML5 <video> tag without MSE or HLS.
+  //   2. b[ext=mp4]   — best muxed MP4 (fallback for non-YouTube sites)
+  //   3. best         — legacy catch-all
+  const formatSelectors = ['22/18', 'b[ext=mp4]', 'best']
+
+  let lastError: string = ''
+
+  for (const formatSelector of formatSelectors) {
+    const args: string[] = [
+      '-f', formatSelector,
+      '-g',                    // --get-url: print URL, don't download
+      '--no-playlist',
+      '--no-check-certificate',
+      '--geo-bypass',
+      '--force-ipv4',
+      '--no-warnings',
+      '--socket-timeout', '10',
+      '--no-cache-dir',
+    ]
+
+    args.push(...getJsRuntimeArgs())
+
+    // Cookie logic: same priority as analyzeWithYtdlp
+    const globalCookies = getCookiesPath()
+    if (globalCookies) {
+      args.push('--cookies', globalCookies)
+    } else if (cookieFile) {
+      args.push('--cookies', cookieFile)
+    } else if (browser && browser !== 'none') {
+      args.push('--cookies-from-browser', browser)
+    }
+
+    args.push(url)
+
+    const startMs = Date.now()
+    log.info(`[ytdlp] getDirectStreamUrl: trying format "${formatSelector}" for ${url.slice(0, 80)}...`)
+
+    try {
+      const directUrl = await new Promise<string>((resolve, reject) => {
+        const p = spawn(ytdlpPath, args, {
+          windowsHide: true,
+          detached: false,
+          env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        })
+
+        let stdout = ''
+        let stderr = ''
+
+        p.stdout.on('data', (data) => {
+          stdout += data.toString()
+        })
+
+        p.stderr.on('data', (data) => {
+          stderr += data.toString()
+        })
+
+        p.on('error', (err) => {
+          reject(new Error(`Failed to spawn yt-dlp: ${err.message}`))
+        })
+
+        // Timeout guard
+        const timer = setTimeout(() => {
+          try { p.kill() } catch { /* ignore */ }
+          reject(new Error('yt-dlp timed out while extracting stream URL.'))
+        }, TIMEOUT_MS)
+
+        p.on('close', (code) => {
+          clearTimeout(timer)
+          const elapsedMs = Date.now() - startMs
+          log.info(`[ytdlp] getDirectStreamUrl format="${formatSelector}" finished in ${elapsedMs}ms (exit ${code})`)
+
+          if (code !== 0) {
+            log.warn(`[ytdlp] getDirectStreamUrl stderr: ${stderr.trim()}`)
+            reject(new Error(stderr.trim() || `yt-dlp exited with code ${code}`))
+            return
+          }
+
+          // yt-dlp -g can output multiple lines (video URL + audio URL) for
+          // separate streams, but with format "b" it should be a single URL.
+          // Take the first non-empty line.
+          const firstUrl = stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .find((line) => line.length > 0 && line.startsWith('http'))
+
+          if (!firstUrl) {
+            reject(new Error('yt-dlp returned no playable URL.'))
+            return
+          }
+
+          resolve(firstUrl)
+        })
+      })
+
+      log.info(`[ytdlp] getDirectStreamUrl: success with format "${formatSelector}" (${directUrl.slice(0, 80)}...)`)
+      return directUrl
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+      log.warn(`[ytdlp] getDirectStreamUrl: format "${formatSelector}" failed — ${lastError}`)
+      // Continue to next format selector
+    }
+  }
+
+  throw new Error(`Failed to extract a playable stream URL: ${lastError}`)
+}
