@@ -9,6 +9,7 @@ import type { StartInput } from '../types'
 import { analyzeUrlForHls } from '../hls'
 import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl } from '../ytdlp'
 import { extractAndSaveComments } from '../commentsExtractor'
+import { db } from '../db'
 
 export interface IpcDependencies {
   getWin: () => Electron.BrowserWindow | null
@@ -350,7 +351,6 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.handle('cortexdl:get-cookie-file', () => {
     try {
-      const { db } = require('../db') as typeof import('../db')
       const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
       return row?.value ?? null
     } catch {
@@ -360,7 +360,6 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.handle('cortexdl:set-cookie-file', (_event, filePath: string | null) => {
     try {
-      const { db } = require('../db') as typeof import('../db')
       db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
       if (filePath) {
         db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('cookieFilePath', filePath)

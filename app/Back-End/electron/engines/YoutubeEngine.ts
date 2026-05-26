@@ -15,6 +15,7 @@ import {
   logRawProgressChunk,
 } from '../progressParser'
 import type { FfmpegState } from '../progressParser'
+import { db } from '../db'
 import type { IEngine } from './IEngine'
 import { getJsRuntimeArgs } from '../ytdlp'
 
@@ -22,7 +23,6 @@ type Profile = 'proAudio' | 'bestVideo' | 'default'
 
 const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,ios,web_creator,web'
 const YOUTUBE_THROTTLED_RATE = '512K'
-const FFMPEG_TRIM_OUTPUT_ARGS = 'ffmpeg_o:-c copy -movflags +faststart'
 
 interface YtdlpRunResult {
   exitCode: number
@@ -293,7 +293,8 @@ export class YoutubeEngine implements IEngine {
     this.childProcess = proc
     runtime.child = proc
 
-    log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile})`)
+    const hasCookies = args.includes('--cookies')
+    log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile}${hasCookies ? ', cookies=active' : ''})`)
 
     const preseedDuration = this.computePreseedDuration(task)
     const ffmpegState: FfmpegState = { totalDuration: preseedDuration, stderr: '' }
@@ -390,9 +391,15 @@ export class YoutubeEngine implements IEngine {
     const args: string[] = []
 
     // Cookie-based auth: use --cookies if the user has provided a cookies.txt file.
-    const cookiePath = this.getCookieFilePath()
-    if (cookiePath && existsSync(cookiePath)) {
-      args.push('--cookies', cookiePath)
+    let cookiePath = this.getCookieFilePath()
+    if (cookiePath) {
+      cookiePath = path.resolve(cookiePath)
+      const exists = existsSync(cookiePath)
+      log.debug(`[YoutubeEngine] DB returned cookie path: ${cookiePath}`)
+      log.debug(`[YoutubeEngine] Cookie file exists on disk: ${exists}`)
+      if (exists) {
+        args.push('--cookies', cookiePath)
+      }
     }
 
     // Basic auth (username/password) — still honoured for non-YouTube sites.
@@ -407,8 +414,6 @@ export class YoutubeEngine implements IEngine {
       const end = task.endTime || 'inf'
       args.push('--download-sections', `*${start}-${end}`)
       args.push('--no-force-keyframes-at-cuts')
-      args.push('--downloader', 'ffmpeg')
-      args.push('--downloader-args', FFMPEG_TRIM_OUTPUT_ARGS)
     }
 
     return args
@@ -416,7 +421,6 @@ export class YoutubeEngine implements IEngine {
 
   private getCookieFilePath(): string | null {
     try {
-      const { db } = require('../db') as typeof import('../db')
       const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
       return row?.value ?? null
     } catch {
@@ -447,7 +451,8 @@ export class YoutubeEngine implements IEngine {
       '--file-access-retries', '5',
       '--socket-timeout', '10',
       // Max-speed: parallel fragment downloads (IDM-style)
-      '--concurrent-fragments', '5',
+      '-N', '8',
+      '--concurrent-fragments', '4',
       '--http-chunk-size', '5.0M',
       ...this.buildAuthArgs(task),
       ...getJsRuntimeArgs(),
@@ -458,7 +463,7 @@ export class YoutubeEngine implements IEngine {
       ytArgs.push(
         '--postprocessor-args',
         isTrimmedTask
-          ? 'ffmpeg:-y -threads 0 -c copy -movflags +faststart'
+          ? 'ffmpeg_i:-c copy -movflags +faststart'
           : 'ffmpeg:-y -threads 0 -c:a aac -movflags +faststart'
       )
     } else {
