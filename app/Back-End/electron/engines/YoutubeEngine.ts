@@ -413,7 +413,6 @@ export class YoutubeEngine implements IEngine {
       const start = task.startTime || '00:00:00'
       const end = task.endTime || 'inf'
       args.push('--download-sections', `*${start}-${end}`)
-      args.push('--no-force-keyframes-at-cuts')
     }
 
     return args
@@ -463,7 +462,7 @@ export class YoutubeEngine implements IEngine {
       ytArgs.push(
         '--postprocessor-args',
         isTrimmedTask
-          ? 'ffmpeg_i:-c copy -movflags +faststart'
+          ? 'ffmpeg_i:-movflags +faststart'
           : 'ffmpeg:-y -threads 0 -c:a aac -movflags +faststart'
       )
     } else {
