@@ -1,8 +1,7 @@
 # Cortex DL — Architecture Reference
 
 > **Version:** 1.4.0  
-> **Stack:** Electron · React · TypeScript · SQLite · yt-dlp · ffmpeg  
-> **Repository:** https://github.com/SAADX25/Cortex-DL
+> **Stack:** Electron · React · TypeScript · SQLite · yt-dlp · ffmpeg
 
 ---
 
