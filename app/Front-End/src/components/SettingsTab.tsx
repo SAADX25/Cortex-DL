@@ -1,5 +1,5 @@
 import React from 'react'
-import { RefreshCw, AlertTriangle, ShieldAlert, FolderOpen, X, Info } from 'lucide-react'
+import { RefreshCw, AlertTriangle, ShieldAlert, FolderOpen, X, ExternalLink } from 'lucide-react'
 import { Language, translations } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 
@@ -129,10 +129,26 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 <span className="row-title">{t.youtube_auth_title}</span>
 
                 {/* Helper blurb */}
-                <span className="row-subtitle" style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '4px' }}>
-                  <Info size={13} style={{ flexShrink: 0, marginTop: '2px', color: '#64748b' }} />
-                  <span>{t.youtube_auth_desc}</span>
+                <span className="row-subtitle" style={{ marginTop: '4px', display: 'block' }}>
+                  {t.youtube_auth_desc}
                 </span>
+
+                {/* Get Extension link — matches btn-ghost-primary exactly */}
+                <button
+                  id="get-cookies-extension-btn"
+                  className="btn-ghost-primary"
+                  style={{ marginTop: '10px', fontSize: '0.82rem', padding: '0.4rem 0.9rem', width: 'fit-content' }}
+                  onClick={() =>
+                    window.cortexDl.openExternal(
+                      'https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc?hl=en-US&utm_source=ext_sidebar'
+                    )
+                  }
+                  title={t.youtube_auth_get_extension}
+                >
+                  <ExternalLink size={14} />
+                  {t.youtube_auth_get_extension}
+                </button>
+
               </div>
 
               {/* Action button */}
