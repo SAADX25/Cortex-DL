@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, ClipboardPaste } from 'lucide-react'
 import './App.css'
-import ConfirmModal from './ConfirmModal'
+import ConfirmModal from './components/ConfirmModal'
 import MediaPlayerModal from './components/MediaPlayer/MediaPlayerModal'
 import DownloadList from './components/DownloadList'
 import Sidebar from './components/Sidebar'

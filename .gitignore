@@ -46,3 +46,15 @@ bin/
 *.mp3
 *.part
 *.ytdl
+
+# Debug & temp outputs
+formats_*.txt
+test_*.txt
+lint.txt
+output.json
+
+# Legacy
+*.cs
+
+# TypeScript build info
+*.tsbuildinfo
