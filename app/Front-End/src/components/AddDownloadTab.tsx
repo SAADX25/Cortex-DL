@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react'
 import { Language, translations } from '../translations'
-import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, CheckSquare, Square, Trash2, Search, Scissors } from 'lucide-react'
-import CustomDropdown from './CustomDropdown'
+import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
 import { useUIStore } from '../stores/useUIStore'
-import { useDebounce } from '../hooks/useDebounce'
 
-// Local or exported types needed
+// Import Sub-Views
+import UrlAnalysisView from './AddDownloadTab/UrlAnalysisView'
+import PlaylistView from './AddDownloadTab/PlaylistView'
+import BatchListView from './AddDownloadTab/BatchListView'
+
 export type BatchItemStatus = 'pending' | 'processing' | 'success' | 'error'
 
 export type BatchItem = {
@@ -118,17 +120,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   const analyzing = useUIStore((s) => s.analyzing)
   const showToast = useUIStore((s) => s.showToast)
 
-  const [searchQuery, setSearchQuery] = useState('')
   const [isTrimmerOpen, setIsTrimmerOpen] = useState(false)
-  const debouncedSearch = useDebounce(searchQuery, 300)
-
-  const filteredPlaylistItems = useMemo(() => {
-    if (analyzeResult?.kind !== 'playlist' || !analyzeResult.items) return []
-    const itemsWithIndex = analyzeResult.items.map((item: any, originalIndex: number) => ({ item, originalIndex }))
-    if (!debouncedSearch) return itemsWithIndex
-    const lowerQ = debouncedSearch.toLowerCase()
-    return itemsWithIndex.filter(({ item }: any) => item.title?.toLowerCase().includes(lowerQ))
-  }, [analyzeResult, debouncedSearch])
 
   const trimmerSource = useMemo(() => {
     if (isAudioMode || analyzeResult?.kind !== 'ytdlp' || !analyzeResult.duration) return null
@@ -165,18 +157,6 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   const applyTrimRange = (range: TrimRange) => {
     setStartTime(range.startTime)
     setEndTime(range.endTime)
-  }
-
-  const handleSelectAllVisible = () => {
-    if (filteredPlaylistItems.length > 0) {
-      selectAllPlaylistItems(filteredPlaylistItems.map(({ originalIndex }) => originalIndex))
-    }
-  }
-
-  const handleDeselectAllVisible = () => {
-    if (filteredPlaylistItems.length > 0) {
-      deselectAllPlaylistItems(filteredPlaylistItems.map(({ originalIndex }) => originalIndex))
-    }
   }
 
   return (
@@ -270,189 +250,27 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
             <div className="fade-in">
               {/* Preview Card */}
               {analyzeResult.kind === 'playlist' ? (
-                <div className="playlist-preview">
-                  <div className="playlist-header">
-                    <h3>🎬 {t.playlist_title}: {analyzeResult.title}</h3>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span className="badge" style={{ backgroundColor: analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS ? '#ef4444' : undefined }}>
-                        {analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS 
-                          ? `${analyzeResult.items.filter((i:any) => i.selected).length} / ${MAX_BATCH_ITEMS} Max Selected`
-                          : `${analyzeResult.items.filter((i:any) => i.selected).length} Selected`}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', padding: '0 8px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <button onClick={handleSelectAllVisible} style={{ background: '#3b82f6', color: 'white', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>Select All</button>
-                      <button onClick={handleDeselectAllVisible} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>Deselect All</button>
-                      <button onClick={clearPlaylistItems} style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', border: 'none', cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Trash2 size={14} /> Clear List
-                      </button>
-                    </div>
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1, minWidth: '150px', maxWidth: '300px' }}>
-                      <Search size={14} style={{ position: 'absolute', left: '10px', color: '#9ca3af' }} />
-                      <input 
-                        type="text" 
-                        placeholder="Search..." 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        style={{
-                          width: '100%',
-                          background: 'rgba(0,0,0,0.2)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '6px',
-                          color: '#fff',
-                          padding: '6px 10px 6px 30px',
-                          fontSize: '13px',
-                          outline: 'none'
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS && (
-                    <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px', padding: '0 8px', fontWeight: 500 }}>
-                      ⚠️ {lang === 'ar' ? `يجب إزالة ${analyzeResult.items.filter((i:any) => i.selected).length - MAX_BATCH_ITEMS} ملفات للبدء بالتحميل` : `Please deselect ${analyzeResult.items.filter((i:any) => i.selected).length - MAX_BATCH_ITEMS} items to start downloading`}
-                    </div>
-                  )}
-                  <div className="playlist-items custom-scrollbar" style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
-                    {filteredPlaylistItems.map(({ item, originalIndex }: any) => (
-                      <div key={`${item.id}-${originalIndex}`} className="playlist-item" style={{ opacity: item.selected ? 1 : 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 6, transition: 'background 0.2s, opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', cursor: 'pointer', flex: 1 }} onClick={() => togglePlaylistItemSelected(originalIndex)}>
-                          <div style={{ color: item.selected ? '#3b82f6' : '#9ca3af', display: 'flex', alignItems: 'center' }}>
-                            {item.selected ? <CheckSquare size={18} /> : <Square size={18} />}
-                          </div>
-                          {item.thumbnail && <SmartImage src={item.thumbnail} alt="thumbnail" style={{ width: 56, height: 32, objectFit: 'cover', borderRadius: '4px' }} />}
-                          <span title={item.title} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#d1d5db', fontSize: 13 }}>{item.title}</span>
-                        </div>
-                        <button
-                          onClick={() => removeAnalyzedPlaylistVideo(originalIndex)}
-                          style={{
-                            background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer',
-                            padding: '4px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = '#9ca3af'; e.currentTarget.style.backgroundColor = 'transparent' }}
-                          title={t.btn_remove || "Remove"}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                    {filteredPlaylistItems.length === 0 && debouncedSearch && (
-                      <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '13px' }}>
-                        No results found for "{debouncedSearch}"
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <PlaylistView
+                  analyzeResult={analyzeResult}
+                  lang={lang}
+                  MAX_BATCH_ITEMS={MAX_BATCH_ITEMS}
+                  SmartImage={SmartImage}
+                  removeAnalyzedPlaylistVideo={removeAnalyzedPlaylistVideo}
+                  togglePlaylistItemSelected={togglePlaylistItemSelected}
+                  selectAllPlaylistItems={selectAllPlaylistItems}
+                  deselectAllPlaylistItems={deselectAllPlaylistItems}
+                  clearPlaylistItems={clearPlaylistItems}
+                />
               ) : (
-                <div className="video-preview-large" style={{ alignItems: 'stretch' }}>
-                  {analyzeResult.kind === 'ytdlp' && analyzeResult.thumbnail && (
-                    <SmartImage src={analyzeResult.thumbnail} alt="thumb" className="preview-thumb-large" />
-                  )}
-                  <div className="preview-info-large" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <div className="preview-title-large" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: '8px' }}>
-                      {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : 'HLS Stream'}
-                    </div>
-
-                    {/* 👀 Views & Likes */}
-                    {analyzeResult.kind === 'ytdlp' && (
-                      <div className="preview-metadata">
-                          <div className="preview-metadata-row">
-                            {analyzeResult.views != null && (
-                              <div className="metadata-badge" title={lang === 'ar' ? 'المشاهدات' : 'Views'}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                                <span>{analyzeResult.views.toLocaleString()}</span>
-                              </div>
-                            )}
-                            {analyzeResult.duration != null && (
-                              <div className="metadata-badge" title={lang === 'ar' ? 'المدة' : 'Duration'}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                                <span>{
-                                  (() => {
-                                    const d = analyzeResult.duration as number;
-                                    const h = Math.floor(d / 3600);
-                                    const m = Math.floor((d % 3600) / 60);
-                                    const s = d % 60;
-                                    return h > 0 
-                                      ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-                                      : `${m}:${s.toString().padStart(2, '0')}`;
-                                  })()
-                                }</span>
-                              </div>
-                            )}
-                            {analyzeResult.likes != null && (
-                              <div className="metadata-badge" title={lang === 'ar' ? 'الإعجابات' : 'Likes'}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
-                                <span>{analyzeResult.likes.toLocaleString()}</span>
-                              </div>
-                            )}
-                            {analyzeResult.dislikes != null && analyzeResult.dislikes > 0 && (
-                              <div className="metadata-badge" title={lang === 'ar' ? 'عدم الإعجاب' : 'Dislikes'}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>
-                                <span>{analyzeResult.dislikes.toLocaleString()}</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="preview-metadata-row" style={{ marginTop: '2px' }}>
-                            {(url.includes('youtube.com') || url.includes('youtu.be')) && (
-                              <div 
-                                className="metadata-badge" 
-                                style={{ cursor: 'pointer', backgroundColor: '#3b82f6', color: '#fff', border: 'none' }}
-                                title={lang === 'ar' ? 'تحميل جميع التعليقات بملف نصي' : 'Download all comments to text file'}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const res = await window.cortexDl.downloadComments(url);
-                                  if (typeof res === 'object' && res !== null) {
-                                    if (res.success) {
-                                      setCommentsSuccessPath(res.filePath || null);
-                                      showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
-                                    } else {
-                                      setIsCommentsDownloading(false);
-                                      if (!res.canceled) showToast(lang === 'ar' ? 'حدث خطأ أثناء استخراج التعليقات.' : 'Failed to extract comments.');
-                                    }
-                                  } else if (res) {
-                                    setCommentsSuccessPath(null);
-                                    showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
-                                  } else {
-                                    setIsCommentsDownloading(false);
-                                  }
-                                }}
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
-                                <span>{lang === 'ar' ? 'تحميل التعليقات' : 'Save Comments'}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                    {/* 💬 Comments */}
-                    {analyzeResult.kind === 'ytdlp' && (url.includes('youtube.com') || url.includes('youtu.be')) && analyzeResult.comments && analyzeResult.comments.length > 0 && (
-                      <div className="preview-comments custom-scrollbar">
-                        <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>
-                          💬 {lang === 'ar' ? 'تعليقات' : 'Comments'}
-                        </h4>
-                        <div className="comments-list">
-                          {analyzeResult.comments.map((comment: any, i: number) => (
-                            <div key={i} className="comment-item">
-                              <div className="comment-header">
-                                <span className="comment-author">{comment.author}</span>
-                                <span className="comment-likes">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
-                                  {comment.likeCount > 0 ? comment.likeCount.toLocaleString() : 0}
-                                </span>
-                              </div>
-                              <p className="comment-text" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{comment.text}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <UrlAnalysisView
+                  analyzeResult={analyzeResult}
+                  url={url}
+                  lang={lang}
+                  SmartImage={SmartImage}
+                  setCommentsSuccessPath={setCommentsSuccessPath}
+                  setIsCommentsDownloading={setIsCommentsDownloading}
+                  showToast={showToast}
+                />
               )}
 
               {/* Advanced Settings */}
@@ -622,73 +440,11 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
 
           {/* STEP 4: Batch list */}
           <div className="flex-1 overflow-y-auto pr-2">
-            {batchItems.length > 0 && (
-              <div className="batch-list fade-in" style={{ marginTop: 12, borderRadius: 8, background: '#0b1220', padding: 8 }}>
-                {batchItems.map((item, idx) => {
-                  const isItemError = item.status === 'error'
-                  const isItemProcessing = item.status === 'processing'
-                  const isItemLocked = isItemProcessing || item.status === 'success'
-                  return (
-                    <div key={item.id} style={{
-                      display: 'flex', flexDirection: 'column',
-                      padding: '6px 8px',
-                      borderBottom: '1px solid rgba(255,255,255,0.03)',
-                      borderLeft: isItemError ? '3px solid #ef4444' : isItemProcessing ? '3px solid #3b82f6' : '3px solid transparent',
-                      background: isItemError ? 'rgba(239, 68, 68, 0.06)' : isItemProcessing ? 'rgba(59, 130, 246, 0.04)' : 'transparent',
-                      transition: 'all 0.3s ease',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflow: 'hidden' }}>
-                          {isItemProcessing ? (
-                            <div style={{ width: 56, height: 32, borderRadius: 6, background: '#081026', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div className="spinner-sm" style={{ width: 16, height: 16, borderWidth: 2 }}></div>
-                            </div>
-                          ) : item.thumbnail ? (
-                            <SmartImage src={item.thumbnail} alt="thumb" style={{ width: 56, height: 32, objectFit: 'cover', borderRadius: 6 }} />
-                          ) : item.loading ? (
-                            <div style={{ width: 56, height: 32, borderRadius: 6, background: '#081026', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>⏳</div>
-                          ) : (
-                            <div style={{ width: 56, height: 32, borderRadius: 6, background: '#081026', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isItemError ? '#f87171' : '#9ca3af' }}>
-                              {isItemError ? '⚠️' : item.format === 'mp3' ? '🎵' : '🎬'}
-                            </div>
-                          )}
-                          <div style={{ color: isItemError ? '#fca5a5' : '#d1d5db', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }} title={item.title || item.url}>
-                            {item.title || (item.loading ? 'Loading...' : item.url)}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {isItemProcessing ? (
-                            <span style={{ color: '#60a5fa', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>Adding…</span>
-                          ) : (
-                            <div style={{ minWidth: 92, display: 'flex', alignItems: 'center', opacity: isItemLocked ? 0.4 : 1, pointerEvents: isItemLocked ? 'none' : 'auto' }}>
-                              <CustomDropdown
-                                value={item.format}
-                                onChange={(v) => setBatchItems(prev => prev.map(b => b.id === item.id ? { ...b, format: v as any } : b))}
-                                groups={[
-                                  { label: 'Video', options: [ { value: 'mp4', label: 'MP4' }, { value: 'mkv', label: 'MKV' }, { value: 'avi', label: 'AVI' }, { value: 'mov', label: 'MOV' }, { value: 'webm', label: 'WEBM' }, { value: 'ogv', label: 'OGV' }, { value: 'm4v', label: 'M4V' } ] },
-                                  { label: 'Audio', options: [ { value: 'mp3', label: 'MP3' }, { value: 'wav', label: 'WAV' }, { value: 'm4a', label: 'M4A' }, { value: 'ogg', label: 'OGG' }, { value: 'flac', label: 'FLAC' }, { value: 'aac', label: 'AAC' }, { value: 'opus', label: 'OPUS' }, { value: 'wma', label: 'WMA' } ] }
-                                ]}
-                              />
-                            </div>
-                          )}
-                          <button
-                            className="batch-remove-btn"
-                            onClick={() => setBatchItems(prev => prev.filter((_, i) => i !== idx))}
-                            disabled={isItemProcessing}
-                            style={{ opacity: isItemProcessing ? 0.3 : 1 }}
-                          >✕</button>
-                        </div>
-                      </div>
-                      {isItemError && item.errorMessage && (
-                        <div style={{ fontSize: 11, color: '#f87171', marginTop: 4, paddingLeft: 64, lineHeight: 1.3 }}>
-                          ⚠️ {item.errorMessage}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            <BatchListView 
+              batchItems={batchItems} 
+              setBatchItems={setBatchItems} 
+              SmartImage={SmartImage} 
+            />
           </div>
 
         </div>

@@ -11,17 +11,12 @@ dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
-import { app, BrowserWindow, dialog, ipcMain, session, shell, Tray, Menu, nativeImage, safeStorage } from 'electron'
-import { existsSync, rmSync, statSync, createReadStream, writeFileSync, mkdirSync } from 'node:fs'
-import os from 'node:os'
+import { app, BrowserWindow, dialog, session, shell } from 'electron'
+import { existsSync, rmSync, statSync, createReadStream } from 'node:fs'
 import http from 'node:http'
-import { spawn } from 'node:child_process'
 import type { DownloadManager } from './downloadManager'
-import type { StartInput } from './types'
-import { analyzeUrlForHls } from './hls'
-import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl } from './ytdlp'
-import { extractAndSaveComments } from './commentsExtractor'
-
+import { registerIpcHandlers } from './ipc/handlers'
+import { createTray } from './tray'
 
 // GPU Hardware Acceleration
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
@@ -153,66 +148,6 @@ async function loadBackendServices() {
   }
 }
 
-ipcMain.on('log-message', (_event, level, message) => {
-  if (log && log[level as keyof typeof log]) {
-    // @ts-expect-error log dynamic key
-    log[level](`[Renderer] ${message}`)
-  } else {
-    log?.info(`[Renderer] ${message}`)
-  }
-})
-
-ipcMain.handle('cortexdl:check-for-updates', async () => {
-  autoUpdater?.checkForUpdates()
-})
-
-ipcMain.handle('cortexdl:restart-app', async () => {
-  autoUpdater?.quitAndInstall()
-})
-
-ipcMain.handle('cortexdl:uninstall-app', () => {
-  try {
-    // 1. Path to uninstaller (usually in the executable's directory)
-    // In dev, this might not exist, but in prod it should be next to the exe
-    const uninstallerPath = path.join(path.dirname(app.getPath('exe')), 'unins000.exe')
-    
-    // 2. Path to User Data (AppData/Roaming/Cortex DL)
-    const userDataPath = app.getPath('userData')
-
-    log.info('Initiating Self-Destruct...')
-
-    // 3. Wipe User Data (Force delete everything in AppData)
-    if (existsSync(userDataPath)) {
-      try {
-        rmSync(userDataPath, { recursive: true, force: true })
-        log.info('UserData wiped successfully.')
-      } catch (err) {
-        log.error('Failed to wipe UserData:', err)
-      }
-    }
-
-    // 4. Launch Uninstaller (Detached so it stays alive after app quits)
-    if (existsSync(uninstallerPath)) {
-      const child = spawn(uninstallerPath, [], {
-        detached: true,
-        stdio: 'ignore'
-      })
-      child.unref() // Allow uninstaller to run independently
-    } else {
-      log.error('Uninstaller not found at:', uninstallerPath)
-      // Fallback: Open Add/Remove programs if uninstaller is missing
-      shell.openExternal('ms-settings:appsfeatures')
-    }
-
-    // Exit immediately
-    log.info('Exiting app...')
-    app.exit(0)
-
-  } catch (error) {
-    log.error('Uninstall error:', error)
-  }
-})
-
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
@@ -220,48 +155,25 @@ export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'Front-End', 'dist')
 
-let win: BrowserWindow | null
-let tray: Tray | null = null
+let win: BrowserWindow | null = null
 let isQuitting = false
-// let downloads: DownloadManager | null = null
 
-function createTray() {
+function initTray() {
   const iconPath = VITE_DEV_SERVER_URL 
     ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico') 
     : path.join(RENDERER_DIST, 'CortexDL.ico');
     
-  const trayIcon = nativeImage.createFromPath(iconPath);
-  
-  tray = new Tray(trayIcon);
-  tray.setToolTip('Cortex DL');
-
-  const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: 'Open Cortex DL', 
-      click: () => win?.show() 
-    }, 
-    { type: 'separator' }, 
-    { 
-      label: 'Quit / Exit', 
-      click: () => { 
-        isQuitting = true; 
-        app.quit(); 
-      } 
-    } 
-  ]);
-
-  tray.setContextMenu(contextMenu);
-
-  // Restore window on single click 
-  tray.on('click', () => { 
-    if (win) win.show(); 
-  });
+  createTray(
+    iconPath,
+    () => win,
+    () => { isQuitting = true }
+  )
 }
 
 function createWindow() {
-    const iconPath = VITE_DEV_SERVER_URL 
-      ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico') 
-      : path.join(RENDERER_DIST, 'CortexDL.ico');
+  const iconPath = VITE_DEV_SERVER_URL 
+    ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico') 
+    : path.join(RENDERER_DIST, 'CortexDL.ico');
 
   win = new BrowserWindow({
     width: 1100,
@@ -295,17 +207,6 @@ function createWindow() {
     if (!isQuitting) {
       event.preventDefault(); // STOP the close
       win?.hide();            // Just hide the window
-      
-      // Show a balloon notification on first hide (optional logic could go here)
-      // For now, just a simple notification if supported
-      /*
-      if (tray) {
-        tray.displayBalloon({
-          title: 'Cortex DL is running',
-          content: 'Downloads continue in the background. Right-click the icon to quit.'
-        });
-      }
-      */
     }
     return false;
   });
@@ -318,18 +219,12 @@ function createWindow() {
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
   } else {
-    // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
   // ── CORS bypass for remote media streams (YouTube CDN, etc.) ──────────
-  // The HTML5 <video> tag in the renderer needs to fetch remote streams
-  // (e.g. googlevideo.com). These servers don't send CORS headers, so
-  // Chromium blocks the response. Since this is a desktop app, we inject
-  // the permissive header at the session level.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const url = details.url
-    // Only modify remote requests — skip local dev server and file:// URLs
     if (url.startsWith('http') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
       callback({
         responseHeaders: {
@@ -343,305 +238,7 @@ function createWindow() {
   })
 }
 
-ipcMain.handle('cortexdl:select-folder', async () => {
-  if (!win) return null
-  const result = await dialog.showOpenDialog(win, {
-    properties: ['openDirectory', 'createDirectory'],
-  })
-  if (result.canceled) return null
-  return result.filePaths[0] ?? null
-})
-
-ipcMain.handle('cortexdl:select-cookies-file', async () => {
-  if (!win) return null
-  const result = await dialog.showOpenDialog(win, {
-    properties: ['openFile'],
-    filters: [
-      { name: 'Cookies', extensions: ['txt'] },
-      { name: 'All Files', extensions: ['*'] },
-    ],
-  })
-  if (result.canceled) return null
-  return result.filePaths[0] ?? null
-})
-
-// SafeStorage for Secure Credentials
-ipcMain.handle('cortexdl:secure-save', (_event, _key: string, value: string) => {
-  try {
-    if (!safeStorage.isEncryptionAvailable()) {
-      // Fallback for systems lacking keychain/encryption support
-      log.warn('[safeStorage] Encryption not available. Returning failure.')
-      return false
-    }
-    const encrypted = safeStorage.encryptString(value)
-    // We store the encrypted buffer as Base64 in standard config files/store or localStorage proxy.
-    // However, it's safer to use Electron's `store` or just let the frontend store the encrypted Base64 string in localStorage.
-    // For simplicity of this proxy, we return the base64 payload to the frontend.
-    return encrypted.toString('base64')
-  } catch (error) {
-    log.error('[safeStorage] Failed to encrypt data', error)
-    return false
-  }
-})
-
-ipcMain.handle('cortexdl:secure-get', (_event, base64Value: string) => {
-  try {
-    if (!safeStorage.isEncryptionAvailable() || !base64Value) return ''
-    const buffer = Buffer.from(base64Value, 'base64')
-    return safeStorage.decryptString(buffer)
-  } catch (error) {
-    log.error('[safeStorage] Failed to decrypt data', error)
-    return ''
-  }
-})
-
-ipcMain.handle('cortexdl:update-engine', async () => {
-    if (downloads && downloads.getActiveCount() > 0) {
-      log.warn('[ytdlp] Engine auto-update aborted because active downloads are running.')
-      return { success: false, message: 'Wait for downloads to complete before updating engine.' }
-    }
-    return await updateYtdlp()
-})
-
-ipcMain.handle('cortexdl:get-engine-version', async () => {
-  return getYtdlpVersion()
-})
-
-ipcMain.handle('cortexdl:downloads:list', async () => {
-  await serviceReadyPromise
-  return downloads?.list() || []
-})
-
-ipcMain.handle(
-  'cortexdl:downloads:add',
-  async (_event, input: StartInput) => {
-    await serviceReadyPromise
-    if (!downloads) throw new Error('Download Manager not initialized')
-    return downloads.add(input)
-  },
-)
-
-ipcMain.handle(
-  'cortexdl:downloads:add-batch',
-  async (_event, inputs: StartInput[]) => {
-    await serviceReadyPromise
-    if (!downloads) throw new Error('Download Manager not initialized')
-    return downloads.addBatch(inputs)
-  },
-)
-
-ipcMain.handle('cortexdl:downloads:pause', async (_event, id: string) => downloads?.pause(id))
-ipcMain.handle('cortexdl:downloads:resume', async (_event, id: string) => downloads?.resume(id))
-ipcMain.handle('cortexdl:downloads:cancel', async (_event, id: string) => downloads?.cancel(id))
-ipcMain.handle('cortexdl:downloads:delete', async (_event, id: string, deleteFile: boolean) => downloads?.delete(id, deleteFile))
-ipcMain.handle('cortexdl:downloads:clear-completed', async () => downloads?.clearCompleted())
-ipcMain.handle('cortexdl:downloads:pause-all', async () => downloads?.pauseAll())
-ipcMain.handle('cortexdl:downloads:resume-all', async () => downloads?.resumeAll())
-
-ipcMain.handle('cortexdl:set-concurrency', async (_event, value: number) => {
-  await serviceReadyPromise
-  downloads?.setMaxConcurrent(value)
-})
-
-ipcMain.handle('cortexdl:get-concurrency', async () => {
-  await serviceReadyPromise
-  return downloads?.getMaxConcurrent() ?? 3
-})
-
-ipcMain.handle('cortexdl:open-folder', async (_event, filePath: string) => {
-  try {
-    const normalizedPath = path.normalize(filePath)
-    if (existsSync(normalizedPath)) {
-      shell.showItemInFolder(normalizedPath)
-    } else {
-      const dir = path.dirname(normalizedPath)
-      if (existsSync(dir)) {
-        const err = await shell.openPath(dir)
-        if (err) throw new Error(err)
-      } else {
-        throw new Error('المجلد غير موجود')
-      }
-    }
-  } catch (err) {
-    log.error('Failed to open folder:', err)
-    // Fallback: Try to open the parent directory if showing item failed
-    try {
-      const dir = path.dirname(filePath)
-      if (existsSync(dir)) {
-        await shell.openPath(dir)
-        return
-      }
-    } catch (e) {
-      log.error('Fallback open folder failed:', e)
-    }
-    throw err
-  }
-})
-
-ipcMain.handle('cortexdl:open-file', async (_event, filePath: string) => {
-  try {
-    // Normalize the path to handle backslashes, special characters, etc.
-    const normalizedPath = path.normalize(filePath)
-    if (existsSync(normalizedPath)) {
-      const err = await shell.openPath(normalizedPath)
-      if (err) throw new Error(err)
-    } else {
-      throw new Error(`File not found on disk: ${normalizedPath}`)
-    }
-  } catch (err) {
-    log.error('Failed to open file:', err)
-    throw err
-  }
-})
-
-ipcMain.handle('cortexdl:open-external', async (_event, url: string) => {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      log.warn('[Security] Blocked openExternal with non-http protocol:', parsed.protocol)
-      return
-    }
-    await shell.openExternal(url)
-  } catch {
-    log.warn('[Security] Blocked openExternal with invalid URL')
-  }
-})
-
-ipcMain.handle('cortexdl:show-main-window', () => {
-  if (win) {
-    if (win.isMinimized()) win.restore()
-    if (!win.isVisible()) win.show()
-    win.focus()
-  }
-})
-
-ipcMain.handle('cortexdl:download-comments', async (_event, url: string) => {
-  try {
-    if (!win) return { success: false, error: 'No main window' }
-    const { canceled, filePath } = await dialog.showSaveDialog(win, {
-      title: 'Save Comments',
-      defaultPath: 'comments.txt',
-      filters: [{ name: 'Text Files', extensions: ['txt'] }]
-    })
-    if (canceled || !filePath) return { success: false, canceled: true }
-
-    // Send an event to say we are starting the actual extraction
-    win.webContents.send('cortexdl:comments-extraction-started')
-
-    const result = await extractAndSaveComments(url, filePath, (current, total) => {
-      win?.webContents.send('cortexdl:comments-progress', current, total)
-    })
-    if (result) {
-      // DONT show message box. Front-end handles it.
-      return { success: true, filePath }
-    } else {
-      // DONT show message box. Front-end handles it.
-      return { success: false, error: 'Extraction failed' }
-    }
-  } catch (e: any) {
-    log.error('[main] Error in download-comments:', e)
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('cortexdl:analyze-url', async (_event, url: string, browser?: string) => {
-  try {
-    const hlsResult = await analyzeUrlForHls(url)
-    if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') {
-      return hlsResult
-    }
-    
-    // If not HLS, try yt-dlp (covers YouTube, FB, Insta, etc.)
-    const ytdlpResult = await analyzeWithYtdlp(url, browser)
-    if (ytdlpResult.kind !== 'unknown') {
-      return ytdlpResult
-    }
-
-    return hlsResult // fallback to direct/unknown
-  } catch (err) {
-    log.error('Analysis error:', err)
-    throw err // Propagate the error to the frontend
-  }
-})
-
-ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string, browser?: string) => {
-  try {
-    log.info(`[IPC] get-direct-stream-url called for: ${url.slice(0, 80)}...`)
-    const directUrl = await getDirectStreamUrl(url, browser)
-    return directUrl
-  } catch (err) {
-    log.error('[IPC] get-direct-stream-url error:', err)
-    throw err // Propagate the error to the frontend
-  }
-})
-
-ipcMain.handle('cortexdl:get-media-fps', async (_event, filePath: string) => {
-  try {
-    const { MediaProcessor } = await import('./engines/MediaProcessor')
-    const processor = new MediaProcessor()
-    return await processor.getFps(filePath)
-  } catch (err) {
-    log.error('Failed to get media FPS:', err)
-    return null
-  }
-})
-
-
-
-ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
-  try {
-    if (!url || typeof url !== 'string') throw new Error('Invalid URL')
-    // Use global fetch (Node 18+) to request image with spoofed headers
-    const res = await fetch(url, {
-      headers: {
-        'Referer': 'https://www.instagram.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    } as any)
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-
-    const contentType = res.headers.get('content-type') || 'image/jpeg'
-    const arr = await res.arrayBuffer()
-    const buf = Buffer.from(arr)
-
-    // Determine file extension from content-type
-    const extMap: Record<string, string> = {
-      'image/jpeg': '.jpg', 'image/jpg': '.jpg',
-      'image/png': '.png', 'image/webp': '.webp',
-      'image/gif': '.gif', 'image/avif': '.avif',
-    }
-    const ext = extMap[contentType] || '.jpg'
-
-    // Save to a temp directory under our app's namespace to avoid collisions
-    const thumbCacheDir = path.join(os.tmpdir(), 'cortexdl-thumbs')
-    if (!existsSync(thumbCacheDir)) mkdirSync(thumbCacheDir, { recursive: true })
-
-    // Hash the URL to create a deterministic, collision-free filename
-    const hash = Buffer.from(url).toString('base64url').slice(0, 32)
-    const filePath = path.join(thumbCacheDir, `${hash}${ext}`)
-
-    // Only write if not already cached
-    if (!existsSync(filePath)) {
-      writeFileSync(filePath, buf)
-    }
-
-    return filePath
-  } catch (err) {
-    log.error('[fetch-thumbnail] failed for', url, err)
-    throw err
-  }
-})
-
-// IPC handler: expose the dynamically resolved media server port to the renderer
-ipcMain.handle('cortexdl:get-media-port', () => MEDIA_SERVER_PORT)
-// Hardware acceleration is actively enabled for smooth UI/video playback
-// app.disableHardwareAcceleration()
-const gotTheLock = app.requestSingleInstanceLock()
 // Media Streaming Server
-
-// Media Server Port (default to constant value if not found in .env)
-// Uses `let` so it can be reassigned when the preferred port is busy.
 const MEDIA_SERVER_PORT_BASE = Number(process.env.MEDIA_SERVER_PORT) || 3345
 const MEDIA_SERVER_PORT_MAX_TRIES = 10
 export let MEDIA_SERVER_PORT = MEDIA_SERVER_PORT_BASE
@@ -663,7 +260,6 @@ const MIME_TYPES: Record<string, string> = {
   '.aac':  'audio/aac',
   '.opus': 'audio/opus',
   '.wma':  'audio/x-ms-wma',
-  // Image types — used by the thumbnail proxy
   '.jpg':  'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png':  'image/png',
@@ -673,25 +269,20 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 function startMediaStreamingServer(): void {
-  if (mediaServer) return // already running
+  if (mediaServer) return
 
-  // The allowed origin is VITE_DEV_SERVER_URL in dev, and 'file://' in production.
   const devUrl = VITE_DEV_SERVER_URL ? VITE_DEV_SERVER_URL.replace(/\/$/, '') : null
   const appOrigin = devUrl || 'file://'
 
   const server = http.createServer((req, res) => {
-    // 1. Origin Validation
     const requestOrigin = req.headers.origin
     
-    // Media elements (video/audio) may send null or missing origin in file:// context.
     if (requestOrigin && requestOrigin !== appOrigin && requestOrigin !== 'null') {
       res.writeHead(403)
       res.end('Unauthorized origin')
       return
     }
 
-    // CORS pre-flight
-    // Use the actual requestOrigin to satisfy CORS constraints, fallback to '*' or appOrigin.
     const corsOrigin = requestOrigin && requestOrigin !== 'null' ? requestOrigin : '*'
     res.setHeader('Access-Control-Allow-Origin', corsOrigin)
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
@@ -714,7 +305,6 @@ function startMediaStreamingServer(): void {
         return
       }
 
-      // Normalize to resolve any '..' traversal attempts, then validate
       const filePath = path.normalize(rawFilePath)
       if (!path.isAbsolute(filePath)) {
         res.writeHead(400)
@@ -741,8 +331,6 @@ function startMediaStreamingServer(): void {
       const rangeHeader = req.headers['range']
 
       if (rangeHeader) {
-        // ── 206 Partial Content ─────────────────────────────────────────
-        // Required for seeking, scrubbing, and proper duration detection.
         const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
         const start = match ? parseInt(match[1], 10) : 0
         const end   = (match && match[2]) ? parseInt(match[2], 10) : fileSize - 1
@@ -760,7 +348,6 @@ function startMediaStreamingServer(): void {
         req.on('aborted', () => stream206.destroy())
         stream206.pipe(res)
       } else {
-        // ── 200 Full Response ────────────────────────────────────
         res.writeHead(200, {
           'Content-Length': fileSize,
           'Content-Type':   contentType,
@@ -784,11 +371,6 @@ function startMediaStreamingServer(): void {
     }
   })
 
-  /**
-   * Attempt to listen on MEDIA_SERVER_PORT. If the port is already in use
-   * (EADDRINUSE), automatically try the next port up to MEDIA_SERVER_PORT_MAX_TRIES
-   * attempts before giving up.
-   */
   let attempt = 0
 
   const tryListen = (port: number) => {
@@ -802,7 +384,7 @@ function startMediaStreamingServer(): void {
       const nextPort = MEDIA_SERVER_PORT_BASE + attempt
       if (attempt < MEDIA_SERVER_PORT_MAX_TRIES) {
         log.warn(`[MediaServer] Port ${MEDIA_SERVER_PORT} in use, trying ${nextPort}…`)
-        server.close() // Release before retrying
+        server.close()
         tryListen(nextPort)
       } else {
         log.error(`[MediaServer] All ports ${MEDIA_SERVER_PORT_BASE}–${nextPort} are in use. Media server could not start.`)
@@ -820,11 +402,12 @@ function startMediaStreamingServer(): void {
   tryListen(MEDIA_SERVER_PORT)
 }
 
+const gotTheLock = app.requestSingleInstanceLock()
+
 if (!gotTheLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    // Someone tried to run a second instance, we should focus our window.
     if (win) {
       if (win.isMinimized()) win.restore()
       if (!win.isVisible()) win.show()
@@ -832,9 +415,6 @@ if (!gotTheLock) {
     }
   })
 
-  // Quit when all windows are closed, except on macOS. There, it's common
-  // for applications and their menu bar to stay active until the user quits
-  // explicitly with Cmd + Q.
   app.on('before-quit', () => {
     isQuitting = true
     downloads?.flushPendingSave()
@@ -853,11 +433,19 @@ if (!gotTheLock) {
     }
   })
 
-  // Non-Blocking Initialization
+  // Register all IPC Handlers exactly once before app gets ready
+  registerIpcHandlers({
+    getWin: () => win,
+    getDownloads: () => downloads,
+    getAutoUpdater: () => autoUpdater,
+    getMediaPort: () => MEDIA_SERVER_PORT,
+    serviceReadyPromise
+  })
+
   app.whenReady().then(async () => {
     startMediaStreamingServer()
     createWindow()
-    if (!tray) createTray()
+    initTray()
 
     setTimeout(() => {
       loadBackendServices().catch((err) => {

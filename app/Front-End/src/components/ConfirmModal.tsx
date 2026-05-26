@@ -1,6 +1,6 @@
 import React from 'react'
 import { AlertTriangle, X } from 'lucide-react'
-import './App.css'
+import '../App.css'
 
 interface ConfirmModalProps {
   isOpen: boolean
