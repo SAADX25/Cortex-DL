@@ -1,5 +1,5 @@
 import React from 'react'
-import { RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react'
+import { RefreshCw, AlertTriangle, ShieldAlert, FolderOpen, X, Info } from 'lucide-react'
 import { Language, translations } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 
@@ -12,6 +12,9 @@ interface SettingsTabProps {
   onResetStats: () => void
   useInAppPlayer: boolean
   setUseInAppPlayer: (val: boolean) => void
+  cookieFilePath: string | null
+  onSelectCookieFile: () => void
+  onClearCookieFile: () => void
   concurrentDownloads: number
   setConcurrentDownloads: (val: number) => void
   updateStatus: any
@@ -30,6 +33,9 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   onResetStats,
   useInAppPlayer,
   setUseInAppPlayer,
+  cookieFilePath,
+  onSelectCookieFile,
+  onClearCookieFile,
   concurrentDownloads,
   setConcurrentDownloads,
   updateStatus,
@@ -41,6 +47,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   onUninstall,
 }) => {
   const t = translations[lang]
+
+  // Derive a short display name from the full path
+  const cookieFileName = cookieFilePath
+    ? cookieFilePath.split(/[\\/]/).pop() ?? cookieFilePath
+    : null
 
   return (
     <div className="tab-content fade-in centered-layout">
@@ -67,6 +78,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         <div className="settings-section">
           <h3 className="section-header">{t.settings_general}</h3>
 
+          {/* Language */}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.language_label}</span>
@@ -90,6 +102,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
+          {/* In-App Player */}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.use_inapp_player}</span>
@@ -109,6 +122,118 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
+          {/* ── YouTube Authentication (cookies.txt) ── */}
+          <div className="minimal-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+              <div className="row-info" style={{ flex: 1 }}>
+                <span className="row-title">{t.youtube_auth_title}</span>
+
+                {/* Helper blurb */}
+                <span className="row-subtitle" style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '4px' }}>
+                  <Info size={13} style={{ flexShrink: 0, marginTop: '2px', color: '#64748b' }} />
+                  <span>{t.youtube_auth_desc}</span>
+                </span>
+              </div>
+
+              {/* Action button */}
+              <div className="row-control" style={{ flexShrink: 0 }}>
+                <button
+                  className="btn-ghost-primary"
+                  onClick={onSelectCookieFile}
+                  id="select-cookie-file-btn"
+                  title={t.youtube_auth_select_btn}
+                >
+                  <FolderOpen size={16} />
+                  <span>{t.youtube_auth_select_btn}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Selected file display */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: cookieFilePath
+                  ? 'rgba(34, 197, 94, 0.07)'
+                  : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${cookieFilePath ? 'rgba(34, 197, 94, 0.25)' : 'rgba(255,255,255,0.07)'}`,
+                transition: 'all 0.25s ease',
+              }}
+            >
+              {cookieFilePath ? (
+                <>
+                  {/* Green dot indicator */}
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: '#22c55e',
+                      flexShrink: 0,
+                      boxShadow: '0 0 6px rgba(34,197,94,0.6)',
+                    }}
+                  />
+                  <span
+                    style={{
+                      flex: 1,
+                      fontSize: '0.82rem',
+                      color: '#94a3b8',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'monospace',
+                      letterSpacing: '0.01em',
+                    }}
+                    title={cookieFilePath}
+                  >
+                    {cookieFileName}
+                  </span>
+                  <button
+                    onClick={onClearCookieFile}
+                    title={t.youtube_auth_clear_btn}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#ef4444',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '2px',
+                      borderRadius: '4px',
+                      opacity: 0.7,
+                      transition: 'opacity 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: '#475569',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: '0.82rem', color: '#475569' }}>
+                    {t.youtube_auth_no_file}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Concurrent Downloads */}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.concurrent_title}</span>
@@ -134,6 +259,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
+          {/* Check for Updates */}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.check_for_updates}</span>
@@ -164,6 +290,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
+          {/* Engine (yt-dlp) */}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">Engine (yt-dlp)</span>
@@ -192,7 +319,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           <div className="about-minimal">
             <p className="about-row"><strong>Cortex DL</strong> v{__APP_VERSION__}</p>
             <p className="about-row">{t.settings_developed_by} SAADX25</p>
-            <p className="about-row muted">{t.settings_powered_by} yt-dlp & FFmpeg</p>
+            <p className="about-row muted">{t.settings_powered_by} yt-dlp &amp; FFmpeg</p>
           </div>
         </div>
 

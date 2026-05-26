@@ -6,7 +6,7 @@ import { existsSync, createWriteStream } from 'node:fs'
 import { get } from 'node:https'
 import { chmodSync } from 'node:fs'
 import { unlink, rename, stat } from 'node:fs/promises'
-import { getBinaryPath, getBinDirectory, getCookiesPath } from './paths'
+import { getBinaryPath, getBinDirectory } from './paths'
 
 // In-Memory Analysis Cache (5-min TTL)
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
@@ -363,7 +363,7 @@ export function getJsRuntimeArgs(): string[] {
   return ['--js-runtimes', `node:${process.execPath}`]
 }
 
-export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile?: string): Promise<AnalyzeResult> {
+export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
   // ── Cache check: return instantly if we analyzed this URL recently ──
   const cached = getCachedAnalysis(url)
   if (cached) return cached
@@ -393,17 +393,6 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
     }
 
     args.push(...getJsRuntimeArgs())
-
-    // Cookie Logic: Prioritize manual cookie file in root, then passed cookieFile, then browser
-    const globalCookies = getCookiesPath()
-    if (globalCookies) {
-      log.info(`[ytdlp Analysis] Using global cookies from: ${globalCookies}`)
-      args.push('--cookies', globalCookies)
-    } else if (cookieFile) {
-      args.push('--cookies', cookieFile)
-    } else if (browser && browser !== 'none') {
-      args.push('--cookies-from-browser', browser)
-    }
 
     args.push(url)
 
@@ -440,16 +429,7 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
         log.error('yt-dlp analysis failed:', stderr)
         // Check for common YouTube bot/login blocks
         if (isYouTubeUrl(url) && (stderr.includes('Sign in to confirm you') || stderr.includes('not a bot'))) {
-          const hasCookies = !!getCookiesPath()
-          if (hasCookies) {
-            reject(new Error('يوتيوب يطلب تسجيل دخول رغم وجود ملف cookies.txt. قد تكون الكوكيز منتهية الصلاحية.'))
-          } else {
-            reject(new Error('يوتيوب يطلب تسجيل دخول أو كابتشا (Bot Detection). الحل: ضع ملف "cookies.txt" في مجلد البرنامج أو اختر متصفحك من الإعدادات.'))
-          }
-          return
-        }
-        if (stderr.includes('Could not copy Chrome cookie database') || stderr.includes('database is locked')) {
-          reject(new Error('خطأ: المتصفح مفتوح وقاعدة البيانات مقفلة. الحل: أغلق المتصفح تماماً، أو الأفضل استخدم ملف "cookies.txt" لتجنب هذه المشكلة.'))
+          reject(new Error('YouTube requires login or CAPTCHA. Start the download and follow the device-code prompt in Settings.'))
           return
         }
         resolve({ kind: 'unknown' })
@@ -565,8 +545,6 @@ export async function analyzeWithYtdlp(url: string, browser?: string, cookieFile
  */
 export async function getDirectStreamUrl(
   url: string,
-  browser?: string,
-  cookieFile?: string,
 ): Promise<string> {
   const TIMEOUT_MS = 30_000 // 30 seconds — extraction can be slow
 
@@ -599,16 +577,6 @@ export async function getDirectStreamUrl(
     ]
 
     args.push(...getJsRuntimeArgs())
-
-    // Cookie logic: same priority as analyzeWithYtdlp
-    const globalCookies = getCookiesPath()
-    if (globalCookies) {
-      args.push('--cookies', globalCookies)
-    } else if (cookieFile) {
-      args.push('--cookies', cookieFile)
-    } else if (browser && browser !== 'none') {
-      args.push('--cookies-from-browser', browser)
-    }
 
     args.push(url)
 

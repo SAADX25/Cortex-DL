@@ -12,7 +12,7 @@ import type {
   DownloadTask, TaskRuntime, StartInput, EngineContext,
   DownloadEngine,
 } from './types'
-import { STATS_CHANNEL } from './types'
+import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL } from './types'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
@@ -272,8 +272,6 @@ export class DownloadManager {
       updatedAtMs: now,
       title: input.title,
       thumbnail: input.thumbnail,
-      cookieBrowser: input.cookieBrowser,
-      cookieFile: input.cookieFile,
       username: input.username,
       password: input.password,
       speedLimit: input.speedLimit,
@@ -337,8 +335,6 @@ export class DownloadManager {
         updatedAtMs: now,
         title: input.title,
         thumbnail: input.thumbnail,
-        cookieBrowser: input.cookieBrowser,
-        cookieFile: input.cookieFile,
         username: input.username,
         password: input.password,
         speedLimit: input.speedLimit,
@@ -564,6 +560,11 @@ export class DownloadManager {
           this.win.webContents.send(STATS_CHANNEL, { id, addedBytes })
         }
       },
+      sendYouTubeOAuthCode: (payload) => {
+        if (this.win && !this.win.isDestroyed()) {
+          this.win.webContents.send(YOUTUBE_OAUTH_CHANNEL, payload)
+        }
+      },
     }
   }
 
@@ -634,4 +635,3 @@ export class DownloadManager {
     }
   }
 }
-

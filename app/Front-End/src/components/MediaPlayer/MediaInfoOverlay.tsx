@@ -12,7 +12,7 @@ interface MediaInfoProps {
   taskFps?: number | string;
 }
 
-export function MediaInfoOverlay({ title: _title, filePath, videoWidth, videoHeight, mediaType, showOverlay, toggleOverlay, taskFps }: MediaInfoProps) {
+export function MediaInfoOverlay({ filePath, videoWidth, videoHeight, mediaType, showOverlay, toggleOverlay, taskFps }: MediaInfoProps) {
   const extension = filePath.split('.').pop()?.toUpperCase() || 'UNKNOWN';
   const [fps, setFps] = useState<number | string | null>(taskFps || null);
 

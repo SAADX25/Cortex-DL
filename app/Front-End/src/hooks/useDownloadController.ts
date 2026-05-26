@@ -47,8 +47,6 @@ function isYtdlpUrl(url: string): boolean {
 // Dependencies
 
 export interface DownloadControllerDeps {
-  cookieBrowser: string
-  cookieFile: string | null
   username: string
   password: string
   useInAppPlayer: boolean
@@ -59,7 +57,7 @@ export interface DownloadControllerDeps {
 // Hook
 
 export function useDownloadController({
-  cookieBrowser, cookieFile, username, password,
+  username, password,
   useInAppPlayer, setModalConfig, t,
 }: DownloadControllerDeps) {
   // ── Constants ──
@@ -221,7 +219,7 @@ export function useDownloadController({
     setUrl(urlToAnalyze)
 
     try {
-      const result = await window.cortexDl.analyzeUrl(urlToAnalyze.trim(), cookieBrowser)
+      const result = await window.cortexDl.analyzeUrl(urlToAnalyze.trim())
       
       // NEW: Add default selected state to playlist items
       if (result.kind === 'playlist') {
@@ -336,7 +334,7 @@ export function useDownloadController({
 
   async function fetchMetadataForBatchItem(id: string, urlToAnalyze: string) {
     try {
-      const res = await window.cortexDl.analyzeUrl(urlToAnalyze, cookieBrowser)
+      const res = await window.cortexDl.analyzeUrl(urlToAnalyze)
       const newTitle = res && 'title' in res ? res.title : undefined
       const newThumb = res && 'thumbnail' in res ? (res as { thumbnail?: string }).thumbnail : undefined
       setBatchItems((prev) => prev.map(b => b.id === id ? { ...b, title: newTitle ?? b.title ?? undefined, thumbnail: newThumb ?? b.thumbnail ?? undefined, loading: false } : b))
@@ -373,8 +371,6 @@ export function useDownloadController({
           ytdlpFormatId: item.quality ? String(item.quality).replace('raw:', '') : undefined,
           title: item.title || undefined,
           thumbnail: item.thumbnail || undefined,
-          cookieBrowser,
-          cookieFile: cookieFile || undefined,
           username: username || undefined,
           password: password || undefined,
           speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,
@@ -426,8 +422,6 @@ export function useDownloadController({
           ytdlpFormatId: selectedYtdlpFormatId || selectedQuality || undefined,
           title: pItem.title || undefined,
           thumbnail: pItem.thumbnail || undefined,
-          cookieBrowser,
-          cookieFile: cookieFile || undefined,
           username: username || undefined,
           password: password || undefined,
           speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,
@@ -442,7 +436,7 @@ export function useDownloadController({
       } else {
         const trimmed = url.trim()
         if (!trimmed) return
-        let engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
+        const engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
         
         let downloadUrl = trimmed
         if (analyzeResult.kind === 'hls-media') downloadUrl = analyzeResult.url
@@ -458,8 +452,6 @@ export function useDownloadController({
           ytdlpFormatId: selectedYtdlpFormatId || selectedQuality || undefined,
           title: analyzeResult.kind === 'ytdlp' ? analyzeResult.title : undefined,
           thumbnail: analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined,
-          cookieBrowser,
-          cookieFile: cookieFile || undefined,
           username: username || undefined,
           password: password || undefined,
           speedLimit: speedLimit !== 'auto' ? speedLimit : undefined,

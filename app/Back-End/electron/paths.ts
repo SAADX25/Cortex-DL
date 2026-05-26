@@ -2,7 +2,7 @@
  *  Paths — Binary and resource path resolution for dev and production.
  *
  *  Used by every engine module and the analysis layer.
- *  Eliminates the duplicated getBinaryPath / getCookiesPath functions
+ *  Eliminates duplicated binary path resolution
  *  that were scattered across downloadManager.ts and ytdlp.ts.
  */
 import { app } from 'electron'
@@ -32,19 +32,4 @@ export function getBinDirectory(): string {
     return path.join(root, 'bin')
   }
   return path.join(process.resourcesPath, 'bin')
-}
-
-export function getCookiesPath(): string | null {
-  const fileName = 'cookies.txt'
-  let cookiesPath: string
-  if (isDev) {
-    const root = process.env.APP_ROOT || process.cwd()
-    cookiesPath = path.join(root, fileName)
-    if (!existsSync(cookiesPath)) {
-      cookiesPath = path.join(process.cwd(), fileName)
-    }
-  } else {
-    cookiesPath = path.join(process.resourcesPath, fileName)
-  }
-  return existsSync(cookiesPath) ? cookiesPath : null
 }

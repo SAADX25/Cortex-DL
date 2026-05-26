@@ -217,6 +217,9 @@ function App() {
             onResetStats={ctrl.onResetStats}
             useInAppPlayer={ctrl.useInAppPlayer}
             setUseInAppPlayer={ctrl.setUseInAppPlayer}
+            cookieFilePath={ctrl.cookieFilePath}
+            onSelectCookieFile={ctrl.onSelectCookieFile}
+            onClearCookieFile={ctrl.onClearCookieFile}
             concurrentDownloads={ctrl.concurrentDownloads}
             setConcurrentDownloads={ctrl.setConcurrentDownloads}
             updateStatus={ctrl.updateStatus}

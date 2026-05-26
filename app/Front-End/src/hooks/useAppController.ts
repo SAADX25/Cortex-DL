@@ -51,8 +51,6 @@ export function useAppController() {
   const settings = useSettingsController({ setModalConfig })
 
   const downloads = useDownloadController({
-    cookieBrowser: settings.cookieBrowser,
-    cookieFile: settings.cookieFile,
     username: settings.username,
     password: settings.password,
     useInAppPlayer: settings.useInAppPlayer,
@@ -96,6 +94,7 @@ export function useAppController() {
 
     // Settings / engine
     useInAppPlayer: settings.useInAppPlayer, setUseInAppPlayer: settings.setUseInAppPlayer,
+    cookieFilePath: settings.cookieFilePath,
     concurrentDownloads: settings.concurrentDownloads, setConcurrentDownloads: settings.setConcurrentDownloads,
     totalDownloadedBytes: settings.totalDownloadedBytes,
     updateStatus: settings.updateStatus,
@@ -136,6 +135,8 @@ export function useAppController() {
     // Actions (settings)
     onCheckForUpdates: settings.onCheckForUpdates,
     onUpdateEngine: settings.onUpdateEngine,
+    onSelectCookieFile: settings.onSelectCookieFile,
+    onClearCookieFile: settings.onClearCookieFile,
     onResetStats: settings.onResetStats,
     onRestartAndInstall: settings.onRestartAndInstall,
     onUninstall: settings.onUninstall,

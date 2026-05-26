@@ -28,6 +28,14 @@ export const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'wav', 'm4a', 'ogg', 'flac',
 export const UPDATE_CHANNEL = 'cortexdl:download-updated'
 export const PROGRESS_CHANNEL = 'cortexdl:download-progress'
 export const STATS_CHANNEL = 'cortexdl:download-stats-updated'
+export const YOUTUBE_OAUTH_CHANNEL = 'cortexdl:youtube-oauth-code'
+
+export type YouTubeOAuthCodePayload = {
+  taskId: string
+  url: string
+  code: string
+  message?: string
+}
 
 export type DownloadTask = {
   id: string
@@ -46,8 +54,6 @@ export type DownloadTask = {
   updatedAtMs: number
   title?: string
   thumbnail?: string
-  cookieBrowser?: string
-  cookieFile?: string
   username?: string
   password?: string
   speedLimit?: string

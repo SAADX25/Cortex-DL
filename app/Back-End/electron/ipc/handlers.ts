@@ -84,20 +84,6 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     return result.filePaths[0] ?? null
   })
 
-  ipcMain.handle('cortexdl:select-cookies-file', async () => {
-    const win = getWin()
-    if (!win) return null
-    const result = await dialog.showOpenDialog(win, {
-      properties: ['openFile'],
-      filters: [
-        { name: 'Cookies', extensions: ['txt'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
-    })
-    if (result.canceled) return null
-    return result.filePaths[0] ?? null
-  })
-
   ipcMain.handle('cortexdl:secure-save', (_event, _key: string, value: string) => {
     try {
       if (!safeStorage.isEncryptionAvailable()) {
@@ -267,14 +253,14 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:analyze-url', async (_event, url: string, browser?: string) => {
+  ipcMain.handle('cortexdl:analyze-url', async (_event, url: string) => {
     try {
       const hlsResult = await analyzeUrlForHls(url)
       if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') {
         return hlsResult
       }
       
-      const ytdlpResult = await analyzeWithYtdlp(url, browser)
+      const ytdlpResult = await analyzeWithYtdlp(url)
       if (ytdlpResult.kind !== 'unknown') {
         return ytdlpResult
       }
@@ -286,10 +272,10 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string, browser?: string) => {
+  ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string) => {
     try {
       log.info(`[IPC] get-direct-stream-url called for: ${url.slice(0, 80)}...`)
-      const directUrl = await getDirectStreamUrl(url, browser)
+      const directUrl = await getDirectStreamUrl(url)
       return directUrl
     } catch (err) {
       log.error('[IPC] get-direct-stream-url error:', err)
@@ -349,4 +335,42 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   })
 
   ipcMain.handle('cortexdl:get-media-port', () => getMediaPort())
+
+  ipcMain.handle('cortexdl:select-cookie-file', async () => {
+    const win = getWin()
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Select cookies.txt file',
+      properties: ['openFile'],
+      filters: [{ name: 'Cookies File', extensions: ['txt'] }],
+    })
+    if (result.canceled || !result.filePaths.length) return null
+    return result.filePaths[0] ?? null
+  })
+
+  ipcMain.handle('cortexdl:get-cookie-file', () => {
+    try {
+      const { db } = require('../db') as typeof import('../db')
+      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
+      return row?.value ?? null
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('cortexdl:set-cookie-file', (_event, filePath: string | null) => {
+    try {
+      const { db } = require('../db') as typeof import('../db')
+      db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
+      if (filePath) {
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('cookieFilePath', filePath)
+      } else {
+        db.prepare('DELETE FROM settings WHERE key = ?').run('cookieFilePath')
+      }
+      return true
+    } catch (err) {
+      log.error('[cookies] Failed to persist cookieFilePath:', err)
+      return false
+    }
+  })
 }

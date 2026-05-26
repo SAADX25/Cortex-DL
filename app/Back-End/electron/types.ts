@@ -17,6 +17,7 @@ import type {
   HlsVariant,
   YtdlpFormat,
   AnalyzeResult,
+  YouTubeOAuthCodePayload,
 } from '../../Shared/types'
 
 export type {
@@ -30,8 +31,9 @@ export type {
   HlsVariant,
   YtdlpFormat,
   AnalyzeResult,
+  YouTubeOAuthCodePayload,
 }
-export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
+export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 
 // ── Add-Download Input ───────────────────────────────────────────────────────
 
@@ -45,8 +47,6 @@ export type StartInput = {
   ytdlpFormatId?: string
   title?: string
   thumbnail?: string
-  cookieBrowser?: string
-  cookieFile?: string
   username?: string
   password?: string
   speedLimit?: string
@@ -82,5 +82,6 @@ export interface EngineContext {
   /** Immediate, crash-safe write.  Call on lifecycle transitions only. */
   flushSave: () => void
   sendStats: (id: string, addedBytes: number) => void
+  sendYouTubeOAuthCode: (payload: YouTubeOAuthCodePayload) => void
 }
 

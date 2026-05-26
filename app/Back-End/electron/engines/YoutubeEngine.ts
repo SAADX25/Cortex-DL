@@ -5,7 +5,7 @@ import path from 'node:path'
 import log from 'electron-log'
 import type { DownloadTask, EngineContext, TaskRuntime, AudioFormat, VideoFormat } from '../types'
 import { AUDIO_FORMATS, VIDEO_FORMATS } from '../types'
-import { getBinaryPath, getCookiesPath } from '../paths'
+import { getBinaryPath } from '../paths'
 import { nowMs, sanitizeFilename, getFileSizeIfExists, parseTimeToSeconds, sendNotification, killProcessTree } from '../utils'
 import {
   parseDownloadProgress,
@@ -19,6 +19,16 @@ import type { IEngine } from './IEngine'
 import { getJsRuntimeArgs } from '../ytdlp'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
+
+const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,ios,web_creator,web'
+const YOUTUBE_THROTTLED_RATE = '512K'
+const FFMPEG_TRIM_OUTPUT_ARGS = 'ffmpeg_o:-c copy -movflags +faststart'
+
+interface YtdlpRunResult {
+  exitCode: number
+  detectedFinalPath: string | null
+  stderr: string
+}
 
 export class YoutubeEngine implements IEngine {
   private static updatePromise: Promise<void> | null = null
@@ -39,7 +49,8 @@ export class YoutubeEngine implements IEngine {
     const ffmpegDir = path.dirname(ffmpegPath)
 
     const profile = this.selectProfile(task)
-    const requiresFfmpeg = profile === 'proAudio' || profile === 'bestVideo' || task.targetFormat !== 'webm'
+    const isTrimmedTask = Boolean(task.startTime || task.endTime)
+    const requiresFfmpeg = isTrimmedTask || profile === 'proAudio' || profile === 'bestVideo' || task.targetFormat !== 'webm'
     if (!existsSync(ytDlpPath)) {
       task.status = 'error'
       task.errorMessage = 'yt-dlp binary is missing from the bin directory.'
@@ -75,108 +86,14 @@ export class YoutubeEngine implements IEngine {
       log.warn(`[YoutubeEngine] Metadata prefetch failed for ${task.id}:`, e instanceof Error ? e.message : e)
     })
 
-    // Spawn yt-dlp
     const args = this.buildYtdlpArgs(task, profile, { ffmpegDir })
-    const proc = spawn(ytDlpPath, args, {
-      windowsHide: true,
-      detached: false,
-      env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' },
-    })
-
-    this.childProcess = proc
-    runtime.child = proc
-
-    log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile})`)
-
-    // Progress parsing state
-    const preseedDuration = this.computePreseedDuration(task)
-    const ffmpegState: FfmpegState = { totalDuration: preseedDuration, stderr: '' }
-    let stdoutBuf = ''
-    let stderrBuf = ''
-    let lastUpdateAtMs = 0
-    let detectedFinalPath: string | null = null
-
-    const progressCtx = {
-      sendUpdate: (t: DownloadTask) => context.sendUpdate(t),
-      saveState: () => context.saveState(),
-    }
-
-    const MAX_STDERR_BYTES = 64 * 1024
-
-    proc.stderr.on('data', (data: Buffer) => {
-      const chunk = data.toString()
-      logRawProgressChunk(task.id, 'yt-dlp:stderr', chunk)
-
-      ffmpegState.stderr += chunk
-      if (ffmpegState.stderr.length > MAX_STDERR_BYTES) {
-        ffmpegState.stderr = ffmpegState.stderr.slice(-MAX_STDERR_BYTES)
-      }
-
-      let lines: string[]
-      ;[lines, stderrBuf] = flushLines(stderrBuf, chunk)
-
-      for (const line of lines) {
-        if (!line.trim()) continue
-
-        const ffmpegChanged = parseFfmpegProgress(line, task, ffmpegState)
-        let dlChanged = false
-        if (task.status === 'downloading') dlChanged = parseDownloadProgress(line, task)
-
-        if (ffmpegChanged || dlChanged) {
-          const now = nowMs()
-          if (now - lastUpdateAtMs > 200) {
-            task.updatedAtMs = now
-            lastUpdateAtMs = now
-            context.sendUpdate(task)
-          }
-        }
-
-        const { detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
-        if (detectedPath) detectedFinalPath = detectedPath
-      }
-    })
-
-    proc.stdout.on('data', (data: Buffer) => {
-      const chunk = data.toString()
-      logRawProgressChunk(task.id, 'yt-dlp:stdout', chunk)
-
-      let lines: string[]
-      ;[lines, stdoutBuf] = flushLines(stdoutBuf, chunk)
-
-      let stateChanged = false
-      for (const line of lines) {
-        if (!line.trim()) continue
-
-        const { transitioned, detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
-        if (detectedPath) detectedFinalPath = detectedPath
-        if (transitioned) {
-          stateChanged = true
-          continue
-        }
-
-        if (task.status === 'downloading' && parseDownloadProgress(line, task)) stateChanged = true
-        if (parseFfmpegProgress(line, task, ffmpegState)) stateChanged = true
-      }
-
-      const now = nowMs()
-      if (stateChanged && now - lastUpdateAtMs > 200) {
-        task.updatedAtMs = now
-        lastUpdateAtMs = now
-        context.sendUpdate(task)
-        if (Math.random() < 0.02) context.saveState()
-      }
-    })
-
-    const exitCode: number = await new Promise((resolve) => {
-      proc.on('close', (code) => resolve(code ?? 1))
-      proc.on('error', () => resolve(1))
-    })
+    const runResult = await this.runYtdlpAttempt(task, context, runtime, args, profile)
 
     // If the user paused/canceled, don't overwrite state.
     if (runtime.abortController?.signal.aborted) return
 
     // Find if a valid downloaded file exists at this point
-    let downloadedTempPath: string | null = detectedFinalPath
+    let downloadedTempPath: string | null = runResult.detectedFinalPath
     if (!downloadedTempPath || !existsSync(downloadedTempPath)) {
       try {
         const files = await fsPromises.readdir(task.directory)
@@ -189,19 +106,19 @@ export class YoutubeEngine implements IEngine {
     }
 
     // Treat as success if exit code is 0 OR if we actually produced a file with some reasonable data
-    let isSuccess = exitCode === 0
+    let isSuccess = runResult.exitCode === 0
     if (!isSuccess && downloadedTempPath && existsSync(downloadedTempPath)) {
       const sizeTemp = await getFileSizeIfExists(downloadedTempPath)
       // If we have a file with more than 50KB or download progress indicated > 0, it's likely successfully fetched but ffmpeg gave a warning
       if (sizeTemp > 50 * 1024 || task.downloadedBytes > 0) {
-        log.warn(`[YoutubeEngine] Task ${task.id} exited with ${exitCode} but generated file. Treating as success.`)
+        log.warn(`[YoutubeEngine] Task ${task.id} exited with ${runResult.exitCode} but generated file. Treating as success.`)
         isSuccess = true
       }
     }
 
     if (isSuccess) {
       // Rename/move final output to the orchestrator's expected task.filePath
-      await this.renameDownloaded(task, downloadedTempPath || detectedFinalPath)
+      await this.renameDownloaded(task, downloadedTempPath || runResult.detectedFinalPath)
 
       task.status = 'completed'
       task.updatedAtMs = nowMs()
@@ -221,8 +138,8 @@ export class YoutubeEngine implements IEngine {
     }
 
     // Error path: build message from captured stderr
-    const finalMessage = this.buildErrorMessage(ffmpegState.stderr)
-    log.error(`[YoutubeEngine] Task ${task.id} exited with code ${exitCode}: ${finalMessage}`)
+    const finalMessage = this.buildErrorMessage(runResult.stderr)
+    log.error(`[YoutubeEngine] Task ${task.id} exited with code ${runResult.exitCode}: ${finalMessage}`)
 
     // Retry with exponential backoff (common for bot/network disconnects)
     const MAX_RETRIES = 5
@@ -360,21 +277,127 @@ export class YoutubeEngine implements IEngine {
     context.sendUpdate(task)
   }
 
+  private async runYtdlpAttempt(
+    task: DownloadTask,
+    context: EngineContext,
+    runtime: TaskRuntime,
+    args: string[],
+    profile: Profile,
+  ): Promise<YtdlpRunResult> {
+    const proc = spawn(getBinaryPath('yt-dlp'), args, {
+      windowsHide: true,
+      detached: false,
+      env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' },
+    })
+
+    this.childProcess = proc
+    runtime.child = proc
+
+    log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile})`)
+
+    const preseedDuration = this.computePreseedDuration(task)
+    const ffmpegState: FfmpegState = { totalDuration: preseedDuration, stderr: '' }
+    let stdoutBuf = ''
+    let stderrBuf = ''
+    let lastUpdateAtMs = 0
+    let detectedFinalPath: string | null = null
+
+    const progressCtx = {
+      sendUpdate: (t: DownloadTask) => context.sendUpdate(t),
+      saveState: () => context.saveState(),
+    }
+
+    const MAX_STDERR_BYTES = 64 * 1024
+
+    proc.stderr.on('data', (data: Buffer) => {
+      const chunk = data.toString()
+      logRawProgressChunk(task.id, 'yt-dlp:stderr', chunk)
+
+      ffmpegState.stderr += chunk
+      if (ffmpegState.stderr.length > MAX_STDERR_BYTES) {
+        ffmpegState.stderr = ffmpegState.stderr.slice(-MAX_STDERR_BYTES)
+      }
+
+      let lines: string[]
+      ;[lines, stderrBuf] = flushLines(stderrBuf, chunk)
+
+      for (const line of lines) {
+        if (!line.trim()) continue
+
+        const ffmpegChanged = parseFfmpegProgress(line, task, ffmpegState)
+        let dlChanged = false
+        if (task.status === 'downloading') dlChanged = parseDownloadProgress(line, task)
+
+        if (ffmpegChanged || dlChanged) {
+          const now = nowMs()
+          if (now - lastUpdateAtMs > 200) {
+            task.updatedAtMs = now
+            lastUpdateAtMs = now
+            context.sendUpdate(task)
+          }
+        }
+
+        const { detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
+        if (detectedPath) detectedFinalPath = detectedPath
+      }
+    })
+
+    proc.stdout.on('data', (data: Buffer) => {
+      const chunk = data.toString()
+      logRawProgressChunk(task.id, 'yt-dlp:stdout', chunk)
+
+      let lines: string[]
+      ;[lines, stdoutBuf] = flushLines(stdoutBuf, chunk)
+
+      let stateChanged = false
+      for (const line of lines) {
+        if (!line.trim()) continue
+
+        const { transitioned, detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
+        if (detectedPath) detectedFinalPath = detectedPath
+        if (transitioned) {
+          stateChanged = true
+          continue
+        }
+
+        if (task.status === 'downloading' && parseDownloadProgress(line, task)) stateChanged = true
+        if (parseFfmpegProgress(line, task, ffmpegState)) stateChanged = true
+      }
+
+      const now = nowMs()
+      if (stateChanged && now - lastUpdateAtMs > 200) {
+        task.updatedAtMs = now
+        lastUpdateAtMs = now
+        context.sendUpdate(task)
+        if (Math.random() < 0.02) context.saveState()
+      }
+    })
+
+    const exitCode: number = await new Promise((resolve) => {
+      proc.on('close', (code) => resolve(code ?? 1))
+      proc.on('error', () => resolve(1))
+    })
+
+    return { exitCode, detectedFinalPath, stderr: ffmpegState.stderr }
+  }
+
+  private isYouTubeUrl(url: string): boolean {
+    const low = url.toLowerCase()
+    return low.includes('youtube.com') || low.includes('youtu.be')
+  }
+
   private buildAuthArgs(task: DownloadTask): string[] {
     const args: string[] = []
-    const cookiesPath = getCookiesPath()
 
-    // Authentication / cookies
+    // Cookie-based auth: use --cookies if the user has provided a cookies.txt file.
+    const cookiePath = this.getCookieFilePath()
+    if (cookiePath && existsSync(cookiePath)) {
+      args.push('--cookies', cookiePath)
+    }
+
+    // Basic auth (username/password) — still honoured for non-YouTube sites.
     if (task.username) args.push('--username', task.username)
     if (task.password) args.push('--password', task.password)
-
-    if (task.cookieFile) {
-      args.push('--cookies', task.cookieFile)
-    } else if (cookiesPath) {
-      args.push('--cookies', cookiesPath)
-    } else if (task.cookieBrowser && task.cookieBrowser !== 'none') {
-      args.push('--cookies-from-browser', task.cookieBrowser)
-    }
 
     if (task.speedLimit && task.speedLimit !== 'auto') args.push('--limit-rate', task.speedLimit)
 
@@ -383,12 +406,22 @@ export class YoutubeEngine implements IEngine {
       const start = task.startTime || '00:00:00'
       const end = task.endTime || 'inf'
       args.push('--download-sections', `*${start}-${end}`)
-      args.push('--force-keyframes-at-cuts')
-      // Force Chromium compatibility: clean AAC audio and faststart
-      args.push('--downloader-args', 'ffmpeg:-c:v copy -c:a aac -movflags +faststart')
+      args.push('--no-force-keyframes-at-cuts')
+      args.push('--downloader', 'ffmpeg')
+      args.push('--downloader-args', FFMPEG_TRIM_OUTPUT_ARGS)
     }
 
     return args
+  }
+
+  private getCookieFilePath(): string | null {
+    try {
+      const { db } = require('../db') as typeof import('../db')
+      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
+      return row?.value ?? null
+    } catch {
+      return null
+    }
   }
 
   private buildYtdlpArgs(
@@ -406,6 +439,8 @@ export class YoutubeEngine implements IEngine {
       '--force-ipv4',
       '--no-warnings',
       '--force-overwrites',
+      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
+      '--throttled-rate', YOUTUBE_THROTTLED_RATE,
       '--progress-template', 'download:CORTEX_DL:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s:%(progress.speed)s',
       '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
       '--resize-buffer',
@@ -419,7 +454,13 @@ export class YoutubeEngine implements IEngine {
     ]
 
     if (task.targetFormat === 'mp4') {
-      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 0 -c:a aac -movflags +faststart')
+      const isTrimmedTask = Boolean(task.startTime || task.endTime)
+      ytArgs.push(
+        '--postprocessor-args',
+        isTrimmedTask
+          ? 'ffmpeg:-y -threads 0 -c copy -movflags +faststart'
+          : 'ffmpeg:-y -threads 0 -c:a aac -movflags +faststart'
+      )
     } else {
       ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 0')
     }

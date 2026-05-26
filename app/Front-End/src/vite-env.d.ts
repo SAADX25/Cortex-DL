@@ -43,16 +43,16 @@ declare global {
     | { kind: 'direct' }
     | { kind: 'hls-media'; url: string }
     | { kind: 'hls-master'; variants: HlsVariant[] }
-    | { 
-        kind: 'ytdlp'; 
-        title: string; 
-        thumbnail?: string; 
-        formats: YtdlpFormat[];
-        views?: number;
-        likes?: number;
-        dislikes?: number;
-        duration?: number;
-        comments?: { author: string; text: string; likeCount: number }[];
+    | {
+        kind: 'ytdlp'
+        title: string
+        thumbnail?: string
+        formats: YtdlpFormat[]
+        views?: number
+        likes?: number
+        dislikes?: number
+        duration?: number
+        comments?: { author: string; text: string; likeCount: number }[]
       }
     | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
 
@@ -83,7 +83,6 @@ declare global {
 
       // ── File / folder dialogs ──
       selectFolder: () => Promise<string | null>
-      selectCookiesFile: () => Promise<string | null>
 
       // ── Comments extraction ──
       downloadComments: (url: string) => Promise<DownloadCommentsResult>
@@ -91,45 +90,41 @@ declare global {
       onCommentsProgress: (callback: (current: number, total: number) => void) => () => void
 
       // ── URL analysis ──
-      analyzeUrl: (url: string, browser?: string) => Promise<AnalyzeResult>
+      analyzeUrl: (url: string) => Promise<AnalyzeResult>
 
       // ── Download CRUD ──
       listDownloads: () => Promise<DownloadTask[]>
-      addDownload: (input: { 
-        url: string; 
-        directory: string; 
-        subfolderName?: string;
-        filename?: string; 
-        engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'; 
-        targetFormat?: TargetFormat; 
-        ytdlpFormatId?: string; 
-        title?: string; 
-        thumbnail?: string; 
-        cookieBrowser?: string;
-        cookieFile?: string;
-        username?: string;
-        password?: string;
-        speedLimit?: string;
-        startTime?: string;
-        endTime?: string;
+      addDownload: (input: {
+        url: string
+        directory: string
+        subfolderName?: string
+        filename?: string
+        engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
+        targetFormat?: TargetFormat
+        ytdlpFormatId?: string
+        title?: string
+        thumbnail?: string
+        username?: string
+        password?: string
+        speedLimit?: string
+        startTime?: string
+        endTime?: string
       }) => Promise<DownloadTask>
-      addBatchDownloads: (inputs: { 
-        url: string; 
-        directory: string; 
-        subfolderName?: string; 
-        filename?: string; 
-        engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'; 
-        targetFormat?: TargetFormat; 
-        ytdlpFormatId?: string; 
-        title?: string; 
-        thumbnail?: string; 
-        cookieBrowser?: string;
-        cookieFile?: string;
-        username?: string;
-        password?: string;
-        speedLimit?: string;
-        startTime?: string;
-        endTime?: string;
+      addBatchDownloads: (inputs: {
+        url: string
+        directory: string
+        subfolderName?: string
+        filename?: string
+        engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
+        targetFormat?: TargetFormat
+        ytdlpFormatId?: string
+        title?: string
+        thumbnail?: string
+        username?: string
+        password?: string
+        speedLimit?: string
+        startTime?: string
+        endTime?: string
       }[]) => Promise<DownloadTask[]>
       pauseDownload: (id: string) => Promise<DownloadTask>
       resumeDownload: (id: string) => Promise<DownloadTask>
@@ -160,7 +155,12 @@ declare global {
       getMediaPort: () => Promise<number>
       fetchThumbnail: (url: string) => Promise<string>
       getMediaFps: (filePath: string) => Promise<number | null>
-      getDirectStreamUrl: (url: string, browser?: string) => Promise<string>
+      getDirectStreamUrl: (url: string) => Promise<string>
+
+      // ── Cookie file (YouTube authentication) ──
+      selectCookieFile: () => Promise<string | null>
+      getCookieFile: () => Promise<string | null>
+      setCookieFile: (filePath: string | null) => Promise<boolean>
 
       // ── IPC event listeners (return dispose functions) ──
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void

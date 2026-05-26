@@ -135,6 +135,11 @@ export interface Translations {
   settings_cancel: string;
   use_inapp_player: string;
   use_inapp_player_desc: string;
+  youtube_auth_title: string;
+  youtube_auth_desc: string;
+  youtube_auth_select_btn: string;
+  youtube_auth_no_file: string;
+  youtube_auth_clear_btn: string;
   paste_and_go: string;
   btn_video: string;
   btn_audio: string;
@@ -279,6 +284,11 @@ export const translations: Record<Language, Translations> = {
     settings_cancel: "إلغاء",
     use_inapp_player: "مشغل وسائط مدمج",
     use_inapp_player_desc: "تشغيل الفيديو والصوت داخل التطبيق بدلاً من المشغل الافتراضي",
+    youtube_auth_title: "تفويض يوتيوب (Cookies)",
+    youtube_auth_desc: "لتفعيل التنزيل بسرعة عالية، ثبّت إضافة 'Get cookies.txt LOCALLY' في متصفحك، صدّر الملف من يوتيوب، ثم اختره هنا.",
+    youtube_auth_select_btn: "اختر ملف cookies.txt",
+    youtube_auth_no_file: "لم يتم اختيار ملف بعد",
+    youtube_auth_clear_btn: "إزالة الملف",
     paste_and_go: "لصق وانطلاق",
     btn_video: "فيديو",
     btn_audio: "صوت",
@@ -419,6 +429,11 @@ export const translations: Record<Language, Translations> = {
     settings_cancel: "Cancel",
     use_inapp_player: "In-App Media Player",
     use_inapp_player_desc: "Play videos and audio inside the app instead of system default",
+    youtube_auth_title: "YouTube Authentication",
+    youtube_auth_desc: "To enable high-speed downloads, install the 'Get cookies.txt LOCALLY' extension in your browser, export the file from YouTube, then select it here.",
+    youtube_auth_select_btn: "Select cookies.txt File",
+    youtube_auth_no_file: "No file selected",
+    youtube_auth_clear_btn: "Remove File",
     paste_and_go: "Paste & Go",
     btn_video: "Video",
     btn_audio: "Audio",

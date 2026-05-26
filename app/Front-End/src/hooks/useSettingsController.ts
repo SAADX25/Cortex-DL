@@ -6,7 +6,7 @@
  *  ─ Engine status polling, version, and updates
  *  ─ App auto-update listener
  *  ─ Secure credentials (username/password)
- *  ─ Cookie state (browser, file)
+ *  ─ Cookie-file path for YouTube authentication
  *  ─ In-app player preference
  *  ─ Download stats tracking (totalDownloadedBytes)
  *  ─ localStorage syncs for all settings
@@ -37,10 +37,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   const [updateStatus, setUpdateStatus] = useState<{ status: string; percent?: number; error?: string } | null>(null)
   const [engineVersion, setEngineVersion] = useState<string>('...')
   const [engineUpdateStatus, setEngineUpdateStatus] = useState<{ updating: boolean; message?: string; success?: boolean } | null>(null)
-
-  // ── Cookie state ──
-  const [cookieBrowser] = useState<string>(() => localStorage.getItem('cortex-cookie-browser') || 'none')
-  const [cookieFile] = useState<string | null>(() => localStorage.getItem('cortex-cookie-file'))
+  const [cookieFilePath, setCookieFilePath] = useState<string | null>(null)
 
   // ── Credentials ──
   const [username, setUsername] = useState<string>('')
@@ -78,11 +75,6 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   }, [])
 
   // localStorage syncs
-  useEffect(() => { localStorage.setItem('cortex-cookie-browser', cookieBrowser) }, [cookieBrowser])
-  useEffect(() => {
-    if (cookieFile) localStorage.setItem('cortex-cookie-file', cookieFile)
-    else localStorage.removeItem('cortex-cookie-file')
-  }, [cookieFile])
   useEffect(() => { localStorage.setItem('cortex-notifications', String(notificationsEnabled)) }, [notificationsEnabled])
   useEffect(() => {
     localStorage.setItem('cortex-concurrent', String(concurrentDownloads))
@@ -92,6 +84,14 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     const timer = setTimeout(() => localStorage.setItem('cortex-total-bytes', String(totalDownloadedBytes)), 1000)
     return () => clearTimeout(timer)
   }, [totalDownloadedBytes])
+
+  useEffect(() => {
+    if (window.cortexDl?.getCookieFile) {
+      window.cortexDl.getCookieFile().then((path) => {
+        if (path) setCookieFilePath(path)
+      }).catch(() => {})
+    }
+  }, [])
 
   // Secure credentials
   useEffect(() => {
@@ -146,6 +146,27 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     }
   }
 
+  const onSelectCookieFile = async () => {
+    try {
+      const filePath = await window.cortexDl.selectCookieFile()
+      if (filePath) {
+        setCookieFilePath(filePath)
+        await window.cortexDl.setCookieFile(filePath)
+      }
+    } catch (err) {
+      console.error('Failed to select cookie file:', err)
+    }
+  }
+
+  const onClearCookieFile = async () => {
+    try {
+      setCookieFilePath(null)
+      await window.cortexDl.setCookieFile(null)
+    } catch (err) {
+      console.error('Failed to clear cookie file:', err)
+    }
+  }
+
   const onResetStats = () => {
     setModalConfig({
       isOpen: true,
@@ -190,6 +211,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
 
     // Settings state
     useInAppPlayer, setUseInAppPlayer,
+    cookieFilePath,
     concurrentDownloads, setConcurrentDownloads,
     totalDownloadedBytes,
     updateStatus,
@@ -197,14 +219,14 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     engineUpdateStatus,
 
     // Auth (consumed by download controller via composition shell)
-    cookieBrowser,
-    cookieFile,
     username,
     password,
 
     // Actions
     onCheckForUpdates,
     onUpdateEngine,
+    onSelectCookieFile,
+    onClearCookieFile,
     onResetStats,
     onRestartAndInstall,
     onUninstall,
