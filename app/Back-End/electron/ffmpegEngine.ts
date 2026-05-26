@@ -17,7 +17,7 @@ import type { DownloadTask, TaskRuntime, EngineContext, AudioFormat, TargetForma
 import { AUDIO_FORMATS } from './types'
 import { getBinaryPath } from './paths'
 import { nowMs, getFileSizeIfExists, sendNotification, parseTimeToSeconds } from './utils'
-import { parseFfmpegProgress, flushLines } from './progressParser'
+import { parseFfmpegProgress, flushLines, logRawProgressChunk } from './progressParser'
 import type { FfmpegState } from './progressParser'
 
 // ── FFmpeg Availability Check ────────────────────────────────────────────────
@@ -167,21 +167,29 @@ export async function runFfmpegDownload(
     if (task.startTime && task.endTime) {
       const dur = parseTimeToSeconds(task.endTime) - parseTimeToSeconds(task.startTime)
       if (dur > 0) preseededDuration = dur
+    } else if (!task.startTime && task.endTime) {
+      const endSec = parseTimeToSeconds(task.endTime)
+      if (endSec > 0) preseededDuration = endSec
     }
     const ffState: FfmpegState = { totalDuration: preseededDuration, stderr: '' }
     let stderrBuf = ''
+    let stdoutBuf = ''
     let lastProgressAtMs = 0
     const MAX_STDERR_BYTES = 64 * 1024
 
-    proc.stderr.on('data', (data: Buffer) => {
-      const chunk = data.toString()
-      ffState.stderr += chunk
-      if (ffState.stderr.length > MAX_STDERR_BYTES) {
-        ffState.stderr = ffState.stderr.slice(-MAX_STDERR_BYTES)
-      }
+    const handleProgressChunk = (source: string, chunk: string) => {
+      logRawProgressChunk(task.id, source, chunk)
 
       let lines: string[]
-      ;[lines, stderrBuf] = flushLines(stderrBuf, chunk)
+      if (source.endsWith('stderr')) {
+        const flushed = flushLines(stderrBuf, chunk)
+        lines = flushed[0]
+        stderrBuf = flushed[1]
+      } else {
+        const flushed = flushLines(stdoutBuf, chunk)
+        lines = flushed[0]
+        stdoutBuf = flushed[1]
+      }
 
       let changed = false
       for (const line of lines) {
@@ -198,6 +206,20 @@ export async function runFfmpegDownload(
           ctx.saveState()
         }
       }
+    }
+
+    proc.stderr.on('data', (data: Buffer) => {
+      const chunk = data.toString()
+      ffState.stderr += chunk
+      if (ffState.stderr.length > MAX_STDERR_BYTES) {
+        ffState.stderr = ffState.stderr.slice(-MAX_STDERR_BYTES)
+      }
+
+      handleProgressChunk('ffmpeg:stderr', chunk)
+    })
+
+    proc.stdout.on('data', (data: Buffer) => {
+      handleProgressChunk('ffmpeg:stdout', data.toString())
     })
 
     const exitCode: number = await new Promise((resolve) => {

@@ -190,11 +190,15 @@ function updateDomForTask(task: DownloadTask): void {
   const DOWNLOAD_WEIGHT = 0.90
   const POST_WEIGHT = 0.10
 
-  const isPostProcessing = task.status === 'merging' || task.status === 'converting'
+  const isTrimmedTask = Boolean(task.startTime || task.endTime)
+  const isTrimDownload = isTrimmedTask && task.status === 'downloading'
+  const isTrimMode = isTrimDownload || (isTrimmedTask && task.status === 'converting')
+  const isPostProcessing = task.status === 'merging' || task.status === 'converting' || isTrimDownload
   const dlPct = task.downloadPercent != null && !isNaN(task.downloadPercent) && task.downloadPercent > 0
     ? task.downloadPercent : null
   const convPct = task.convertingPercent != null && !isNaN(task.convertingPercent) && task.convertingPercent > 0
     ? task.convertingPercent : null
+  const trimPct = isTrimMode ? (convPct ?? dlPct) : null
 
   // ── Proactive merge detection ───────────────────────────────────────────
   // When downloadPercent hits 100% but status is still 'downloading',
@@ -202,8 +206,8 @@ function updateDomForTask(task: DownloadTask): void {
   // Start the purple simulation immediately so the user doesn't see a
   // "stuck" blue bar at 90%. If download resets (e.g., audio stream starts
   // after video stream), dlPct drops and the simulation auto-stops.
-  const downloadDone = task.status === 'downloading' && dlPct !== null && dlPct >= 100
-  const shouldSimulateMerge = (isPostProcessing && convPct === null) || downloadDone
+  const downloadDone = !isTrimMode && task.status === 'downloading' && dlPct !== null && dlPct >= 100
+  const shouldSimulateMerge = !isTrimMode && ((isPostProcessing && convPct === null) || downloadDone)
 
   if (shouldSimulateMerge) {
     // Start simulated progress animation (90% → 99%)
@@ -231,6 +235,9 @@ function updateDomForTask(task: DownloadTask): void {
   if (task.status === 'completed') {
     percent = 100
     percentText = '100%'
+  } else if (isTrimMode && trimPct !== null) {
+    percent = trimPct
+    percentText = `${trimPct}%`
   } else if (isPostProcessing && convPct !== null) {
     // Real FFmpeg progress available
     const basePercent = Math.round(DOWNLOAD_WEIGHT * 100)
@@ -254,7 +261,8 @@ function updateDomForTask(task: DownloadTask): void {
     bar.style.width = `${percent}%`
 
     // Swap phase CSS class on the bar fill for color transitions
-    const targetClass = isPostProcessing ? task.status
+    const targetClass = isTrimMode ? 'converting'
+      : isPostProcessing ? task.status
       : (task.status === 'downloading' ? 'downloading'
       : (task.status === 'completed' ? 'completed'
       : (task.status === 'paused' ? 'paused'
@@ -268,8 +276,8 @@ function updateDomForTask(task: DownloadTask): void {
       }
     }
 
-    // Remove indeterminate when we have real progress during post-processing
-    if (isPostProcessing && convPct !== null) {
+    // Remove indeterminate once FFmpeg/yt-dlp gives us a real percent.
+    if (percent > 0 || task.status === 'completed') {
       bar.classList.remove('indeterminate')
     }
   }
@@ -290,7 +298,10 @@ function updateDomForTask(task: DownloadTask): void {
 function structuralKey(task: DownloadTask): string {
   const speedPositive = task.speedBytesPerSec != null && task.speedBytesPerSec > 0
   const totalKnown = task.totalBytes != null && task.totalBytes > 0
-  return `${task.status}|${task.errorMessage ?? ''}|speed=${speedPositive}|total=${totalKnown}`
+  const percentKnown = (task.downloadPercent != null && task.downloadPercent > 0)
+    || (task.convertingPercent != null && task.convertingPercent > 0)
+  const trimActive = Boolean(task.startTime || task.endTime) && task.status === 'downloading' && percentKnown
+  return `${task.status}|${task.errorMessage ?? ''}|speed=${speedPositive}|total=${totalKnown}|percent=${percentKnown}|trim=${trimActive}`
 }
 
 function maybeUpsertToZustand(

@@ -9,12 +9,33 @@
  */
 import type { DownloadTask } from './types'
 import { parseTimeToSeconds } from './utils'
+import log from 'electron-log'
 
 // ── FFmpeg State (shared across lines within one download) ───────────────────
 
 export interface FfmpegState {
   totalDuration: number | null
   stderr: string
+}
+
+const RAW_PROGRESS_LOG_ENABLED = /^(1|true|yes)$/i.test(process.env.CORTEX_DL_DEBUG_PROGRESS ?? '')
+
+/**
+ * Diagnostic helper for yt-dlp / FFmpeg stream output.
+ * Enable with CORTEX_DL_DEBUG_PROGRESS=1 to capture the raw dialect emitted by
+ * trim jobs without spamming normal production logs.
+ */
+export function logRawProgressChunk(taskId: string, source: string, chunk: string): void {
+  if (!RAW_PROGRESS_LOG_ENABLED) return
+
+  const lines = chunk
+    .split(/\r\n|[\r\n]/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  for (const line of lines) {
+    log.info(`[progress:raw][${taskId}][${source}] ${line}`)
+  }
 }
 
 // ── Download Progress (yt-dlp structured + regex fallback) ───────────────────
@@ -109,7 +130,7 @@ export function parseFfmpegProgress(
 
   // Always capture Duration header
   if (state.totalDuration === null) {
-    const durMatch = /Duration:\s*(\d{2}:\d{2}:\d{2}\.\d+)/.exec(line)
+    const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
     if (durMatch) {
       state.totalDuration = parseTimeToSeconds(durMatch[1])
     }
@@ -166,15 +187,23 @@ export function parseFfmpegProgress(
   }
 
   // Parse time= → percent (context-dependent)
-  const timeMatch = /time=(\d{2}:\d{2}:\d{2}\.\d+)/.exec(line)
-  if (timeMatch) {
-    const currentSec = parseTimeToSeconds(timeMatch[1])
+  const timeMatch = /\b(?:out_)?time=(-?\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
+  const outTimeUnitsMatch = /^out_time_(?:ms|us)=(\d+)$/.exec(line.trim())
+  if (timeMatch || outTimeUnitsMatch) {
+    // FFmpeg's historical out_time_ms value is in AV_TIME_BASE units
+    // (microseconds), despite the name.
+    const currentSec = timeMatch
+      ? parseTimeToSeconds(timeMatch[1])
+      : parseInt(outTimeUnitsMatch![1], 10) / 1_000_000
     if (currentSec <= 0) return changed
 
     let totalDuration = state.totalDuration
     if (task.startTime && task.endTime) {
       const trimDur = parseTimeToSeconds(task.endTime) - parseTimeToSeconds(task.startTime)
       if (trimDur > 0) totalDuration = trimDur
+    } else if (!task.startTime && task.endTime) {
+      const endSec = parseTimeToSeconds(task.endTime)
+      if (endSec > 0) totalDuration = endSec
     } else if (task.startTime && !task.endTime && state.totalDuration) {
       const startSec = parseTimeToSeconds(task.startTime)
       if (state.totalDuration > startSec) totalDuration = state.totalDuration - startSec
@@ -234,7 +263,7 @@ export function parseStateTransition(
     task.status = 'merging'
     task.convertingPercent = 0
     state.totalDuration = null
-    const durMatch = /Duration:\s*(\d{2}:\d{2}:\d{2}\.\d+)/.exec(state.stderr)
+    const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(state.stderr)
     if (durMatch) state.totalDuration = parseTimeToSeconds(durMatch[1])
     ctx.saveState()
     ctx.sendUpdate(task)
@@ -258,7 +287,7 @@ export function parseStateTransition(
     task.status = 'converting'
     task.convertingPercent = 0
     state.totalDuration = null
-    const durMatch = /Duration:\s*(\d{2}:\d{2}:\d{2}\.\d+)/.exec(state.stderr)
+    const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(state.stderr)
     if (durMatch) state.totalDuration = parseTimeToSeconds(durMatch[1])
     ctx.saveState()
     ctx.sendUpdate(task)
@@ -273,7 +302,11 @@ export function parseStateTransition(
 /** Split a buffer into complete lines. Returns [completedLines, remainingBuffer]. */
 export function flushLines(buf: string, chunk: string): [string[], string] {
   buf += chunk
-  const parts = buf.split('\n')
+  // FFmpeg's classic progress output rewrites a single terminal line with
+  // carriage returns (`\r`) instead of newline-delimited records. yt-dlp
+  // switches to that FFmpeg dialect during --download-sections trim jobs, so
+  // treating only `\n` as a line boundary leaves progress buffered until exit.
+  const parts = buf.split(/\r\n|[\r\n]/)
   const remainder = parts.pop() || ''
-  return [parts.map(l => l.replace(/\r$/, '')), remainder]
+  return [parts, remainder]
 }

@@ -131,8 +131,13 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     const hasProgress = task.downloadedBytes > 0
       || (task.speedBytesPerSec != null && task.speedBytesPerSec > 0)
       || (task.downloadPercent != null && task.downloadPercent > 0)
+    const isTrimmedTask = Boolean(task.startTime || task.endTime)
     if (task.status === 'downloading' && !hasProgress) {
       phase = 'starting'
+    } else if (task.status === 'downloading' && isTrimmedTask) {
+      // yt-dlp --download-sections delegates active work to FFmpeg while the
+      // task is still in the downloading lifecycle state.
+      phase = 'trimming'
     } else if (task.status === 'downloading' && task.downloadPercent != null && task.downloadPercent >= 100) {
       // Download bytes are done — yt-dlp is about to merge audio+video.
       // Show merge phase immediately so user doesn't see a "stuck" bar.
@@ -191,6 +196,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     const dlPct = task.downloadPercent != null && !isNaN(task.downloadPercent) && task.downloadPercent > 0
       ? task.downloadPercent
       : null
+    const trimPct = isTrimMode ? (convPct ?? dlPct) : null
 
     let percent: number
     let percentLabel: string
@@ -200,10 +206,11 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       percent = 100
       percentLabel = '100%'
     } else if (isTrimMode) {
-      // Trim mode: ffmpeg does download+process in one shot, convPct is the whole progress
-      if (convPct !== null) {
-        percent = convPct
-        percentLabel = `${convPct}%`
+      // Trim mode: FFmpeg does download+process in one shot, so progress owns
+      // the whole 0-100 range. yt-dlp section trims report it as downloadPercent.
+      if (trimPct !== null) {
+        percent = trimPct
+        percentLabel = `${trimPct}%`
       } else {
         percent = 0
         percentLabel = ''

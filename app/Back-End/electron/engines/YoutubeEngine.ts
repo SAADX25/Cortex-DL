@@ -12,6 +12,7 @@ import {
   parseFfmpegProgress,
   parseStateTransition,
   flushLines,
+  logRawProgressChunk,
 } from '../progressParser'
 import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
@@ -104,6 +105,8 @@ export class YoutubeEngine implements IEngine {
 
     proc.stderr.on('data', (data: Buffer) => {
       const chunk = data.toString()
+      logRawProgressChunk(task.id, 'yt-dlp:stderr', chunk)
+
       ffmpegState.stderr += chunk
       if (ffmpegState.stderr.length > MAX_STDERR_BYTES) {
         ffmpegState.stderr = ffmpegState.stderr.slice(-MAX_STDERR_BYTES)
@@ -134,8 +137,11 @@ export class YoutubeEngine implements IEngine {
     })
 
     proc.stdout.on('data', (data: Buffer) => {
+      const chunk = data.toString()
+      logRawProgressChunk(task.id, 'yt-dlp:stdout', chunk)
+
       let lines: string[]
-      ;[lines, stdoutBuf] = flushLines(stdoutBuf, data.toString())
+      ;[lines, stdoutBuf] = flushLines(stdoutBuf, chunk)
 
       let stateChanged = false
       for (const line of lines) {
@@ -283,6 +289,9 @@ export class YoutubeEngine implements IEngine {
     if (task.startTime && task.endTime) {
       const td = parseTimeToSeconds(task.endTime) - parseTimeToSeconds(task.startTime)
       if (td > 0) return td
+    } else if (!task.startTime && task.endTime) {
+      const endSec = parseTimeToSeconds(task.endTime)
+      if (endSec > 0) return endSec
     }
     return null
   }

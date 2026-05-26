@@ -334,7 +334,8 @@
 
 /* Purple percent text during merging/converting */
 .dc-card.merging .dc-percent,
-.dc-card.converting .dc-percent {
+.dc-card.converting .dc-percent,
+.dc-card.trimming .dc-percent {
   color: #a78bfa;
 }
 
