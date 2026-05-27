@@ -62,72 +62,92 @@
 
 ```
 Cortex DL/
-├── app/                          # Main application package
+├── app/                               # Main application package
 │   ├── Back-End/
-│   │   └── electron/             # Electron main process source
-│   │       ├── main.ts           # App entry point, IPC handlers, window/tray
-│   │       ├── preload.ts        # Secure bridge (contextBridge)
-│   │       ├── downloadManager.ts# Queue orchestrator
-│   │       ├── db.ts             # SQLite setup & prepared statements
-│   │       ├── utils.ts          # Pure utility functions
-│   │       ├── paths.ts          # Binary & resource path resolution
-│   │       ├── ytdlp.ts          # yt-dlp analysis, update, stream URL extraction
-│   │       ├── hls.ts            # HLS m3u8 parser & analyzer
-│   │       ├── ffmpegEngine.ts   # FFmpeg direct conversion helper
-│   │       ├── progressParser.ts # yt-dlp/ffmpeg stdout/stderr parser
-│   │       ├── commentsExtractor.ts # YouTube comments extraction
-│   │       ├── types.ts          # Backend type re-exports + internal types
+│   │   └── electron/                  # Electron main process source
+│   │       ├── main.ts                # App entry point, window creation, service bootstrap
+│   │       ├── preload.ts             # Secure contextBridge (window.cortexDl API)
+│   │       ├── tray.ts                # System tray icon & menu management
+│   │       ├── downloadManager.ts     # Queue orchestrator (concurrent scheduling)
+│   │       ├── db.ts                  # SQLite setup & prepared statements (WAL mode)
+│   │       ├── utils.ts               # Pure utility functions (shared across modules)
+│   │       ├── paths.ts               # Binary & resource path resolution (dev vs prod)
+│   │       ├── ytdlp.ts               # yt-dlp analysis, update, stream URL extraction
+│   │       ├── hls.ts                 # HLS m3u8 parser & stream variant analyzer
+│   │       ├── ffmpegEngine.ts        # FFmpeg-based HLS/stream download engine
+│   │       ├── progressParser.ts      # yt-dlp/ffmpeg stdout/stderr progress parser
+│   │       ├── commentsExtractor.ts   # YouTube comments extraction via yt-dlp
+│   │       ├── types.ts               # Backend type re-exports + internal types
+│   │       ├── electron-env.d.ts      # Electron environment type declarations
+│   │       ├── ipc/
+│   │       │   └── handlers.ts        # Centralized ipcMain.handle registrations
 │   │       └── engines/
-│   │           ├── IEngine.ts    # Engine interface contract
-│   │           ├── DirectEngine.ts  # Chunked HTTP downloader (axios)
-│   │           ├── YoutubeEngine.ts # yt-dlp process wrapper
-│   │           ├── FfmpegEngine.ts  # FFmpeg HLS/stream downloader
-│   │           └── MediaProcessor.ts # FPS detection via ffprobe
+│   │           ├── IEngine.ts         # Engine interface contract
+│   │           ├── DirectEngine.ts    # Chunked HTTP downloader (axios, 8 parallel chunks)
+│   │           ├── YoutubeEngine.ts   # yt-dlp process wrapper (YouTube/social platforms)
+│   │           ├── FfmpegEngine.ts    # FFmpeg HLS/stream download engine (stub/delegator)
+│   │           └── MediaProcessor.ts  # FPS detection via ffprobe
 │   ├── Front-End/
 │   │   ├── index.html
 │   │   └── src/
-│   │       ├── main.tsx          # React entry point
-│   │       ├── App.tsx           # Root component, routing, IPC listeners
-│   │       ├── App.css           # Global styles (~56KB)
-│   │       ├── translations.ts   # i18n strings (Arabic + English)
+│   │       ├── main.tsx               # React entry point
+│   │       ├── App.tsx                # Root component, routing, IPC listeners
+│   │       ├── App.css                # Global styles (~56 KB)
+│   │       ├── translations.ts        # i18n strings (Arabic + English)
+│   │       ├── vite-env.d.ts          # Vite/Electron environment type declarations
 │   │       ├── components/
-│   │       │   ├── AddDownloadTab.tsx    # URL input, analysis, format picker
-│   │       │   ├── DownloadList.tsx      # Downloads queue list
-│   │       │   ├── DownloadCard.tsx      # Individual download card UI
-│   │       │   ├── SettingsTab.tsx       # App settings panel
-│   │       │   ├── Sidebar.tsx           # Navigation sidebar
-│   │       │   ├── AdvancedTrimmer.tsx   # Video trim controls
+│   │       │   ├── AddDownloadTab.tsx         # URL input, analysis, format picker (main)
+│   │       │   ├── AddDownloadTab/            # Sub-views for AddDownloadTab
+│   │       │   │   ├── UrlAnalysisView.tsx    # Analysis result display & format selection
+│   │       │   │   ├── PlaylistView.tsx       # Playlist item listing & batch selection
+│   │       │   │   └── BatchListView.tsx      # Batch download queue preview
+│   │       │   ├── DownloadList.tsx           # Downloads queue list
+│   │       │   ├── DownloadCard.tsx           # Individual download card UI
+│   │       │   ├── DownloadCard.css           # Styles for download card component
+│   │       │   ├── SettingsTab.tsx            # App settings panel
+│   │       │   ├── Sidebar.tsx                # Navigation sidebar
+│   │       │   ├── AdvancedTrimmer.tsx        # Video start/end time trim controls
+│   │       │   ├── AdvancedTrimmer.css        # Styles for advanced trimmer component
 │   │       │   ├── AnimatedSegmentedControl.tsx
 │   │       │   ├── CustomDropdown.tsx
-│   │       │   ├── SimpleDownloader.tsx  # Quick-download mode
-│   │       │   ├── ConfirmModal.tsx
+│   │       │   ├── SimpleDownloader.tsx       # Quick-download mode (no analysis)
+│   │       │   ├── ConfirmModal.tsx           # Generic confirmation dialog
 │   │       │   └── MediaPlayer/
-│   │       │       ├── MediaPlayerModal.tsx  # Full player modal
-│   │       │       ├── VideoPlayerView.tsx
-│   │       │       ├── AudioPlayerView.tsx
-│   │       │       ├── PlayerControls.tsx
-│   │       │       └── MediaInfoOverlay.tsx
+│   │       │       ├── MediaPlayerModal.tsx   # Full-screen player modal
+│   │       │       ├── MediaPlayer.css        # Styles for the media player
+│   │       │       ├── VideoPlayerView.tsx    # <video> element + HTTP server URL
+│   │       │       ├── AudioPlayerView.tsx    # <audio> element + waveform display
+│   │       │       ├── PlayerControls.tsx     # Playback controls (seek, volume, speed)
+│   │       │       └── MediaInfoOverlay.tsx   # File metadata overlay (FPS, codec, etc.)
 │   │       ├── hooks/
-│   │       │   ├── useDownloadController.ts  # Core download logic hook
-│   │       │   ├── useHighFrequencyIPC.ts    # Throttled IPC listener
-│   │       │   ├── useDownloadCardVM.ts      # Card view-model
-│   │       │   ├── useAppController.ts       # App-level logic
-│   │       │   ├── useSettingsController.ts  # Settings logic
-│   │       │   ├── useCommentsController.ts  # Comments download logic
-│   │       │   └── useDebounce.ts
+│   │       │   ├── types.ts                   # Shared hook-level TypeScript types
+│   │       │   ├── useDownloadController.ts   # Core download logic hook
+│   │       │   ├── useHighFrequencyIPC.ts     # Throttled IPC listener & store sync
+│   │       │   ├── useDownloadCardVM.ts       # View-model for a single DownloadCard
+│   │       │   ├── useAppController.ts        # App-level logic (updater, concurrency)
+│   │       │   ├── useSettingsController.ts   # Settings persistence & folder selection
+│   │       │   ├── useCommentsController.ts   # Comments download flow + progress
+│   │       │   └── useDebounce.ts             # Generic debounce hook
 │   │       ├── stores/
-│   │       │   ├── downloadStore.ts   # Zustand — download tasks state
-│   │       │   └── useUIStore.ts      # Zustand — UI state
+│   │       │   ├── downloadStore.ts           # Zustand — download tasks state
+│   │       │   └── useUIStore.ts              # Zustand — UI state (tabs, panels)
 │   │       └── constants/
-│   │           └── formats.ts        # Format constants
+│   │           └── formats.ts                 # Supported format constants
 │   ├── Shared/
-│   │   └── types.ts              # Single source of truth for all shared types
-│   ├── bin/                      # Bundled binaries (yt-dlp.exe, ffmpeg.exe, etc.)
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   ├── electron-builder.json5    # Packaging config
-│   └── package.json
-└── package.json                  # Root workspace package
+│   │   └── types.ts                   # Single source of truth for all shared types
+│   ├── bin/                           # Bundled binaries
+│   │   ├── yt-dlp.exe                 # yt-dlp download engine
+│   │   └── ffmpeg.exe                 # FFmpeg media processor
+│   ├── build/                         # Electron-builder resources (icons, assets)
+│   ├── release/                       # Output directory for packaged installers
+│   ├── .env                           # Local environment variables (not committed)
+│   ├── .env.example                   # Environment variable template
+│   ├── vite.config.ts                 # Vite + vite-plugin-electron configuration
+│   ├── tsconfig.json                  # TypeScript config (renderer + main)
+│   ├── tsconfig.node.json             # TypeScript config (Node.js / Electron main)
+│   ├── electron-builder.json5         # Packaging & installer configuration
+│   └── package.json                   # App dependencies & scripts
+└── package.json                       # Root workspace package
 ```
 
 ---

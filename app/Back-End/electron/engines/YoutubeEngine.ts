@@ -382,11 +382,6 @@ export class YoutubeEngine implements IEngine {
     return { exitCode, detectedFinalPath, stderr: ffmpegState.stderr }
   }
 
-  private isYouTubeUrl(url: string): boolean {
-    const low = url.toLowerCase()
-    return low.includes('youtube.com') || low.includes('youtu.be')
-  }
-
   private buildAuthArgs(task: DownloadTask): string[] {
     const args: string[] = []
 
