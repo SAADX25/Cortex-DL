@@ -204,32 +204,38 @@ Cortex DL/
 
 ### 5.1 Entry Point — `main.ts`
 
-**File:** `app/Back-End/electron/main.ts` (870 lines)
+**File:** `app/Back-End/electron/main.ts` (458 lines)
 
 Responsibilities:
+- Loads `.env` via `dotenv` and initializes `electron-log` globally
+- GPU hardware acceleration flag configuration
 - App lifecycle management (`app.whenReady`, `before-quit`, `window-all-closed`)
 - Single-instance lock enforcement (`app.requestSingleInstanceLock`)
-- GPU hardware acceleration flags
-- `BrowserWindow` creation (1100×720, `contextIsolation:true`, `sandbox:true`)
-- System tray management (minimize-to-tray behavior)
-- Session-level CORS header injection for remote media streams
-- Media streaming HTTP server startup
+- `BrowserWindow` creation (1100×720, `contextIsolation:true`, `sandbox:true`, `show:false` until ready)
+- System tray initialization via `tray.ts` (`createTray()`)
+- Session-level CORS header injection for remote media CDN streams
+- In-process media streaming HTTP server startup (`startMediaStreamingServer()`)
+- Delegates all IPC handler registration to `ipc/handlers.ts` (`registerIpcHandlers()`)
 - Deferred backend service loading (1500ms after app ready)
-- All `ipcMain.handle` registrations
+- Updater cache cleanup on startup (`cleanupUpdaterCache()`)
 
 **Initialization sequence:**
 ```
+// Before app.whenReady():
+registerIpcHandlers(deps)         // All ipcMain.handle registrations
+
 app.whenReady()
-  ├── startMediaStreamingServer()   // Port 3345
-  ├── createWindow()                // BrowserWindow
-  ├── createTray()                  // System tray
+  ├── startMediaStreamingServer()   // Port 3345 (configurable via .env)
+  ├── createWindow()                // BrowserWindow (show: false → ready-to-show)
+  ├── initTray()                    // createTray() from tray.ts
   └── setTimeout(1500ms)
         └── loadBackendServices()
               ├── import electron-updater
-              ├── import DownloadManager
+              ├── autoUpdater.autoDownload = false  // User prompted before download
+              ├── setup updater event listeners
               ├── new DownloadManager().attachWindow(win)
               ├── serviceReadyResolve()   // Unblocks IPC queue
-              └── autoUpdater.checkForUpdatesAndNotify()
+              └── cleanupUpdaterCache() + autoUpdater.checkForUpdatesAndNotify()
 ```
 
 **Key exported constants:**
@@ -237,21 +243,20 @@ app.whenReady()
 export const VITE_DEV_SERVER_URL  // Dev vs production detection
 export const MAIN_DIST            // dist-electron/ path
 export const RENDERER_DIST        // Front-End/dist/ path
-export let   MEDIA_SERVER_PORT    // Dynamic port (default 3345)
+export let   MEDIA_SERVER_PORT    // Dynamic port (default 3345, set via .env)
 ```
 
 ---
 
 ### 5.2 IPC API Surface
 
-All IPC channels use the `cortexdl:` namespace prefix. The table below lists every registered handler:
+All IPC handlers are registered in `ipc/handlers.ts` via `registerIpcHandlers(deps)`. All channels use the `cortexdl:` namespace prefix.
 
 #### File & System
 
 | Channel | Direction | Description |
 |---|---|---|
 | `cortexdl:select-folder` | invoke | Native folder picker dialog |
-| `cortexdl:select-cookies-file` | invoke | Native file picker (.txt) |
 | `cortexdl:open-folder` | invoke | Open folder in Explorer (show file) |
 | `cortexdl:open-file` | invoke | Open file with default app |
 | `cortexdl:open-external` | invoke | Open URL in browser (http/https only) |
@@ -280,17 +285,25 @@ All IPC channels use the `cortexdl:` namespace prefix. The table below lists eve
 |---|---|---|
 | `cortexdl:analyze-url` | invoke | Analyze URL → `AnalyzeResult` |
 | `cortexdl:get-direct-stream-url` | invoke | Get playable stream URL via yt-dlp `-g` |
-| `cortexdl:update-engine` | invoke | Download latest yt-dlp binary |
+| `cortexdl:update-engine` | invoke | Download latest yt-dlp binary (blocked while downloads active) |
 | `cortexdl:get-engine-version` | invoke | Get current yt-dlp version string |
 
 #### Media
 
 | Channel | Direction | Description |
 |---|---|---|
-| `cortexdl:fetch-thumbnail` | invoke | Fetch & cache thumbnail → local file path |
+| `cortexdl:fetch-thumbnail` | invoke | Fetch & cache thumbnail → local temp file path |
 | `cortexdl:get-media-port` | invoke | Get media streaming server port |
 | `cortexdl:get-media-fps` | invoke | Get FPS of local file via ffprobe |
-| `cortexdl:download-comments` | invoke | Extract & save YouTube comments to file |
+| `cortexdl:download-comments` | invoke | Show save dialog, extract & save YouTube comments |
+
+#### Cookie File Management
+
+| Channel | Direction | Description |
+|---|---|---|
+| `cortexdl:select-cookie-file` | invoke | Native file picker for `cookies.txt` |
+| `cortexdl:get-cookie-file` | invoke | Read persisted cookie file path from SQLite settings |
+| `cortexdl:set-cookie-file` | invoke | Persist or clear cookie file path in SQLite settings |
 
 #### Security
 
@@ -305,7 +318,13 @@ All IPC channels use the `cortexdl:` namespace prefix. The table below lists eve
 |---|---|---|
 | `cortexdl:check-for-updates` | invoke | Trigger update check |
 | `cortexdl:restart-app` | invoke | Quit and install update |
-| `cortexdl:uninstall-app` | invoke | Wipe data + run uninstaller |
+| `cortexdl:uninstall-app` | invoke | Wipe user data + spawn `unins000.exe` |
+
+#### Renderer Logging
+
+| Channel | Direction | Description |
+|---|---|---|
+| `log-message` | on (one-way) | Renderer-side log forwarded to `electron-log` |
 
 #### Push Events (Main → Renderer)
 
@@ -316,7 +335,8 @@ All IPC channels use the `cortexdl:` namespace prefix. The table below lists eve
 | `cortexdl:download-stats-updated` | `{ id, addedBytes }` for bandwidth tracking |
 | `cortexdl:comments-extraction-started` | Comments extraction began |
 | `cortexdl:comments-progress` | `(current, total)` comments pages |
-| `update-status` | Auto-updater status events |
+| `cortexdl:youtube-oauth-code` | YouTube OAuth device-code payload for display |
+| `update-status` | Auto-updater status events (`checking`, `available`, `downloading-started`, `downloaded`, `not-available`, `error`, `progress`) |
 
 ---
 
@@ -652,14 +672,14 @@ Transitions detected:
 
 ## 6. Preload Bridge — `preload.ts`
 
-**File:** `app/Back-End/electron/preload.ts` (138 lines)
+**File:** `app/Back-End/electron/preload.ts` (149 lines)
 
 Exposes `window.cortexDl` via `contextBridge.exposeInMainWorld`. Every method maps 1:1 to an IPC channel or event listener.
 
 ```typescript
 contextBridge.exposeInMainWorld('cortexDl', {
   // File system
-  selectFolder(), selectCookiesFile(), openFolder(), openFile(), openExternal(), showMainWindow()
+  selectFolder(), openFolder(), openFile(), openExternal(), showMainWindow()
 
   // Downloads
   listDownloads(), addDownload(), addBatchDownloads()
@@ -679,9 +699,13 @@ contextBridge.exposeInMainWorld('cortexDl', {
   // Comments
   downloadComments(), onCommentsExtractionStarted(), onCommentsProgress()
 
+  // Cookie File Management
+  selectCookieFile(), getCookieFile(), setCookieFile()
+
   // Push Events (return cleanup unsubscribe functions)
   onDownloadUpdated(), onDownloadProgress(), onStatsUpdated()
   onUpdateStatus()
+  onYouTubeOAuthCode()   // YouTube device-code OAuth flow
 
   // App Updates
   checkForUpdates(), restartApp(), uninstallApp()
@@ -713,23 +737,45 @@ type DownloadEngine = 'direct' | 'ffmpeg' | 'ytdlp'
 type VideoFormat    = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'ogv' | 'm4v' | 'gif'
 type AudioFormat    = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac' | 'aac' | 'opus' | 'wma'
 type TargetFormat   = VideoFormat | AudioFormat
+type ThumbnailDataUrl = string
+
+type TrimSelection = {
+  startSeconds: number
+  endSeconds:   number
+  startTime:    string   // HH:MM:SS.ss
+  endTime:      string
+}
 
 type DownloadTask = {
   id, url, directory, filename, filePath, engine, targetFormat
   status, totalBytes, downloadedBytes, speedBytesPerSec, errorMessage
   createdAtMs, updatedAtMs
   // Optional:
-  title, thumbnail, cookieBrowser, cookieFile, username, password
+  title, thumbnail, username, password
   speedLimit, startTime, endTime, ytdlpFormatId, fps
   convertingPercent, downloadPercent
 }
 
-type AnalyzeResult = unknown | direct | hls-media | hls-master | ytdlp | playlist
+type AnalyzeResult =
+  | { kind: 'unknown' }
+  | { kind: 'direct' }
+  | { kind: 'hls-media';  url: string }
+  | { kind: 'hls-master'; variants: HlsVariant[] }
+  | { kind: 'ytdlp';      title, thumbnail?, formats, views?, likes?, dislikes?, duration?, comments? }
+  | { kind: 'playlist';   title, items[]: { id, title, url, thumbnail? } }
+
+type YouTubeOAuthCodePayload = {
+  taskId:   string
+  url:      string
+  code:     string
+  message?: string
+}
 
 // IPC channel name constants:
-const UPDATE_CHANNEL   = 'cortexdl:download-updated'
-const PROGRESS_CHANNEL = 'cortexdl:download-progress'
-const STATS_CHANNEL    = 'cortexdl:download-stats-updated'
+const UPDATE_CHANNEL        = 'cortexdl:download-updated'
+const PROGRESS_CHANNEL      = 'cortexdl:download-progress'
+const STATS_CHANNEL         = 'cortexdl:download-stats-updated'
+const YOUTUBE_OAUTH_CHANNEL = 'cortexdl:youtube-oauth-code'
 ```
 
 ---
@@ -739,27 +785,27 @@ const STATS_CHANNEL    = 'cortexdl:download-stats-updated'
 ### 8.1 Component Tree
 
 ```
-App.tsx  (root, IPC listeners setup, tab routing)
-├── Sidebar.tsx               Navigation tabs
-├── AddDownloadTab.tsx         URL input + analysis + download start
-│   ├── CustomDropdown.tsx     Format/quality picker
-│   ├── AnimatedSegmentedControl.tsx
-│   ├── AdvancedTrimmer.tsx   Start/end time selector
-│   └── SimpleDownloader.tsx  Quick mode (no analysis)
-├── DownloadList.tsx           Queue list
-│   └── DownloadCard.tsx       Per-task card
+App.tsx  (root, tab routing, SmartImage & UrlInputBar defined here)
+├── Sidebar.tsx                Navigation tabs (add / downloads / settings)
+├── AddDownloadTab.tsx          URL input + analysis + format picker + batch
+│   ├── UrlAnalysisView.tsx    (AddDownloadTab/) Single URL analysis result card
+│   ├── PlaylistView.tsx       (AddDownloadTab/) Playlist item listing & selection
+│   ├── BatchListView.tsx      (AddDownloadTab/) Batch queue preview & management
+│   ├── AnimatedSegmentedControl.tsx  Format segment switcher
+│   └── AdvancedTrimmer.tsx          Visual video trimmer (collapsible)
+├── DownloadList.tsx            Queue list
+│   └── DownloadCard.tsx        Per-task card
 │       ├── [thumbnail]
 │       ├── [progress bar]
-│       └── [action buttons: pause/resume/cancel/delete/open]
-├── SettingsTab.tsx            App settings
-│   └── AuthenticationSettings.tsx
-├── ConfirmModal.tsx           Generic confirmation dialog
+│       └── [action buttons: pause/resume/cancel/delete/open/play]
+├── SettingsTab.tsx             App settings panel
+├── ConfirmModal.tsx            Generic confirmation dialog
 └── MediaPlayer/
-    └── MediaPlayerModal.tsx  Full-screen player
-        ├── VideoPlayerView.tsx  <video> element + HTTP server URL
-        ├── AudioPlayerView.tsx  <audio> element
-        ├── PlayerControls.tsx   Playback controls
-        └── MediaInfoOverlay.tsx File info overlay
+    └── MediaPlayerModal.tsx   Full-screen player modal
+        ├── VideoPlayerView.tsx    <video> element + HTTP server URL
+        ├── AudioPlayerView.tsx    <audio> element
+        ├── PlayerControls.tsx     Seek, volume, playback speed controls
+        └── MediaInfoOverlay.tsx   FPS, codec, file metadata overlay
 ```
 
 ### 8.2 State Management — Zustand Stores
@@ -776,8 +822,14 @@ interface DownloadStore {
 #### `useUIStore.ts`
 ```typescript
 interface UIStore {
-  activeTab: string
-  // UI toggles, panel states, etc.
+  activeTab:     ActiveTab                // 'add' | 'downloads' | 'settings'
+  directory:     string | null            // Persisted to localStorage
+  globalError:   string | null
+  batchItems:    BatchItem[]
+  toastMsg:      string | null            // Auto-clears after 2300ms
+  url:           string                   // Current URL input value
+  analyzeResult: AnalyzeResult | null     // Last analysis result
+  analyzing:     boolean                  // Analysis in progress flag
 }
 ```
 
@@ -1018,4 +1070,4 @@ Packages the app for Windows (NSIS installer). Bundles:
 
 ---
 
-*Generated: May 2026 | Cortex DL v1.4.0*
+*Generated: May 2026 | Cortex DL v1.5.0*
