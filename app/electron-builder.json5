@@ -71,7 +71,7 @@
   "uninstallerIcon": "Front-End/public/CortexDL.ico",
     "include": "build/installer.nsh"
   },
-  "npmRebuild": false,
+  "npmRebuild": true,
   "asarUnpack": ["**/*.node"],
   "compression": "maximum",
   "linux": {

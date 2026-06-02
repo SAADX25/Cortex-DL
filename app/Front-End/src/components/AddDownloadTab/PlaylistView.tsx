@@ -125,7 +125,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
         ))}
         {filteredPlaylistItems.length === 0 && debouncedSearch && (
           <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '13px' }}>
-            No results found for "{debouncedSearch}"
+            {`No results found for "${debouncedSearch}"`}
           </div>
         )}
       </div>

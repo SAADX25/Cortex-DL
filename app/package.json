@@ -11,7 +11,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "clean": "rd /s /q release 2>nul || exit 0",
+    "clean": "rimraf release",
     "build": "npm run clean && tsc && vite build && electron-builder",
     "dist": "npm run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -20,6 +20,7 @@
   "dependencies": {
     "axios": "^1.14.0",
     "better-sqlite3": "^12.8.0",
+    "dotenv": "^17.4.0",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
     "framer-motion": "^10.12.16",
@@ -38,8 +39,10 @@
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
     "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "rimraf": "^5.0.5",
     "typescript": "5.5.4",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",

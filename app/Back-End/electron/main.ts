@@ -14,9 +14,11 @@ log.transports.file.level = 'info'
 import { app, BrowserWindow, dialog, session, shell } from 'electron'
 import { existsSync, rmSync, statSync, createReadStream } from 'node:fs'
 import http from 'node:http'
+import os from 'node:os'
 import type { DownloadManager } from './downloadManager'
 import { registerIpcHandlers } from './ipc/handlers'
 import { createTray } from './tray'
+import { db } from './db'
 
 // GPU Hardware Acceleration
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
@@ -222,17 +224,34 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
-  // ── CORS bypass for remote media streams (YouTube CDN, etc.) ──────────
+  // ── CORS: allow only known media/CDN domains to reduce surface ─────────
+  const MEDIA_CORS_WHITELIST = [
+    /(^|\.)googlevideo\.com$/i,   // YouTube video CDN
+    /(^|\.)youtube\.com$/i,
+    /(^|\.)ytimg\.com$/i,
+    /(^|\.)fbcdn\.net$/i,
+    /(^|\.)akamaihd\.net$/i,
+    /(^|\.)tiktokcdn\.com$/i,
+    /(^|\.)vimeocdn\.com$/i,
+  ]
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const url = details.url
-    if (url.startsWith('http') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Access-Control-Allow-Origin': ['*'],
-        },
-      })
-    } else {
+    try {
+      const rawUrl = details.url
+      if (!rawUrl.startsWith('http')) return callback({ responseHeaders: details.responseHeaders })
+      const { hostname } = new URL(rawUrl)
+      const allowed = MEDIA_CORS_WHITELIST.some((re) => re.test(hostname))
+      if (allowed) {
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            'Access-Control-Allow-Origin': ['*'],
+          },
+        })
+      } else {
+        callback({ responseHeaders: details.responseHeaders })
+      }
+    } catch {
       callback({ responseHeaders: details.responseHeaders })
     }
   })
@@ -309,6 +328,34 @@ function startMediaStreamingServer(): void {
       if (!path.isAbsolute(filePath)) {
         res.writeHead(400)
         res.end('Path must be absolute')
+        return
+      }
+
+      // Restrict to safe roots: user's Downloads dir and temp thumbnail cache
+      const downloadsDir = app.getPath('downloads')
+      const thumbsDir = path.join(os.tmpdir(), 'cortexdl-thumbs')
+      const candidateRoots = new Set<string>([downloadsDir, thumbsDir])
+      const settingsTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get('settings') as { name: string } | undefined
+      if (settingsTable) {
+        const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('downloadDirectory') as { value: string } | undefined
+        const configuredDir = row?.value
+        if (configuredDir) candidateRoots.add(configuredDir)
+      }
+      const tasks = downloads ? downloads.list() : []
+      for (const t of tasks) {
+        if (t.directory) candidateRoots.add(t.directory)
+      }
+      const isUnder = (p: string, root: string) => {
+        const rel = path.relative(root, p)
+        return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
+      }
+      let allowed = false
+      for (const root of candidateRoots) {
+        if (isUnder(filePath, root)) { allowed = true; break }
+      }
+      if (!allowed) {
+        res.writeHead(403)
+        res.end('Forbidden path')
         return
       }
 

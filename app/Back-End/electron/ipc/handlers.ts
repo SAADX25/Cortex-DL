@@ -82,7 +82,16 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       properties: ['openDirectory', 'createDirectory'],
     })
     if (result.canceled) return null
-    return result.filePaths[0] ?? null
+    const selected = result.filePaths[0] ?? null
+    if (selected) {
+      try {
+        db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('downloadDirectory', selected)
+      } catch (err) {
+        log.error('[settings] Failed to persist downloadDirectory:', err)
+      }
+    }
+    return selected
   })
 
   ipcMain.handle('cortexdl:secure-save', (_event, _key: string, value: string) => {
