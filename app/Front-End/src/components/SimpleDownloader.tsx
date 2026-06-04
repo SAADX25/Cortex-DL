@@ -2,12 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
 import { useTask } from '../stores/downloadStore'
 
-/**
- * SimpleDownloader — High-Performance URL Input with Uncontrolled Component.
- *
- * Deep-clean: no direct IPC subscriptions here.
- * Volatile updates are handled exclusively by `useHighFrequencyIPC.ts`.
- */
+
 export default function SimpleDownloader() {
   const [status, setStatus] = useState('idle')
   const [fileName, setFileName] = useState('')

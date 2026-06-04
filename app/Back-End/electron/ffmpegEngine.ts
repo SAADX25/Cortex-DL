@@ -1,14 +1,3 @@
-/**
- *  FFmpeg Engine — HLS (M3U8) and direct media conversion downloads.
- *
- *  Used for:
- *  - HLS streams (M3U8 playlists)
- *  - Audio format extraction from media URLs
- *  - Container format conversion
- *
- *  Supports all video formats (MP4, MKV, AVI, MOV, WEBM, GIF)
- *  and all audio formats (MP3, WAV, M4A, OGG, FLAC).
- */
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { promises as fs } from 'node:fs'
@@ -36,13 +25,6 @@ export async function isFfmpegAvailable(): Promise<boolean> {
   }
 }
 
-// ── Output Validation (for resume support) ──────────────────────────────────
-
-/**
- * Quick probe: open the file with FFmpeg in error-only mode and process
- * the first second.  If the container headers are corrupt or missing
- * (e.g. truncated MP4 without moov atom), FFmpeg will return non-zero.
- */
 async function isOutputValid(filePath: string): Promise<boolean> {
   return new Promise((resolve) => {
     try {

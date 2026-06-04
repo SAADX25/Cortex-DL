@@ -1,17 +1,3 @@
-/**
- *  DownloadCard — High-Performance Download Card with Direct DOM Updates
- *
- *  Responsibilities:
- *  ─ Reads ViewModel from useDownloadCardVM for structural data
- *  ─ Uses DOM refs + useHighFrequencyIPC for volatile progress data
- *  ─ Directly mutates progress bar & speed text to avoid React re-renders
- *  ─ Only re-renders on structural changes (status transitions, errors)
- *
- *  Performance:
- *  ─ React.memo prevents re-render unless props change
- *  ─ useHighFrequencyIPC bypasses React reconciliation for progress updates
- *  ─ Direct DOM mutation keeps UI at 60 FPS with 20+ concurrent downloads
- */
 import React, { useRef, useState } from 'react'
 import { Play, FolderOpen, Trash2 } from 'lucide-react'
 import { useDownloadCardVM, type DisplayPhase, type DownloadCardVM } from '../hooks/useDownloadCardVM'

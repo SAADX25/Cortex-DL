@@ -1,10 +1,3 @@
-/**
- *  Paths — Binary and resource path resolution for dev and production.
- *
- *  Used by every engine module and the analysis layer.
- *  Eliminates duplicated binary path resolution
- *  that were scattered across downloadManager.ts and ytdlp.ts.
- */
 import { app } from 'electron'
 import path from 'node:path'
 import { existsSync } from 'node:fs'

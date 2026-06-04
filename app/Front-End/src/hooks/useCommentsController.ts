@@ -1,12 +1,3 @@
-/**
- *  useCommentsController — Comments extraction domain.
- *
- *  Owns:
- *  ─ IPC listeners for comments extraction started / progress
- *  ─ Local state: downloading flag, success path, progress counters
- *
- *  This is the smallest, most self-contained controller hook.
- */
 import { useState, useEffect } from 'react'
 
 // 

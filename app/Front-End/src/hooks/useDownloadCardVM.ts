@@ -1,12 +1,3 @@
-/**
- *  useDownloadCardVM  — The ViewModel hook for a single Download Card.
- *
- *  Subscribes to ONE task in the store. Derives all display-ready values:
- *  percent, ETA, speed string, phase label, which actions to show, etc.
- *
- *  The DownloadCard component consumes this and renders pure markup.
- *  Zero business logic leaks into the JSX.
- */
 import { useMemo, useCallback } from 'react'
 import { useTask } from '../stores/downloadStore'
 import type { Language } from '../translations'

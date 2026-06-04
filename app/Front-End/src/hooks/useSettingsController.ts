@@ -1,29 +1,15 @@
-/**
- *  useSettingsController — Settings, engines, credentials, and preferences.
- *
- *  Owns:
- *  ─ Language selection and direction
- *  ─ Engine status polling, version, and updates
- *  ─ App auto-update listener
- *  ─ Secure credentials (username/password)
- *  ─ Cookie-file path for YouTube authentication
- *  ─ In-app player preference
- *  ─ Download stats tracking (totalDownloadedBytes)
- *  ─ localStorage syncs for all settings
- *  ─ Actions: update engine, check updates, reset stats, uninstall
- */
 import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { translations } from '../translations'
 import type { Language } from '../translations'
 import type { ModalConfig } from './types'
 
-// 
+
 export interface SettingsControllerDeps {
   setModalConfig: Dispatch<SetStateAction<ModalConfig>>
 }
 
-// 
+
 export function useSettingsController({ setModalConfig }: SettingsControllerDeps) {
   // ── Language ──
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en')

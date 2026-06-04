@@ -1,30 +1,3 @@
-/**
- *  useHighFrequencyIPC — Zero-Copy DOM Mutation on IPC Progress Events
- *
- *  Listens to high-frequency progress events and DIRECTLY mutates DOM elements
- *  via refs, bypassing React's reconciliation layer. This prevents re-renders
- *  and keeps the UI at 60 FPS even with 20+ concurrent downloads.
- *
- *  Usage:
- *    const progressBarRef = useRef<HTMLDivElement>(null)
- *    const speedTextRef = useRef<HTMLSpanElement>(null)
- *    const vmRef = useRef<DownloadCardVM | null>(null)
- *    
- *    useHighFrequencyIPC(taskId, {
- *      progressBarRef,
- *      speedTextRef,
- *      vmRef,
- *      onStructuralChange?: (newVM) => { // trigger React re-render }
- *    })
- *
- *  The hook directly updates:
- *    - progressBarRef.current.style.width = "XX%"
- *    - speedTextRef.current.innerText = "5.2 MB/s"
- *
- *  Only triggers React state changes (re-renders) for structural changes like:
- *    - Status transitions (downloading → completed)
- *    - Phase badge changes
- */
 import { useEffect, RefObject } from 'react'
 import type { DownloadTask } from '../../../Shared/types'
 import type { DownloadCardVM } from './useDownloadCardVM'
@@ -37,11 +10,6 @@ interface UseHighFrequencyIPCOptions {
   onStructuralChange?: (newVM: DownloadCardVM) => void
 }
 
-/**
- * Start the single, app-wide IPC listeners that:
- * - mutate DOM refs instantly (if a task is registered)
- * - throttle Zustand store updates to reduce React renders
- */
 export function startHighFrequencyIPCListeners(opts: {
   upsertTask: (task: DownloadTask) => void
   getTaskById: (id: string) => DownloadTask | undefined

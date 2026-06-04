@@ -1,9 +1,3 @@
-/**
- *  Shared Types — Single source of truth for the entire download system.
- *
- *  Every module in the electron/ directory imports types from HERE.
- *  No duplicated type definitions anywhere else in the backend.
- */
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type {

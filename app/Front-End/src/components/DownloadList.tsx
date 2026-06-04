@@ -1,18 +1,3 @@
-/**
- *  DownloadList — Container component for the downloads tab (optimized).
- *
- *  Responsibilities:
- *  ─ Reads the ordered task ID list from the store
- *  ─ Handles search filtering with DEBOUNCING (300ms delay)
- *  ─ Renders bulk action buttons (pause all, resume all, clear)
- *  ─ Maps taskIds → <DownloadCard /> instances
- *
- *  Performance:
- *  ─ Search input changes are debounced to prevent excessive filtering
- *  ─ Only re-filters when user stops typing for 300ms
- *  ─ This component only re-renders when the ID list or debounced search changes,
- *    NOT when individual task progress updates (handled by useHighFrequencyIPC).
- */
 import React, { useState, useMemo } from 'react'
 import { X, Trash2, DownloadCloud } from 'lucide-react'
 import { useTaskIds, getTasksSnapshot, useDownloadStore } from '../stores/downloadStore'
@@ -34,16 +19,10 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
   const onError = useUIStore((s) => s.setGlobalError)
   const t = translations[lang]
   const taskIds = useTaskIds()
-  
-  // ── High-Performance Search with Debouncing ──────────────────────────────
-  // User input is stored immediately (for responsive UI), but filtering is
-  // debounced by 300ms to avoid re-filtering on every single keystroke.
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearchQuery = useDebounce(searchInput, 300)
 
-  // Filter task IDs by search query.
-  // We read the full map snapshot only when filtering (not subscribed).
-  // This runs only when debouncedSearchQuery changes (max 3-4 times per second).
+
   const [showClearModal, setShowClearModal] = useState(false)
 
   const handleClearAll = async (deleteFiles: boolean) => {

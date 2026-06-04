@@ -1,12 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   DownloadCard.css — Isolated styles for the download card component.
-   
-   Naming convention: dc- prefix (Download Card) to avoid collisions
-   with the existing App.css until the legacy card code is fully removed.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Card Container ────────────────────────────────────────────────────────── */
-
 .dc-card {
   background: var(--bg-card);
   border-radius: 1.25rem;

@@ -1,8 +1,3 @@
-/**
- *  Utils — Shared utility functions used across all engine modules.
- *
- *  Pure functions + thin Electron wrappers. No business logic.
- */
 import { Notification, BrowserWindow } from 'electron'
 import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
@@ -11,11 +6,7 @@ import type { DownloadTask, TaskRuntime } from './types'
 import { UPDATE_CHANNEL } from './types'
 
 
-/**
- * Sanitizes a filename using a STRICT WHITELIST approach.
- * Only allows: English letters, Arabic letters, numbers, spaces, dashes, underscores.
- * Everything else is stripped to prevent CLI encoding issues on Windows.
- */
+
 export function sanitizeFilename(name: string): string {
   let sanitized = name.replace(/[^\w\s\u0600-\u06FF-]/g, '')
   sanitized = sanitized.replace(/[\s_]+/g, '_')
@@ -119,17 +110,13 @@ export function parseTotalFromContentRange(value: string | null): number | null 
 
 
 
-/** Raw IPC send */
+
 export function sendUpdate(win: BrowserWindow | null, task: DownloadTask): void {
   if (!win || win.isDestroyed()) return
   win.webContents.send(UPDATE_CHANNEL, task)
 }
 
-/**
- * Throttled IPC send.  Drops intermediate ticks so the renderer receives
- * at most ~5 updates/sec/task (1000 / IPC_THROTTLE_MS).  State-change
- * updates (status !== 'downloading') are always sent immediately.
- */
+
 const IPC_THROTTLE_MS = 200
 
 export function throttledSendUpdate(
@@ -157,11 +144,7 @@ export function sendNotification(title: string, body: string): void {
 
 
 
-/**
- * Kills a child process AND its entire descendant tree.
- * On Windows uses `taskkill /F /T` so yt-dlp-spawned ffmpeg/ffprobe
- * sub-processes are also terminated immediately.
- */
+
 export function killProcessTree(child: ChildProcessWithoutNullStreams | null): void {
   if (!child) return
   const pid = child.pid

@@ -1,16 +1,3 @@
-/**
- * useDownloadController — Download operations domain.
- *
- * Owns:
- * - URL analysis and variant selection
- * - Format/quality/speed settings for downloads
- * - Batch operations (add to list, start batch)
- * - Single download (analyze -> download now)
- * - Download store initialization
- * - Drag-and-drop URL handling
- * - File/folder operations (open, delete)
- * - Media player state
- */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Translations } from '../translations'

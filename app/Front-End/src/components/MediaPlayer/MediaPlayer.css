@@ -1,8 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   Cortex DL Media Player Styles (Glassmorphism & Modern UI)
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Mini Player Overrides */
 .media-player-overlay.mini-mode-overlay {
   pointer-events: none;
   background-color: transparent;

@@ -1,16 +1,3 @@
-/**
- *  useAppController — Composition shell.
- *
- *  Composes useDownloadController, useSettingsController, and
- *  useCommentsController into a single flat API consumed by App.tsx.
- *
- *  Owns only cross-cutting concerns:
- *  ─ Confirm modal state (shared by downloads + settings)
- *  ─ Thumbnail server port (for SmartImage)
- *
- *  The returned object has the same shape as the original monolithic hook,
- *  preserving full backward compatibility with App.tsx.
- */
 import { useState, useEffect } from 'react'
 import { translations } from '../translations'
 import type { Language } from '../translations'

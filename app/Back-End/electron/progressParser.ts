@@ -1,12 +1,3 @@
-/**
- *  Progress Parser — Extracts download progress from yt-dlp & FFmpeg output.
- *
- *  Handles both structured --progress-template output (machine-parseable)
- *  and classic regex fallback for older yt-dlp versions.
- *
- *  Dual-stream parsing: progress can arrive on EITHER stdout or stderr
- *  depending on yt-dlp version and configuration.
- */
 import type { DownloadTask } from './types'
 import { parseTimeToSeconds } from './utils'
 import log from 'electron-log'
@@ -38,9 +29,7 @@ export function logRawProgressChunk(taskId: string, source: string, chunk: strin
   }
 }
 
-// ── Download Progress (yt-dlp structured + regex fallback) ───────────────────
 
-/** Parse a single yt-dlp output line for download progress. Returns true if task was updated. */
 export function parseDownloadProgress(line: string, task: DownloadTask): boolean {
   let changed = false
 
@@ -118,9 +107,7 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
   return changed
 }
 
-// ── FFmpeg Progress (Duration, time=, size=, bitrate=) ───────────────────────
 
-/** Parse an ffmpeg progress line. Returns true if any task field changed. */
 export function parseFfmpegProgress(
   line: string,
   task: DownloadTask,
@@ -136,8 +123,7 @@ export function parseFfmpegProgress(
     }
   }
 
-  // Parse size= → downloadedBytes
-  // Matches both classic log (`size=  1234kB`) and -progress pipe:2 (`total_size=1234`)
+
   const sizeMatch = /size=\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|kB|B)\b/i.exec(line)
   if (sizeMatch) {
     const sizeVal = parseFloat(sizeMatch[1])
@@ -163,7 +149,7 @@ export function parseFfmpegProgress(
     }
   }
 
-  // Parse bitrate= → speedBytesPerSec
+
   const bitrateMatch = /bitrate=\s*(\d+(?:\.\d+)?)\s*(kbits|Mbits)\/s/i.exec(line)
   if (bitrateMatch) {
     const val = parseFloat(bitrateMatch[1])
@@ -176,12 +162,7 @@ export function parseFfmpegProgress(
     }
   }
 
-  // Parse speed=X.Xx — present in both inline multi-field progress lines
-  // (e.g. "... bitrate=3251kbits/s speed=1.72x") and -progress pipe:2 per-line
-  // format.  It's a realtime multiplier, not downloadable bytes/sec, so actual
-  // throughput comes from bitrate= above.  We still mark changed=true so the
-  // first progress event breaks the UI out of the "Accelerating..." state even
-  // if bitrate= hasn't fired yet.
+
   if (!bitrateMatch && /\bspeed=\s*\d+(?:\.\d+)?x\b/.test(line)) {
     changed = true
   }
@@ -297,15 +278,10 @@ export function parseStateTransition(
   return { transitioned: false, detectedPath }
 }
 
-// ── Line Buffering ───────────────────────────────────────────────────────────
 
-/** Split a buffer into complete lines. Returns [completedLines, remainingBuffer]. */
 export function flushLines(buf: string, chunk: string): [string[], string] {
   buf += chunk
-  // FFmpeg's classic progress output rewrites a single terminal line with
-  // carriage returns (`\r`) instead of newline-delimited records. yt-dlp
-  // switches to that FFmpeg dialect during --download-sections trim jobs, so
-  // treating only `\n` as a line boundary leaves progress buffered until exit.
+
   const parts = buf.split(/\r\n|[\r\n]/)
   const remainder = parts.pop() || ''
   return [parts, remainder]
