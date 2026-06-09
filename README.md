@@ -1,8 +1,11 @@
 # Cortex DL — Architecture Reference
 
+```md
 > **Version:** 1.5.0  
-> **Stack:** Electron · React · TypeScript · SQLite · yt-dlp · ffmpeg
+> **Stack:** Electron · React · TypeScript · SQLite · yt-dlp · ffmpeg  
 > **Link:** https://saadx.software/#cortex-dl
+```
+
 
 ---
 
