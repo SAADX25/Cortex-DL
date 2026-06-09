@@ -1,7 +1,9 @@
 ## Cortex DL — Architecture Reference
 
 **Current Version:** `1.5.0`
+
 **Technology Stack:** Electron · React · TypeScript · SQLite · yt-dlp · ffmpeg
+
 **Product Page:** [saadx.software/#cortex-dl](https://saadx.software/#cortex-dl)
 
 
