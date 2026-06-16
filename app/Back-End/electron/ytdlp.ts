@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import type { AnalyzeResult } from './types'
 import log from 'electron-log'
 import path from 'node:path'
@@ -7,10 +7,33 @@ import { get } from 'node:https'
 import { chmodSync } from 'node:fs'
 import { unlink, rename, stat } from 'node:fs/promises'
 import { getBinaryPath, getBinDirectory } from './paths'
+import { db } from './db'
 
 // In-Memory Analysis Cache (5-min TTL)
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 const ANALYSIS_CACHE_MAX = 50 // max entries to prevent unbounded growth
+const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
+const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
+const MIN_BUN_VERSION: VersionTuple = [1, 2, 11]
+const MAX_BUN_VERSION: VersionTuple = [1, 3, 14]
+export const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,ios,web_creator,web'
+
+type VersionTuple = [number, number, number]
+
+type JsRuntimeCandidate = {
+  label: string
+  spec: string
+  command: string
+  minVersion: VersionTuple
+  maxVersion?: VersionTuple
+  env?: NodeJS.ProcessEnv
+}
+
+type JsRuntimeSelection = {
+  args: string[]
+  available: boolean
+  name: string
+}
 
 interface CacheEntry {
   result: AnalyzeResult
@@ -18,6 +41,8 @@ interface CacheEntry {
 }
 
 const analysisCache = new Map<string, CacheEntry>()
+let cachedJsRuntimeSelection: JsRuntimeSelection | null = null
+let warnedNoSupportedRuntime = false
 
 function normalizeUrlForCache(url: string): string {
   // Strip trailing slashes, whitespace, and lowercase the host for consistent keys
@@ -46,7 +71,138 @@ function setCachedAnalysis(url: string, result: AnalyzeResult): void {
   analysisCache.set(key, { result, timestamp: Date.now() })
 }
 
+function parseVersion(text: string): VersionTuple | null {
+  const match = /v?(\d+)\.(\d+)\.(\d+)/.exec(text)
+  if (!match) return null
+  return [Number(match[1]), Number(match[2]), Number(match[3])]
+}
 
+function compareVersions(a: VersionTuple, b: VersionTuple): number {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i]
+  }
+  return 0
+}
+
+function formatVersion(version: VersionTuple): string {
+  return version.join('.')
+}
+
+function getExistingBinaryPath(name: string): string | null {
+  const binaryPath = getBinaryPath(name)
+  return existsSync(binaryPath) ? binaryPath : null
+}
+
+function getRuntimeVersion(candidate: JsRuntimeCandidate): VersionTuple | null {
+  try {
+    const result = spawnSync(candidate.command, ['--version'], {
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: 3000,
+      env: candidate.env ?? process.env,
+    })
+    if (result.error) return null
+    return parseVersion(`${result.stdout ?? ''}\n${result.stderr ?? ''}`)
+  } catch {
+    return null
+  }
+}
+
+function trySelectRuntime(candidate: JsRuntimeCandidate): JsRuntimeSelection | null {
+  const version = getRuntimeVersion(candidate)
+  if (!version) return null
+  if (compareVersions(version, candidate.minVersion) < 0) return null
+  if (candidate.maxVersion && compareVersions(version, candidate.maxVersion) > 0) return null
+
+  return {
+    args: ['--js-runtimes', candidate.spec],
+    available: true,
+    name: `${candidate.label} ${formatVersion(version)}`,
+  }
+}
+
+function selectJsRuntime(): JsRuntimeSelection {
+  if (cachedJsRuntimeSelection) return cachedJsRuntimeSelection
+
+  const electronNodeEnv = { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+  const candidates: JsRuntimeCandidate[] = []
+  const bundledDeno = getExistingBinaryPath('deno')
+  const bundledNode = getExistingBinaryPath('node')
+  const bundledBun = getExistingBinaryPath('bun')
+
+  if (bundledDeno) {
+    candidates.push({ label: 'Deno', spec: `deno:${bundledDeno}`, command: bundledDeno, minVersion: MIN_DENO_VERSION })
+  }
+  if (bundledNode) {
+    candidates.push({ label: 'Node', spec: `node:${bundledNode}`, command: bundledNode, minVersion: MIN_NODE_VERSION })
+  }
+
+  candidates.push(
+    { label: 'Deno', spec: 'deno', command: 'deno', minVersion: MIN_DENO_VERSION },
+    { label: 'Node', spec: 'node', command: 'node', minVersion: MIN_NODE_VERSION },
+  )
+
+  if (bundledBun) {
+    candidates.push({
+      label: 'Bun',
+      spec: `bun:${bundledBun}`,
+      command: bundledBun,
+      minVersion: MIN_BUN_VERSION,
+      maxVersion: MAX_BUN_VERSION,
+    })
+  }
+
+  candidates.push(
+    { label: 'Bun', spec: 'bun', command: 'bun', minVersion: MIN_BUN_VERSION, maxVersion: MAX_BUN_VERSION },
+    {
+      label: 'Electron Node',
+      spec: `node:${process.execPath}`,
+      command: process.execPath,
+      minVersion: MIN_NODE_VERSION,
+      env: electronNodeEnv,
+    },
+  )
+
+  for (const candidate of candidates) {
+    const selected = trySelectRuntime(candidate)
+    if (selected) {
+      cachedJsRuntimeSelection = selected
+      log.info(`[ytdlp] Using JS runtime: ${selected.name}`)
+      return selected
+    }
+  }
+
+  cachedJsRuntimeSelection = {
+    args: [],
+    available: false,
+    name: 'None',
+  }
+
+  if (!warnedNoSupportedRuntime) {
+    warnedNoSupportedRuntime = true
+    log.warn('[ytdlp] No supported JS runtime found. yt-dlp 2026.06.09 requires Deno >= 2.3.0 or Node >= 22; Bun support is limited to 1.2.11 through 1.3.14.')
+  }
+
+  return cachedJsRuntimeSelection
+}
+
+export function getYtdlpCookieArgs(): string[] {
+  try {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
+    if (!row?.value) return []
+
+    const cookiePath = path.resolve(row.value)
+    if (!existsSync(cookiePath)) {
+      log.warn(`[ytdlp] Cookie file configured but missing: ${cookiePath}`)
+      return []
+    }
+
+    return ['--cookies', cookiePath]
+  } catch (err) {
+    log.warn('[ytdlp] Failed to read cookie file setting:', err)
+    return []
+  }
+}
 
 export async function isYtdlpAvailable(): Promise<boolean> {
   try {
@@ -323,26 +479,8 @@ const stats = await stat(tempPath)
 }
 
 export async function checkJsRuntime(): Promise<{ available: boolean; name: string }> {
-  try {
-    const args = [...getJsRuntimeArgs(), '--version']
-    const p = spawn(getBinaryPath('yt-dlp'), args, { windowsHide: true, detached: false, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
-    
-    let stderr = ''
-    p.stderr.on('data', (data) => stderr += data.toString())
-    
-    const exitCode: number = await new Promise((resolve) => {
-      p.on('close', (code) => resolve(code ?? 1))
-      p.on('error', () => resolve(1))
-    })
-
-    if (exitCode === 0 && !stderr.includes('No supported JavaScript runtime')) {
-      const runtime = getJsRuntimeArgs()[1]
-      return { available: true, name: runtime.includes('deno') ? 'Deno' : 'Node' }
-    }
-    return { available: false, name: 'None' }
-  } catch {
-    return { available: false, name: 'None' }
-  }
+  const selected = selectJsRuntime()
+  return { available: selected.available, name: selected.name }
 }
 
 function isYouTubeUrl(url: string): boolean {
@@ -351,16 +489,7 @@ function isYouTubeUrl(url: string): boolean {
 }
 
 export function getJsRuntimeArgs(): string[] {
-  const denoPath = getBinaryPath('deno')
-  if (existsSync(denoPath)) {
-    return ['--js-runtimes', `deno:${denoPath}`]
-  }
-  const nodePath = getBinaryPath('node')
-  if (existsSync(nodePath)) {
-    return ['--js-runtimes', `node:${nodePath}`]
-  }
-  // Using Electron's executable as Node.js for yt-dlp decryption
-  return ['--js-runtimes', `node:${process.execPath}`]
+  return selectJsRuntime().args
 }
 
 export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
@@ -385,7 +514,9 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
       '--no-warnings',
       '--ignore-errors',
       '--socket-timeout', '10',
-      '--no-cache-dir'
+      '--no-cache-dir',
+      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
+      ...getYtdlpCookieArgs(),
     ]
 
     if (isPlaylist) {
@@ -429,7 +560,7 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
         log.error('yt-dlp analysis failed:', stderr)
         // Check for common YouTube bot/login blocks
         if (isYouTubeUrl(url) && (stderr.includes('Sign in to confirm you') || stderr.includes('not a bot'))) {
-          reject(new Error('YouTube requires login or CAPTCHA. Start the download and follow the device-code prompt in Settings.'))
+          reject(new Error('YouTube requires login or CAPTCHA. Select a YouTube cookies.txt file in Settings, then analyze again.'))
           return
         }
         resolve({ kind: 'unknown' })
@@ -574,6 +705,8 @@ export async function getDirectStreamUrl(
       '--no-warnings',
       '--socket-timeout', '10',
       '--no-cache-dir',
+      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
+      ...getYtdlpCookieArgs(),
     ]
 
     args.push(...getJsRuntimeArgs())

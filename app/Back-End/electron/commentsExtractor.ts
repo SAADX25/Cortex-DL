@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
 import log from 'electron-log'
 import { getBinaryPath } from './paths'
-import { getJsRuntimeArgs } from './ytdlp'
+import { getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from './ytdlp'
 
 export async function extractAndSaveComments(url: string, outputPath: string, onProgress?: (current: number, total: number) => void): Promise<boolean> {
   return new Promise((resolve) => {
@@ -16,11 +16,13 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       '--skip-download',
       '--playlist-items', '0',
       '--verbose',
+      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
+      ...getYtdlpCookieArgs(),
       ...getJsRuntimeArgs(),
       url
     ]
 
-    const proc = spawn(ytDlpPath, args, { windowsHide: true })
+    const proc = spawn(ytDlpPath, args, { windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
     
     const stdoutChunks: Buffer[] = []
 

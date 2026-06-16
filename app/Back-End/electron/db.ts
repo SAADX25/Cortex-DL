@@ -24,7 +24,12 @@ db.exec(`
     thumbnail TEXT,
     engine TEXT,
     full_payload TEXT
-  )
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
 `)
 
 // Prepared Statements

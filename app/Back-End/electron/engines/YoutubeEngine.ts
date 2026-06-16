@@ -15,13 +15,11 @@ import {
   logRawProgressChunk,
 } from '../progressParser'
 import type { FfmpegState } from '../progressParser'
-import { db } from '../db'
 import type { IEngine } from './IEngine'
-import { getJsRuntimeArgs } from '../ytdlp'
+import { getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
-const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,ios,web_creator,web'
 const YOUTUBE_THROTTLED_RATE = '512K'
 
 interface YtdlpRunResult {
@@ -225,7 +223,9 @@ export class YoutubeEngine implements IEngine {
       '--no-mtime',
       '--geo-bypass',
       '--force-ipv4',
+      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
       ...this.buildAuthArgs(task),
+      ...getJsRuntimeArgs(),
       task.url,
     ]
 
@@ -385,17 +385,7 @@ export class YoutubeEngine implements IEngine {
   private buildAuthArgs(task: DownloadTask): string[] {
     const args: string[] = []
 
-    // Cookie-based auth: use --cookies if the user has provided a cookies.txt file.
-    let cookiePath = this.getCookieFilePath()
-    if (cookiePath) {
-      cookiePath = path.resolve(cookiePath)
-      const exists = existsSync(cookiePath)
-      log.debug(`[YoutubeEngine] DB returned cookie path: ${cookiePath}`)
-      log.debug(`[YoutubeEngine] Cookie file exists on disk: ${exists}`)
-      if (exists) {
-        args.push('--cookies', cookiePath)
-      }
-    }
+    args.push(...getYtdlpCookieArgs())
 
     // Basic auth (username/password) — still honoured for non-YouTube sites.
     if (task.username) args.push('--username', task.username)
@@ -411,15 +401,6 @@ export class YoutubeEngine implements IEngine {
     }
 
     return args
-  }
-
-  private getCookieFilePath(): string | null {
-    try {
-      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
-      return row?.value ?? null
-    } catch {
-      return null
-    }
   }
 
   private buildYtdlpArgs(
