@@ -7,6 +7,9 @@ import type {
   TargetFormat as SharedTargetFormat,
   DownloadTask as SharedDownloadTask,
   ThumbnailDataUrl as SharedThumbnailDataUrl,
+  AppHealthCheck as SharedAppHealthCheck,
+  CookieValidationResult as SharedCookieValidationResult,
+  JsRuntimeStatus as SharedJsRuntimeStatus,
 } from '../../Shared/types'
 
 declare global {
@@ -20,6 +23,9 @@ declare global {
   type AudioFormat = SharedAudioFormat
   type TargetFormat = SharedTargetFormat
   type ThumbnailDataUrl = SharedThumbnailDataUrl
+  type AppHealthCheck = SharedAppHealthCheck
+  type CookieValidationResult = SharedCookieValidationResult
+  type JsRuntimeStatus = SharedJsRuntimeStatus
 
   type HlsVariant = {
     bandwidth: number | null
@@ -145,6 +151,8 @@ declare global {
       // ── Engines ──
       updateEngine: () => Promise<{ success: boolean; message: string; version?: string }>
       getEngineVersion: () => Promise<string>
+      checkJsRuntime: () => Promise<JsRuntimeStatus>
+      getHealthCheck: () => Promise<AppHealthCheck>
 
       // ── App lifecycle ──
       checkForUpdates: () => Promise<void>
@@ -160,7 +168,7 @@ declare global {
       // ── Cookie file (YouTube authentication) ──
       selectCookieFile: () => Promise<string | null>
       getCookieFile: () => Promise<string | null>
-      setCookieFile: (filePath: string | null) => Promise<boolean>
+      setCookieFile: (filePath: string | null) => Promise<CookieValidationResult>
 
       // ── IPC event listeners (return dispose functions) ──
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void

@@ -10,6 +10,10 @@ import { analyzeUrlForHls } from '../hls'
 import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl } from '../ytdlp'
 import { extractAndSaveComments } from '../commentsExtractor'
 import { db } from '../db'
+import { promises as fsPromises } from 'node:fs'
+import { getBinaryPath } from '../paths'
+import type { AppHealthCheck } from '../types'
+import { checkJsRuntime, validateCookieFile } from '../ytdlp'
 
 export interface IpcDependencies {
   getWin: () => Electron.BrowserWindow | null
@@ -17,6 +21,56 @@ export interface IpcDependencies {
   getAutoUpdater: () => typeof import('electron-updater').autoUpdater | null
   getMediaPort: () => number
   serviceReadyPromise: Promise<void>
+}
+
+async function isDirectoryWritable(directory: string): Promise<boolean> {
+  const testPath = path.join(directory, `.cortex-dl-write-test-${process.pid}-${Date.now()}`)
+  let handle: Awaited<ReturnType<typeof fsPromises.open>> | null = null
+
+  try {
+    handle = await fsPromises.open(testPath, 'wx')
+    return true
+  } catch {
+    return false
+  } finally {
+    await handle?.close().catch(() => {})
+    await fsPromises.unlink(testPath).catch(() => {})
+  }
+}
+
+async function getAppHealthCheck(): Promise<AppHealthCheck> {
+  let cookiePath: string | null = null
+  let downloadDirectory = app.getPath('downloads')
+
+  try {
+    const cookieRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
+    const directoryRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('downloadDirectory') as { value: string } | undefined
+    cookiePath = cookieRow?.value ?? null
+    downloadDirectory = directoryRow?.value || downloadDirectory
+  } catch (err) {
+    log.warn('[health] Failed to read persisted settings:', err)
+  }
+
+  const ffmpegPath = getBinaryPath('ffmpeg')
+  const [ytDlpVersion, jsRuntime, directoryWritable] = await Promise.all([
+    getYtdlpVersion(),
+    checkJsRuntime(),
+    isDirectoryWritable(downloadDirectory),
+  ])
+  const ytDlpAvailable = !['Not Installed', 'Unknown', 'Error'].includes(ytDlpVersion)
+  const ffmpegAvailable = existsSync(ffmpegPath)
+  const cookies = validateCookieFile(cookiePath)
+  const cookiesReady = cookies.valid || cookies.code === 'missing'
+
+  return {
+    checkedAt: Date.now(),
+    healthy: ytDlpAvailable && ffmpegAvailable && jsRuntime.available && cookiesReady && directoryWritable,
+    ytDlp: { available: ytDlpAvailable, version: ytDlpVersion },
+    ffmpeg: { available: ffmpegAvailable, path: ffmpegPath },
+    jsRuntime,
+    cookies,
+    downloadDirectory: { writable: directoryWritable, path: downloadDirectory },
+  }
 }
 
 export function registerIpcHandlers(deps: IpcDependencies) {
@@ -130,6 +184,14 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.handle('cortexdl:get-engine-version', async () => {
     return getYtdlpVersion()
+  })
+
+  ipcMain.handle('cortexdl:check-js-runtime', async () => {
+    return checkJsRuntime()
+  })
+
+  ipcMain.handle('cortexdl:health-check', async () => {
+    return getAppHealthCheck()
   })
 
   ipcMain.handle('cortexdl:downloads:list', async () => {
@@ -367,18 +429,32 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:set-cookie-file', (_event, filePath: string | null) => {
+  ipcMain.handle('cortexdl:set-cookie-file', async (_event, filePath: string | null) => {
     try {
       db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
-      if (filePath) {
-        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('cookieFilePath', filePath)
-      } else {
+      if (!filePath) {
         db.prepare('DELETE FROM settings WHERE key = ?').run('cookieFilePath')
+        return {
+          valid: true,
+          code: 'cleared',
+          message: 'YouTube cookies file was cleared.',
+          filePath: null,
+        }
       }
-      return true
+
+      const validation = validateCookieFile(filePath)
+      if (!validation.valid || !validation.filePath) return validation
+
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('cookieFilePath', validation.filePath)
+      return validation
     } catch (err) {
       log.error('[cookies] Failed to persist cookieFilePath:', err)
-      return false
+      return {
+        valid: false,
+        code: 'save_error',
+        message: 'The cookies file setting could not be saved.',
+        filePath,
+      }
     }
   })
 }

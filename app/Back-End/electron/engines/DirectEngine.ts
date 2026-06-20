@@ -43,11 +43,11 @@ export class DirectEngine implements IEngine {
           signal: this.abortController.signal,
         });
         
-        const contentLength = parseInt(headResponse.headers['content-length'] || '0', 10);
+        const contentLength = parseInt(String(headResponse.headers['content-length'] ?? '0'), 10);
         if (contentLength > 0) {
           totalBytes = contentLength;
           supportsRanges = 
-            (headResponse.headers['accept-ranges']?.toLowerCase() === 'bytes') &&
+            (String(headResponse.headers['accept-ranges'] ?? '').toLowerCase() === 'bytes') &&
             contentLength >= this.MIN_FILE_SIZE_FOR_CHUNKING;
           
           log.info(
@@ -107,7 +107,7 @@ export class DirectEngine implements IEngine {
       timeout: 300000, // 5 minutes timeout
     });
 
-    const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+    const totalBytes = parseInt(String(response.headers['content-length'] ?? '0'), 10);
     if (totalBytes > 0) {
       task.totalBytes = totalBytes;
     }

@@ -82,6 +82,9 @@ export function useAppController() {
     // Settings / engine
     useInAppPlayer: settings.useInAppPlayer, setUseInAppPlayer: settings.setUseInAppPlayer,
     cookieFilePath: settings.cookieFilePath,
+    cookieValidation: settings.cookieValidation,
+    healthCheck: settings.healthCheck,
+    healthChecking: settings.healthChecking,
     concurrentDownloads: settings.concurrentDownloads, setConcurrentDownloads: settings.setConcurrentDownloads,
     totalDownloadedBytes: settings.totalDownloadedBytes,
     updateStatus: settings.updateStatus,
@@ -124,6 +127,7 @@ export function useAppController() {
     onUpdateEngine: settings.onUpdateEngine,
     onSelectCookieFile: settings.onSelectCookieFile,
     onClearCookieFile: settings.onClearCookieFile,
+    refreshHealth: settings.refreshHealth,
     onResetStats: settings.onResetStats,
     onRestartAndInstall: settings.onRestartAndInstall,
     onUninstall: settings.onUninstall,

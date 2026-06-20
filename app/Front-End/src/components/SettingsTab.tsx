@@ -13,8 +13,12 @@ interface SettingsTabProps {
   useInAppPlayer: boolean
   setUseInAppPlayer: (val: boolean) => void
   cookieFilePath: string | null
+  cookieValidation: CookieValidationResult | null
+  healthCheck: AppHealthCheck | null
+  healthChecking: boolean
   onSelectCookieFile: () => void
   onClearCookieFile: () => void
+  onRefreshHealth: () => void
   concurrentDownloads: number
   setConcurrentDownloads: (val: number) => void
   updateStatus: any
@@ -34,8 +38,12 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   useInAppPlayer,
   setUseInAppPlayer,
   cookieFilePath,
+  cookieValidation,
+  healthCheck,
+  healthChecking,
   onSelectCookieFile,
   onClearCookieFile,
+  onRefreshHealth,
   concurrentDownloads,
   setConcurrentDownloads,
   updateStatus,
@@ -52,6 +60,51 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const cookieFileName = cookieFilePath
     ? cookieFilePath.split(/[\\/]/).pop() ?? cookieFilePath
     : null
+
+  const getCookieStatusText = (validation: CookieValidationResult): string => {
+    switch (validation.code) {
+      case 'valid': return t.youtube_cookie_valid
+      case 'cleared': return t.youtube_cookie_cleared
+      case 'missing': return t.youtube_cookie_missing
+      case 'not_file': return t.youtube_cookie_not_file
+      case 'invalid_header': return t.youtube_cookie_invalid_header
+      case 'missing_youtube': return t.youtube_cookie_missing_youtube
+      case 'read_error': return t.youtube_cookie_read_error
+      case 'save_error': return t.youtube_cookie_save_error
+      default: return validation.message
+    }
+  }
+
+  const healthRows = healthCheck
+    ? [
+        {
+          label: t.health_ytdlp,
+          ok: healthCheck.ytDlp.available,
+          detail: healthCheck.ytDlp.available ? healthCheck.ytDlp.version : t.health_missing,
+        },
+        {
+          label: t.health_ffmpeg,
+          ok: healthCheck.ffmpeg.available,
+          detail: healthCheck.ffmpeg.available ? t.health_available : t.health_missing,
+        },
+        {
+          label: t.health_js_runtime,
+          ok: healthCheck.jsRuntime.available,
+          detail: healthCheck.jsRuntime.available ? healthCheck.jsRuntime.name : t.health_missing,
+        },
+        {
+          label: t.health_cookies,
+          ok: healthCheck.cookies.valid || healthCheck.cookies.code === 'missing',
+          detail: healthCheck.cookies.code === 'missing' ? t.health_cookie_optional : getCookieStatusText(healthCheck.cookies),
+        },
+        {
+          label: t.health_download_directory,
+          ok: healthCheck.downloadDirectory.writable,
+          detail: healthCheck.downloadDirectory.writable ? t.health_writable : t.health_not_writable,
+          title: healthCheck.downloadDirectory.path,
+        },
+      ]
+    : []
 
   return (
     <div className="tab-content fade-in centered-layout">
@@ -247,6 +300,15 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 </>
               )}
             </div>
+            {cookieValidation && (
+              <span
+                role="status"
+                style={{ fontSize: '0.82rem', color: cookieValidation.valid ? '#22c55e' : '#f87171' }}
+              >
+                {getCookieStatusText(cookieValidation)}
+              </span>
+            )}
+
           </div>
 
           {/* Concurrent Downloads */}
@@ -327,6 +389,57 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 <span>Update Engine</span>
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+            <div>
+              <h3 className="section-header" style={{ marginBottom: '0.35rem' }}>{t.health_title}</h3>
+              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>{t.health_desc}</p>
+            </div>
+            <button
+              className="btn-ghost-primary"
+              onClick={onRefreshHealth}
+              disabled={healthChecking}
+            >
+              <RefreshCw size={16} className={healthChecking ? 'spin' : ''} />
+              <span>{healthChecking ? t.health_checking : t.health_refresh}</span>
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gap: '0.55rem', marginTop: '1rem' }}>
+            <div
+              role="status"
+              style={{
+                color: healthCheck?.healthy ? '#22c55e' : '#f59e0b',
+                fontSize: '0.86rem',
+                fontWeight: 600,
+              }}
+            >
+              {healthChecking
+                ? t.health_checking
+                : healthCheck?.healthy
+                  ? t.health_ready
+                  : t.health_attention}
+            </div>
+
+            {healthRows.map((row) => (
+              <div
+                key={row.label}
+                title={'title' in row ? row.title : undefined}
+                className="minimal-row"
+                style={{ padding: '0.65rem 0' }}
+              >
+                <span className="row-title">{row.label}</span>
+                <span
+                  className="row-subtitle"
+                  style={{ color: row.ok ? '#22c55e' : '#f87171', textAlign: 'end' }}
+                >
+                  {row.detail}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 

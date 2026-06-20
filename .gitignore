@@ -18,6 +18,11 @@ dist-ssr/
 build/
 release/
 bin/
+!app/bin/
+app/bin/*
+!app/bin/yt-dlp.exe
+!app/bin/ffmpeg.exe
+!app/bin/deno.exe
 
 # Editor directories and files
 .vscode/*

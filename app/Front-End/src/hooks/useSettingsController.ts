@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { translations } from '../translations'
 import type { Language } from '../translations'
@@ -24,10 +24,33 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   const [engineVersion, setEngineVersion] = useState<string>('...')
   const [engineUpdateStatus, setEngineUpdateStatus] = useState<{ updating: boolean; message?: string; success?: boolean } | null>(null)
   const [cookieFilePath, setCookieFilePath] = useState<string | null>(null)
+  const [cookieValidation, setCookieValidation] = useState<CookieValidationResult | null>(null)
+  const [healthCheck, setHealthCheck] = useState<AppHealthCheck | null>(null)
+  const [healthChecking, setHealthChecking] = useState(true)
 
   // ── Credentials ──
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
+
+  const refreshHealth = useCallback(async () => {
+    setHealthChecking(true)
+    try {
+      const [health, jsRuntime] = await Promise.all([
+        window.cortexDl.getHealthCheck(),
+        window.cortexDl.checkJsRuntime(),
+      ])
+      setHealthCheck({ ...health, jsRuntime })
+      setEngineVersion(health.ytDlp.version)
+      if (health.cookies.filePath || health.cookies.code !== 'missing') {
+        setCookieValidation(health.cookies)
+      }
+    } catch (err) {
+      console.error('Health check failed:', err)
+      setHealthCheck(null)
+    } finally {
+      setHealthChecking(false)
+    }
+  }, [])
 
   // Hydrate concurrency from backend on mount
   useEffect(() => {
@@ -35,6 +58,10 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
       if ([3, 5, 10].includes(val)) setConcurrentDownloads(val)
     }).catch(() => {})
   }, [])
+  useEffect(() => {
+    void refreshHealth()
+  }, [refreshHealth])
+
 
   // Engine version
   useEffect(() => {
@@ -120,6 +147,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
         setEngineUpdateStatus({ updating: false, success: true, message: result.message })
         if (result.version) setEngineVersion(result.version)
         else setEngineVersion(await window.cortexDl.getEngineVersion())
+        await refreshHealth()
         setTimeout(() => setEngineUpdateStatus(null), 5000)
       } else {
         setEngineUpdateStatus({ updating: false, success: false, message: result.message })
@@ -136,8 +164,12 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     try {
       const filePath = await window.cortexDl.selectCookieFile()
       if (filePath) {
-        setCookieFilePath(filePath)
-        await window.cortexDl.setCookieFile(filePath)
+        const validation = await window.cortexDl.setCookieFile(filePath)
+        setCookieValidation(validation)
+        if (validation.valid && validation.filePath) {
+          setCookieFilePath(validation.filePath)
+          await refreshHealth()
+        }
       }
     } catch (err) {
       console.error('Failed to select cookie file:', err)
@@ -146,8 +178,10 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
 
   const onClearCookieFile = async () => {
     try {
+      const validation = await window.cortexDl.setCookieFile(null)
       setCookieFilePath(null)
-      await window.cortexDl.setCookieFile(null)
+      setCookieValidation(validation)
+      await refreshHealth()
     } catch (err) {
       console.error('Failed to clear cookie file:', err)
     }
@@ -198,6 +232,9 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     // Settings state
     useInAppPlayer, setUseInAppPlayer,
     cookieFilePath,
+    cookieValidation,
+    healthCheck,
+    healthChecking,
     concurrentDownloads, setConcurrentDownloads,
     totalDownloadedBytes,
     updateStatus,
@@ -213,6 +250,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     onUpdateEngine,
     onSelectCookieFile,
     onClearCookieFile,
+    refreshHealth,
     onResetStats,
     onRestartAndInstall,
     onUninstall,

@@ -100,3 +100,35 @@ export type AnalyzeResult =
       comments?: { author: string; text: string; likeCount: number }[]
     }
   | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
+
+export type CookieValidationCode =
+  | 'valid'
+  | 'cleared'
+  | 'missing'
+  | 'not_file'
+  | 'invalid_header'
+  | 'missing_youtube'
+  | 'read_error'
+  | 'save_error'
+
+export type CookieValidationResult = {
+  valid: boolean
+  code: CookieValidationCode
+  message: string
+  filePath: string | null
+}
+
+export type JsRuntimeStatus = {
+  available: boolean
+  name: string
+}
+
+export type AppHealthCheck = {
+  checkedAt: number
+  healthy: boolean
+  ytDlp: { available: boolean; version: string }
+  ffmpeg: { available: boolean; path: string }
+  jsRuntime: JsRuntimeStatus
+  cookies: CookieValidationResult
+  downloadDirectory: { writable: boolean; path: string }
+}

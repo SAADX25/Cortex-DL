@@ -41,7 +41,7 @@
     {
       "from": "bin",
       "to": "bin",
-      "filter": ["**/*"]
+      "filter": ["yt-dlp.exe", "ffmpeg.exe", "deno.exe"]
     }
   ],
   "mac": {

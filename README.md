@@ -1,6 +1,6 @@
 ## Cortex DL — Architecture Reference
 
-**Current Version:** `1.5.0`
+**Current Version:** `1.6.0`
 
 **Technology Stack:** Electron · React · TypeScript · SQLite · yt-dlp · ffmpeg
 
@@ -1076,4 +1076,4 @@ Packages the app for Windows (NSIS installer). Bundles:
 
 ---
 
-*Generated: May 2026 | Cortex DL v1.5.0*
+*Generated: May 2026 | Cortex DL v1.5.5*

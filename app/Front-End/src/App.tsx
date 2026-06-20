@@ -218,8 +218,12 @@ function App() {
             useInAppPlayer={ctrl.useInAppPlayer}
             setUseInAppPlayer={ctrl.setUseInAppPlayer}
             cookieFilePath={ctrl.cookieFilePath}
+            cookieValidation={ctrl.cookieValidation}
+            healthCheck={ctrl.healthCheck}
+            healthChecking={ctrl.healthChecking}
             onSelectCookieFile={ctrl.onSelectCookieFile}
             onClearCookieFile={ctrl.onClearCookieFile}
+            onRefreshHealth={ctrl.refreshHealth}
             concurrentDownloads={ctrl.concurrentDownloads}
             setConcurrentDownloads={ctrl.setConcurrentDownloads}
             updateStatus={ctrl.updateStatus}

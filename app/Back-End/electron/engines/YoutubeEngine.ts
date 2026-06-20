@@ -17,6 +17,7 @@ import {
 import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
 import { getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
+import { isYouTubeAuthRequiredError, YOUTUBE_AUTH_REQUIRED_CODE } from '../ytdlp'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -136,6 +137,18 @@ export class YoutubeEngine implements IEngine {
     }
 
     // Error path: build message from captured stderr
+    if (isYouTubeAuthRequiredError(runResult.stderr)) {
+      log.warn(`[YoutubeEngine] Authentication or rate limit required for task ${task.id}`)
+      task.status = 'error'
+      task.errorMessage = YOUTUBE_AUTH_REQUIRED_CODE
+      task.updatedAtMs = nowMs()
+      runtime.retries = 0
+      context.flushSave()
+      context.sendUpdate(task)
+      sendNotification('YouTube Sign-in Required', 'Add a valid YouTube cookies.txt file in Settings.')
+      return
+    }
+
     const finalMessage = this.buildErrorMessage(runResult.stderr)
     log.error(`[YoutubeEngine] Task ${task.id} exited with code ${runResult.exitCode}: ${finalMessage}`)
 

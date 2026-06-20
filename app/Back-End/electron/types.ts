@@ -12,6 +12,10 @@ import type {
   YtdlpFormat,
   AnalyzeResult,
   YouTubeOAuthCodePayload,
+  CookieValidationCode,
+  CookieValidationResult,
+  JsRuntimeStatus,
+  AppHealthCheck,
 } from '../../Shared/types'
 
 export type {
@@ -26,6 +30,10 @@ export type {
   YtdlpFormat,
   AnalyzeResult,
   YouTubeOAuthCodePayload,
+  CookieValidationCode,
+  CookieValidationResult,
+  JsRuntimeStatus,
+  AppHealthCheck,
 }
 export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 

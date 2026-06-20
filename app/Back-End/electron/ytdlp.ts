@@ -1,10 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process'
-import type { AnalyzeResult } from './types'
+import type { AnalyzeResult, CookieValidationResult, JsRuntimeStatus } from './types'
 import log from 'electron-log'
 import path from 'node:path'
-import { existsSync, createWriteStream } from 'node:fs'
+import { chmodSync, createWriteStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { get } from 'node:https'
-import { chmodSync } from 'node:fs'
 import { unlink, rename, stat } from 'node:fs/promises'
 import { getBinaryPath, getBinDirectory } from './paths'
 import { db } from './db'
@@ -17,6 +16,54 @@ const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
 const MIN_BUN_VERSION: VersionTuple = [1, 2, 11]
 const MAX_BUN_VERSION: VersionTuple = [1, 3, 14]
 export const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,ios,web_creator,web'
+export const YOUTUBE_AUTH_REQUIRED_CODE = 'YOUTUBE_AUTH_REQUIRED'
+
+const YOUTUBE_AUTH_ERROR_PATTERNS = [
+  /sign in to confirm/i,
+  /not a bot/i,
+  /use --cookies-from-browser or --cookies/i,
+  /login_required/i,
+  /age[- ]restricted/i,
+  /http error 429/i,
+  /too many requests/i,
+  /rate[-_\s]?limit(?:ed|ing)?/i,
+  /request(?:s)?[^\r\n]{0,40}limit exceeded/i,
+  /temporarily blocked[^\r\n]{0,40}(?:request|traffic|youtube)/i,
+]
+
+function getErrorText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value instanceof Error) {
+    const cause = 'cause' in value ? getErrorText(value.cause) : ''
+    return [value.name, value.message, value.stack, cause].filter(Boolean).join('\n')
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return ['code', 'message', 'stderr', 'stdout']
+      .map((key) => record[key])
+      .filter((item): item is string => typeof item === 'string')
+      .join('\n')
+  }
+  return String(value ?? '')
+}
+
+export function isYouTubeAuthRequiredError(value: unknown): boolean {
+  const text = getErrorText(value)
+  return text.includes(YOUTUBE_AUTH_REQUIRED_CODE)
+    || YOUTUBE_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+export class YouTubeAuthRequiredError extends Error {
+  readonly code = YOUTUBE_AUTH_REQUIRED_CODE
+
+  constructor() {
+    super(
+      `${YOUTUBE_AUTH_REQUIRED_CODE}: YouTube requires sign-in, CAPTCHA verification, or has rate-limited this request. ` +
+      'Select a valid YouTube cookies.txt file in Settings and try again.',
+    )
+    this.name = 'YouTubeAuthRequiredError'
+  }
+}
 
 type VersionTuple = [number, number, number]
 
@@ -186,18 +233,60 @@ function selectJsRuntime(): JsRuntimeSelection {
   return cachedJsRuntimeSelection
 }
 
+export function validateCookieFile(filePath: string | null | undefined): CookieValidationResult {
+  if (!filePath) {
+    return { valid: false, code: 'missing', message: 'No cookies file is configured.', filePath: null }
+  }
+
+  const resolvedPath = path.resolve(filePath)
+  if (!existsSync(resolvedPath)) {
+    return { valid: false, code: 'missing', message: 'The selected cookies file does not exist.', filePath: resolvedPath }
+  }
+
+  try {
+    if (!statSync(resolvedPath).isFile()) {
+      return { valid: false, code: 'not_file', message: 'The selected path is not a file.', filePath: resolvedPath }
+    }
+
+    const contents = readFileSync(resolvedPath, 'utf8')
+    const firstLine = (contents.split(/\r?\n/, 1)[0] ?? '').replace(/^\uFEFF/, '').trim()
+    if (firstLine !== '# Netscape HTTP Cookie File' && firstLine !== '# HTTP Cookie File') {
+      return {
+        valid: false,
+        code: 'invalid_header',
+        message: 'The file is not a Netscape cookies.txt export.',
+        filePath: resolvedPath,
+      }
+    }
+
+    if (!/(?:^|\.)youtube\.com/i.test(contents)) {
+      return {
+        valid: false,
+        code: 'missing_youtube',
+        message: 'The cookies file does not contain YouTube cookies.',
+        filePath: resolvedPath,
+      }
+    }
+
+    return { valid: true, code: 'valid', message: 'YouTube cookies file is valid.', filePath: resolvedPath }
+  } catch (err) {
+    log.warn(`[ytdlp] Failed to validate cookie file: ${resolvedPath}`, err)
+    return { valid: false, code: 'read_error', message: 'The cookies file could not be read.', filePath: resolvedPath }
+  }
+}
+
 export function getYtdlpCookieArgs(): string[] {
   try {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
     if (!row?.value) return []
 
-    const cookiePath = path.resolve(row.value)
-    if (!existsSync(cookiePath)) {
-      log.warn(`[ytdlp] Cookie file configured but missing: ${cookiePath}`)
+    const validation = validateCookieFile(row.value)
+    if (!validation.valid || !validation.filePath) {
+      log.warn(`[ytdlp] Ignoring invalid cookie file (${validation.code}): ${validation.filePath ?? 'none'}`)
       return []
     }
 
-    return ['--cookies', cookiePath]
+    return ['--cookies', validation.filePath]
   } catch (err) {
     log.warn('[ytdlp] Failed to read cookie file setting:', err)
     return []
@@ -478,7 +567,7 @@ const stats = await stat(tempPath)
   }
 }
 
-export async function checkJsRuntime(): Promise<{ available: boolean; name: string }> {
+export async function checkJsRuntime(): Promise<JsRuntimeStatus> {
   const selected = selectJsRuntime()
   return { available: selected.available, name: selected.name }
 }
@@ -558,9 +647,8 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
 
       if (code !== 0) {
         log.error('yt-dlp analysis failed:', stderr)
-        // Check for common YouTube bot/login blocks
-        if (isYouTubeUrl(url) && (stderr.includes('Sign in to confirm you') || stderr.includes('not a bot'))) {
-          reject(new Error('YouTube requires login or CAPTCHA. Select a YouTube cookies.txt file in Settings, then analyze again.'))
+        if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(stderr)) {
+          reject(new YouTubeAuthRequiredError())
           return
         }
         resolve({ kind: 'unknown' })
@@ -776,6 +864,9 @@ export async function getDirectStreamUrl(
       log.info(`[ytdlp] getDirectStreamUrl: success with format "${formatSelector}" (${directUrl.slice(0, 80)}...)`)
       return directUrl
     } catch (err) {
+      if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(err)) {
+        throw new YouTubeAuthRequiredError()
+      }
       lastError = err instanceof Error ? err.message : String(err)
       log.warn(`[ytdlp] getDirectStreamUrl: format "${formatSelector}" failed — ${lastError}`)
       // Continue to next format selector

@@ -146,6 +146,31 @@ export interface Translations {
   btn_audio: string;
   new_folder_placeholder: string;
   speed_auto: string;
+  youtube_auth_required: string;
+  youtube_cookie_valid: string;
+  youtube_cookie_cleared: string;
+  youtube_cookie_missing: string;
+  youtube_cookie_not_file: string;
+  youtube_cookie_invalid_header: string;
+  youtube_cookie_missing_youtube: string;
+  youtube_cookie_read_error: string;
+  youtube_cookie_save_error: string;
+  health_title: string;
+  health_desc: string;
+  health_refresh: string;
+  health_checking: string;
+  health_ready: string;
+  health_attention: string;
+  health_ytdlp: string;
+  health_ffmpeg: string;
+  health_js_runtime: string;
+  health_cookies: string;
+  health_download_directory: string;
+  health_available: string;
+  health_missing: string;
+  health_writable: string;
+  health_not_writable: string;
+  health_cookie_optional: string;
 }
 
 export const defaultLanguage: Language = 'en';
@@ -296,6 +321,31 @@ export const translations: Record<Language, Translations> = {
     btn_audio: "صوت",
     new_folder_placeholder: "مجلد جديد (اختياري)",
     speed_auto: "تلقائي",
+    youtube_auth_required: "يتطلب YouTube تسجيل الدخول أو التحقق من CAPTCHA، أو تم تقييد الطلبات مؤقتاً. اختر ملف cookies.txt صالحاً لـ YouTube من الإعدادات ثم حاول مجدداً.",
+    youtube_cookie_valid: "ملف Cookies صالح ويحتوي على بيانات YouTube.",
+    youtube_cookie_cleared: "تمت إزالة ملف Cookies.",
+    youtube_cookie_missing: "ملف Cookies غير موجود.",
+    youtube_cookie_not_file: "المسار المحدد ليس ملفاً.",
+    youtube_cookie_invalid_header: "الملف ليس تصديراً صالحاً بصيغة Netscape cookies.txt.",
+    youtube_cookie_missing_youtube: "الملف لا يحتوي على Cookies خاصة بـ YouTube.",
+    youtube_cookie_read_error: "تعذر قراءة ملف Cookies.",
+    youtube_cookie_save_error: "تعذر حفظ إعداد ملف Cookies.",
+    health_title: "فحص جاهزية التطبيق",
+    health_desc: "يتحقق من المكونات المطلوبة للتحليل والتنزيل على Windows.",
+    health_refresh: "إعادة الفحص",
+    health_checking: "جارٍ الفحص...",
+    health_ready: "التطبيق جاهز",
+    health_attention: "بعض المكونات تحتاج إلى انتباه",
+    health_ytdlp: "محرك yt-dlp",
+    health_ffmpeg: "محرك FFmpeg",
+    health_js_runtime: "مشغل JavaScript",
+    health_cookies: "ملف YouTube Cookies",
+    health_download_directory: "مجلد التنزيل",
+    health_available: "متاح",
+    health_missing: "غير متاح",
+    health_writable: "قابل للكتابة",
+    health_not_writable: "غير قابل للكتابة",
+    health_cookie_optional: "غير محدد (اختياري)",
   },
   en: {
     nav_add: "Add Link",
@@ -442,5 +492,30 @@ export const translations: Record<Language, Translations> = {
     btn_audio: "Audio",
     new_folder_placeholder: "New Folder (Optional)",
     speed_auto: "Auto",
+    youtube_auth_required: "YouTube requires sign-in or CAPTCHA verification, or has temporarily rate-limited this request. Select a valid YouTube cookies.txt file in Settings and try again.",
+    youtube_cookie_valid: "The cookies file is valid and contains YouTube data.",
+    youtube_cookie_cleared: "The cookies file was removed.",
+    youtube_cookie_missing: "The cookies file does not exist.",
+    youtube_cookie_not_file: "The selected path is not a file.",
+    youtube_cookie_invalid_header: "This is not a valid Netscape cookies.txt export.",
+    youtube_cookie_missing_youtube: "The file does not contain YouTube cookies.",
+    youtube_cookie_read_error: "The cookies file could not be read.",
+    youtube_cookie_save_error: "The cookies file setting could not be saved.",
+    health_title: "App readiness",
+    health_desc: "Checks the components required for Windows analysis and downloads.",
+    health_refresh: "Run again",
+    health_checking: "Checking...",
+    health_ready: "Ready",
+    health_attention: "Some components need attention",
+    health_ytdlp: "yt-dlp engine",
+    health_ffmpeg: "FFmpeg engine",
+    health_js_runtime: "JavaScript runtime",
+    health_cookies: "YouTube cookies",
+    health_download_directory: "Download directory",
+    health_available: "Available",
+    health_missing: "Missing",
+    health_writable: "Writable",
+    health_not_writable: "Not writable",
+    health_cookie_optional: "Not configured (optional)",
   }
 };

@@ -1,7 +1,24 @@
 import { ipcRenderer, contextBridge } from 'electron'
-import type { DownloadTask, AnalyzeResult, StartInput } from './types'
+import type { AppHealthCheck, CookieValidationResult, DownloadTask, AnalyzeResult, JsRuntimeStatus, StartInput } from './types'
 import { UPDATE_CHANNEL, YOUTUBE_OAUTH_CHANNEL } from './types'
 
+
+function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> {
+  return ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
+    const rawMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : ''
+    const cleanMessage = rawMessage
+      .replace(/^Error invoking remote method ['"][^'"]+['"]:s*/i, '')
+      .replace(/^Error:s*/i, '')
+      .trim()
+
+    throw new Error(cleanMessage || 'The request could not be completed.')
+  })
+}
 contextBridge.exposeInMainWorld('cortexDl', {
   selectFolder(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-folder')
@@ -34,7 +51,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
     return () => ipcRenderer.off('cortexdl:comments-progress', fn)
   },
   analyzeUrl(url: string): Promise<AnalyzeResult> {
-    return ipcRenderer.invoke('cortexdl:analyze-url', url)
+    return invokeRendererSafe('cortexdl:analyze-url', url)
   },
   listDownloads(): Promise<DownloadTask[]> {
     return ipcRenderer.invoke('cortexdl:downloads:list')
@@ -90,6 +107,12 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getEngineVersion(): Promise<string> {
     return ipcRenderer.invoke('cortexdl:get-engine-version')
   },
+  checkJsRuntime(): Promise<JsRuntimeStatus> {
+    return ipcRenderer.invoke('cortexdl:check-js-runtime')
+  },
+  getHealthCheck(): Promise<AppHealthCheck> {
+    return ipcRenderer.invoke('cortexdl:health-check')
+  },
   checkForUpdates(): Promise<void> {
     return ipcRenderer.invoke('cortexdl:check-for-updates')
   },
@@ -134,7 +157,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
     return ipcRenderer.invoke('cortexdl:get-media-fps', filePath)
   },
   getDirectStreamUrl(url: string): Promise<string> {
-    return ipcRenderer.invoke('cortexdl:get-direct-stream-url', url)
+    return invokeRendererSafe('cortexdl:get-direct-stream-url', url)
   },
   selectCookieFile(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-cookie-file')
@@ -142,7 +165,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getCookieFile(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:get-cookie-file')
   },
-  setCookieFile(filePath: string | null): Promise<boolean> {
+  setCookieFile(filePath: string | null): Promise<CookieValidationResult> {
     return ipcRenderer.invoke('cortexdl:set-cookie-file', filePath)
   },
 })

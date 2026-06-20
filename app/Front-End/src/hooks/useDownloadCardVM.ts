@@ -305,7 +305,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       speedLabel,
       etaLabel,
       convertingPercent: convPct,
-      errorMessage: task.errorMessage ?? null,
+      errorMessage: task.errorMessage === 'YOUTUBE_AUTH_REQUIRED' ? t.youtube_auth_required : task.errorMessage ?? null,
       showPause,
       showResume,
       showCancel,

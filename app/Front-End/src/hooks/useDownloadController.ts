@@ -31,6 +31,28 @@ function isYtdlpUrl(url: string): boolean {
   return true
 }
 
+const YOUTUBE_AUTH_ERROR_PATTERN =
+  /YOUTUBE_AUTH_REQUIRED|sign in to confirm|not a bot|use --cookies-from-browser or --cookies|LOGIN_REQUIRED|age[- ]restricted|HTTP Error 429|too many requests|rate[-_\s]?limit/i
+
+function normalizeIpcError(error: unknown, fallback: string, youtubeAuthMessage: string): string {
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : ''
+
+  if (YOUTUBE_AUTH_ERROR_PATTERN.test(rawMessage)) return youtubeAuthMessage
+
+  const cleaned = rawMessage
+    .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*/i, '')
+    .replace(/^(?:Error|YouTubeAuthRequiredError):\s*/i, '')
+    .trim()
+
+  if (!cleaned || /Error invoking remote method/i.test(cleaned)) return fallback
+  return cleaned
+}
+
 // Dependencies
 
 export interface DownloadControllerDeps {
@@ -168,7 +190,7 @@ export function useDownloadController({
       if (picked) setDirectory(picked)
       return picked ?? null
     } catch (err) {
-      setGlobalError(err instanceof Error ? err.message : t.folder_pick_failed)
+      setGlobalError(normalizeIpcError(err, t.folder_pick_failed, t.youtube_auth_required))
       return null
     }
   }
@@ -222,7 +244,7 @@ export function useDownloadController({
         setSelectedYtdlpFormatId(null)
       }
     } catch (err) {
-      setGlobalError(err instanceof Error ? err.message : t.analyze_failed)
+      setGlobalError(normalizeIpcError(err, t.analyze_failed, t.youtube_auth_required))
     } finally {
       setAnalyzing(false)
     }
@@ -374,7 +396,7 @@ export function useDownloadController({
       resetInputState()
       setActiveTab('downloads')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Batch download failed'
+      const msg = normalizeIpcError(err, t.download_start_failed, t.youtube_auth_required)
       showToast(`❌ ${msg}`)
       setBatchItems((prev) => prev.map(b => ({ ...b, status: 'error', errorMessage: msg })))
     }
@@ -452,7 +474,7 @@ export function useDownloadController({
       setActiveTab('downloads')
     } catch (err) {
       console.error('Download Now failed:', err)
-      setGlobalError(err instanceof Error ? err.message : 'Failed to start download')
+      setGlobalError(normalizeIpcError(err, t.download_start_failed, t.youtube_auth_required))
     }
   }
 
@@ -475,7 +497,7 @@ export function useDownloadController({
           useDownloadStore.getState().removeTask(id)
           setModalConfig(prev => ({ ...prev, isOpen: false }))
         } catch (err) {
-          setGlobalError(err instanceof Error ? err.message : t.delete_failed)
+          setGlobalError(normalizeIpcError(err, t.delete_failed, t.youtube_auth_required))
           setModalConfig(prev => ({ ...prev, isOpen: false }))
         }
       }
@@ -491,13 +513,13 @@ export function useDownloadController({
         await window.cortexDl.openFile(filePath)
       }
     } catch (err) {
-      setGlobalError(err instanceof Error ? err.message : t.open_file_failed)
+      setGlobalError(normalizeIpcError(err, t.open_file_failed, t.youtube_auth_required))
     }
   }
 
   async function onOpenFolder(filePath: string) {
     try { await window.cortexDl.openFolder(filePath) }
-    catch (err) { setGlobalError(err instanceof Error ? err.message : t.open_folder_failed) }
+    catch (err) { setGlobalError(normalizeIpcError(err, t.open_folder_failed, t.youtube_auth_required)) }
   }
 
   const onOpenExternal = async (url: string) => {
