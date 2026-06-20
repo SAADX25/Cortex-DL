@@ -1,10 +1,6 @@
 ## Cortex DL — Architecture Reference
 
-<<<<<<< HEAD
 **Current Version:** `1.6.0`
-=======
-**Current Version:** `1.5.5`
->>>>>>> 7930edc1f6491156be77c3f52cbd6e5da037afac
 
 **Technology Stack:** Electron · React · TypeScript · SQLite · yt-dlp · ffmpeg
 
