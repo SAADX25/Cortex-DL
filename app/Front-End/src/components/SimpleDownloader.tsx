@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react'
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
 import { useTask } from '../stores/downloadStore'
 
-
 export default function SimpleDownloader() {
   const [status, setStatus] = useState('idle')
   const [fileName, setFileName] = useState('')

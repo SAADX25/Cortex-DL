@@ -39,8 +39,6 @@ export type {
 }
 export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 
-
-
 export type StartInput = {
   url: string
   directory: string
@@ -61,8 +59,6 @@ export type StartInput = {
   fps?: number | string
 }
 
-
-
 export type TaskRuntime = {
   abortController: AbortController | null
   child: ChildProcessWithoutNullStreams | null
@@ -73,20 +69,15 @@ export type TaskRuntime = {
   ignoreCookies?: boolean
 }
 
-
-
 export interface EngineContext {
-  /** Throttled — safe to call on every chunk / progress tick. */
+  
   sendUpdate: (task: DownloadTask) => void
-  /**
-   * Runtime state for the specific task id.
-   * Engines that manage child processes (ffmpeg, yt-dlp wrappers, etc.)
-   * use this to support pause/stop and progress throttling.
-   */
+  
+
   runtime: TaskRuntime
-  /** Debounced — coalesced to max 1 write/sec.  Use flushSave() for immediate. */
+  
   saveState: () => void
-  /** Immediate, crash-safe write.  Call on lifecycle transitions only. */
+  
   flushSave: () => void
   sendStats: (id: string, addedBytes: number) => void
   sendYouTubeOAuthCode: (payload: YouTubeOAuthCodePayload) => void

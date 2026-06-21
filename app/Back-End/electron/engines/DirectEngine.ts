@@ -8,8 +8,6 @@ import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { nowMs } from '../utils';
 
-
-
 interface ChunkInfo {
   index: number;
   start: number;
@@ -191,7 +189,7 @@ export class DirectEngine implements IEngine {
         try {
           await fsPromises.unlink(task.filePath);
         } catch {
-          // Preserve the original download error if cleanup cannot remove the file.
+          
         }
       }
       throw error;

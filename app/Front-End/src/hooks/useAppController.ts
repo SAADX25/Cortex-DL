@@ -6,7 +6,6 @@ import { useDownloadController } from './useDownloadController'
 import { useSettingsController } from './useSettingsController'
 import { useCommentsController } from './useCommentsController'
 
-
 export function variantLabel(v: any, lang: Language): string {
   const res = v.resolution ? `${v.resolution.height}p` : null
   const bw = v.bandwidth ? `${Math.round(v.bandwidth / 1000)} kbps` : null
@@ -15,7 +14,6 @@ export function variantLabel(v: any, lang: Language): string {
   if (bw) return bw
   return translations[lang].quality_placeholder
 }
-
 
 export function useAppController() {
   

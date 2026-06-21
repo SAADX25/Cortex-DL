@@ -3,25 +3,25 @@ import type { DownloadTask } from '../../../Shared/types'
 import { startHighFrequencyIPCListeners } from '../hooks/useHighFrequencyIPC'
 
 interface DownloadStoreState {
-  /** Normalized tasks — fast O(1) lookup by ID */
+  
   tasks: Map<string, DownloadTask>
 
-  /** Ordered list of task IDs (newest first) */
+  
   taskIds: string[]
 
-  /** Upsert a single task (insert or update-in-place) */
+  
   upsertTask: (task: DownloadTask) => void
 
-  /** Remove a task by ID */
+  
   removeTask: (id: string) => void
 
-  /** Batch-insert multiple new tasks in a single atomic state update */
+  
   addMultipleTasks: (tasks: DownloadTask[]) => void
 
-  /** Bulk-load from the initial IPC list call */
+  
   loadTasks: (tasks: DownloadTask[]) => void
 
-  /** Remove all completed/canceled/error tasks */
+  
   clearCompleted: () => void
 }
 
@@ -90,21 +90,14 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     }),
 }))
 
-
-
-/** Select a single task by ID */
 export const useTask = (id: string) =>
   useDownloadStore((s) => s.tasks.get(id))
 
-/** Select ordered task IDs */
 export const useTaskIds = () =>
   useDownloadStore((s) => s.taskIds)
 
-/** Get the full tasks map snapshot */
 export const getTasksSnapshot = () =>
   useDownloadStore.getState().tasks
-
-
 
 let ipcInitialized = false
 

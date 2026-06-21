@@ -3,8 +3,6 @@ import { useTask } from '../stores/downloadStore'
 import type { Language } from '../translations'
 import { translations } from '../translations'
 
-
-
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '-'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -34,8 +32,6 @@ function formatEta(remainingBytes: number, speedBps: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-
-
 export type DisplayPhase =
   | 'queued'
   | 'starting'
@@ -47,8 +43,6 @@ export type DisplayPhase =
   | 'completed'
   | 'error'
   | 'canceled'
-
-
 
 export interface DownloadCardVM {
   
@@ -92,8 +86,6 @@ export interface DownloadCardVM {
   
   filePath: string
 }
-
-
 
 interface UseDownloadCardVMOptions {
   id: string

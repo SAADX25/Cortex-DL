@@ -2,8 +2,6 @@ import type { DownloadTask } from './types'
 import { parseTimeToSeconds } from './utils'
 import log from 'electron-log'
 
-
-
 export interface FfmpegState {
   totalDuration: number | null
   stderr: string
@@ -11,11 +9,6 @@ export interface FfmpegState {
 
 const RAW_PROGRESS_LOG_ENABLED = /^(1|true|yes)$/i.test(process.env.CORTEX_DL_DEBUG_PROGRESS ?? '')
 
-/**
- * Diagnostic helper for yt-dlp / FFmpeg stream output.
- * Enable with CORTEX_DL_DEBUG_PROGRESS=1 to capture the raw dialect emitted by
- * trim jobs without spamming normal production logs.
- */
 export function logRawProgressChunk(taskId: string, source: string, chunk: string): void {
   if (!RAW_PROGRESS_LOG_ENABLED) return
 
@@ -28,7 +21,6 @@ export function logRawProgressChunk(taskId: string, source: string, chunk: strin
     log.info(`[progress:raw][${taskId}][${source}] ${line}`)
   }
 }
-
 
 export function parseDownloadProgress(line: string, task: DownloadTask): boolean {
   let changed = false
@@ -107,7 +99,6 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
   return changed
 }
 
-
 export function parseFfmpegProgress(
   line: string,
   task: DownloadTask,
@@ -122,7 +113,6 @@ export function parseFfmpegProgress(
       state.totalDuration = parseTimeToSeconds(durMatch[1])
     }
   }
-
 
   const sizeMatch = /size=\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|kB|B)\b/i.exec(line)
   if (sizeMatch) {
@@ -149,7 +139,6 @@ export function parseFfmpegProgress(
     }
   }
 
-
   const bitrateMatch = /bitrate=\s*(\d+(?:\.\d+)?)\s*(kbits|Mbits)\/s/i.exec(line)
   if (bitrateMatch) {
     const val = parseFloat(bitrateMatch[1])
@@ -161,7 +150,6 @@ export function parseFfmpegProgress(
       changed = true
     }
   }
-
 
   if (!bitrateMatch && /\bspeed=\s*\d+(?:\.\d+)?x\b/.test(line)) {
     changed = true
@@ -207,14 +195,11 @@ export function parseFfmpegProgress(
   return changed
 }
 
-
-
 export interface TransitionResult {
   transitioned: boolean
   detectedPath: string | null
 }
 
-/** Detect state transitions from yt-dlp info lines (merger, converter, etc.) */
 export function parseStateTransition(
   line: string,
   task: DownloadTask,
@@ -277,7 +262,6 @@ export function parseStateTransition(
 
   return { transitioned: false, detectedPath }
 }
-
 
 export function flushLines(buf: string, chunk: string): [string[], string] {
   buf += chunk

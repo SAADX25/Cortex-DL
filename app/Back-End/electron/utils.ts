@@ -5,8 +5,6 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { DownloadTask, TaskRuntime } from './types'
 import { UPDATE_CHANNEL } from './types'
 
-
-
 export function sanitizeFilename(name: string): string {
   let sanitized = name.replace(/[^\w\s\u0600-\u06FF-]/g, '')
   sanitized = sanitized.replace(/[\s_]+/g, '_')
@@ -36,8 +34,6 @@ export function getDefaultFilename(inputUrl: string): string {
   return parseFilenameFromUrl(inputUrl) || 'download'
 }
 
-
-
 export function isHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
@@ -51,13 +47,10 @@ export function isM3u8Url(url: string): boolean {
   return /\.m3u8(\?|#|$)/i.test(url)
 }
 
-
-
 export function nowMs(): number {
   return Date.now()
 }
 
-/** Parse HH:MM:SS.ss or MM:SS.ss or SS.ss timestamp to seconds */
 export function parseTimeToSeconds(ts: string): number {
   const parts = ts.split(':')
   let secs = 0
@@ -83,8 +76,6 @@ export function computeSpeed(task: DownloadTask, runtime: TaskRuntime): void {
   runtime.lastSpeedSampleBytes = task.downloadedBytes
 }
 
-
-
 export async function ensureDirectoryExists(directory: string): Promise<void> {
   await fs.mkdir(directory, { recursive: true })
 }
@@ -98,8 +89,6 @@ export async function getFileSizeIfExists(filePath: string): Promise<number> {
   }
 }
 
-
-
 export function parseTotalFromContentRange(value: string | null): number | null {
   if (!value) return null
   const match = /^bytes\s+\d+-\d+\/(\d+|\*)$/i.exec(value.trim())
@@ -108,14 +97,10 @@ export function parseTotalFromContentRange(value: string | null): number | null 
   return Number.isFinite(total) && total > 0 ? total : null
 }
 
-
-
-
 export function sendUpdate(win: BrowserWindow | null, task: DownloadTask): void {
   if (!win || win.isDestroyed()) return
   win.webContents.send(UPDATE_CHANNEL, task)
 }
-
 
 const IPC_THROTTLE_MS = 200
 
@@ -142,15 +127,12 @@ export function sendNotification(title: string, body: string): void {
   }
 }
 
-
-
-
 export function killProcessTree(child: ChildProcessWithoutNullStreams | null): void {
   if (!child) return
   const pid = child.pid
   if (!pid) {
     try { child.kill('SIGKILL') } catch {
-      // The child may already be gone.
+      
     }
     return
   }
@@ -170,7 +152,7 @@ export function killProcessTree(child: ChildProcessWithoutNullStreams | null): v
     })
     killer.on('error', () => {
       try { child.kill('SIGKILL') } catch {
-        // The child may already be gone.
+        
       }
     })
   } else {
@@ -178,7 +160,7 @@ export function killProcessTree(child: ChildProcessWithoutNullStreams | null): v
       process.kill(-pid, 'SIGKILL')
     } catch {
       try { child.kill('SIGKILL') } catch {
-        // The child may already be gone.
+        
       }
     }
   }

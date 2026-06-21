@@ -10,9 +10,9 @@ export type TrimRange = {
 }
 
 type AdvancedTrimmerProps = {
-  /** CDN / format URL from the analysis result. */
+  
   videoUrl: string
-  /** Original page URL (e.g. youtube.com/watch?v=...) — resolved via yt-dlp. */
+  
   originalUrl?: string
   duration: number
   initialStartTime?: string

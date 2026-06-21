@@ -53,7 +53,6 @@ export function AudioPlayerView({
         crossOrigin="anonymous"
       />
 
-
       <div
         className="player-header"
         style={{

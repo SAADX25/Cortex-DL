@@ -41,9 +41,8 @@ export class MediaProcessor {
     });
   }
 
-  /**
-    * Converts a media file from one format/container to another.
-    */
+  
+
   async convert(inputPath: string, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const ffmpeg = getBinaryPath('ffmpeg');
@@ -63,9 +62,8 @@ export class MediaProcessor {
     });
   }
 
-  /**
-   * Extracts the FPS of a video file using ffmpeg.
-   */
+  
+
   async getFps(filePath: string): Promise<number | null> {
     return new Promise((resolve) => {
       const ffmpeg = getBinaryPath('ffmpeg');

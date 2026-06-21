@@ -50,7 +50,7 @@ export function VideoPlayerView({
       window.cortexDl.getSubtitles(filePath).then(subs => {
         setSubtitles(subs);
         if (subs && subs.length > 0) {
-          setActiveSubtitle(0); // Auto-enable first subtitle if available
+          setActiveSubtitle(0); 
         } else {
           setActiveSubtitle(-1);
         }
@@ -58,7 +58,7 @@ export function VideoPlayerView({
     }
   }, [filePath]);
 
-  // Sync the active subtitle with the video's textTracks
+  
   React.useEffect(() => {
     if (!videoRef.current) return;
     const tracks = videoRef.current.textTracks;

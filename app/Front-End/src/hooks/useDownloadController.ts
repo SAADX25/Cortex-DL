@@ -6,8 +6,6 @@ import { initDownloadStore, useDownloadStore, getTasksSnapshot } from '../stores
 import { useUIStore } from '../stores/useUIStore'
 import type { ModalConfig } from './types'
 
-
-
 function isYtdlpUrl(url: string): boolean {
   const lowUrl = url.toLowerCase()
   if (
@@ -55,8 +53,6 @@ function normalizeIpcError(error: unknown, fallback: string, youtubeAuthMessage:
   return cleaned
 }
 
-
-
 export interface DownloadControllerDeps {
   username: string
   password: string
@@ -64,8 +60,6 @@ export interface DownloadControllerDeps {
   setModalConfig: Dispatch<SetStateAction<ModalConfig>>
   t: Translations
 }
-
-
 
 export function useDownloadController({
   username, password,
@@ -288,7 +282,7 @@ export function useDownloadController({
         return
       }
     } catch {
-      // Non-URL input is handled by the regular analyzer below.
+      
     }
 
     performAnalysis(inputUrl)
@@ -328,7 +322,7 @@ export function useDownloadController({
       showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
       return
     }
-    if (!/^https?:\/\//i.test(trimmed)) {
+    if (!/^https?:\/\
       setGlobalError('Invalid URL')
       setTimeout(() => setGlobalError(null), 2500)
       return
@@ -338,8 +332,6 @@ export function useDownloadController({
       showToast('Subtitles can be embedded only in MP4, MKV, or WEBM videos.')
       return
     }
-
-
 
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const knownTitle = analyzeResult?.kind === 'ytdlp' ? analyzeResult.title : undefined

@@ -63,7 +63,6 @@ const domRegistry = new Map<string, RegisteredDom>()
 
 let ipcListenersStarted = false
 
-
 const ZUSTAND_THROTTLE_MS = 500
 const lastZustandSentAtMs = new Map<string, number>()
 const lastStructuralKeyById = new Map<string, string>()
@@ -97,12 +96,6 @@ export function useHighFrequencyIPC(
     }
   }, [taskId, progressBarRef, speedTextRef, percentTextRef, vmRef, onStructuralChange])
 }
-
-
-
-
-
-
 
 const mergeSimState = new Map<string, { timer: ReturnType<typeof setInterval>; startMs: number }>()
 
@@ -144,9 +137,6 @@ function stopMergeSimulation(taskId: string): void {
   }
 }
 
-
-
-/** Phase CSS classes used on the bar fill element */
 const PHASE_CLASSES = ['downloading', 'merging', 'converting', 'completed', 'error', 'paused', 'queued']
 
 function updateDomForTask(task: DownloadTask): void {
@@ -260,8 +250,6 @@ function updateDomForTask(task: DownloadTask): void {
     refs.speedTextRef.current.innerText = formatSpeedForDisplay(task.speedBytesPerSec)
   }
 }
-
-
 
 function structuralKey(task: DownloadTask): string {
   const speedPositive = task.speedBytesPerSec != null && task.speedBytesPerSec > 0

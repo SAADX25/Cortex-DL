@@ -19,7 +19,6 @@ import {
   killProcessTree,
 } from './utils'
 
-
 import type { IEngine } from './engines/IEngine'
 import { DirectEngine } from './engines/DirectEngine'
 import { YoutubeEngine } from './engines/YoutubeEngine'
@@ -61,7 +60,7 @@ export class DownloadManager {
         if ([3, 5, 10].includes(parsed)) this.maxConcurrent = parsed
       }
     } catch {
-      // Keep the default concurrency when persisted settings are unavailable.
+      
     }
   }
 
@@ -107,11 +106,8 @@ export class DownloadManager {
     }
   }
 
-  /**
-   * Scan download directories for orphaned {uuid}.* temp files left by
-   * yt-dlp downloads that were interrupted by a crash.  Only deletes
-   * files whose UUID prefix does NOT match any known task.
-   */
+  
+
   private cleanupOrphanFiles(): void {
     
     const knownIds = new Set(this.tasks.keys())
@@ -137,18 +133,17 @@ export class DownloadManager {
             unlinkSync(orphanPath)
             log.info(`[Cleanup] Deleted orphan: ${file}`)
           } catch {
-            // Cleanup is best-effort; a locked file must not block startup.
+            
           }
         }
       } catch {
-        // Ignore directories that cannot be scanned during best-effort cleanup.
+        
       }
     }
   }
 
-  /**
-   * Save active tasks to database.
-   */
+  
+
   private saveStateImmediate(taskId?: string): void {
     try {
       if (taskId) {
@@ -179,9 +174,8 @@ export class DownloadManager {
     })
   }
 
-  /**
-   * Update active tasks in database.
-   */
+  
+
   private saveStateDebounced(): void {
     
     
@@ -198,9 +192,8 @@ export class DownloadManager {
     }
   }
 
-  /**
-   * Used before app quit so the last state isn't lost.
-   */
+  
+
   flushPendingSave(): void {
     this.saveStateImmediate()
   }
@@ -441,7 +434,7 @@ export class DownloadManager {
     try {
       if (existsSync(task.filePath)) await fs.unlink(task.filePath)
     } catch {
-      // A locked partial file can be removed by the next cleanup pass.
+      
     }
 
     return task

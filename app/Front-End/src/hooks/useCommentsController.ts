@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 
-
 export function useCommentsController() {
   const [isCommentsDownloading, setIsCommentsDownloading] = useState(false)
   const [commentsSuccessPath, setCommentsSuccessPath] = useState<string | null>(null)

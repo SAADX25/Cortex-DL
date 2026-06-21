@@ -22,7 +22,6 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearchQuery = useDebounce(searchInput, 300)
 
-
   const [showClearModal, setShowClearModal] = useState(false)
 
   const handleClearAll = async (deleteFiles: boolean) => {

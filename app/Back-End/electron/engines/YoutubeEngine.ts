@@ -110,7 +110,7 @@ export class YoutubeEngine implements IEngine {
       const sizeTemp = await getFileSizeIfExists(downloadedTempPath)
       const isMedia = /\.(mp4|mkv|webm|mp3|m4a|ogg|wav|flv|avi|mov)$/i.test(downloadedTempPath)
       
-      // Only treat as success if it's a media file AND has a reasonable size
+      
       if (isMedia && sizeTemp > 50 * 1024) {
         log.warn(`[YoutubeEngine] Task ${task.id} exited with ${runResult.exitCode} but generated valid media file. Treating as success.`)
         isSuccess = true
@@ -124,7 +124,7 @@ export class YoutubeEngine implements IEngine {
       if (!isMedia) {
         log.error(`[YoutubeEngine] Task ${task.id} exited with 0 but no valid media file was found (found: ${finalPathToRename}). The download was likely blocked by YouTube.`)
         
-        // Clean up fragments (like .vtt files that weren't embedded)
+        
         try {
           const files = await fsPromises.readdir(task.directory)
           const fragments = files.filter(f => f.startsWith(`${task.id}.`))
@@ -180,7 +180,7 @@ export class YoutubeEngine implements IEngine {
       if (!runtime.ignoreCookies && args.includes('--cookies')) {
         log.warn(`[YoutubeEngine] Retrying task ${task.id} without cookies to bypass auth limit...`)
         runtime.ignoreCookies = true
-        // Fall through to the retry block below
+        
       } else {
         task.status = 'error'
         task.errorMessage = YOUTUBE_AUTH_REQUIRED_CODE
@@ -297,7 +297,7 @@ export class YoutubeEngine implements IEngine {
       new Promise<string>((_, rej) =>
         setTimeout(() => {
           try { proc.kill() } catch {
-            // The process may already have exited when the timeout fires.
+            
           }
           rej(new Error('meta timeout'))
         }, META_TIMEOUT_MS)
@@ -384,7 +384,7 @@ export class YoutubeEngine implements IEngine {
       for (const line of lines) {
         if (!line.trim()) continue
 
-        // Always log subtitle/embed-related messages for diagnostics
+        
         if (/subtitle|sub|embed|caption|WARNING|ERROR/i.test(line)) {
           log.info(`[YoutubeEngine:sub] ${line.trim()}`)
         }
@@ -469,6 +469,16 @@ export class YoutubeEngine implements IEngine {
     return args
   }
 
+  
+
+  private parseHeightFromFormatId(formatId: string | undefined | null): number | null {
+    if (!formatId) return null
+    const match = /^(\d{3,4})p$/i.exec(formatId.trim())
+    if (!match) return null
+    const height = parseInt(match[1], 10)
+    return isNaN(height) ? null : height
+  }
+
   private buildYtdlpArgs(
     task: DownloadTask,
     profile: Profile,
@@ -485,8 +495,8 @@ export class YoutubeEngine implements IEngine {
       '--no-playlist',
       '--geo-bypass',
       '--force-ipv4',
-      // When subtitles are requested, allow warnings so yt-dlp reports
-      // subtitle download/embed issues instead of silently skipping.
+      
+      
       ...(hasSubtitles ? [] : ['--no-warnings']),
       '--force-overwrites',
       '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
@@ -504,15 +514,21 @@ export class YoutubeEngine implements IEngine {
       ...getJsRuntimeArgs(),
     ]
 
-    // hasSubtitles already computed above
+    
 
     if (task.targetFormat === 'mp4') {
       const isTrimmedTask = Boolean(task.startTime || task.endTime)
       if (isTrimmedTask) {
         ytArgs.push('--postprocessor-args', 'ffmpeg_i:-movflags +faststart')
+      } else if (hasSubtitles) {
+        
+        
+        ytArgs.push(
+          '--postprocessor-args',
+          'Merger+ffmpeg:-y -threads 0 -c:a aac -c:s mov_text -movflags +faststart'
+        )
       } else {
-        // Scope to Merger only so EmbedSubtitle PP can run with its own
-        // default codec settings (it handles -c:s mov_text internally).
+        
         ytArgs.push(
           '--postprocessor-args',
           'Merger+ffmpeg:-y -threads 0 -c:a aac -movflags +faststart'
@@ -534,51 +550,57 @@ export class YoutubeEngine implements IEngine {
     }
 
     
+    const heightConstraint = this.parseHeightFromFormatId(task.ytdlpFormatId)
+
     switch (profile) {
       case 'proAudio': {
-        
-        
         ytArgs.push('-x', '--audio-format', 'mp3', '--audio-quality', '0')
         ytArgs.push('-f', 'bestaudio/best')
         break
       }
       case 'bestVideo': {
         
-        
+        const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
         ytArgs.push(
           '-f',
-          'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best'
+          `bestvideo${heightFilter}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${heightFilter}+bestaudio/best`
         )
+        if (heightConstraint) {
+          log.info(`[YoutubeEngine] Quality constraint applied: height<=${heightConstraint}`)
+        }
         ytArgs.push('--merge-output-format', 'mp4')
         break
       }
       default: {
-        
         if (AUDIO_FORMATS.includes(task.targetFormat as AudioFormat)) {
           let audioFmt = task.targetFormat as string
           if (audioFmt === 'ogg') audioFmt = 'vorbis'
-          if (audioFmt === 'wma') audioFmt = 'wav' 
-          
+          if (audioFmt === 'wma') audioFmt = 'wav'
+
           ytArgs.push('-x', '--audio-format', audioFmt, '-f', 'bestaudio/best')
           if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
         } else if (VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
-          ytArgs.push('-f', 'bestvideo+bestaudio/best', '-S', 'res,fps')
           
+          const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
+          ytArgs.push('-f', `bestvideo${heightFilter}+bestaudio/best`, '-S', 'res,fps')
+          if (heightConstraint) {
+            log.info(`[YoutubeEngine] Quality constraint applied (default): height<=${heightConstraint}`)
+          }
+
           let mergeFmt = 'mkv'
           if (['mp4', 'mkv', 'webm', 'ogg', 'flv'].includes(task.targetFormat)) {
             mergeFmt = task.targetFormat
           } else if (task.targetFormat === 'ogv') {
-            mergeFmt = 'ogg' 
+            mergeFmt = 'ogg'
             ytArgs.push('--recode-video', 'ogg')
           } else if (task.targetFormat === 'm4v') {
-            mergeFmt = 'mp4' 
+            mergeFmt = 'mp4'
           }
           ytArgs.push('--merge-output-format', mergeFmt)
-          
+
           if (task.targetFormat === 'avi' || task.targetFormat === 'mov') {
             ytArgs.push('--recode-video', task.targetFormat)
           } else if (task.targetFormat === 'gif') {
-            
             ytArgs.push('--merge-output-format', 'mp4')
           }
         }
@@ -678,7 +700,7 @@ export class YoutubeEngine implements IEngine {
       task.filePath = targetPath
       task.filename = path.basename(targetPath)
 
-      // Also rename any associated subtitle files (e.g. task.id.ar.vtt -> finalName.ar.vtt)
+      
       try {
         const files = await fsPromises.readdir(task.directory)
         const subFiles = files.filter(f => f.startsWith(`${task.id}.`) && (f.endsWith('.vtt') || f.endsWith('.srt')))
@@ -686,7 +708,7 @@ export class YoutubeEngine implements IEngine {
         
         for (const subFile of subFiles) {
           const oldSubPath = path.join(task.directory, subFile)
-          // Extract the language part. e.g. "task.id.ar.vtt" -> ".ar.vtt"
+          
           const suffix = subFile.substring(task.id.length)
           const newSubPath = path.join(task.directory, `${parsedTarget.name}${suffix}`)
           await fsPromises.rename(oldSubPath, newSubPath)

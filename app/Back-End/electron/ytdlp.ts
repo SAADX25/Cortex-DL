@@ -8,7 +8,6 @@ import { unlink, rename, stat } from 'node:fs/promises'
 import { getBinaryPath, getBinDirectory } from './paths'
 import { db } from './db'
 
-
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 
 const ANALYSIS_CACHE_MAX = 50 
 const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
@@ -337,7 +336,7 @@ export async function getYtdlpVersion(): Promise<string> {
       new Promise<number>((resolve) => {
         setTimeout(() => {
           try { p.kill() } catch {
-            // The process may already have exited when the timeout fires.
+            
           }
           resolve(1)
         }, TIMEOUT_MS)
@@ -353,7 +352,6 @@ export async function getYtdlpVersion(): Promise<string> {
     return 'Error'
   }
 }
-
 
 function fetchJson(url: string): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -393,7 +391,6 @@ function fetchJson(url: string): Promise<any> {
     get(url, options as any, handleResponse).on('error', reject)
   })
 }
-
 
 function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -551,7 +548,7 @@ const stats = await stat(tempPath)
     try {
       chmodSync(binaryPath, 0o755)
     } catch {
-      // chmod is not required on Windows and may be unsupported elsewhere.
+      
     }
     
     log.info(`[ytdlp] Update successful! Version: ${latestVersion}`)
@@ -732,8 +729,8 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
           }
         }
 
-        // Prefer creator-provided subtitles over automatic captions when both
-        // collections contain the same language code.
+        
+        
         addSubtitleTracks(info.subtitles, false)
         addSubtitleTracks(info.automatic_captions, true)
 
@@ -778,7 +775,6 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
     })
   })
 }
-
 
 export async function getDirectStreamUrl(
   url: string,
@@ -848,7 +844,7 @@ export async function getDirectStreamUrl(
         
         const timer = setTimeout(() => {
           try { p.kill() } catch {
-            // The process may already have exited when the timeout fires.
+            
           }
           reject(new Error('yt-dlp timed out while extracting stream URL.'))
         }, TIMEOUT_MS)

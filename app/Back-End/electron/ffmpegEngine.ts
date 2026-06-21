@@ -9,9 +9,6 @@ import { nowMs, getFileSizeIfExists, sendNotification, parseTimeToSeconds } from
 import { parseFfmpegProgress, flushLines, logRawProgressChunk } from './progressParser'
 import type { FfmpegState } from './progressParser'
 
-
-
-
 export async function isFfmpegAvailable(): Promise<boolean> {
   try {
     const p = spawn(getBinaryPath('ffmpeg'), ['-version'], { windowsHide: true, detached: false })
@@ -44,8 +41,6 @@ async function isOutputValid(filePath: string): Promise<boolean> {
     }
   })
 }
-
-
 
 function spawnFfmpeg(
   url: string,
@@ -91,8 +86,6 @@ function spawnFfmpeg(
 
   return spawn(getBinaryPath('ffmpeg'), [...pre, ...tail], { windowsHide: true, detached: false })
 }
-
-
 
 export async function runFfmpegDownload(
   task: DownloadTask,
@@ -223,7 +216,7 @@ export async function runFfmpegDownload(
           task.downloadedBytes = finalSize
         }
       } catch {
-        // Completion metadata is optional when the output cannot be inspected.
+        
       }
 
       ctx.flushSave()

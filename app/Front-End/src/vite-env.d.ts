@@ -64,21 +64,21 @@ declare global {
       }
     | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
 
-  /** Shape emitted by the main process on download progress events. */
+  
   interface DownloadProgressData {
     id?: string
     Id?: string
     [key: string]: unknown
   }
 
-  /** Shape emitted by the main process on auto-update status events. */
+  
   interface UpdateStatusData {
     status: 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
     percent?: number
     error?: string
   }
 
-  /** Result shape returned by downloadComments IPC. */
+  
   type DownloadCommentsResult =
     | boolean
     | { success: boolean; canceled?: boolean; error?: string; filePath?: string }

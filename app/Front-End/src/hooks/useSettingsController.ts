@@ -4,11 +4,9 @@ import { translations } from '../translations'
 import type { Language } from '../translations'
 import type { ModalConfig } from './types'
 
-
 export interface SettingsControllerDeps {
   setModalConfig: Dispatch<SetStateAction<ModalConfig>>
 }
-
 
 export function useSettingsController({ setModalConfig }: SettingsControllerDeps) {
   
@@ -61,7 +59,6 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   useEffect(() => {
     void refreshHealth()
   }, [refreshHealth])
-
 
   
   useEffect(() => {

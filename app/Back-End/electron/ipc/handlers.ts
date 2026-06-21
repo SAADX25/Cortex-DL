@@ -469,10 +469,10 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
       const subtitles: import('../../../Shared/types').PlayerSubtitleTrack[] = []
 
-      // 1. Check for external subtitle files
+      
       for (const file of files) {
         if (file.startsWith(baseName) && (file.endsWith('.vtt') || file.endsWith('.srt'))) {
-          // Parse language code. E.g. "Video Title.ar.vtt" -> "ar"
+          
           const namePart = file.slice(baseName.length, -path.extname(file).length)
           const langCode = namePart.replace(/^\./, '') || 'Unknown'
           
@@ -485,7 +485,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
         }
       }
 
-      // 2. Check for embedded subtitle streams using ffprobe
+      
       try {
         const ffprobePath = getBinaryPath('ffprobe')
         if (existsSync(ffprobePath) && (ext === '.mp4' || ext === '.mkv' || ext === '.webm')) {

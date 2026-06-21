@@ -94,7 +94,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     if (mediaRef.current) {
       mediaRef.current.pause();
       try { mediaRef.current.currentTime = 0; } catch (e) {
-        // Some media streams reject seeking while their metadata is resetting.
+        
       }
     }
     if (videoRef.current) videoRef.current.pause();
@@ -215,10 +215,10 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       cancelAnimationFrame(rafId);
       animationFrameRef.current = null;
       try { if (source && analyser) source.disconnect(analyser); } catch (_) {
-        // The audio nodes may already be disconnected during rapid source changes.
+        
       }
       try { if (analyser) analyser.disconnect(); } catch (_) {
-        // The analyser may already be disconnected during cleanup.
+        
       }
       
       audioContextRef.current = null;
@@ -431,7 +431,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
   
 
-
   const handleTimeUpdate = () => {
     
   };
@@ -496,7 +495,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     setIsPlaying(false);
     if (mediaRef.current) mediaRef.current.currentTime = 0;
   };
-
 
   if (!isOpen) return null;
 

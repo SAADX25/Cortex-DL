@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { BatchItem } from '../components/AddDownloadTab'
 
-
 export type ActiveTab = 'add' | 'downloads' | 'settings'
 
 interface UIStoreState {
@@ -28,7 +27,6 @@ interface UIStoreState {
   analyzing: boolean
   setAnalyzing: (v: boolean) => void
 }
-
 
 export const useUIStore = create<UIStoreState>((set) => ({
   
@@ -71,26 +69,18 @@ export const useUIStore = create<UIStoreState>((set) => ({
   setAnalyzing: (v) => set({ analyzing: v }),
 }))
 
-
-/** Active tab */
 export const useActiveTab = () => useUIStore((s) => s.activeTab)
 export const useSetActiveTab = () => useUIStore((s) => s.setActiveTab)
 
-/** Directory */
 export const useDirectory = () => useUIStore((s) => s.directory)
 
-/** Global error */
 export const useGlobalError = () => useUIStore((s) => s.globalError)
 
-/** Batch items */
 export const useBatchItems = () => useUIStore((s) => s.batchItems)
 
-/** Toast */
 export const useToast = () => useUIStore((s) => s.toastMsg)
 
-/** URL */
 export const useUrl = () => useUIStore((s) => s.url)
 
-/** Analysis */
 export const useAnalyzeResult = () => useUIStore((s) => s.analyzeResult)
 export const useAnalyzing = () => useUIStore((s) => s.analyzing)

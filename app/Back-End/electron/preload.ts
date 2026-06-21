@@ -2,7 +2,6 @@ import { ipcRenderer, contextBridge } from 'electron'
 import type { AppHealthCheck, CookieValidationResult, DownloadTask, AnalyzeResult, JsRuntimeStatus, StartInput } from './types'
 import { UPDATE_CHANNEL, YOUTUBE_OAUTH_CHANNEL } from './types'
 
-
 function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
     const rawMessage =

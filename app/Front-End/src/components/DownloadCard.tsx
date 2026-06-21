@@ -32,7 +32,7 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
             setImgSrc(streamUrl)
           }
         } catch (err) {
-          // Fall back to the original image URL when thumbnail resolution fails.
+          
         }
       })()
     }
@@ -64,8 +64,6 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
   )
 }
 
-
-
 interface DownloadCardProps {
   id: string
   lang: Language
@@ -74,8 +72,6 @@ interface DownloadCardProps {
   onDelete: (id: string, deleteFile: boolean) => void
   onError: (msg: string) => void
 }
-
-
 
 const ProgressBar: React.FC<{
   percent: number
@@ -109,8 +105,6 @@ const ProgressBar: React.FC<{
   )
 })
 ProgressBar.displayName = 'ProgressBar'
-
-
 
 const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   const { id, lang, onOpenFile, onOpenFolder, onDelete, onError } = props

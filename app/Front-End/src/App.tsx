@@ -11,7 +11,6 @@ import { useAppController, variantLabel } from './hooks/useAppController'
 import { useUIStore } from './stores/useUIStore'
 import React from 'react'
 
-
  
 export const YouTubeMusicIcon = ({ size = 22, ...props }: { size?: number } & any) => {
   return (
@@ -96,9 +95,7 @@ export const UrlInputBar = React.memo(({
   )
 })
 
-
 const THUMB_FALLBACK_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90'><rect width='100%' height='100%' fill='%23081126'/><text x='50%' y='50%' font-size='12' fill='%239ca3af' dominant-baseline='middle' text-anchor='middle'>No image</text></svg>"
-
 
 function createSmartImage(thumbPort: number) {
    
@@ -116,7 +113,7 @@ function createSmartImage(thumbPort: number) {
               setImgSrc(streamUrl)
             }
           } catch (err) {
-            // Fall back to the original image URL when thumbnail resolution fails.
+            
           }
         })()
       }
@@ -138,7 +135,6 @@ function createSmartImage(thumbPort: number) {
     )
   }
 }
-
 
 function App() {
   const ctrl = useAppController()

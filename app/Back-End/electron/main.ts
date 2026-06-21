@@ -3,10 +3,8 @@ import * as dotenv from 'dotenv'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-
 const __dirname_env = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
-
 
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
@@ -22,7 +20,6 @@ import { db } from './db'
 import { spawn } from 'node:child_process'
 import { getBinaryPath } from './paths'
 
-
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
@@ -30,23 +27,19 @@ app.commandLine.appendSwitch('disable-software-rasterizer')
 app.commandLine.appendSwitch('enable-hardware-overlays')
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization')
 
-
 process.on('unhandledRejection', (reason) => {
   log.error('UNHANDLED REJECTION:', reason)
 })
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-
 let downloads: DownloadManager | null = null
 let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
-
 
 let serviceReadyResolve: () => void
 const serviceReadyPromise = new Promise<void>(resolve => {
   serviceReadyResolve = resolve
 })
-
 
 function cleanupUpdaterCache() {
   try {
@@ -154,7 +147,6 @@ async function loadBackendServices() {
 
 process.env.APP_ROOT = path.join(__dirname, '..')
 
-
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'Front-End', 'dist')
@@ -258,7 +250,6 @@ function createWindow() {
     }
   })
 }
-
 
 const MEDIA_SERVER_PORT_BASE = Number(process.env.MEDIA_SERVER_PORT) || 3345
 const MEDIA_SERVER_PORT_MAX_TRIES = 10
@@ -407,7 +398,6 @@ function startMediaStreamingServer(): void {
         })
         return
       }
-
 
       const stat = statSync(filePath)
       const fileSize = stat.size
