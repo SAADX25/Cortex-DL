@@ -34,6 +34,8 @@ function isYtdlpUrl(url: string): boolean {
 const YOUTUBE_AUTH_ERROR_PATTERN =
   /YOUTUBE_AUTH_REQUIRED|sign in to confirm|not a bot|use --cookies-from-browser or --cookies|LOGIN_REQUIRED|age[- ]restricted|HTTP Error 429|too many requests|rate[-_\s]?limit/i
 
+const SUBTITLE_EMBED_FORMATS = new Set<TargetFormat>(['mp4', 'mkv', 'webm'])
+
 function normalizeIpcError(error: unknown, fallback: string, youtubeAuthMessage: string): string {
   const rawMessage =
     error instanceof Error
@@ -99,6 +101,7 @@ export function useDownloadController({
   const [isAudioMode, setIsAudioMode] = useState(false)
   const [selectedQuality, setSelectedQuality] = useState<string>('')
   const [selectedYtdlpFormatId, setSelectedYtdlpFormatId] = useState<string | null>(null)
+  const [selectedSubtitleLanguage, setSelectedSubtitleLanguage] = useState('')
   const [, setTargetResolution] = useState<number | null>(null)
   const [speedLimit, setSpeedLimit] = useState<string>(() => localStorage.getItem('cortex-speed-limit') || 'auto')
   const [subfolderName, setSubfolderName] = useState('')
@@ -140,6 +143,13 @@ export function useDownloadController({
       .sort((a, b) => b.height - a.height)
   }, [analyzeResult])
 
+  const selectedSubtitleTrack = useMemo(() => {
+    if (analyzeResult?.kind !== 'ytdlp' || !selectedSubtitleLanguage) return undefined
+    return analyzeResult.subtitles?.find(
+      (track) => track.languageCode === selectedSubtitleLanguage
+    )
+  }, [analyzeResult, selectedSubtitleLanguage])
+
   const activeDownloadCount = useDownloadStore(
     (s) => Array.from(s.tasks.values()).filter((t) => t.status === 'downloading').length
   )
@@ -158,6 +168,7 @@ export function useDownloadController({
     setSelectedVariantUrl(null)
     setTargetResolution(null)
     setSelectedYtdlpFormatId(null)
+    setSelectedSubtitleLanguage('')
     
   }, [setAnalyzeResult, url])
 
@@ -202,6 +213,7 @@ export function useDownloadController({
     setFilename('')
     setStartTime('')
     setEndTime('')
+    setSelectedSubtitleLanguage('')
   }
 
   async function onPasteAndAnalyze() {
@@ -225,6 +237,7 @@ export function useDownloadController({
     setAnalyzing(true)
     setAnalyzeResult(null)
     setSelectedVariantUrl(null)
+    setSelectedSubtitleLanguage('')
     setUrl(urlToAnalyze)
 
     try {
@@ -321,6 +334,11 @@ export function useDownloadController({
       return
     }
 
+    if (selectedSubtitleLanguage && !SUBTITLE_EMBED_FORMATS.has(targetFormat)) {
+      showToast('Subtitles can be embedded only in MP4, MKV, or WEBM videos.')
+      return
+    }
+
 
 
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -334,6 +352,8 @@ export function useDownloadController({
       loading: !knownTitle,
       format: targetFormat,
       quality: selectedYtdlpFormatId || selectedQuality || null,
+      subtitleLanguage: selectedSubtitleTrack?.languageCode,
+      subtitleIsAutomatic: selectedSubtitleTrack?.isAutomatic,
     }
 
     setBatchItems((prev) => [...prev, item])
@@ -378,6 +398,8 @@ export function useDownloadController({
           engine,
           targetFormat: item.format,
           ytdlpFormatId: item.quality ? String(item.quality).replace('raw:', '') : undefined,
+          subtitleLanguage: item.subtitleLanguage,
+          subtitleIsAutomatic: item.subtitleIsAutomatic,
           title: item.title || undefined,
           thumbnail: item.thumbnail || undefined,
           username: username || undefined,
@@ -404,6 +426,11 @@ export function useDownloadController({
 
   async function onDownloadNow() {
     if (!analyzeResult) return
+
+    if (selectedSubtitleLanguage && !SUBTITLE_EMBED_FORMATS.has(targetFormat)) {
+      showToast('Subtitles can be embedded only in MP4, MKV, or WEBM videos.')
+      return
+    }
     
     let resolvedDirectory = useUIStore.getState().directory
     if (!resolvedDirectory) {
@@ -459,6 +486,8 @@ export function useDownloadController({
           engine,
           targetFormat,
           ytdlpFormatId: selectedYtdlpFormatId || selectedQuality || undefined,
+          subtitleLanguage: selectedSubtitleTrack?.languageCode,
+          subtitleIsAutomatic: selectedSubtitleTrack?.isAutomatic,
           title: analyzeResult.kind === 'ytdlp' ? analyzeResult.title : undefined,
           thumbnail: analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined,
           username: username || undefined,
@@ -608,6 +637,7 @@ export function useDownloadController({
     isAudioMode, setIsAudioMode,
     selectedQuality, setSelectedQuality,
     selectedYtdlpFormatId, setSelectedYtdlpFormatId,
+    selectedSubtitleLanguage, setSelectedSubtitleLanguage,
     setTargetResolution,
     speedLimit, setSpeedLimit,
     subfolderName, setSubfolderName,

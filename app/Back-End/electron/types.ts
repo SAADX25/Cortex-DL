@@ -10,6 +10,7 @@ import type {
   ThumbnailDataUrl,
   HlsVariant,
   YtdlpFormat,
+  SubtitleTrack,
   AnalyzeResult,
   YouTubeOAuthCodePayload,
   CookieValidationCode,
@@ -28,6 +29,7 @@ export type {
   ThumbnailDataUrl,
   HlsVariant,
   YtdlpFormat,
+  SubtitleTrack,
   AnalyzeResult,
   YouTubeOAuthCodePayload,
   CookieValidationCode,
@@ -47,6 +49,8 @@ export type StartInput = {
   engine?: 'auto' | DownloadEngine
   targetFormat?: TargetFormat
   ytdlpFormatId?: string
+  subtitleLanguage?: string
+  subtitleIsAutomatic?: boolean
   title?: string
   thumbnail?: string
   username?: string
@@ -66,6 +70,7 @@ export type TaskRuntime = {
   lastSpeedSampleBytes: number | null
   lastIpcAtMs: number
   retries: number
+  ignoreCookies?: boolean
 }
 
 

@@ -515,6 +515,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       >
         {mediaType === 'video' && (
           <VideoPlayerView
+            mediaPort={mediaPort}
             fileUrl={fileUrl}
             title={displayTitle}
             filePath={filePath}

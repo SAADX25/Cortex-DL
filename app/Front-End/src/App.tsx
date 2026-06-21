@@ -172,6 +172,7 @@ function App() {
             targetFormat={ctrl.targetFormat} setTargetFormat={ctrl.setTargetFormat}
             isAudioMode={ctrl.isAudioMode} setIsAudioMode={ctrl.setIsAudioMode}
             selectedQuality={ctrl.selectedQuality} setSelectedQuality={ctrl.setSelectedQuality}
+            selectedSubtitleLanguage={ctrl.selectedSubtitleLanguage} setSelectedSubtitleLanguage={ctrl.setSelectedSubtitleLanguage}
             selectedVariantUrl={ctrl.selectedVariantUrl} setSelectedVariantUrl={ctrl.setSelectedVariantUrl}
             startTime={ctrl.startTime} setStartTime={ctrl.setStartTime}
             endTime={ctrl.endTime} setEndTime={ctrl.setEndTime}

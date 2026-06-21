@@ -1318,6 +1318,33 @@ body {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+.subtitle-language-control {
+  min-width: 190px;
+  padding: 0 8px;
+  color: #60a5fa;
+}
+
+.subtitle-language-control svg {
+  flex: 0 0 auto;
+}
+
+.subtitle-language-control select {
+  width: 100%;
+  max-width: 240px;
+  height: 34px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f8fafc;
+  cursor: pointer;
+  font: inherit;
+}
+
+.subtitle-language-control select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
 .preview-comments {
   margin-top: 14px;
 }

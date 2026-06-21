@@ -457,4 +457,77 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       }
     }
   })
+
+  ipcMain.handle('cortexdl:get-subtitles', async (_event, videoPath: string) => {
+    try {
+      if (!videoPath || !existsSync(videoPath)) return []
+
+      const dir = path.dirname(videoPath)
+      const ext = path.extname(videoPath)
+      const baseName = path.basename(videoPath, ext)
+      const files = await fsPromises.readdir(dir)
+
+      const subtitles: import('../../../Shared/types').PlayerSubtitleTrack[] = []
+
+      // 1. Check for external subtitle files
+      for (const file of files) {
+        if (file.startsWith(baseName) && (file.endsWith('.vtt') || file.endsWith('.srt'))) {
+          // Parse language code. E.g. "Video Title.ar.vtt" -> "ar"
+          const namePart = file.slice(baseName.length, -path.extname(file).length)
+          const langCode = namePart.replace(/^\./, '') || 'Unknown'
+          
+          subtitles.push({
+            label: langCode.toUpperCase(),
+            language: langCode,
+            filePath: path.join(dir, file),
+            isEmbedded: false
+          })
+        }
+      }
+
+      // 2. Check for embedded subtitle streams using ffprobe
+      try {
+        const ffprobePath = getBinaryPath('ffprobe')
+        if (existsSync(ffprobePath) && (ext === '.mp4' || ext === '.mkv' || ext === '.webm')) {
+          const probeData = await new Promise<string>((resolve, reject) => {
+            let output = ''
+            const p = spawn(ffprobePath, [
+              '-v', 'error',
+              '-show_entries', 'stream=index,codec_name:stream_tags=language',
+              '-select_streams', 's',
+              '-of', 'json',
+              videoPath
+            ], { windowsHide: true })
+            
+            p.stdout.on('data', d => { output += d.toString() })
+            p.on('close', code => {
+              if (code === 0) resolve(output)
+              else reject(new Error('ffprobe failed'))
+            })
+            p.on('error', reject)
+          })
+
+          const parsed = JSON.parse(probeData)
+          if (parsed && Array.isArray(parsed.streams)) {
+            for (const stream of parsed.streams) {
+              const langCode = stream.tags?.language || 'Unknown'
+              subtitles.push({
+                label: `[Embedded] ${langCode.toUpperCase()}`,
+                language: langCode,
+                isEmbedded: true,
+                streamIndex: stream.index
+              })
+            }
+          }
+        }
+      } catch (err) {
+        log.error('[handlers] Failed to probe embedded subtitles:', err)
+      }
+
+      return subtitles
+    } catch (err) {
+      log.error('Failed to get subtitles:', err)
+      return []
+    }
+  })
 }

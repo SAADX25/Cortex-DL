@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import type { AnalyzeResult, CookieValidationResult, JsRuntimeStatus } from './types'
+import type { AnalyzeResult, CookieValidationResult, JsRuntimeStatus, SubtitleTrack } from './types'
 import log from 'electron-log'
 import path from 'node:path'
 import { chmodSync, createWriteStream, existsSync, readFileSync, statSync } from 'node:fs'
@@ -15,7 +15,7 @@ const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
 const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
 const MIN_BUN_VERSION: VersionTuple = [1, 2, 11]
 const MAX_BUN_VERSION: VersionTuple = [1, 3, 14]
-export const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,ios,web_creator,web'
+export const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,web,android'
 export const YOUTUBE_AUTH_REQUIRED_CODE = 'YOUTUBE_AUTH_REQUIRED'
 
 const YOUTUBE_AUTH_ERROR_PATTERNS = [
@@ -715,6 +715,33 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
             extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
         }
 
+        const subtitleTracks = new Map<string, SubtitleTrack>()
+        const addSubtitleTracks = (tracks: unknown, isAutomatic: boolean) => {
+          if (!tracks || typeof tracks !== 'object') return
+
+          for (const [languageCode, formats] of Object.entries(tracks)) {
+            if (!languageCode || !Array.isArray(formats) || formats.length === 0) continue
+            if (subtitleTracks.has(languageCode)) continue
+
+            const namedFormat = formats.find((format: any) => typeof format?.name === 'string' && format.name.trim())
+            subtitleTracks.set(languageCode, {
+              languageCode,
+              name: namedFormat?.name?.trim() || languageCode,
+              isAutomatic,
+            })
+          }
+        }
+
+        // Prefer creator-provided subtitles over automatic captions when both
+        // collections contain the same language code.
+        addSubtitleTracks(info.subtitles, false)
+        addSubtitleTracks(info.automatic_captions, true)
+
+        const subtitles = Array.from(subtitleTracks.values()).sort((a, b) => {
+          if (a.isAutomatic !== b.isAutomatic) return a.isAutomatic ? 1 : -1
+          return a.name.localeCompare(b.name)
+        })
+
         
         let finalDislikes = info.dislike_count;
         if (isYouTubeUrl(url) && info.id) {
@@ -738,7 +765,8 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
           views: info.view_count,
           likes: info.like_count,
           dislikes: finalDislikes,
-          duration: info.duration
+          duration: info.duration,
+          subtitles
         };
 
         setCachedAnalysis(url, result);

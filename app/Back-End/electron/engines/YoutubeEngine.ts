@@ -85,7 +85,7 @@ export class YoutubeEngine implements IEngine {
       log.warn(`[YoutubeEngine] Metadata prefetch failed for ${task.id}:`, e instanceof Error ? e.message : e)
     })
 
-    const args = this.buildYtdlpArgs(task, profile, { ffmpegDir })
+    const args = this.buildYtdlpArgs(task, profile, { ffmpegDir }, runtime)
     const runResult = await this.runYtdlpAttempt(task, context, runtime, args, profile)
 
     
@@ -108,16 +108,52 @@ export class YoutubeEngine implements IEngine {
     let isSuccess = runResult.exitCode === 0
     if (!isSuccess && downloadedTempPath && existsSync(downloadedTempPath)) {
       const sizeTemp = await getFileSizeIfExists(downloadedTempPath)
+      const isMedia = /\.(mp4|mkv|webm|mp3|m4a|ogg|wav|flv|avi|mov)$/i.test(downloadedTempPath)
       
-      if (sizeTemp > 50 * 1024 || task.downloadedBytes > 0) {
-        log.warn(`[YoutubeEngine] Task ${task.id} exited with ${runResult.exitCode} but generated file. Treating as success.`)
+      // Only treat as success if it's a media file AND has a reasonable size
+      if (isMedia && sizeTemp > 50 * 1024) {
+        log.warn(`[YoutubeEngine] Task ${task.id} exited with ${runResult.exitCode} but generated valid media file. Treating as success.`)
         isSuccess = true
       }
     }
 
     if (isSuccess) {
+      const finalPathToRename = downloadedTempPath || runResult.detectedFinalPath
+      const isMedia = finalPathToRename && /\.(mp4|mkv|webm|mp3|m4a|ogg|wav|flv|avi|mov)$/i.test(finalPathToRename)
       
-      await this.renameDownloaded(task, downloadedTempPath || runResult.detectedFinalPath)
+      if (!isMedia) {
+        log.error(`[YoutubeEngine] Task ${task.id} exited with 0 but no valid media file was found (found: ${finalPathToRename}). The download was likely blocked by YouTube.`)
+        
+        // Clean up fragments (like .vtt files that weren't embedded)
+        try {
+          const files = await fsPromises.readdir(task.directory)
+          const fragments = files.filter(f => f.startsWith(`${task.id}.`))
+          for (const f of fragments) {
+            await fsPromises.unlink(path.join(task.directory, f)).catch(() => {})
+          }
+        } catch (e) {
+          log.warn(`[YoutubeEngine] Failed to clean up fragments for ${task.id}`, e)
+        }
+
+        if (!runtime.ignoreCookies && args.includes('--cookies')) {
+          log.warn(`[YoutubeEngine] Retrying task ${task.id} without cookies due to missing valid media file...`)
+          runtime.ignoreCookies = true
+          isSuccess = false
+        } else {
+          task.status = 'error'
+          task.errorMessage = `Download failed: No video file was generated. YouTube might have blocked the download.`
+          task.updatedAtMs = nowMs()
+          runtime.retries = 0
+          context.flushSave()
+          context.sendUpdate(task)
+          sendNotification('Download Failed', `YouTube blocked the download.`)
+          return
+        }
+      }
+
+      if (isSuccess) {
+
+      await this.renameDownloaded(task, finalPathToRename)
 
       task.status = 'completed'
       task.updatedAtMs = nowMs()
@@ -135,18 +171,26 @@ export class YoutubeEngine implements IEngine {
       sendNotification('Download Complete', `${task.title || task.filename} downloaded successfully.`)
       return
     }
+    }
 
     
     if (isYouTubeAuthRequiredError(runResult.stderr)) {
       log.warn(`[YoutubeEngine] Authentication or rate limit required for task ${task.id}`)
-      task.status = 'error'
-      task.errorMessage = YOUTUBE_AUTH_REQUIRED_CODE
-      task.updatedAtMs = nowMs()
-      runtime.retries = 0
-      context.flushSave()
-      context.sendUpdate(task)
-      sendNotification('YouTube Sign-in Required', 'Add a valid YouTube cookies.txt file in Settings.')
-      return
+      
+      if (!runtime.ignoreCookies && args.includes('--cookies')) {
+        log.warn(`[YoutubeEngine] Retrying task ${task.id} without cookies to bypass auth limit...`)
+        runtime.ignoreCookies = true
+        // Fall through to the retry block below
+      } else {
+        task.status = 'error'
+        task.errorMessage = YOUTUBE_AUTH_REQUIRED_CODE
+        task.updatedAtMs = nowMs()
+        runtime.retries = 0
+        context.flushSave()
+        context.sendUpdate(task)
+        sendNotification('YouTube Sign-in Required', 'Add a valid YouTube cookies.txt file in Settings.')
+        return
+      }
     }
 
     const finalMessage = this.buildErrorMessage(runResult.stderr)
@@ -237,7 +281,7 @@ export class YoutubeEngine implements IEngine {
       '--geo-bypass',
       '--force-ipv4',
       '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
-      ...this.buildAuthArgs(task),
+      ...this.buildAuthArgs(task, runtime),
       ...getJsRuntimeArgs(),
       task.url,
     ]
@@ -340,6 +384,11 @@ export class YoutubeEngine implements IEngine {
       for (const line of lines) {
         if (!line.trim()) continue
 
+        // Always log subtitle/embed-related messages for diagnostics
+        if (/subtitle|sub|embed|caption|WARNING|ERROR/i.test(line)) {
+          log.info(`[YoutubeEngine:sub] ${line.trim()}`)
+        }
+
         const ffmpegChanged = parseFfmpegProgress(line, task, ffmpegState)
         let dlChanged = false
         if (task.status === 'downloading') dlChanged = parseDownloadProgress(line, task)
@@ -397,10 +446,12 @@ export class YoutubeEngine implements IEngine {
     return { exitCode, detectedFinalPath, stderr: ffmpegState.stderr }
   }
 
-  private buildAuthArgs(task: DownloadTask): string[] {
+  private buildAuthArgs(task: DownloadTask, runtime: TaskRuntime): string[] {
     const args: string[] = []
 
-    args.push(...getYtdlpCookieArgs())
+    if (!runtime.ignoreCookies) {
+      args.push(...getYtdlpCookieArgs())
+    }
 
     
     if (task.username) args.push('--username', task.username)
@@ -422,7 +473,10 @@ export class YoutubeEngine implements IEngine {
     task: DownloadTask,
     profile: Profile,
     opts: { ffmpegDir: string },
+    runtime: TaskRuntime,
   ): string[] {
+    const hasSubtitles = task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)
+
     const ytArgs: string[] = [
       '--newline',
       '--progress',
@@ -431,7 +485,9 @@ export class YoutubeEngine implements IEngine {
       '--no-playlist',
       '--geo-bypass',
       '--force-ipv4',
-      '--no-warnings',
+      // When subtitles are requested, allow warnings so yt-dlp reports
+      // subtitle download/embed issues instead of silently skipping.
+      ...(hasSubtitles ? [] : ['--no-warnings']),
       '--force-overwrites',
       '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
       '--throttled-rate', YOUTUBE_THROTTLED_RATE,
@@ -444,25 +500,38 @@ export class YoutubeEngine implements IEngine {
       '-N', '8',
       '--concurrent-fragments', '4',
       '--http-chunk-size', '5.0M',
-      ...this.buildAuthArgs(task),
+      ...this.buildAuthArgs(task, runtime),
       ...getJsRuntimeArgs(),
     ]
 
+    // hasSubtitles already computed above
+
     if (task.targetFormat === 'mp4') {
       const isTrimmedTask = Boolean(task.startTime || task.endTime)
-      ytArgs.push(
-        '--postprocessor-args',
-        isTrimmedTask
-          ? 'ffmpeg_i:-movflags +faststart'
-          : 'ffmpeg:-y -threads 0 -c:a aac -movflags +faststart'
-      )
+      if (isTrimmedTask) {
+        ytArgs.push('--postprocessor-args', 'ffmpeg_i:-movflags +faststart')
+      } else {
+        // Scope to Merger only so EmbedSubtitle PP can run with its own
+        // default codec settings (it handles -c:s mov_text internally).
+        ytArgs.push(
+          '--postprocessor-args',
+          'Merger+ffmpeg:-y -threads 0 -c:a aac -movflags +faststart'
+        )
+      }
     } else {
-      ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 0')
+      ytArgs.push('--postprocessor-args', 'Merger+ffmpeg:-y -threads 0')
     }
 
     
     const ffmpegExePath = getBinaryPath('ffmpeg')
     if (existsSync(ffmpegExePath)) ytArgs.push('--ffmpeg-location', opts.ffmpegDir)
+
+    if (hasSubtitles) {
+      ytArgs.push(task.subtitleIsAutomatic ? '--write-auto-subs' : '--write-subs')
+      ytArgs.push('--sub-langs', task.subtitleLanguage!)
+      ytArgs.push('--embed-subs')
+      log.info(`[YoutubeEngine] Subtitle args: lang=${task.subtitleLanguage}, auto=${task.subtitleIsAutomatic}, embedded=true`)
+    }
 
     
     switch (profile) {
@@ -601,7 +670,6 @@ export class YoutubeEngine implements IEngine {
     }
 
     if (!renameSuccess) {
-      
       if (existsSync(downloadedPath)) {
         task.filePath = downloadedPath
         task.filename = path.basename(downloadedPath)
@@ -609,6 +677,23 @@ export class YoutubeEngine implements IEngine {
     } else if (existsSync(targetPath)) {
       task.filePath = targetPath
       task.filename = path.basename(targetPath)
+
+      // Also rename any associated subtitle files (e.g. task.id.ar.vtt -> finalName.ar.vtt)
+      try {
+        const files = await fsPromises.readdir(task.directory)
+        const subFiles = files.filter(f => f.startsWith(`${task.id}.`) && (f.endsWith('.vtt') || f.endsWith('.srt')))
+        const parsedTarget = path.parse(targetPath)
+        
+        for (const subFile of subFiles) {
+          const oldSubPath = path.join(task.directory, subFile)
+          // Extract the language part. e.g. "task.id.ar.vtt" -> ".ar.vtt"
+          const suffix = subFile.substring(task.id.length)
+          const newSubPath = path.join(task.directory, `${parsedTarget.name}${suffix}`)
+          await fsPromises.rename(oldSubPath, newSubPath)
+        }
+      } catch (err) {
+        log.error('[YoutubeEngine] Failed to rename subtitle files:', err)
+      }
     }
   }
 

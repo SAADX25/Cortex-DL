@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture, Palette } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture, Palette, Subtitles } from 'lucide-react';
+import type { PlayerSubtitleTrack } from '../../../../Shared/types';
 
 interface PlayerControlsProps {
   mediaRef: React.RefObject<HTMLVideoElement | HTMLAudioElement | null>;
@@ -11,6 +12,9 @@ interface PlayerControlsProps {
   showSettings: boolean;
   mediaType: 'video' | 'audio';
   isFullscreen?: boolean;
+  subtitles?: PlayerSubtitleTrack[];
+  activeSubtitle?: number;
+  onSubtitleChange?: (index: number) => void;
   togglePlay: () => void;
   onSeek: (time: number) => void;
   onVolumeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -31,7 +35,7 @@ function formatTime(seconds: number): string {
 }
 
 export function PlayerControls({
-  mediaRef, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, mediaType, isFullscreen,
+  mediaRef, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, mediaType, isFullscreen, subtitles, activeSubtitle, onSubtitleChange,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP, currentTheme, onToggleTheme
 }: PlayerControlsProps) {
   const progressRef = useRef<HTMLInputElement>(null);
@@ -125,6 +129,24 @@ export function PlayerControls({
                </div>
              )}
           </div>
+
+          {mediaType === 'video' && subtitles && subtitles.length > 0 && onSubtitleChange && (
+            <div className="settings-wrapper">
+              <button 
+                className={`control-btn ${activeSubtitle !== -1 ? 'active' : ''}`} 
+                onClick={() => {
+                  if (activeSubtitle !== -1) {
+                    onSubtitleChange(-1);
+                  } else {
+                    onSubtitleChange(0);
+                  }
+                }} 
+                title="Subtitles / CC"
+              >
+                <Subtitles size={20} />
+              </button>
+            </div>
+          )}
 
           {mediaType === 'audio' && onToggleTheme && (
             <button className="control-btn" onClick={onToggleTheme} title={`Theme: ${currentTheme}`}>

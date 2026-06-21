@@ -62,6 +62,8 @@ export type DownloadTask = {
   convertingPercent?: number
   downloadPercent?: number
   ytdlpFormatId?: string
+  subtitleLanguage?: string
+  subtitleIsAutomatic?: boolean
   fps?: number | string
 }
 
@@ -83,6 +85,12 @@ export type YtdlpFormat = {
   tbr?: number
 }
 
+export type SubtitleTrack = {
+  languageCode: string
+  name: string
+  isAutomatic: boolean
+}
+
 export type AnalyzeResult =
   | { kind: 'unknown' }
   | { kind: 'direct' }
@@ -97,6 +105,7 @@ export type AnalyzeResult =
       likes?: number
       dislikes?: number
       duration?: number
+      subtitles?: SubtitleTrack[]
       comments?: { author: string; text: string; likeCount: number }[]
     }
   | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
@@ -131,4 +140,12 @@ export type AppHealthCheck = {
   jsRuntime: JsRuntimeStatus
   cookies: CookieValidationResult
   downloadDirectory: { writable: boolean; path: string }
+}
+
+export type PlayerSubtitleTrack = {
+  label: string
+  language: string
+  filePath?: string
+  isEmbedded?: boolean
+  streamIndex?: number
 }

@@ -70,6 +70,7 @@ export function useAppController() {
     isAudioMode: downloads.isAudioMode, setIsAudioMode: downloads.setIsAudioMode,
     selectedQuality: downloads.selectedQuality, setSelectedQuality: downloads.setSelectedQuality,
     selectedYtdlpFormatId: downloads.selectedYtdlpFormatId, setSelectedYtdlpFormatId: downloads.setSelectedYtdlpFormatId,
+    selectedSubtitleLanguage: downloads.selectedSubtitleLanguage, setSelectedSubtitleLanguage: downloads.setSelectedSubtitleLanguage,
     setTargetResolution: downloads.setTargetResolution,
     speedLimit: downloads.speedLimit, setSpeedLimit: downloads.setSpeedLimit,
     subfolderName: downloads.subfolderName, setSubfolderName: downloads.setSubfolderName,

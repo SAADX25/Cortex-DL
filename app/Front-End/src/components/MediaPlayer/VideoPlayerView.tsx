@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { PlayerControls } from './PlayerControls';
 import { MediaInfoOverlay } from './MediaInfoOverlay';
 
 interface VideoViewProps {
+  mediaPort: number;
   fileUrl: string;
   title: string;
   filePath: string;
@@ -34,13 +35,41 @@ interface VideoViewProps {
 }
 
 export function VideoPlayerView({
-  fileUrl, title, filePath, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
+  mediaPort, fileUrl, title, filePath, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
   isFullscreen, showControls, videoRef, mediaRef, ambilightRef,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP,
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
 }: VideoViewProps) {
-  const [isBuffering, setIsBuffering] = useState(false);
-  const [showMediaInfo, setShowMediaInfo] = useState(false);
+  const [isBuffering, setIsBuffering] = React.useState(false);
+  const [showMediaInfo, setShowMediaInfo] = React.useState(false);
+  const [subtitles, setSubtitles] = React.useState<import('../../../../Shared/types').PlayerSubtitleTrack[]>([]);
+  const [activeSubtitle, setActiveSubtitle] = React.useState<number>(-1);
+
+  React.useEffect(() => {
+    if (filePath && window.cortexDl?.getSubtitles) {
+      window.cortexDl.getSubtitles(filePath).then(subs => {
+        setSubtitles(subs);
+        if (subs && subs.length > 0) {
+          setActiveSubtitle(0); // Auto-enable first subtitle if available
+        } else {
+          setActiveSubtitle(-1);
+        }
+      }).catch(console.error);
+    }
+  }, [filePath]);
+
+  // Sync the active subtitle with the video's textTracks
+  React.useEffect(() => {
+    if (!videoRef.current) return;
+    const tracks = videoRef.current.textTracks;
+    for (let i = 0; i < tracks.length; i++) {
+      if (i === activeSubtitle) {
+        tracks[i].mode = 'showing';
+      } else {
+        tracks[i].mode = 'hidden';
+      }
+    }
+  }, [activeSubtitle, subtitles, videoRef]);
 
   return (
     <>
@@ -63,7 +92,24 @@ export function VideoPlayerView({
             onCanPlay={() => setIsBuffering(false)}
             crossOrigin="anonymous"
             playsInline
-          />
+          >
+            {subtitles.map((sub, i) => {
+              const srcUrl = sub.isEmbedded 
+                ? `http://127.0.0.1:${mediaPort}/?path=${encodeURIComponent(filePath)}&subtitle=true&streamIndex=${sub.streamIndex}`
+                : `http://127.0.0.1:${mediaPort}/?path=${encodeURIComponent(sub.filePath!)}`
+                
+              return (
+                <track
+                  key={`${i}-${sub.label}`}
+                  kind="subtitles"
+                  label={sub.label}
+                  srcLang={sub.language}
+                  src={srcUrl}
+                  default={i === activeSubtitle}
+                />
+              )
+            })}
+          </video>
 
           {isBuffering && (
             <div className="buffering-overlay">
@@ -116,6 +162,9 @@ export function VideoPlayerView({
           playbackSpeed={playbackSpeed}
           showSettings={showSettings}
           isFullscreen={isFullscreen}
+          subtitles={subtitles}
+          activeSubtitle={activeSubtitle}
+          onSubtitleChange={setActiveSubtitle}
           togglePlay={togglePlay} 
           onSeek={onSeek}
           onVolumeChange={onVolumeChange} 

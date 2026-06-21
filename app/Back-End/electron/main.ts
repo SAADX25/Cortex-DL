@@ -19,6 +19,8 @@ import type { DownloadManager } from './downloadManager'
 import { registerIpcHandlers } from './ipc/handlers'
 import { createTray } from './tray'
 import { db } from './db'
+import { spawn } from 'node:child_process'
+import { getBinaryPath } from './paths'
 
 
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
@@ -285,6 +287,8 @@ const MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.gif':  'image/gif',
   '.avif': 'image/avif',
+  '.vtt':  'text/vtt',
+  '.srt':  'text/plain',
 }
 
 function startMediaStreamingServer(): void {
@@ -371,6 +375,39 @@ function startMediaStreamingServer(): void {
         res.end('File not found')
         return
       }
+
+      const isSubtitleReq = urlObj.searchParams.get('subtitle') === 'true'
+      if (isSubtitleReq) {
+        const streamIndex = urlObj.searchParams.get('streamIndex') || '0'
+        res.writeHead(200, {
+          'Content-Type': 'text/vtt',
+          'Access-Control-Allow-Origin': corsOrigin
+        })
+
+        if (req.method === 'HEAD') {
+          res.end()
+          return
+        }
+
+        const ffmpegPath = getBinaryPath('ffmpeg')
+        const p = spawn(ffmpegPath, [
+          '-i', filePath,
+          '-map', `0:${streamIndex}`,
+          '-f', 'webvtt',
+          'pipe:1'
+        ], { windowsHide: true })
+
+        p.stdout.pipe(res)
+        
+        req.on('close', () => p.kill('SIGKILL'))
+        req.on('aborted', () => p.kill('SIGKILL'))
+        p.on('error', (err) => {
+          log.error('[MediaServer] FFmpeg subtitle extraction error:', err)
+          if (!res.headersSent) res.end()
+        })
+        return
+      }
+
 
       const stat = statSync(filePath)
       const fileSize = stat.size

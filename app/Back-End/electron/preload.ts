@@ -168,4 +168,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
   setCookieFile(filePath: string | null): Promise<CookieValidationResult> {
     return ipcRenderer.invoke('cortexdl:set-cookie-file', filePath)
   },
+  getSubtitles(filePath: string): Promise<import('../../Shared/types').PlayerSubtitleTrack[]> {
+    return ipcRenderer.invoke('cortexdl:get-subtitles', filePath)
+  },
 })

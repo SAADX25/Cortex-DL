@@ -6,6 +6,7 @@ import type {
   AudioFormat as SharedAudioFormat,
   TargetFormat as SharedTargetFormat,
   DownloadTask as SharedDownloadTask,
+  SubtitleTrack as SharedSubtitleTrack,
   ThumbnailDataUrl as SharedThumbnailDataUrl,
   AppHealthCheck as SharedAppHealthCheck,
   CookieValidationResult as SharedCookieValidationResult,
@@ -58,6 +59,7 @@ declare global {
         likes?: number
         dislikes?: number
         duration?: number
+        subtitles?: SharedSubtitleTrack[]
         comments?: { author: string; text: string; likeCount: number }[]
       }
     | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
@@ -108,6 +110,8 @@ declare global {
         engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
         targetFormat?: TargetFormat
         ytdlpFormatId?: string
+        subtitleLanguage?: string
+        subtitleIsAutomatic?: boolean
         title?: string
         thumbnail?: string
         username?: string
@@ -124,6 +128,8 @@ declare global {
         engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
         targetFormat?: TargetFormat
         ytdlpFormatId?: string
+        subtitleLanguage?: string
+        subtitleIsAutomatic?: boolean
         title?: string
         thumbnail?: string
         username?: string
@@ -169,6 +175,7 @@ declare global {
       selectCookieFile: () => Promise<string | null>
       getCookieFile: () => Promise<string | null>
       setCookieFile: (filePath: string | null) => Promise<CookieValidationResult>
+      getSubtitles: (filePath: string) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>
 
       
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void

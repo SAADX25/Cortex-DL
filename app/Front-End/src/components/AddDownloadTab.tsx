@@ -20,6 +20,8 @@ export type BatchItem = {
   format: any
   loading?: boolean
   quality?: string | null
+  subtitleLanguage?: string
+  subtitleIsAutomatic?: boolean
   status?: BatchItemStatus
   errorMessage?: string
 }
@@ -36,6 +38,8 @@ interface AddDownloadTabProps {
   setIsAudioMode: (val: boolean) => void
   selectedQuality: string
   setSelectedQuality: (val: string) => void
+  selectedSubtitleLanguage: string
+  setSelectedSubtitleLanguage: (val: string) => void
   selectedVariantUrl: string | null
   setSelectedVariantUrl: (val: string | null) => void
   startTime: string
@@ -78,6 +82,8 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   setIsAudioMode,
   selectedQuality,
   setSelectedQuality,
+  selectedSubtitleLanguage,
+  setSelectedSubtitleLanguage,
   selectedVariantUrl,
   setSelectedVariantUrl,
   startTime,
@@ -202,6 +208,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                 onClick={() => {
                   setIsAudioMode(true)
                   setTargetFormat('mp3')
+                  setSelectedSubtitleLanguage('')
                 }}
               >
                 {t.btn_audio}
@@ -270,6 +277,9 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                   setCommentsSuccessPath={setCommentsSuccessPath}
                   setIsCommentsDownloading={setIsCommentsDownloading}
                   showToast={showToast}
+                  isAudioMode={isAudioMode}
+                  selectedSubtitleLanguage={selectedSubtitleLanguage}
+                  setSelectedSubtitleLanguage={setSelectedSubtitleLanguage}
                 />
               )}
 

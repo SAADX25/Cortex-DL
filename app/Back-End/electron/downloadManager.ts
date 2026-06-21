@@ -284,6 +284,8 @@ export class DownloadManager {
       startTime: input.startTime,
       endTime: input.endTime,
       ytdlpFormatId: input.ytdlpFormatId,
+      subtitleLanguage: input.subtitleLanguage,
+      subtitleIsAutomatic: input.subtitleIsAutomatic,
       fps: input.fps,
     }
 
@@ -347,6 +349,8 @@ export class DownloadManager {
         startTime: input.startTime,
         endTime: input.endTime,
         ytdlpFormatId: input.ytdlpFormatId,
+        subtitleLanguage: input.subtitleLanguage,
+        subtitleIsAutomatic: input.subtitleIsAutomatic,
         fps: input.fps,
       }
 
