@@ -37,7 +37,7 @@ export type {
 }
 export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 
-// ── Add-Download Input ───────────────────────────────────────────────────────
+
 
 export type StartInput = {
   url: string
@@ -57,7 +57,7 @@ export type StartInput = {
   fps?: number | string
 }
 
-// ── Per-Task Runtime State ───────────────────────────────────────────────────
+
 
 export type TaskRuntime = {
   abortController: AbortController | null
@@ -68,7 +68,7 @@ export type TaskRuntime = {
   retries: number
 }
 
-// ── Engine Context (callbacks injected by the orchestrator) ──────────────────
+
 
 export interface EngineContext {
   /** Throttled — safe to call on every chunk / progress tick. */

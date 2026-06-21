@@ -13,7 +13,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const t = translations[lang]
 
-  // Subscribe directly to the store — only re-renders when these slices change
+  
   const activeTab = useUIStore((s) => s.activeTab)
   const setActiveTab = useUIStore((s) => s.setActiveTab)
   const activeDownloadCount = useDownloadStore(

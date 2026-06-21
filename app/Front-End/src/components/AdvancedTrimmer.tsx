@@ -78,7 +78,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     return parsed == null ? safeDuration : clamp(parsed, 0, safeDuration)
   })
 
-  // ── Stream URL resolution (simple, single-attempt) ────────────────
+  
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [isResolvingStream, setIsResolvingStream] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)

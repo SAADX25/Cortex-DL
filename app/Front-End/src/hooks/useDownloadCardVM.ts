@@ -3,7 +3,7 @@ import { useTask } from '../stores/downloadStore'
 import type { Language } from '../translations'
 import { translations } from '../translations'
 
-// ── Formatting Helpers (pure functions, not hooks) ───────────────────────────
+
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '-'
@@ -34,7 +34,7 @@ function formatEta(remainingBytes: number, speedBps: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-// ── Phase Type ───────────────────────────────────────────────────────────────
+
 
 export type DisplayPhase =
   | 'queued'
@@ -48,40 +48,40 @@ export type DisplayPhase =
   | 'error'
   | 'canceled'
 
-// ── ViewModel Shape ──────────────────────────────────────────────────────────
+
 
 export interface DownloadCardVM {
-  // Identity
+  
   id: string
   title: string
   thumbnail: string | null
   formatTag: string
 
-  // Phase
+  
   phase: DisplayPhase
   phaseLabel: string
   phaseColor: string
 
-  // Progress
-  percent: number          // 0–100 (for the bar width)
-  percentLabel: string     // "43%" or "--" or "100%"
-  isIndeterminate: boolean // true = show animated sweep, no numeric %
-  sizeLabel: string        // "150 MB / 330 MB"
-  speedLabel: string       // "5.2 MB/s"
-  etaLabel: string         // "2:34" or "--:--"
+  
+  percent: number          
+  percentLabel: string     
+  isIndeterminate: boolean 
+  sizeLabel: string        
+  speedLabel: string       
+  etaLabel: string         
   convertingPercent: number | null
 
-  // Error
+  
   errorMessage: string | null
 
-  // Actions (which ones to show)
+  
   showPause: boolean
   showResume: boolean
   showCancel: boolean
   showPlay: boolean
   showOpenFolder: boolean
 
-  // Bound action callbacks
+  
   onPause: () => void
   onResume: () => void
   onCancel: () => void
@@ -89,11 +89,11 @@ export interface DownloadCardVM {
   onOpenFolder: () => void
   onDelete: (deleteFile: boolean) => void
 
-  // Raw filePath (for external actions)
+  
   filePath: string
 }
 
-// ── Hook ─────────────────────────────────────────────────────────────────────
+
 
 interface UseDownloadCardVMOptions {
   id: string
@@ -109,15 +109,15 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
   const task = useTask(id)
   const t = translations[lang]
 
-  // ── Derived values (recalculated only when task object changes) ──────────
+  
 
   const vm = useMemo<DownloadCardVM | null>(() => {
     if (!task) return null
 
-    // Phase resolution
-    // 'starting' = we're nominally downloading but have no meaningful progress yet.
-    // Transition to 'downloading' as soon as bytes OR speed become positive so the
-    // speed / ETA / percent labels start rendering.
+    
+    
+    
+    
     let phase: DisplayPhase
     const hasProgress = task.downloadedBytes > 0
       || (task.speedBytesPerSec != null && task.speedBytesPerSec > 0)
@@ -126,12 +126,12 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     if (task.status === 'downloading' && !hasProgress) {
       phase = 'starting'
     } else if (task.status === 'downloading' && isTrimmedTask) {
-      // yt-dlp --download-sections delegates active work to FFmpeg while the
-      // task is still in the downloading lifecycle state.
+      
+      
       phase = 'trimming'
     } else if (task.status === 'downloading' && task.downloadPercent != null && task.downloadPercent >= 100) {
-      // Download bytes are done — yt-dlp is about to merge audio+video.
-      // Show merge phase immediately so user doesn't see a "stuck" bar.
+      
+      
       phase = 'merging'
     } else if (task.status === 'converting' && (task.startTime || task.endTime)) {
       phase = 'trimming'
@@ -139,7 +139,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       phase = task.status as DisplayPhase
     }
 
-    // Phase label
+    
     const phaseLabels: Record<DisplayPhase, string> = {
       queued: t.status_queued,
       starting: t.accelerating,
@@ -153,7 +153,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       canceled: t.status_canceled,
     }
 
-    // Phase color (CSS variable names)
+    
     const phaseColors: Record<DisplayPhase, string> = {
       queued: 'var(--text-muted)',
       starting: 'var(--accent-primary)',
@@ -167,15 +167,15 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       canceled: 'var(--text-muted)',
     }
 
-    // ── Unified Weighted Progress Engine ──────────────────────────────────
-    // Like Steam/IDM: Download phase maps to 0–90%, Merge/Convert phase
-    // maps to 90–100%. The bar never jumps backwards on phase transition
-    // because the backend snaps downloadPercent to 100% at handover.
-    //
-    // Weighting ratios:
-    //   DOWNLOAD_WEIGHT = 0.90  (download phase owns 0–90%)
-    //   POST_WEIGHT     = 0.10  (merge/convert owns 90–100%)
-    //   Trim mode is different: ffmpeg does everything, so converting owns 0–100%
+    
+    
+    
+    
+    
+    
+    
+    
+    
     const DOWNLOAD_WEIGHT = 0.90
     const POST_WEIGHT = 0.10
 
@@ -197,8 +197,8 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       percent = 100
       percentLabel = '100%'
     } else if (isTrimMode) {
-      // Trim mode: FFmpeg does download+process in one shot, so progress owns
-      // the whole 0-100 range. yt-dlp section trims report it as downloadPercent.
+      
+      
       if (trimPct !== null) {
         percent = trimPct
         percentLabel = `${trimPct}%`
@@ -208,20 +208,20 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
         isIndeterminate = true
       }
     } else if (isPostProcessing) {
-      // Merge/Convert: weighted 90–100% range
-      // downloadPercent should be 100 at this point (backend snaps it)
-      const basePercent = Math.round(DOWNLOAD_WEIGHT * 100) // 90
+      
+      
+      const basePercent = Math.round(DOWNLOAD_WEIGHT * 100) 
       if (convPct !== null) {
         percent = Math.min(99, basePercent + Math.round(POST_WEIGHT * convPct))
         percentLabel = `${percent}%`
       } else {
-        // No real ffmpeg progress yet — bar starts at 90%.
-        // Simulated progress in useHighFrequencyIPC animates it 90% → 99%.
+        
+        
         percent = basePercent
         percentLabel = `${basePercent}%`
       }
     } else if (dlPct !== null && dlPct > 0) {
-      // Downloading with known percent from backend — map to 0–90% range
+      
       percent = Math.min(Math.round(DOWNLOAD_WEIGHT * 100), Math.round(DOWNLOAD_WEIGHT * dlPct))
       percentLabel = `${percent}%`
       if (phase === 'starting') {
@@ -229,7 +229,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
         percentLabel = ''
       }
     } else if (task.totalBytes && task.totalBytes > 0) {
-      // Fallback: compute percent from raw bytes (for direct downloads)
+      
       const rawPct = Math.min(100, Math.round((task.downloadedBytes / task.totalBytes) * 100))
       percent = Math.min(Math.round(DOWNLOAD_WEIGHT * 100), Math.round(DOWNLOAD_WEIGHT * rawPct))
       percentLabel = `${percent}%`
@@ -238,7 +238,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
         percentLabel = ''
       }
     } else {
-      // Unknown total — indeterminate
+      
       percent = 0
       percentLabel = ''
       if (phase === 'downloading' || phase === 'starting') {
@@ -246,7 +246,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       }
     }
 
-    // Size / Speed / ETA — compute when downloading or post-processing
+    
     const knownTotal = task.totalBytes != null && task.totalBytes > 0
     const remaining = knownTotal ? task.totalBytes! - task.downloadedBytes : 0
     const isDownloading = task.status === 'downloading'
@@ -256,7 +256,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       if (knownTotal) {
         sizeLabel = `${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes!)}`
       } else if (task.downloadedBytes > 0) {
-        // Unknown total (DASH/HLS) — show downloaded bytes only, no misleading "/ 0 B"
+        
         sizeLabel = formatBytes(task.downloadedBytes)
       }
     }
@@ -269,21 +269,21 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       ? formatEta(remaining, task.speedBytesPerSec ?? 0)
       : ''
 
-    // Debug: log what the VM is producing so we can trace data flow
+    
     if (isDownloading) {
       console.debug('[VM]', task.id, 'phase=', phase, 'bytes=', task.downloadedBytes,
         '/', task.totalBytes, 'speed=', task.speedBytesPerSec,
         '→ speedLabel=', speedLabel, 'etaLabel=', etaLabel, 'percent=', percent)
     }
 
-    // Post-processing badge
+    
     const phaseEmoji = phase === 'merging' ? '⚙️' : phase === 'trimming' ? '✂️' : phase === 'converting' ? '🔄' : ''
     const phaseBadge = isPostProcessing
       ? `${phaseEmoji} ${convPct !== null ? `${phaseLabels[phase]} ${convPct}%` : phaseLabels[phase]}`
       : ''
     const finalPhaseLabel = isPostProcessing ? phaseBadge : phaseLabels[phase]
 
-    // Action visibility
+    
     const showPause = task.status === 'downloading' || task.status === 'queued'
     const showResume = task.status === 'paused' || task.status === 'error'
     const showCancel = task.status !== 'completed' && task.status !== 'canceled'
@@ -312,7 +312,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       showPlay,
       showOpenFolder,
       filePath: task.filePath,
-      // Callbacks are set below via useCallback — placeholder for now
+      
       onPause: () => {},
       onResume: () => {},
       onCancel: () => {},
@@ -322,7 +322,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     }
   }, [task, lang, t])
 
-  // ── Stable callbacks (don't cause re-render when parent re-renders) ──────
+  
 
   const handlePause = useCallback(async () => {
     try { await window.cortexDl.pauseDownload(id) }
@@ -352,7 +352,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     [id, onDelete],
   )
 
-  // Merge callbacks into the vm
+  
   if (!vm) return null
 
   return {

@@ -11,11 +11,11 @@ export interface SettingsControllerDeps {
 
 
 export function useSettingsController({ setModalConfig }: SettingsControllerDeps) {
-  // ── Language ──
+  
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en')
   const t = translations[lang]
 
-  // ── Settings / engine state ──
+  
   const [notificationsEnabled] = useState(true)
   const [concurrentDownloads, setConcurrentDownloads] = useState(3)
   const [useInAppPlayer, setUseInAppPlayer] = useState<boolean>(() => localStorage.getItem('cortex-inapp-player') !== 'false')
@@ -28,7 +28,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   const [healthCheck, setHealthCheck] = useState<AppHealthCheck | null>(null)
   const [healthChecking, setHealthChecking] = useState(true)
 
-  // ── Credentials ──
+  
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
 
@@ -52,7 +52,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     }
   }, [])
 
-  // Hydrate concurrency from backend on mount
+  
   useEffect(() => {
     window.cortexDl.getConcurrency().then((val) => {
       if ([3, 5, 10].includes(val)) setConcurrentDownloads(val)
@@ -63,7 +63,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   }, [refreshHealth])
 
 
-  // Engine version
+  
   useEffect(() => {
     (async () => {
       try { setEngineVersion(await window.cortexDl.getEngineVersion()) }
@@ -71,13 +71,13 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     })()
   }, [])
 
-  // Language direction
+  
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
     localStorage.setItem('language', lang)
   }, [lang])
 
-  // Auto-update listener
+  
   useEffect(() => {
     return window.cortexDl.onUpdateStatus((status) => {
       setUpdateStatus(status)
@@ -87,7 +87,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     })
   }, [])
 
-  // localStorage syncs
+  
   useEffect(() => { localStorage.setItem('cortex-notifications', String(notificationsEnabled)) }, [notificationsEnabled])
   useEffect(() => {
     localStorage.setItem('cortex-concurrent', String(concurrentDownloads))
@@ -106,7 +106,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     }
   }, [])
 
-  // Secure credentials
+  
   useEffect(() => {
     (async () => {
       try {
@@ -124,7 +124,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
   useEffect(() => { if (username !== '') window.cortexDl.saveSecureData('cortex-username', username) }, [username])
   useEffect(() => { if (password !== '') window.cortexDl.saveSecureData('cortex-password', password) }, [password])
 
-  // Stats listener (totalDownloadedBytes)
+  
   useEffect(() => {
     const statsDispose = window.cortexDl.onStatsUpdated(({ addedBytes }) => {
       setTotalDownloadedBytes(current => current + addedBytes)
@@ -132,7 +132,7 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     return () => { statsDispose() }
   }, [])
 
-  // 
+  
   const onCheckForUpdates = async () => {
     setUpdateStatus({ status: 'checking' })
     try { await window.cortexDl.checkForUpdates() }
@@ -224,12 +224,12 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     })
   }
 
-  // 
+  
   return {
-    // Language
+    
     lang, setLang, t,
 
-    // Settings state
+    
     useInAppPlayer, setUseInAppPlayer,
     cookieFilePath,
     cookieValidation,
@@ -241,11 +241,11 @@ export function useSettingsController({ setModalConfig }: SettingsControllerDeps
     engineVersion,
     engineUpdateStatus,
 
-    // Auth (consumed by download controller via composition shell)
+    
     username,
     password,
 
-    // Actions
+    
     onCheckForUpdates,
     onUpdateEngine,
     onSelectCookieFile,

@@ -85,7 +85,7 @@ export function AudioPlayerView({
         </div>
       </div>
 
-      {/* Mini Mode Controls */}
+      {}
       <div className="mini-player-controls">
         <button className="mini-control-btn" onClick={(e) => { e.stopPropagation(); togglePlay(); }} title={isPlaying ? "Pause" : "Play"}>
           {isPlaying ? <Pause size={20} /> : <Play size={20} />}

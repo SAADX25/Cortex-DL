@@ -56,14 +56,14 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
 
   return (
     <div className="tab-content fade-in">
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {}
       <header className="content-header flex-col sticky-search-header" style={{ flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
         <div style={{ width: '100%', textAlign: 'left' }}>
           <h1>{t.downloads_title}</h1>
           <p className="muted">{t.total_tasks}: {totalCount}</p>
         </div>
 
-        {/* Search bar with debouncing */}
+        {}
         <div className="search-bar-centered" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
           <div className="search-bar-container" style={{ position: 'relative', width: '100%', maxWidth: '500px' }}>
             <input
@@ -122,7 +122,7 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
         </div>
       </header>
 
-      {/* Modal for Clear All */}
+      {}
       {showClearModal && (
         <div className="modal-overlay fade-in" style={{
           position: 'fixed',
@@ -233,7 +233,7 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
         </div>
       )}
 
-      {/* ── Task Grid ───────────────────────────────────────────── */}
+      {}
       <section className="downloads-list">
         <div className="task-grid">
           {filteredIds.map((id) => (
@@ -249,7 +249,7 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
           ))}
         </div>
 
-        {/* Empty state */}
+        {}
         {totalCount === 0 && (
           <div className="empty-state fade-in">
             <div className="empty-icon-container">

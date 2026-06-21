@@ -32,7 +32,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
           {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : 'HLS Stream'}
         </div>
 
-        {/* Views & Likes */}
+        {}
         {analyzeResult.kind === 'ytdlp' && (
           <div className="preview-metadata">
             <div className="preview-metadata-row">
@@ -104,7 +104,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
           </div>
         )}
 
-        {/* Comments Preview */}
+        {}
         {analyzeResult.kind === 'ytdlp' && (url.includes('youtube.com') || url.includes('youtu.be')) && analyzeResult.comments && analyzeResult.comments.length > 0 && (
           <div className="preview-comments custom-scrollbar">
             <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>

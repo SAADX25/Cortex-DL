@@ -90,7 +90,7 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     }),
 }))
 
-// ── Selectors (equality-stable, used by components) ──────────────────────────
+
 
 /** Select a single task by ID */
 export const useTask = (id: string) =>
@@ -104,7 +104,7 @@ export const useTaskIds = () =>
 export const getTasksSnapshot = () =>
   useDownloadStore.getState().tasks
 
-// ── IPC Wiring — call once at app startup ────────────────────────────────────
+
 
 let ipcInitialized = false
 
@@ -114,14 +114,14 @@ export function initDownloadStore(): () => void {
 
   const { upsertTask } = useDownloadStore.getState()
 
-  // Single source of truth for volatile updates.
-  // `useHighFrequencyIPC.ts` owns all onDownloadUpdated/onDownloadProgress listeners.
+  
+  
   const disposeIPC = startHighFrequencyIPCListeners({
     upsertTask,
     getTaskById: (id) => useDownloadStore.getState().tasks.get(id),
   })
 
-  // Load initial task list (Shared DownloadTask shape; no legacy normalization).
+  
   window.cortexDl.listDownloads().then((initial) => {
     for (const t of initial as DownloadTask[]) upsertTask(t)
   })

@@ -78,8 +78,8 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.on('log-message', (_event, level, message) => {
     if (log && log[level as keyof typeof log]) {
-      // @ts-expect-error log dynamic key
-      log[level](`[Renderer] ${message}`)
+      
+      (log as any)[level](`[Renderer] ${message}`)
     } else {
       log?.info(`[Renderer] ${message}`)
     }

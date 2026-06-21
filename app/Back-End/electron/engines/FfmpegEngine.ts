@@ -16,12 +16,12 @@ export class FfmpegEngine implements IEngine {
   }
 
   pause(): void {
-    // Orchestrator will also abort and kill the process tree.
+    
     this.runtime?.abortController?.abort()
   }
 
   stop(): void {
-    // Orchestrator will also abort and kill the process tree.
+    
     this.runtime?.abortController?.abort()
   }
 }

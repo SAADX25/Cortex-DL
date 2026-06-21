@@ -9,7 +9,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
     log.info(`[CommentsExtractor] Starting comment extraction for ${url}`)
     const ytDlpPath = getBinaryPath('yt-dlp')
 
-    // Use yt-dlp to quickly get JSON which includes the comments
+    
     const args = [
       '--dump-json',
       '--write-comments',
@@ -34,23 +34,23 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       const text = chunk.toString()
       console.log('[YTDLP RAW]:', text.trim())
 
-      // The Ultimate Failsafe: aggressively kill if yt-dlp attempts to download the video anyway
+      
       if (text.includes('Downloading 1 format(s)') || text.includes('[download] Destination:')) {
         proc.kill()
-        // The close event will automatically trigger and process the stdout chunks buffer.
+        
         return
       }
       
-      // Smart Error Handling (Fail-Fast)
+      
       if (text.includes('No supported JavaScript runtime could be found')) {
         proc.kill()
-        // Do not reject here. The close event will handle it naturally when process exits
+        
         return
       }
 
-      // Real-Time Progress Counter via Callback
+      
       if (onProgress) {
-        // Catch the final count: "Extracted 1849 comments"
+        
         const finalMatch = text.match(/Extracted\s+(\d+)\s+comments/i)
         if (finalMatch && finalMatch[1]) {
           const finalCount = parseInt(finalMatch[1], 10)
@@ -58,8 +58,8 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
             onProgress(finalCount, finalCount)
           }
         } else {
-          // Track API Batches instead of exact numbers by parsing pagination requests in verbose logs
-          // Extract the true progress output, e.g., "Downloading comment API JSON page 47 (1011/~1863)"
+          
+          
           const match = text.match(/\((\d+)\/~?(\d+)\)/)
           
           if (match && match[1] && match[2]) {
@@ -74,9 +74,9 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
     })
 
     proc.on('close', async (code) => {
-      // Do NOT exit early if killed or if code !== 0, because yt-dlp often returns code 1 if there are minor warnings, 
-      // or if we killed it intentionally via our failsafe.
-      // But we might still have perfectly valid JSON output in stdoutChunks!
+      
+      
+      
 
       try {
         const stdoutData = Buffer.concat(stdoutChunks).toString('utf-8')
@@ -101,7 +101,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
           const author = c.author || 'Unknown'
           const text = c.text || ''
           const likes = c.like_count ? `(👍 ${c.like_count})` : ''
-          const date = c.time_text || '' // Like "2 months ago"
+          const date = c.time_text || '' 
           
           return `👤 ${author} ${likes} ${date}\n📝 ${text}`
         }).join('\n\n---------------------------------------\n\n')

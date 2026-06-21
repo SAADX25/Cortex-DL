@@ -12,7 +12,7 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
   const [imgSrc, setImgSrc] = React.useState<string | undefined>(src)
   const [thumbPort, setThumbPort] = React.useState(3345)
 
-  // Resolve the dynamic media server port once
+  
   React.useEffect(() => {
     if (window.cortexDl?.getMediaPort) {
       window.cortexDl.getMediaPort().then((port) => setThumbPort(port)).catch(() => {})
@@ -27,12 +27,12 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
         try {
           const filePath = await window.cortexDl.fetchThumbnail(src)
           if (!cancelled && filePath) {
-            // filePath is a local temp file — serve via the media streaming server
+            
             const streamUrl = `http://127.0.0.1:${thumbPort}/?path=${encodeURIComponent(filePath)}`
             setImgSrc(streamUrl)
           }
         } catch (err) {
-          // ignore — fallback will show placeholder
+          // Fall back to the original image URL when thumbnail resolution fails.
         }
       })()
     }
@@ -64,7 +64,7 @@ const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
   )
 }
 
-// ── Props ────────────────────────────────────────────────────────────────────
+
 
 interface DownloadCardProps {
   id: string
@@ -75,7 +75,7 @@ interface DownloadCardProps {
   onError: (msg: string) => void
 }
 
-// ── Progress Bar (extracted sub-component with direct DOM manipulation) ──────
+
 
 const ProgressBar: React.FC<{
   percent: number
@@ -83,7 +83,7 @@ const ProgressBar: React.FC<{
   isIndeterminate: boolean
   progressBarRef?: React.RefObject<HTMLDivElement>
 }> = React.memo(({ percent, phase, isIndeterminate, progressBarRef }) => {
-  // Map phase → CSS modifier class for the fill
+  
   const phaseToBarClass: Record<string, string> = {
     downloading: 'downloading',
     starting: 'downloading',
@@ -110,34 +110,34 @@ const ProgressBar: React.FC<{
 })
 ProgressBar.displayName = 'ProgressBar'
 
-// ── Main Component ───────────────────────────────────────────────────────────
+
 
 const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   const { id, lang, onOpenFile, onOpenFolder, onDelete, onError } = props
   const t = translations[lang]
   const vm = useDownloadCardVM({ id, lang, onOpenFile, onOpenFolder, onDelete, onError })
 
-  // ── High-Performance DOM Refs ────────────────────────────────────────────
-  // These are updated directly by useHighFrequencyIPC without triggering
-  // React re-renders. This keeps the UI at 60 FPS even with many downloads.
+  
+  
+  
   const progressBarRef = useRef<HTMLDivElement>(null)
   const speedTextRef = useRef<HTMLSpanElement>(null)
   const percentTextRef = useRef<HTMLSpanElement>(null)
   const vmRef = useRef<DownloadCardVM | null>(vm)
   vmRef.current = vm
 
-  // ── Force re-render only on structural status changes (rare)
+  
   const [forceUpdateKey, setForceUpdateKey] = useState(0)
 
-  // ── Listen to high-frequency IPC events and mutate DOM directly
+  
   useHighFrequencyIPC(id, {
     progressBarRef,
     speedTextRef,
     percentTextRef,
     vmRef,
     onStructuralChange: () => {
-      // This fires when status changes (e.g., downloading → completed)
-      // Force a re-render by toggling a key
+      
+      
       setForceUpdateKey(k => k + 1)
     },
   })
@@ -149,7 +149,7 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
 
   return (
     <div className={`dc-card ${vm.phase}`} key={forceUpdateKey}>
-      {/* ── Thumbnail ─────────────────────────────────────────── */}
+      {}
       <div className="dc-thumb">
         {vm.thumbnail ? (
           <SmartImage 
@@ -164,15 +164,15 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
         )}
       </div>
 
-      {/* ── Body ──────────────────────────────────────────────── */}
+      {}
       <div className="dc-body">
-        {/* Header: title + format badge */}
+        {}
         <div className="dc-header">
           <h4 className="dc-title" title={vm.title}>{vm.title}</h4>
           <span className={`dc-format-tag ${vm.formatTag}`}>{vm.formatTag}</span>
         </div>
 
-        {/* Status row: phase badge + stats */}
+        {}
         <div className="dc-meta">
           {isPostProcessing ? (
             <span className="dc-phase-badge processing" style={{ color: vm.phaseColor }}>
@@ -185,7 +185,7 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
             </span>
           )}
 
-          {/* Stats: speed / size / ETA — render during active, post-processing, or completed */}
+          {}
           {(isActive || isPostProcessing || vm.phase === 'completed') && (
             <div className="dc-stats">
               {vm.speedLabel && vm.speedLabel !== '-' && (
@@ -203,7 +203,7 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           )}
         </div>
 
-        {/* Progress bar */}
+        {}
         <div className="dc-progress">
           <ProgressBar 
             percent={vm.percent} 
@@ -216,10 +216,10 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           </div>
         </div>
 
-        {/* Error message */}
+        {}
         {vm.errorMessage && <div className="dc-error">{vm.errorMessage}</div>}
 
-        {/* Actions */}
+        {}
         <div className="dc-actions">
           <div className="dc-action-group">
             {vm.showPause && (

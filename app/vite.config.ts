@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'))
 
-// https://vitejs.dev/config/
+
 export default defineConfig(() => {
 
   return {

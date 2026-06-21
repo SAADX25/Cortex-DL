@@ -5,7 +5,7 @@ import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
 import { useUIStore } from '../stores/useUIStore'
 
-// Import Sub-Views
+
 import UrlAnalysisView from './AddDownloadTab/UrlAnalysisView'
 import PlaylistView from './AddDownloadTab/PlaylistView'
 import BatchListView from './AddDownloadTab/BatchListView'
@@ -109,7 +109,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
 }) => {
   const t = translations[lang]
 
-  // Read from Zustand store directly — no prop drilling needed
+  
   const url = useUIStore((s) => s.url)
   const setUrl = useUIStore((s) => s.setUrl)
   const directory = useUIStore((s) => s.directory)
@@ -169,7 +169,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
       <section className="minimal-panel">
         <div className="input-group">
 
-          {/* STEP 1: URL Input */}
+          {}
           <div className="w-full">
             <UrlInputBar
               analyzing={analyzing}
@@ -184,9 +184,9 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
             />
           </div>
 
-          {/* STEP 2: Global Settings Row */}
+          {}
           <div className="modern-chips-grid flex flex-row justify-between items-center w-full">
-            {/* Left: Media Type */}
+            {}
             <div className="chip-group flex flex-row items-center gap-2">
               <button
                 className={`modern-chip transition-all duration-300 ease-in-out transform hover:scale-105 hover:-translate-y-1 ${!isAudioMode ? 'chip-active-blue hover:shadow-[0_8px_30px_rgba(34,211,238,0.4)]' : ''}`}
@@ -208,7 +208,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
               </button>
             </div>
 
-            {/* Right: Download Settings */}
+            {}
             <div className="chip-group flex flex-row items-center gap-3">
               <div className="cortex-pill cursor-pointer" onClick={onPickFolder}>
                 <span className="text-lg">📁</span>
@@ -245,10 +245,10 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
             </div>
           </div>
 
-          {/* STEP 3: Preview + Config + Actions */}
+          {}
           {analyzeResult && (
             <div className="fade-in">
-              {/* Preview Card */}
+              {}
               {analyzeResult.kind === 'playlist' ? (
                 <PlaylistView
                   analyzeResult={analyzeResult}
@@ -273,10 +273,10 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                 />
               )}
 
-              {/* Advanced Settings */}
+              {}
               <div className="advanced-options">
                 <div className="format-quality-row">
-                  {/* Format Pills */}
+                  {}
                   <div className="option-box">
                     <label className="option-label">{t.format_label || 'File Format'}</label>
                     <div className="flex flex-wrap gap-2" style={{ padding: 6 }}>
@@ -309,7 +309,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                     </div>
                   </div>
 
-                  {/* Quality Dropdown (Video only) */}
+                  {}
                   {!isAudioMode && (
                     <div className="option-box">
                       <label className="option-label">{t.quality_label}</label>
@@ -342,7 +342,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                   )}
                 </div>
 
-                {/* Visual video trimming — toggle button + collapsible panel */}
+                {}
                 {trimmerSource ? (
                   <>
                     <button
@@ -352,7 +352,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                         const next = !isTrimmerOpen
                         setIsTrimmerOpen(next)
                         if (!next) {
-                          // Reset trim range so download uses full video length
+                          
                           setStartTime('')
                           setEndTime('')
                         }
@@ -382,7 +382,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                   </>
                 ) : null}
 
-                {/* HLS variant selector */}
+                {}
                 {analyzeResult.kind === 'hls-master' && (
                   <div className="option-box">
                     <label className="option-label">{t.quality_label}</label>
@@ -399,7 +399,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                 )}
               </div>
 
-              {/* Two Action Buttons */}
+              {}
               <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
                 <button
                   className="download-main-btn-large"
@@ -438,7 +438,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
             </div>
           )}
 
-          {/* STEP 4: Batch list */}
+          {}
           <div className="flex-1 overflow-y-auto pr-2">
             <BatchListView 
               batchItems={batchItems} 
@@ -452,7 +452,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
         {globalError ? <div className="global-error-banner">{globalError}</div> : null}
       </section>
 
-      {/* Bottom Anchor: Start Batch Download */}
+      {}
       <div className="w-full mt-auto pt-4 flex-none">
         <div className="w-full max-w-full mx-auto px-2">
           {(() => {
@@ -509,7 +509,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
             <Clapperboard size={20} />
           </button>
           <button className="brand-icon-btn kick" onClick={() => onOpenExternal('https://kick.com')} title="Kick">
-            {/* Official Kick shield logo */}
+            {}
             <svg width="20" height="20" viewBox="0 0 200 200" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
               <path d="M30 20 H90 V80 H120 L150 20 H200 L160 100 L200 180 H150 L120 120 H90 V180 H30 V20Z" />
             </svg>

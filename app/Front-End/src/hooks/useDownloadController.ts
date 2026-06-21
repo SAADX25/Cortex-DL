@@ -6,7 +6,7 @@ import { initDownloadStore, useDownloadStore, getTasksSnapshot } from '../stores
 import { useUIStore } from '../stores/useUIStore'
 import type { ModalConfig } from './types'
 
-// Helpers
+
 
 function isYtdlpUrl(url: string): boolean {
   const lowUrl = url.toLowerCase()
@@ -53,7 +53,7 @@ function normalizeIpcError(error: unknown, fallback: string, youtubeAuthMessage:
   return cleaned
 }
 
-// Dependencies
+
 
 export interface DownloadControllerDeps {
   username: string
@@ -63,16 +63,16 @@ export interface DownloadControllerDeps {
   t: Translations
 }
 
-// Hook
+
 
 export function useDownloadController({
   username, password,
   useInAppPlayer, setModalConfig, t,
 }: DownloadControllerDeps) {
-  // ── Constants ──
+  
   const MAX_BATCH_ITEMS = 50
 
-  // ── Zustand UI store — read via selectors for fine-grained subscriptions ──
+  
   const url = useUIStore((s) => s.url)
   const setUrl = useUIStore((s) => s.setUrl)
   const directory = useUIStore((s) => s.directory)
@@ -90,7 +90,7 @@ export function useDownloadController({
   const analyzing = useUIStore((s) => s.analyzing)
   const setAnalyzing = useUIStore((s) => s.setAnalyzing)
 
-  // Local state
+  
   const [, setFilename] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
@@ -103,10 +103,10 @@ export function useDownloadController({
   const [speedLimit, setSpeedLimit] = useState<string>(() => localStorage.getItem('cortex-speed-limit') || 'auto')
   const [subfolderName, setSubfolderName] = useState('')
 
-  // ── Media player state ──
+  
   const [mediaPlayerFile, setMediaPlayerFile] = useState<{ filePath: string; title?: string } | null>(null)
 
-  // Derived / Computed
+  
 
   const availableVideoQualities = useMemo(() => {
     if (analyzeResult?.kind !== 'ytdlp') return null
@@ -144,24 +144,24 @@ export function useDownloadController({
     (s) => Array.from(s.tasks.values()).filter((t) => t.status === 'downloading').length
   )
 
-  // Side Effects
+  
 
-  // Download store init
+  
   useEffect(() => {
     const disposeStore = initDownloadStore()
     return () => { disposeStore() }
   }, [])
 
-  // Reset analysis on URL change
+  
   useEffect(() => {
     setAnalyzeResult(null)
     setSelectedVariantUrl(null)
     setTargetResolution(null)
     setSelectedYtdlpFormatId(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url])
+    
+  }, [setAnalyzeResult, url])
 
-  // Drag-and-drop URL
+  
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => { e.preventDefault(); e.stopPropagation() }
     const handleDrop = (e: DragEvent) => {
@@ -178,10 +178,10 @@ export function useDownloadController({
       window.removeEventListener('dragover', handleDragOver)
       window.removeEventListener('drop', handleDrop)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    
+  }, [setActiveTab, setUrl])
 
-  // Action Handlers
+  
 
   async function onPickFolder(): Promise<string | null> {
     setGlobalError(null)
@@ -230,7 +230,7 @@ export function useDownloadController({
     try {
       const result = await window.cortexDl.analyzeUrl(urlToAnalyze.trim())
       
-      // NEW: Add default selected state to playlist items
+      
       if (result.kind === 'playlist') {
         result.items = result.items.map((item: any) => ({ ...item, selected: true }))
       }
@@ -275,7 +275,7 @@ export function useDownloadController({
         return
       }
     } catch {
-      // Ignore URL parsing errors and let the analyzer handle it
+      // Non-URL input is handled by the regular analyzer below.
     }
 
     performAnalysis(inputUrl)
@@ -391,7 +391,7 @@ export function useDownloadController({
       const createdTasks = await window.cortexDl.addBatchDownloads(inputs)
       useDownloadStore.getState().addMultipleTasks(createdTasks)
 
-      setBatchItems([]) // Clear successful items entirely
+      setBatchItems([]) 
       showToast(`✅ ${count} items added to Queue!`)
       resetInputState()
       setActiveTab('downloads')
@@ -478,7 +478,7 @@ export function useDownloadController({
     }
   }
 
-  // ── Download-list actions ──
+  
 
   const onDelete = useCallback((id: string, deleteFile: boolean) => {
     const task = getTasksSnapshot().get(id)
@@ -502,8 +502,8 @@ export function useDownloadController({
         }
       }
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t])
+    
+  }, [setGlobalError, setModalConfig, t])
 
   async function onOpenFile(filePath: string, title?: string) {
     try {
@@ -584,13 +584,13 @@ export function useDownloadController({
     }
   }, [analyzeResult, setAnalyzeResult])
 
-  // Return API
+  
 
   return {
-    // Constants
+    
     MAX_BATCH_ITEMS,
 
-    // From Zustand store (components can also subscribe directly)
+    
     url, setUrl,
     directory,
     globalError, setGlobalError,
@@ -600,7 +600,7 @@ export function useDownloadController({
     analyzeResult,
     analyzing,
 
-    // Local state
+    
     startTime, setStartTime,
     endTime, setEndTime,
     selectedVariantUrl, setSelectedVariantUrl,
@@ -613,13 +613,13 @@ export function useDownloadController({
     subfolderName, setSubfolderName,
     availableVideoQualities,
 
-    // Counts
+    
     activeDownloadCount,
 
-    // Media player
+    
     mediaPlayerFile, setMediaPlayerFile,
 
-    // Actions
+    
     onPickFolder,
     onPasteAndAnalyze,
     handleAnalyzeUrlDirectly,

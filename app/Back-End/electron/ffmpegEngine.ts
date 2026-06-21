@@ -9,7 +9,7 @@ import { nowMs, getFileSizeIfExists, sendNotification, parseTimeToSeconds } from
 import { parseFfmpegProgress, flushLines, logRawProgressChunk } from './progressParser'
 import type { FfmpegState } from './progressParser'
 
-// ── FFmpeg Availability Check ────────────────────────────────────────────────
+
 
 
 export async function isFfmpegAvailable(): Promise<boolean> {
@@ -45,7 +45,7 @@ async function isOutputValid(filePath: string): Promise<boolean> {
   })
 }
 
-// ── FFmpeg Spawn ─────────────────────────────────────────────────────────────
+
 
 function spawnFfmpeg(
   url: string,
@@ -54,17 +54,17 @@ function spawnFfmpeg(
   startTime?: string,
   endTime?: string,
 ): ChildProcessWithoutNullStreams {
-  // Pre-input flags: overwrite, progress, fast input seek
+  
     const pre = ['-y', '-threads', '2', '-progress', 'pipe:2']
-  if (startTime) pre.push('-ss', startTime)   // input seek (fast)
+  if (startTime) pre.push('-ss', startTime)   
   pre.push('-i', url)
 
-  // Post-input duration limit
+  
   if (startTime && endTime) {
     const dur = parseTimeToSeconds(endTime) - parseTimeToSeconds(startTime)
     if (dur > 0) pre.push('-t', String(dur))
   } else if (endTime && !startTime) {
-    pre.push('-to', endTime)  // absolute end position
+    pre.push('-to', endTime)  
   }
 
   let tail: string[]
@@ -92,7 +92,7 @@ function spawnFfmpeg(
   return spawn(getBinaryPath('ffmpeg'), [...pre, ...tail], { windowsHide: true, detached: false })
 }
 
-// ── Engine Entry Point ───────────────────────────────────────────────────────
+
 
 export async function runFfmpegDownload(
   task: DownloadTask,
@@ -107,7 +107,7 @@ export async function runFfmpegDownload(
     return
   }
 
-  // ── Resume: skip if output file already exists and is valid ─────────
+  
   const existingSize = await getFileSizeIfExists(task.filePath)
   if (existingSize > 0) {
     const valid = await isOutputValid(task.filePath)
@@ -121,7 +121,7 @@ export async function runFfmpegDownload(
       sendNotification('Download Complete', `${task.title || task.filename} was already downloaded.`)
       return
     }
-    // Incomplete/corrupt — remove before re-downloading
+    
     await fs.unlink(task.filePath).catch(() => {})
   }
 
@@ -142,9 +142,9 @@ export async function runFfmpegDownload(
     const proc = spawnFfmpeg(task.url, task.filePath, task.targetFormat, task.startTime, task.endTime)
     runtime.child = proc
 
-    // ── Wire progress parsing on stderr ─────────────────────────────────
-    // Pre-seed trim duration so progress starts on the very first time= tick
-    // instead of waiting for the Duration header (which may never arrive for HLS).
+    
+    
+    
     let preseededDuration: number | null = null
     if (task.startTime && task.endTime) {
       const dur = parseTimeToSeconds(task.endTime) - parseTimeToSeconds(task.startTime)
@@ -222,7 +222,9 @@ export async function runFfmpegDownload(
           task.totalBytes = finalSize
           task.downloadedBytes = finalSize
         }
-      } catch { /* ignore size check errors */ }
+      } catch {
+        // Completion metadata is optional when the output cannot be inspected.
+      }
 
       ctx.flushSave()
       ctx.sendUpdate(task)
@@ -230,7 +232,7 @@ export async function runFfmpegDownload(
       return
     }
 
-    // Retry with backoff
+    
     if (runtime.retries < 3) {
       runtime.retries++
       task.status = 'queued'

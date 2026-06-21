@@ -2,7 +2,7 @@ import type { DownloadTask } from './types'
 import { parseTimeToSeconds } from './utils'
 import log from 'electron-log'
 
-// ── FFmpeg State (shared across lines within one download) ───────────────────
+
 
 export interface FfmpegState {
   totalDuration: number | null
@@ -33,8 +33,8 @@ export function logRawProgressChunk(taskId: string, source: string, chunk: strin
 export function parseDownloadProgress(line: string, task: DownloadTask): boolean {
   let changed = false
 
-  // PRIMARY: Structured --progress-template output
-  // Format: CORTEX_DL:<downloaded_bytes>:<total_bytes_estimate>:<speed>
+  
+  
   const tplMatch = /CORTEX_DL:(\S+):(\S+):(\S+)/.exec(line)
   if (tplMatch) {
     const dlBytes = parseFloat(tplMatch[1])
@@ -67,7 +67,7 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
     return changed
   }
 
-  // FALLBACK: Classic [download] regex for older yt-dlp
+  
   const progressMatch = /\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+~?\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|TiB|B)/i.exec(line)
   if (progressMatch) {
     const totalVal = parseFloat(progressMatch[2])
@@ -115,7 +115,7 @@ export function parseFfmpegProgress(
 ): boolean {
   let changed = false
 
-  // Always capture Duration header
+  
   if (state.totalDuration === null) {
     const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
     if (durMatch) {
@@ -138,7 +138,7 @@ export function parseFfmpegProgress(
       changed = true
     }
   } else {
-    // Structured: total_size=<plain bytes>
+    
     const plainSizeMatch = /^total_size=(\d+)$/.exec(line.trim())
     if (plainSizeMatch) {
       const bytes = parseInt(plainSizeMatch[1], 10)
@@ -167,12 +167,12 @@ export function parseFfmpegProgress(
     changed = true
   }
 
-  // Parse time= → percent (context-dependent)
+  
   const timeMatch = /\b(?:out_)?time=(-?\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
   const outTimeUnitsMatch = /^out_time_(?:ms|us)=(\d+)$/.exec(line.trim())
   if (timeMatch || outTimeUnitsMatch) {
-    // FFmpeg's historical out_time_ms value is in AV_TIME_BASE units
-    // (microseconds), despite the name.
+    
+    
     const currentSec = timeMatch
       ? parseTimeToSeconds(timeMatch[1])
       : parseInt(outTimeUnitsMatch![1], 10) / 1_000_000
@@ -193,11 +193,11 @@ export function parseFfmpegProgress(
     if (totalDuration && totalDuration > 0) {
       const pct = Math.min(99, Math.round((currentSec / totalDuration) * 100))
       if (task.status === 'downloading') {
-        // TRIM MODE: ffmpeg is the downloader
+        
         task.downloadPercent = pct
         changed = true
       } else if (task.status === 'converting' || task.status === 'merging') {
-        // POST-PROCESSING: ffmpeg is muxing/recoding
+        
         task.convertingPercent = pct
         changed = true
       }
@@ -207,7 +207,7 @@ export function parseFfmpegProgress(
   return changed
 }
 
-// ── State Transitions ────────────────────────────────────────────────────────
+
 
 export interface TransitionResult {
   transitioned: boolean
@@ -223,7 +223,7 @@ export function parseStateTransition(
 ): TransitionResult {
   let detectedPath: string | null = null
 
-  // Capture final output path
+  
   const destMatch = /Destination:\s*(.+)$/.exec(line)
     ?? /Merging formats into "(.+)"/.exec(line)
   if (destMatch) {

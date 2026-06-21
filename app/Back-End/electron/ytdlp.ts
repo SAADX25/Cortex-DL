@@ -8,9 +8,9 @@ import { unlink, rename, stat } from 'node:fs/promises'
 import { getBinaryPath, getBinDirectory } from './paths'
 import { db } from './db'
 
-// In-Memory Analysis Cache (5-min TTL)
-const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-const ANALYSIS_CACHE_MAX = 50 // max entries to prevent unbounded growth
+
+const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 
+const ANALYSIS_CACHE_MAX = 50 
 const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
 const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
 const MIN_BUN_VERSION: VersionTuple = [1, 2, 11]
@@ -92,7 +92,7 @@ let cachedJsRuntimeSelection: JsRuntimeSelection | null = null
 let warnedNoSupportedRuntime = false
 
 function normalizeUrlForCache(url: string): string {
-  // Strip trailing slashes, whitespace, and lowercase the host for consistent keys
+  
   return url.trim().replace(/\/+$/, '')
 }
 
@@ -110,7 +110,7 @@ function getCachedAnalysis(url: string): AnalyzeResult | null {
 
 function setCachedAnalysis(url: string, result: AnalyzeResult): void {
   const key = normalizeUrlForCache(url)
-  // Evict oldest entries if at capacity
+  
   if (analysisCache.size >= ANALYSIS_CACHE_MAX) {
     const oldestKey = analysisCache.keys().next().value
     if (oldestKey) analysisCache.delete(oldestKey)
@@ -307,7 +307,7 @@ export async function isYtdlpAvailable(): Promise<boolean> {
 }
 
 export async function getYtdlpVersion(): Promise<string> {
-  const TIMEOUT_MS = 5000 // 5 second timeout
+  const TIMEOUT_MS = 5000 
   
   try {
     const binaryPath = getBinaryPath('yt-dlp')
@@ -336,7 +336,9 @@ export async function getYtdlpVersion(): Promise<string> {
       }),
       new Promise<number>((resolve) => {
         setTimeout(() => {
-          try { p.kill() } catch { /* ignore */ }
+          try { p.kill() } catch {
+            // The process may already have exited when the timeout fires.
+          }
           resolve(1)
         }, TIMEOUT_MS)
       })
@@ -352,9 +354,7 @@ export async function getYtdlpVersion(): Promise<string> {
   }
 }
 
-/**
- * Fetches JSON from a URL using HTTPS with redirect support
- */
+
 function fetchJson(url: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const options = {
@@ -394,9 +394,7 @@ function fetchJson(url: string): Promise<any> {
   })
 }
 
-/**
- * Downloads a file from a URL with redirect support
- */
+
 function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const options = {
@@ -465,7 +463,7 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
   const tempPath = path.join(binDir, 'yt-dlp_new.exe')
   const oldPath = binaryPath + '.old'
 
-  // Cleanup old files from previous updates
+  
   try {
     if (existsSync(oldPath)) {
       await unlink(oldPath)
@@ -478,7 +476,7 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
   log.info(`[ytdlp] Update: binDir=${binDir}, binaryPath=${binaryPath}`)
 
   try {
-    // Step 1: Fetch latest release info from GitHub API
+    
     log.info('[ytdlp] Fetching latest release from GitHub...')
     const releaseUrl = process.env.GITHUB_RELEASE_API || 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'
     const releaseData = await fetchJson(releaseUrl)
@@ -486,7 +484,7 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
     const latestVersion = releaseData.tag_name || releaseData.name
     log.info(`[ytdlp] Latest version: ${latestVersion}`)
     
-    // Find the Windows executable asset
+    
     const asset = releaseData.assets?.find((a: any) => 
       a.name === 'yt-dlp.exe' || a.name === 'yt-dlp_win.exe'
     )
@@ -498,28 +496,28 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
     const downloadUrl = asset.browser_download_url
     log.info(`[ytdlp] Download URL: ${downloadUrl}`)
     
-    // Step 2: Download new binary to temp file
+    
     log.info('[ytdlp] Downloading new binary...')
     await downloadFile(downloadUrl, tempPath)
     
-    // Verify download succeeded
+    
     if (!existsSync(tempPath)) {
       return { success: false, message: 'Download failed - temp file not created.' }
     }
     
 const stats = await stat(tempPath)
-    if (stats.size < 1000000) { // yt-dlp.exe should be at least 1MB
+    if (stats.size < 1000000) { 
       await unlink(tempPath).catch(() => {})
       return { success: false, message: 'Download appears corrupted (file too small).' }
     }
 
-    // Step 3: Delete old binary (if exists)
+    
     log.info('[ytdlp] Replacing old binary...')
     if (existsSync(binaryPath)) {
       try {
         await unlink(binaryPath)
       } catch (err) {
-        // Try to rename old file instead
+        
         try {
           await rename(binaryPath, binaryPath + '.old')
         } catch (renameErr) {
@@ -536,7 +534,7 @@ const stats = await stat(tempPath)
       }
     }
 
-    // Step 4: Rename temp to final
+    
     try {
       await rename(tempPath, binaryPath)
     } catch (renameFinalErr) {
@@ -549,17 +547,19 @@ const stats = await stat(tempPath)
       return { success: false, message: 'Failed to rename new binary.' }
     }
 
-    // Step 5: Set executable permissions (for non-Windows)
+    
     try {
       chmodSync(binaryPath, 0o755)
-    } catch { /* ignore on Windows */ }
+    } catch {
+      // chmod is not required on Windows and may be unsupported elsewhere.
+    }
     
     log.info(`[ytdlp] Update successful! Version: ${latestVersion}`)
     return { success: true, message: `Updated successfully to ${latestVersion}!`, version: latestVersion }
     
   } catch (err) {
     log.error('[ytdlp] Update error:', err)
-    // Cleanup temp file if exists
+    
     if (existsSync(tempPath)) {
       await unlink(tempPath).catch(() => {})
     }
@@ -582,7 +582,7 @@ export function getJsRuntimeArgs(): string[] {
 }
 
 export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
-  // ── Cache check: return instantly if we analyzed this URL recently ──
+  
   const cached = getCachedAnalysis(url)
   if (cached) return cached
 
@@ -636,7 +636,7 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
       log.error(`[ytdlp stderr] ${chunk.trim()}`)
     })
 
-    // Handle spawn errors (e.g., ENOENT if binary is corrupted/missing at runtime)
+    
     p.on('error', (err) => {
       reject(new Error(`فشل تشغيل yt-dlp: ${err.message}`))
     })
@@ -659,7 +659,7 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
         const info = JSON.parse(stdout)
         log.info(`[ytdlp Debug] Info parsed. Views: ${info.view_count}, Likes: ${info.like_count}, Comments: ${info.comments ? info.comments.length : 0}`)
 
-        // Handle Playlist
+        
         if (info._type === 'playlist') {
           const items = (info.entries || []).map((entry: any) => {
               let extractedThumbnail = entry.thumbnail;
@@ -668,11 +668,11 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
               }
               
               let entryUrl = entry.url || entry.webpage_url;
-              // If only id or incomplete URL is provided, reconstruct it for YouTube
+              
               if (!entryUrl && entry.id) {
                 entryUrl = `https://www.youtube.com/watch?v=${entry.id}`
               } else if (entryUrl && !entryUrl.startsWith('http')) {
-                // E.g., for relative URLs returned by yt-dlp in some setups
+                
                 entryUrl = `https://www.youtube.com/watch?v=${entryUrl}`
               }
 
@@ -707,7 +707,7 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
             height: f.height || 0,
             fps: f.fps || 0
           }))
-          // Sort by height descending, then by bitrate (tbr) descending
+          
           .sort((a: any, b: any) => b.height - a.height || b.tbr - a.tbr)
 
         let extractedThumbnail = info.thumbnail;
@@ -715,7 +715,7 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
             extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
         }
 
-        // Fetch actual dislikes from Return YouTube Dislike API
+        
         let finalDislikes = info.dislike_count;
         if (isYouTubeUrl(url) && info.id) {
           try {
@@ -751,33 +751,23 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
   })
 }
 
-/**
- * Extracts a direct, playable stream URL for a given video URL.
- *
- * Uses yt-dlp's `-g` (--get-url) flag to print the direct media URL
- * instead of downloading. The format selector `b[ext=mp4]` requests
- * the best single-file (muxed) MP4 stream — compatible with the
- * standard HTML5 `<video>` tag without MSE or HLS players.
- *
- * Falls back through `b` → `best` if the mp4-specific selector
- * yields no results.
- */
+
 export async function getDirectStreamUrl(
   url: string,
 ): Promise<string> {
-  const TIMEOUT_MS = 30_000 // 30 seconds — extraction can be slow
+  const TIMEOUT_MS = 30_000 
 
   const ytdlpPath = getBinaryPath('yt-dlp')
   if (!existsSync(ytdlpPath)) {
     throw new Error('yt-dlp binary not found. Please ensure it exists in the bin directory.')
   }
 
-  // Try format selectors in priority order:
-  //   1. 22/18        — YouTube native pre-merged h264+AAC (720p / 360p).
-  //                     These are single-URL, muxed MP4s that work in any
-  //                     HTML5 <video> tag without MSE or HLS.
-  //   2. b[ext=mp4]   — best muxed MP4 (fallback for non-YouTube sites)
-  //   3. best         — legacy catch-all
+  
+  
+  
+  
+  
+  
   const formatSelectors = ['22/18', 'b[ext=mp4]', 'best']
 
   let lastError: string = ''
@@ -785,7 +775,7 @@ export async function getDirectStreamUrl(
   for (const formatSelector of formatSelectors) {
     const args: string[] = [
       '-f', formatSelector,
-      '-g',                    // --get-url: print URL, don't download
+      '-g',                    
       '--no-playlist',
       '--no-check-certificate',
       '--geo-bypass',
@@ -827,9 +817,11 @@ export async function getDirectStreamUrl(
           reject(new Error(`Failed to spawn yt-dlp: ${err.message}`))
         })
 
-        // Timeout guard
+        
         const timer = setTimeout(() => {
-          try { p.kill() } catch { /* ignore */ }
+          try { p.kill() } catch {
+            // The process may already have exited when the timeout fires.
+          }
           reject(new Error('yt-dlp timed out while extracting stream URL.'))
         }, TIMEOUT_MS)
 
@@ -844,9 +836,9 @@ export async function getDirectStreamUrl(
             return
           }
 
-          // yt-dlp -g can output multiple lines (video URL + audio URL) for
-          // separate streams, but with format "b" it should be a single URL.
-          // Take the first non-empty line.
+          
+          
+          
           const firstUrl = stdout
             .split('\n')
             .map((line) => line.trim())
@@ -869,7 +861,7 @@ export async function getDirectStreamUrl(
       }
       lastError = err instanceof Error ? err.message : String(err)
       log.warn(`[ytdlp] getDirectStreamUrl: format "${formatSelector}" failed — ${lastError}`)
-      // Continue to next format selector
+      
     }
   }
 

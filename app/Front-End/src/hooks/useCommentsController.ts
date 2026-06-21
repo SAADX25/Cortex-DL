@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 
-// 
+
 export function useCommentsController() {
   const [isCommentsDownloading, setIsCommentsDownloading] = useState(false)
   const [commentsSuccessPath, setCommentsSuccessPath] = useState<string | null>(null)
   const [commentsProgress, setCommentsProgress] = useState<{ current: number; total: number } | null>(null)
 
-  // Comments IPC listeners
+  
   useEffect(() => {
     let cleanupStarted: (() => void) | undefined
     let cleanupProgress: (() => void) | undefined
@@ -31,7 +31,7 @@ export function useCommentsController() {
     }
   }, [])
 
-  // 
+  
   return {
     isCommentsDownloading, setIsCommentsDownloading,
     commentsSuccessPath, setCommentsSuccessPath,

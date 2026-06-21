@@ -6,7 +6,7 @@ import { useDownloadController } from './useDownloadController'
 import { useSettingsController } from './useSettingsController'
 import { useCommentsController } from './useCommentsController'
 
-// 
+
 export function variantLabel(v: any, lang: Language): string {
   const res = v.resolution ? `${v.resolution.height}p` : null
   const bw = v.bandwidth ? `${Math.round(v.bandwidth / 1000)} kbps` : null
@@ -16,9 +16,9 @@ export function variantLabel(v: any, lang: Language): string {
   return translations[lang].quality_placeholder
 }
 
-// 
+
 export function useAppController() {
-  // ── Shared: Confirm modal (used by both downloads and settings) ──
+  
   const [modalConfig, setModalConfig] = useState<ModalConfig>({
     isOpen: false, title: '', message: '',
     confirmText: 'Confirm', cancelText: 'Cancel',
@@ -26,7 +26,7 @@ export function useAppController() {
   })
   const closeModal = () => setModalConfig(prev => ({ ...prev, isOpen: false }))
 
-  // ── Shared: Thumbnail port (for SmartImage) ──
+  
   const [thumbPort, setThumbPort] = useState(3345)
   useEffect(() => {
     if (window.cortexDl?.getMediaPort) {
@@ -34,7 +34,7 @@ export function useAppController() {
     }
   }, [])
 
-  // ── Domain hooks ──
+  
   const settings = useSettingsController({ setModalConfig })
 
   const downloads = useDownloadController({
@@ -47,12 +47,12 @@ export function useAppController() {
 
   const comments = useCommentsController()
 
-  // 
+  
   return {
-    // Constants
+    
     MAX_BATCH_ITEMS: downloads.MAX_BATCH_ITEMS,
 
-    // From Zustand store (components can also subscribe directly)
+    
     url: downloads.url, setUrl: downloads.setUrl,
     directory: downloads.directory,
     globalError: downloads.globalError, setGlobalError: downloads.setGlobalError,
@@ -62,7 +62,7 @@ export function useAppController() {
     analyzeResult: downloads.analyzeResult,
     analyzing: downloads.analyzing,
 
-    // Local state (downloads)
+    
     startTime: downloads.startTime, setStartTime: downloads.setStartTime,
     endTime: downloads.endTime, setEndTime: downloads.setEndTime,
     selectedVariantUrl: downloads.selectedVariantUrl, setSelectedVariantUrl: downloads.setSelectedVariantUrl,
@@ -75,11 +75,11 @@ export function useAppController() {
     subfolderName: downloads.subfolderName, setSubfolderName: downloads.setSubfolderName,
     availableVideoQualities: downloads.availableVideoQualities,
 
-    // UI chrome
+    
     lang: settings.lang, setLang: settings.setLang,
     activeDownloadCount: downloads.activeDownloadCount,
 
-    // Settings / engine
+    
     useInAppPlayer: settings.useInAppPlayer, setUseInAppPlayer: settings.setUseInAppPlayer,
     cookieFilePath: settings.cookieFilePath,
     cookieValidation: settings.cookieValidation,
@@ -91,21 +91,21 @@ export function useAppController() {
     engineVersion: settings.engineVersion,
     engineUpdateStatus: settings.engineUpdateStatus,
 
-    // Media player
+    
     mediaPlayerFile: downloads.mediaPlayerFile, setMediaPlayerFile: downloads.setMediaPlayerFile,
 
-    // Comments
+    
     isCommentsDownloading: comments.isCommentsDownloading, setIsCommentsDownloading: comments.setIsCommentsDownloading,
     commentsSuccessPath: comments.commentsSuccessPath, setCommentsSuccessPath: comments.setCommentsSuccessPath,
     commentsProgress: comments.commentsProgress,
 
-    // Modal
+    
     modalConfig, closeModal,
 
-    // Thumbnail port
+    
     thumbPort,
 
-    // Actions (downloads)
+    
     onPickFolder: downloads.onPickFolder,
     onPasteAndAnalyze: downloads.onPasteAndAnalyze,
     handleAnalyzeUrlDirectly: downloads.handleAnalyzeUrlDirectly,
@@ -122,7 +122,7 @@ export function useAppController() {
     deselectAllPlaylistItems: downloads.deselectAllPlaylistItems,
     clearPlaylistItems: downloads.clearPlaylistItems,
 
-    // Actions (settings)
+    
     onCheckForUpdates: settings.onCheckForUpdates,
     onUpdateEngine: settings.onUpdateEngine,
     onSelectCookieFile: settings.onSelectCookieFile,

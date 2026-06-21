@@ -3,11 +3,11 @@ import * as dotenv from 'dotenv'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Initialization: set __dirname and load .env
+
 const __dirname_env = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
 
-// Configure pure electron-log globally FIRST
+
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
@@ -20,7 +20,7 @@ import { registerIpcHandlers } from './ipc/handlers'
 import { createTray } from './tray'
 import { db } from './db'
 
-// GPU Hardware Acceleration
+
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
@@ -28,24 +28,24 @@ app.commandLine.appendSwitch('disable-software-rasterizer')
 app.commandLine.appendSwitch('enable-hardware-overlays')
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization')
 
-// Global Error Catchers
+
 process.on('unhandledRejection', (reason) => {
   log.error('UNHANDLED REJECTION:', reason)
 })
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Global Lazy-Loaded Variables (Strictly Typed)
+
 let downloads: DownloadManager | null = null
 let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
 
-// Service Ready Promise (Fixes Race Condition)
+
 let serviceReadyResolve: () => void
 const serviceReadyPromise = new Promise<void>(resolve => {
   serviceReadyResolve = resolve
 })
 
-// Auto-cleanup function for updater cache
+
 function cleanupUpdaterCache() {
   try {
     const updaterCacheDir = path.join(app.getPath('userData'), '..', 'cortex-dl-updater')
@@ -59,18 +59,18 @@ function cleanupUpdaterCache() {
 }
 
 async function loadBackendServices() {
-  // 1. Dynamic Imports
+  
   const { autoUpdater: electronUpdater } = await import('electron-updater')
   const { DownloadManager } = await import('./downloadManager')
 
-  // 2. Initialize Globals
+  
   autoUpdater = electronUpdater
 
-  // 3. Configure AutoUpdater logging
+  
   autoUpdater.logger = log
-  autoUpdater.autoDownload = false // Pre-prompt before downloading
+  autoUpdater.autoDownload = false 
 
-  // 4. Setup AutoUpdater Listeners
+  
   autoUpdater.on('update-downloaded', async () => {
     log?.info('Update downloaded. Prompting for install...')
     if (win) win.webContents.send('update-status', { status: 'downloaded' })
@@ -129,17 +129,17 @@ async function loadBackendServices() {
     if (win) win.webContents.send('update-status', { status: 'progress', percent: progressObj.percent })
   })
 
-  // 5. Initialize DownloadManager
+  
   if (win && !downloads) {
     downloads = new DownloadManager()
     downloads.attachWindow(win)
     log.info('[Backend] DownloadManager initialized')
   }
 
-  // Signal that backend services are ready
+  
   serviceReadyResolve()
 
-  // Running startup checks
+  
   log.info('Backend services loaded. Running startup checks...')
   cleanupUpdaterCache()
   
@@ -152,7 +152,7 @@ async function loadBackendServices() {
 
 process.env.APP_ROOT = path.join(__dirname, '..')
 
-// 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
+
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'Front-End', 'dist')
@@ -183,7 +183,7 @@ function createWindow() {
     title: 'Cortex DL',
     icon: iconPath,
     autoHideMenuBar: true,
-    show: false, // Don't show immediately
+    show: false, 
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -192,23 +192,23 @@ function createWindow() {
     },
   })
 
-  // Remove native menu bar
+  
   try {
     win.setMenu(null)
   } catch (err) {
     log.warn('Failed to remove menu:', err)
   }
 
-  // Show window as soon as it's ready, to prevent "splash freeze"
+  
   win.once('ready-to-show', () => {
     win?.show()
   })
 
-  // Intercept the 'close' Event to minimize to tray
+  
   win.on('close', (event) => {
     if (!isQuitting) {
-      event.preventDefault(); // STOP the close
-      win?.hide();            // Just hide the window
+      event.preventDefault(); 
+      win?.hide();            
     }
     return false;
   });
@@ -224,9 +224,9 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
-  // ── CORS: allow only known media/CDN domains to reduce surface ─────────
+  
   const MEDIA_CORS_WHITELIST = [
-    /(^|\.)googlevideo\.com$/i,   // YouTube video CDN
+    /(^|\.)googlevideo\.com$/i,   
     /(^|\.)youtube\.com$/i,
     /(^|\.)ytimg\.com$/i,
     /(^|\.)fbcdn\.net$/i,
@@ -257,7 +257,7 @@ function createWindow() {
   })
 }
 
-// Media Streaming Server
+
 const MEDIA_SERVER_PORT_BASE = Number(process.env.MEDIA_SERVER_PORT) || 3345
 const MEDIA_SERVER_PORT_MAX_TRIES = 10
 export let MEDIA_SERVER_PORT = MEDIA_SERVER_PORT_BASE
@@ -331,7 +331,7 @@ function startMediaStreamingServer(): void {
         return
       }
 
-      // Restrict to safe roots: user's Downloads dir and temp thumbnail cache
+      
       const downloadsDir = app.getPath('downloads')
       const thumbsDir = path.join(os.tmpdir(), 'cortexdl-thumbs')
       const candidateRoots = new Set<string>([downloadsDir, thumbsDir])
@@ -480,7 +480,7 @@ if (!gotTheLock) {
     }
   })
 
-  // Register all IPC Handlers exactly once before app gets ready
+  
   registerIpcHandlers({
     getWin: () => win,
     getDownloads: () => downloads,

@@ -36,13 +36,13 @@ export class YoutubeEngine implements IEngine {
   async download(task: DownloadTask, context?: EngineContext): Promise<void> {
     if (!context) throw new Error('[YoutubeEngine] Missing EngineContext')
 
-    // Ensure yt-dlp binary is present and updated
+    
     await YoutubeEngine.ensureYtdlpFresh()
 
     const runtime = context.runtime
     this.childProcess = null
 
-    // Check dependencies
+    
     const ytDlpPath = getBinaryPath('yt-dlp')
     const ffmpegPath = getBinaryPath('ffmpeg')
     const ffmpegDir = path.dirname(ffmpegPath)
@@ -66,32 +66,32 @@ export class YoutubeEngine implements IEngine {
       return
     }
 
-    // Initialize runtime
+    
     runtime.abortController?.abort()
     runtime.abortController = new AbortController()
     runtime.lastSpeedSampleAtMs = null
     runtime.lastSpeedSampleBytes = null
     runtime.retries = runtime.retries ?? 0
 
-    // Reset and enter downloading state
+    
     task.status = 'downloading'
     task.errorMessage = null
     task.updatedAtMs = nowMs()
     context.sendUpdate(task)
 
-    // Prefetch metadata
+    
     await this.prefetchMetadata(task, context, runtime).catch((e) => {
-      // Non-fatal; continue without metadata.
+      
       log.warn(`[YoutubeEngine] Metadata prefetch failed for ${task.id}:`, e instanceof Error ? e.message : e)
     })
 
     const args = this.buildYtdlpArgs(task, profile, { ffmpegDir })
     const runResult = await this.runYtdlpAttempt(task, context, runtime, args, profile)
 
-    // If the user paused/canceled, don't overwrite state.
+    
     if (runtime.abortController?.signal.aborted) return
 
-    // Find if a valid downloaded file exists at this point
+    
     let downloadedTempPath: string | null = runResult.detectedFinalPath
     if (!downloadedTempPath || !existsSync(downloadedTempPath)) {
       try {
@@ -104,11 +104,11 @@ export class YoutubeEngine implements IEngine {
       }
     }
 
-    // Treat as success if exit code is 0 OR if we actually produced a file with some reasonable data
+    
     let isSuccess = runResult.exitCode === 0
     if (!isSuccess && downloadedTempPath && existsSync(downloadedTempPath)) {
       const sizeTemp = await getFileSizeIfExists(downloadedTempPath)
-      // If we have a file with more than 50KB or download progress indicated > 0, it's likely successfully fetched but ffmpeg gave a warning
+      
       if (sizeTemp > 50 * 1024 || task.downloadedBytes > 0) {
         log.warn(`[YoutubeEngine] Task ${task.id} exited with ${runResult.exitCode} but generated file. Treating as success.`)
         isSuccess = true
@@ -116,7 +116,7 @@ export class YoutubeEngine implements IEngine {
     }
 
     if (isSuccess) {
-      // Rename/move final output to the orchestrator's expected task.filePath
+      
       await this.renameDownloaded(task, downloadedTempPath || runResult.detectedFinalPath)
 
       task.status = 'completed'
@@ -136,7 +136,7 @@ export class YoutubeEngine implements IEngine {
       return
     }
 
-    // Error path: build message from captured stderr
+    
     if (isYouTubeAuthRequiredError(runResult.stderr)) {
       log.warn(`[YoutubeEngine] Authentication or rate limit required for task ${task.id}`)
       task.status = 'error'
@@ -152,7 +152,7 @@ export class YoutubeEngine implements IEngine {
     const finalMessage = this.buildErrorMessage(runResult.stderr)
     log.error(`[YoutubeEngine] Task ${task.id} exited with code ${runResult.exitCode}: ${finalMessage}`)
 
-    // Retry with exponential backoff (common for bot/network disconnects)
+    
     const MAX_RETRIES = 5
     if (runtime.retries < MAX_RETRIES) {
       runtime.retries++
@@ -174,7 +174,7 @@ export class YoutubeEngine implements IEngine {
   }
 
   pause(): void {
-    // Orchestrator will also abort and kill process tree.
+    
     log.info(`[YoutubeEngine] Pausing (Killing) process...`)
     killProcessTree(this.childProcess)
   }
@@ -252,7 +252,9 @@ export class YoutubeEngine implements IEngine {
       })(),
       new Promise<string>((_, rej) =>
         setTimeout(() => {
-          try { proc.kill() } catch { /* ignore */ }
+          try { proc.kill() } catch {
+            // The process may already have exited when the timeout fires.
+          }
           rej(new Error('meta timeout'))
         }, META_TIMEOUT_MS)
       ),
@@ -264,7 +266,7 @@ export class YoutubeEngine implements IEngine {
     try {
       info = JSON.parse(metaOut.trim())
     } catch {
-      // Fallback: try to parse the first JSON object in case stderr prefixed output.
+      
       const start = metaOut.indexOf('{')
       const end = metaOut.lastIndexOf('}')
       if (start >= 0 && end > start) info = JSON.parse(metaOut.slice(start, end + 1))
@@ -274,7 +276,7 @@ export class YoutubeEngine implements IEngine {
 
     if (info.title) task.title = String(info.title)
 
-    // Duration requested (not currently persisted to DownloadTask UI).
+    
     if (typeof info.duration === 'number') {
       log.info(`[YoutubeEngine] Duration for ${task.id}: ${info.duration}s`)
     }
@@ -400,13 +402,13 @@ export class YoutubeEngine implements IEngine {
 
     args.push(...getYtdlpCookieArgs())
 
-    // Basic auth (username/password) — still honoured for non-YouTube sites.
+    
     if (task.username) args.push('--username', task.username)
     if (task.password) args.push('--password', task.password)
 
     if (task.speedLimit && task.speedLimit !== 'auto') args.push('--limit-rate', task.speedLimit)
 
-    // Section trimming
+    
     if (task.startTime || task.endTime) {
       const start = task.startTime || '00:00:00'
       const end = task.endTime || 'inf'
@@ -438,7 +440,7 @@ export class YoutubeEngine implements IEngine {
       '--resize-buffer',
       '--file-access-retries', '5',
       '--socket-timeout', '10',
-      // Max-speed: parallel fragment downloads (IDM-style)
+      
       '-N', '8',
       '--concurrent-fragments', '4',
       '--http-chunk-size', '5.0M',
@@ -458,22 +460,22 @@ export class YoutubeEngine implements IEngine {
       ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 0')
     }
 
-    // FFmpeg location helps yt-dlp find ffmpeg reliably in packaged setups.
+    
     const ffmpegExePath = getBinaryPath('ffmpeg')
     if (existsSync(ffmpegExePath)) ytArgs.push('--ffmpeg-location', opts.ffmpegDir)
 
-    // Profile-specific format selection
+    
     switch (profile) {
       case 'proAudio': {
-        // Pro Audio profile requested:
-        // -x --audio-format mp3 --audio-quality 0
+        
+        
         ytArgs.push('-x', '--audio-format', 'mp3', '--audio-quality', '0')
         ytArgs.push('-f', 'bestaudio/best')
         break
       }
       case 'bestVideo': {
-        // Best Video profile requested:
-        // -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"
+        
+        
         ytArgs.push(
           '-f',
           'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best'
@@ -482,11 +484,11 @@ export class YoutubeEngine implements IEngine {
         break
       }
       default: {
-        // Conservative defaults for other target formats.
+        
         if (AUDIO_FORMATS.includes(task.targetFormat as AudioFormat)) {
           let audioFmt = task.targetFormat as string
           if (audioFmt === 'ogg') audioFmt = 'vorbis'
-          if (audioFmt === 'wma') audioFmt = 'wav' // converted post-download
+          if (audioFmt === 'wma') audioFmt = 'wav' 
           
           ytArgs.push('-x', '--audio-format', audioFmt, '-f', 'bestaudio/best')
           if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
@@ -497,17 +499,17 @@ export class YoutubeEngine implements IEngine {
           if (['mp4', 'mkv', 'webm', 'ogg', 'flv'].includes(task.targetFormat)) {
             mergeFmt = task.targetFormat
           } else if (task.targetFormat === 'ogv') {
-            mergeFmt = 'ogg' // renamed post-download
+            mergeFmt = 'ogg' 
             ytArgs.push('--recode-video', 'ogg')
           } else if (task.targetFormat === 'm4v') {
-            mergeFmt = 'mp4' // renamed post-download
+            mergeFmt = 'mp4' 
           }
           ytArgs.push('--merge-output-format', mergeFmt)
           
           if (task.targetFormat === 'avi' || task.targetFormat === 'mov') {
             ytArgs.push('--recode-video', task.targetFormat)
           } else if (task.targetFormat === 'gif') {
-            // GIF will be converted manually from MP4 in post-download
+            
             ytArgs.push('--merge-output-format', 'mp4')
           }
         }
@@ -515,12 +517,12 @@ export class YoutubeEngine implements IEngine {
       }
     }
 
-    // Hide messy temporary parts inside a dedicated hidden temp folder
+    
     const tempDir = path.join(task.directory, '.cortex_temp')
     ytArgs.push('--paths', `temp:${tempDir}`)
     ytArgs.push('--paths', `home:${task.directory}`)
     
-    // Set output format to task ID (will be fully renamed post-download)
+    
     ytArgs.push('-o', `${task.id}.%(ext)s`)
     ytArgs.push(task.url)
 
@@ -528,12 +530,12 @@ export class YoutubeEngine implements IEngine {
   }
 
   private async renameDownloaded(task: DownloadTask, detectedFinalPath: string | null): Promise<void> {
-    const desiredExt = path.extname(task.filePath) // includes dot
+    const desiredExt = path.extname(task.filePath) 
     const safeBase = sanitizeFilename((task.title || task.filename).replace(new RegExp(`${desiredExt}$`), ''))
     const desiredFilename = `${safeBase}${desiredExt || ''}`
     const targetPathBase = path.join(task.directory, desiredFilename)
 
-    // Find a downloaded file if yt-dlp didn't provide a postprocess destination.
+    
     let downloadedPath: string | null = detectedFinalPath
     if (!downloadedPath || !existsSync(downloadedPath)) {
       try {
@@ -548,7 +550,7 @@ export class YoutubeEngine implements IEngine {
 
     if (!downloadedPath || !existsSync(downloadedPath)) return
 
-    // FFmpeg post-processing for specific formats
+    
     const dExt = path.extname(downloadedPath).toLowerCase()
     let needsFfmpeg = false
     let ffmpegArgs: string[] = []
@@ -576,7 +578,7 @@ export class YoutubeEngine implements IEngine {
       }
     }
 
-    // Handle name collisions.
+    
     let targetPath = targetPathBase
     if (existsSync(targetPath)) {
       const parsed = path.parse(targetPathBase)
@@ -585,21 +587,21 @@ export class YoutubeEngine implements IEngine {
       targetPath = `${parsed.dir}\\${parsed.name}_${counter}${parsed.ext}`
     }
 
-    // Windows can sometimes fail to rename if a file is temporarily locked (e.g. by AV or just written). Let's use a small retry loop.
+    
     let renameSuccess = false;
     for (let attempts = 0; attempts < 3; attempts++) {
       try {
         await fsPromises.rename(downloadedPath, targetPath);
         renameSuccess = true;
-        break; // Successfully renamed
+        break; 
       } catch (err) {
         log.warn(`[YoutubeEngine] Rename failed on attempt ${attempts + 1} for ${downloadedPath}:`, err);
-        await new Promise((r) => setTimeout(r, 1000)); // wait 1s before retrying
+        await new Promise((r) => setTimeout(r, 1000)); 
       }
     }
 
     if (!renameSuccess) {
-      // If rename fails totally, fall back to updating fields for detected output.
+      
       if (existsSync(downloadedPath)) {
         task.filePath = downloadedPath
         task.filename = path.basename(downloadedPath)

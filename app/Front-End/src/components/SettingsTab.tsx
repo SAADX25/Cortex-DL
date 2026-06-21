@@ -56,7 +56,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 }) => {
   const t = translations[lang]
 
-  // Derive a short display name from the full path
+  
   const cookieFileName = cookieFilePath
     ? cookieFilePath.split(/[\\/]/).pop() ?? cookieFilePath
     : null
@@ -115,7 +115,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
       <section className="minimal-panel" style={{ gap: '3rem' }}>
 
-        {/* Hero Stats */}
+        {}
         <div className="settings-hero-stats">
           <div className="hero-stat-value gradient-text-large">
             {formatBytes(totalDownloadedBytes)}
@@ -131,7 +131,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         <div className="settings-section">
           <h3 className="section-header">{t.settings_general}</h3>
 
-          {/* Language */}
+          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.language_label}</span>
@@ -155,7 +155,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
-          {/* In-App Player */}
+          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.use_inapp_player}</span>
@@ -175,18 +175,18 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
-          {/* ── YouTube Authentication (cookies.txt) ── */}
+          {}
           <div className="minimal-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
               <div className="row-info" style={{ flex: 1 }}>
                 <span className="row-title">{t.youtube_auth_title}</span>
 
-                {/* Helper blurb */}
+                {}
                 <span className="row-subtitle" style={{ marginTop: '4px', display: 'block' }}>
                   {t.youtube_auth_desc}
                 </span>
 
-                {/* Get Extension link — matches btn-ghost-primary exactly */}
+                {}
                 <button
                   id="get-cookies-extension-btn"
                   className="btn-ghost-primary"
@@ -204,7 +204,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
               </div>
 
-              {/* Action button */}
+              {}
               <div className="row-control" style={{ flexShrink: 0 }}>
                 <button
                   className="btn-ghost-primary"
@@ -218,7 +218,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
 
-            {/* Selected file display */}
+            {}
             <div
               style={{
                 display: 'flex',
@@ -235,7 +235,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             >
               {cookieFilePath ? (
                 <>
-                  {/* Green dot indicator */}
+                  {}
                   <span
                     style={{
                       width: 8,
@@ -311,7 +311,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
           </div>
 
-          {/* Concurrent Downloads */}
+          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.concurrent_title}</span>
@@ -337,7 +337,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
-          {/* Check for Updates */}
+          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.check_for_updates}</span>
@@ -368,7 +368,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
 
-          {/* Engine (yt-dlp) */}
+          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">Engine (yt-dlp)</span>
@@ -452,7 +452,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
-        {/* Danger Zone */}
+        {}
         <div className="settings-section danger-zone">
           <h3 className="section-header danger-text">
             <AlertTriangle size={18} />

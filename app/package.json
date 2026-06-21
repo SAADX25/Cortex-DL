@@ -10,6 +10,8 @@
   "author": "Cortex Team",
   "type": "module",
   "scripts": {
+    "postinstall": "electron-builder install-app-deps",
+    "predev": "node scripts/ensure-electron.cjs",
     "dev": "vite",
     "clean": "rimraf release",
     "build": "npm run clean && tsc && vite build && electron-builder",

@@ -10,15 +10,15 @@ export default function SimpleDownloader() {
 
   const task = useTask(activeTaskId || '')
 
-  // Uncontrolled URL Input
+  
   const urlInputRef = useRef<HTMLInputElement>(null)
 
-  // Direct DOM refs for volatile metrics
+  
   const progressBarRef = useRef<HTMLDivElement>(null)
   const percentTextRef = useRef<HTMLSpanElement>(null)
   const speedTextRef = useRef<HTMLSpanElement>(null)
 
-  // DOM-fast-path driven by the single shared IPC listeners.
+  
   useHighFrequencyIPC(activeTaskId, {
     progressBarRef,
     speedTextRef,
@@ -29,8 +29,8 @@ export default function SimpleDownloader() {
     if (!task) return
     setFileName(task.title || task.filename || '')
     setStatus(task.status)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task?.id, task?.title, task?.filename, task?.status])
+    
+  }, [task])
 
   async function onDownload() {
     const url = urlInputRef.current?.value?.trim() || ''
@@ -40,7 +40,7 @@ export default function SimpleDownloader() {
     setFileName('')
     setActiveTaskId(undefined)
 
-    // Reset DOM
+    
     if (progressBarRef.current) progressBarRef.current.style.width = '0%'
     if (percentTextRef.current) percentTextRef.current.innerText = '0%'
     if (speedTextRef.current) speedTextRef.current.innerText = '0 B/s'
@@ -58,7 +58,7 @@ export default function SimpleDownloader() {
 
       setActiveTaskId(newTask.id)
 
-      // Clear input only on successful submission
+      
       if (urlInputRef.current) urlInputRef.current.value = ''
     } catch (err) {
       console.error(err)

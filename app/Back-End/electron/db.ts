@@ -7,12 +7,12 @@ const dbPath = path.join(userDataPath, 'tasks.sqlite')
 
 export const db = new Database(dbPath)
 
-// WAL mode for performance
+
 db.pragma('journal_mode = WAL')
 
 db.pragma('auto_vacuum = INCREMENTAL')
 
-// Initialize tasks table
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
@@ -32,7 +32,7 @@ db.exec(`
   );
 `)
 
-// Prepared Statements
+
 export const taskDb = {
   upsertTask: db.prepare(`
     INSERT INTO tasks (id, title, url, status, progress, size, thumbnail, engine, full_payload)

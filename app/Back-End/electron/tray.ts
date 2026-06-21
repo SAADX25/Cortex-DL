@@ -34,7 +34,7 @@ export function createTray(
 
   tray.setContextMenu(contextMenu)
 
-  // Restore window on single click 
+  
   tray.on('click', () => { 
     getWin()?.show()
   })

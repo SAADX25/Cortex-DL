@@ -31,40 +31,40 @@ interface UIStoreState {
 
 
 export const useUIStore = create<UIStoreState>((set) => ({
-  // Navigation
+  
   activeTab: 'add',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  // Directory — hydrate from localStorage
+  
   directory: localStorage.getItem('cortex-directory'),
   setDirectory: (dir) => {
     if (dir) localStorage.setItem('cortex-directory', dir)
     set({ directory: dir })
   },
 
-  // Global error
+  
   globalError: null,
   setGlobalError: (err) => set({ globalError: err }),
 
-  // Batch items
+  
   batchItems: [],
   setBatchItems: (updater) =>
     set((state) => ({
       batchItems: typeof updater === 'function' ? updater(state.batchItems) : updater,
     })),
 
-  // Toast
+  
   toastMsg: null,
   showToast: (msg) => {
     set({ toastMsg: msg })
     setTimeout(() => set({ toastMsg: null }), 2300)
   },
 
-  // URL
+  
   url: '',
   setUrl: (url) => set({ url }),
 
-  // Analysis
+  
   analyzeResult: null,
   setAnalyzeResult: (result) => set({ analyzeResult: result }),
   analyzing: false,

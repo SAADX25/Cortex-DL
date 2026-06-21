@@ -23,9 +23,9 @@ export const YouTubeMusicIcon = ({ size = 22, ...props }: { size?: number } & an
       xmlns="http://www.w3.org/2000/svg"
       {...props}
     >
-      {/* White Hollow Ring */}
+      {}
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
-      {/* White Play Triangle */}
+      {}
       <path d="M10.5 8.5 L15.5 12 L10.5 15.5 Z" fill="currentColor" />
     </svg>
   )
@@ -116,7 +116,7 @@ function createSmartImage(thumbPort: number) {
               setImgSrc(streamUrl)
             }
           } catch (err) {
-            // fall back to original src; onError will handle visuals
+            // Fall back to the original image URL when thumbnail resolution fails.
           }
         })()
       }
@@ -144,11 +144,11 @@ function App() {
   const ctrl = useAppController()
   const lang = ctrl.lang
 
-  // Read from Zustand store — only the slices App.tsx itself needs for rendering
+  
   const activeTab = useUIStore((s) => s.activeTab)
   const toastMsg = useUIStore((s) => s.toastMsg)
 
-  // Memoize SmartImage so it doesn't re-create on every render
+  
   const SmartImage = React.useMemo(() => createSmartImage(ctrl.thumbPort), [ctrl.thumbPort])
 
   return (
@@ -158,7 +158,7 @@ function App() {
       />
 
       <main className="main-content">
-        {/* Transient toast */}
+        {}
         {toastMsg && (
           <div style={{ position: 'fixed', right: 20, top: 20, background: 'rgba(15,23,42,0.95)', color: '#fff', padding: '10px 14px', borderRadius: 10, boxShadow: '0 8px 30px rgba(2,6,23,0.6)', zIndex: 1000 }}>
             {toastMsg}

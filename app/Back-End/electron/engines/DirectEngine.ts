@@ -23,7 +23,7 @@ export class DirectEngine implements IEngine {
   private abortController: AbortController | null = null;
   private readonly MAX_RETRIES = 3;
   private readonly NUM_CHUNKS = 8;
-  private readonly MIN_FILE_SIZE_FOR_CHUNKING = 5 * 1024 * 1024; // 5 MB minimum
+  private readonly MIN_FILE_SIZE_FOR_CHUNKING = 5 * 1024 * 1024; 
   private chunks: ChunkInfo[] = [];
   private lastProgressUpdate = 0;
   private lastProgressUpdateBytes = 0;
@@ -33,7 +33,7 @@ export class DirectEngine implements IEngine {
     this.abortController = new AbortController();
 
     try {
-      // Check Accept-Ranges support via HEAD request
+      
       let supportsRanges = false;
       let totalBytes: number | null = null;
 
@@ -62,13 +62,13 @@ export class DirectEngine implements IEngine {
         );
       }
 
-      // Update task with total bytes
+      
       if (totalBytes) {
         task.totalBytes = totalBytes;
         if (context?.sendUpdate) context.sendUpdate(task);
       }
 
-      // Choose download strategy
+      
       if (supportsRanges && totalBytes && totalBytes > 0) {
         await this.downloadWithChunking(task, totalBytes, context);
       } else {
@@ -91,7 +91,7 @@ export class DirectEngine implements IEngine {
     }
   }
 
-  // Single-Stream Fallback (no range support)
+  
 
   private async downloadSingleStream(
     task: DownloadTask,
@@ -104,7 +104,7 @@ export class DirectEngine implements IEngine {
       url: task.url,
       responseType: 'stream',
       signal: this.abortController?.signal,
-      timeout: 300000, // 5 minutes timeout
+      timeout: 300000, 
     });
 
     const totalBytes = parseInt(String(response.headers['content-length'] ?? '0'), 10);
@@ -122,7 +122,7 @@ export class DirectEngine implements IEngine {
         task.downloadedBytes += chunk.length;
         
         const now = nowMs();
-        // Send update every 100ms or every 1MB
+        
         const bytesSinceLast = task.downloadedBytes - this.lastProgressUpdateBytes;
         if (now - this.lastProgressUpdate > 100 || bytesSinceLast > 1024 * 1024) {
           if (context?.sendUpdate) {
@@ -146,7 +146,7 @@ export class DirectEngine implements IEngine {
     await pipeline(response.data, progressStream, writer);
   }
 
-  // Multi-Chunk Downloader
+  
 
   private async downloadWithChunking(
     task: DownloadTask,
@@ -155,12 +155,12 @@ export class DirectEngine implements IEngine {
   ): Promise<void> {
     log.info(`[DirectEngine] Task ${task.id}: Using 8-chunk parallel download`);
 
-    // Ensure the file exists with correct size without allocating memory
+    
     const fh = await fsPromises.open(task.filePath, 'w');
     await fh.truncate(totalBytes);
     await fh.close();
     
-    // Create chunks
+    
     this.chunks = this.createChunks(totalBytes);
     log.info(`[DirectEngine] Task ${task.id}: Created ${this.chunks.length} chunks`);
 
@@ -169,14 +169,14 @@ export class DirectEngine implements IEngine {
     this.lastProgressUpdateBytes = 0;
 
     try {
-      // Download all chunks concurrently with retry logic
+      
       const downloadPromises = this.chunks.map((chunk) =>
         this.downloadChunkWithRetry(task, chunk, context)
       );
 
       await Promise.all(downloadPromises);
 
-      // Verify all chunks completed
+      
       const allChunksComplete = this.chunks.every(c => c.completed);
       
       if (!allChunksComplete) {
@@ -186,17 +186,19 @@ export class DirectEngine implements IEngine {
       log.info(`[DirectEngine] Task ${task.id}: All ${this.chunks.length} chunks completed successfully`);
 
     } catch (error) {
-      // Clean up partial file on failure ONLY if not aborted
+      
       if (!this.abortController?.signal.aborted && !axios.isCancel(error)) {
         try {
           await fsPromises.unlink(task.filePath);
-        } catch { /* ignore */ }
+        } catch {
+          // Preserve the original download error if cleanup cannot remove the file.
+        }
       }
       throw error;
     }
   }
 
-  // Chunk Download with Retry
+  
 
   private async downloadChunkWithRetry(
     task: DownloadTask,
@@ -225,13 +227,13 @@ export class DirectEngine implements IEngine {
           );
         }
 
-        // Exponential backoff: 200ms, 400ms, 800ms
+        
         await new Promise(r => setTimeout(r, Math.pow(2, chunk.retries) * 100));
       }
     }
   }
 
-  // Core Chunk Download Logic
+  
 
   private async downloadChunk(
     task: DownloadTask,
@@ -250,7 +252,7 @@ export class DirectEngine implements IEngine {
       },
       responseType: 'stream',
       signal: this.abortController?.signal,
-      timeout: 60000, // 1 minute timeout per chunk
+      timeout: 60000, 
     });
 
     let chunkDownloadedBytes = 0;
@@ -260,11 +262,11 @@ export class DirectEngine implements IEngine {
         chunkDownloadedBytes += buffer.length;
         chunk.downloadedBytes = chunkDownloadedBytes;
 
-        // Update overall progress
+        
         task.downloadedBytes = this.calculateTotalProgress();
         
         const now = nowMs();
-        // Send update every 150ms
+        
         if (now - this.lastProgressUpdate > 150) {
           if (context?.sendUpdate) {
             context.sendUpdate(task);
@@ -281,14 +283,14 @@ export class DirectEngine implements IEngine {
       }
     });
 
-    // Write chunk data to file at the correct position
+    
     await pipeline(
       response.data,
       progressStream,
       createWriteStream(task.filePath, { start: chunk.start, flags: 'r+' })
     );
 
-    // Verify chunk size
+    
     if (chunkDownloadedBytes !== (chunk.end - chunk.start + 1)) {
       throw new Error(
         `Chunk ${chunk.index} size mismatch: expected ${chunk.end - chunk.start + 1}, ` +
@@ -297,7 +299,7 @@ export class DirectEngine implements IEngine {
     }
   }
 
-  // Utility Methods
+  
 
   private createChunks(totalBytes: number): ChunkInfo[] {
     const chunks: ChunkInfo[] = [];

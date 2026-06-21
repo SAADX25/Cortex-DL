@@ -54,7 +54,7 @@ export function PlayerControls({
     };
 
     media.addEventListener('timeupdate', updateTime);
-    updateTime(); // init
+    updateTime(); 
 
     return () => media.removeEventListener('timeupdate', updateTime);
   }, [mediaRef, duration]);

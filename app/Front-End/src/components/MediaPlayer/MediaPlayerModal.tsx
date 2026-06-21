@@ -81,7 +81,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     });
   };
 
-  // Reset states and perform cleanup when switching between files
+  
   useEffect(() => {
     if (document.pictureInPictureElement) {
        document.exitPictureInPicture().catch(() => {});
@@ -93,7 +93,9 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
     if (mediaRef.current) {
       mediaRef.current.pause();
-      try { mediaRef.current.currentTime = 0; } catch (e) { /* ignore */ }
+      try { mediaRef.current.currentTime = 0; } catch (e) {
+        // Some media streams reject seeking while their metadata is resetting.
+      }
     }
     if (videoRef.current) videoRef.current.pause();
     if (audioRef.current) audioRef.current.pause();
@@ -111,11 +113,11 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     hideTimerRef.current = setTimeout(() => {
       setShowControls(false);
       setIsIdle(true);
-      setShowSettings(false); // Close settings menu if idle
+      setShowSettings(false); 
     }, 2000);
   }, [clearHideTimer]);
 
-  // Audio Visualizer Logic
+  
 
   useEffect(() => {
     if (!isOpen || mediaType !== 'audio') return;
@@ -212,16 +214,42 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     return () => {
       cancelAnimationFrame(rafId);
       animationFrameRef.current = null;
-      try { if (source && analyser) source.disconnect(analyser); } catch (_) { /* ignore */ }
-      try { if (analyser) analyser.disconnect(); } catch (_) { /* ignore */ }
+      try { if (source && analyser) source.disconnect(analyser); } catch (_) {
+        // The audio nodes may already be disconnected during rapid source changes.
+      }
+      try { if (analyser) analyser.disconnect(); } catch (_) {
+        // The analyser may already be disconnected during cleanup.
+      }
       
       audioContextRef.current = null;
       analyserRef.current = null;
       sourceRef.current = null;
+
     };
   }, [isOpen, mediaType, filePath]);
 
-  /* ── Keyboard Shortcuts ── */
+  const togglePlay = useCallback(() => {
+    if (!mediaRef.current) return;
+    if (isPlaying) {
+      mediaRef.current.pause();
+    } else {
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      mediaRef.current.play().catch(console.error);
+    }
+    setIsPlaying(p => !p);
+  }, [isPlaying]);
+
+  const handleClose = useCallback(() => {
+    if (mediaType === 'video' && document.pictureInPictureElement === videoRef.current) {
+      setHideForPiP(true);
+    } else {
+      onClose();
+    }
+  }, [mediaType, onClose]);
+
+  
   useEffect(() => {
     if (!isOpen) return;
 
@@ -257,8 +285,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, isFullscreen, onClose, mediaType]);
+    
+  }, [handleClose, isFullscreen, isOpen, mediaType, togglePlay]);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -266,7 +294,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  /* ── Cleanup on Close ── */
+  
   useEffect(() => {
     if (!isOpen) {
       const release = (el: HTMLVideoElement | HTMLAudioElement | HTMLCanvasElement | null) => {
@@ -295,8 +323,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     }
   }, [isOpen, clearHideTimer]);
 
-  /* ── Force Cleanup on Unmount ── */
-  /* ── Force Cleanup on Unmount ── */
+  
+  
   useEffect(() => {
     const mediaObj = mediaRef.current;
     const videoObj = videoRef.current;
@@ -316,7 +344,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     };
   }, []);
 
-  /* ── Native PiP Sync ── */
+  
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -349,7 +377,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     startHideTimer();
   }, [isPlaying, clearHideTimer, startHideTimer]);
 
-  /* ── Ambilight Loop ── */
+  
   useEffect(() => {
     if (mediaType !== 'video') return;
 
@@ -357,7 +385,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     let isActive = true;
 
     let lastTime = 0;
-    const fpsLimit = 1000 / 15; // 15 FPS
+    const fpsLimit = 1000 / 15; 
 
     const drawAmbilightFrame = (timestamp: number) => {
       if (!isActive) return;
@@ -374,9 +402,9 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
             }
             const ctx = canvas.getContext('2d');
             if (ctx) {
-              // PROFESSIONAL OPTIMIZATION: Skip canvas drawing for 4K/high-res videos.
-              // Copying 4K video frames to Canvas is extremely CPU-intensive and causes
-              // the 50% CPU spikes. We disable the effect for video wider than 2560px.
+              
+              
+              
               if (video.videoWidth <= 2560) {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
               }
@@ -401,23 +429,11 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     };
   }, [isPlaying, mediaType]);
 
-  /* ── Action Handlers ── */
+  
 
-  const togglePlay = () => {
-    if (!mediaRef.current) return;
-    if (isPlaying) {
-      mediaRef.current.pause();
-    } else {
-      if (audioContextRef.current?.state === 'suspended') {
-        audioContextRef.current.resume();
-      }
-      mediaRef.current.play().catch(console.error);
-    }
-    setIsPlaying(p => !p);
-  };
 
   const handleTimeUpdate = () => {
-    // Current time is now handled directly via ref in PlayerControls to prevent re-renders
+    
   };
 
   const handleLoadedMetadata = () => {
@@ -481,13 +497,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     if (mediaRef.current) mediaRef.current.currentTime = 0;
   };
 
-  const handleClose = () => {
-    if (mediaType === 'video' && document.pictureInPictureElement === videoRef.current) {
-      setHideForPiP(true);
-    } else {
-      onClose();
-    }
-  };
 
   if (!isOpen) return null;
 

@@ -19,7 +19,7 @@ import {
   killProcessTree,
 } from './utils'
 
-// Engines
+
 import type { IEngine } from './engines/IEngine'
 import { DirectEngine } from './engines/DirectEngine'
 import { YoutubeEngine } from './engines/YoutubeEngine'
@@ -43,7 +43,7 @@ const filenameTransforms: Partial<Record<DownloadEngine, (filename: string) => s
 export class DownloadManager {
   private tasks = new Map<string, DownloadTask>()
   private runtime = new Map<string, TaskRuntime>()
-  private engines = new Map<string, IEngine>() // Track active engine instances
+  private engines = new Map<string, IEngine>() 
   private win: BrowserWindow | null = null
   private maxConcurrent = 3
   private active = new Set<string>()
@@ -60,7 +60,9 @@ export class DownloadManager {
         const parsed = parseInt(row.value, 10)
         if ([3, 5, 10].includes(parsed)) this.maxConcurrent = parsed
       }
-    } catch { /* table may not exist yet — use default */ }
+    } catch {
+      // Keep the default concurrency when persisted settings are unavailable.
+    }
   }
 
   setMaxConcurrent(value: number): void {
@@ -79,16 +81,16 @@ export class DownloadManager {
     return this.maxConcurrent
   }
 
-  // State Persistence
+  
   private loadState(): void {
     try {
-      // Load items from database ONLY
+      
       const rows = taskDb.getAllTasks.all() as { full_payload: string }[]
       for (const row of rows) {
         try {
           const task: DownloadTask = JSON.parse(row.full_payload)
           if (!task.id || !task.url) continue
-          // Reset active statuses on cold start
+          
           if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
             task.status = 'paused'
             task.speedBytesPerSec = null
@@ -111,14 +113,14 @@ export class DownloadManager {
    * files whose UUID prefix does NOT match any known task.
    */
   private cleanupOrphanFiles(): void {
-    // Collect all known task IDs and all distinct directories
+    
     const knownIds = new Set(this.tasks.keys())
     const directories = new Set<string>()
     for (const task of this.tasks.values()) {
       if (task.directory) directories.add(task.directory)
     }
 
-    // UUID v4 pattern  at the start of a filename
+    
     const UUID_RE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\./i
 
     for (const dir of directories) {
@@ -129,14 +131,18 @@ export class DownloadManager {
           const match = UUID_RE.exec(file)
           if (!match) continue
           const fileId = match[1]
-          if (knownIds.has(fileId)) continue // belongs to an active task
+          if (knownIds.has(fileId)) continue 
           const orphanPath = path.join(dir, file)
           try {
             unlinkSync(orphanPath)
             log.info(`[Cleanup] Deleted orphan: ${file}`)
-          } catch { /* in-use or permission — skip */ }
+          } catch {
+            // Cleanup is best-effort; a locked file must not block startup.
+          }
         }
-      } catch { /* directory read failed — skip */ }
+      } catch {
+        // Ignore directories that cannot be scanned during best-effort cleanup.
+      }
     }
   }
 
@@ -177,8 +183,8 @@ export class DownloadManager {
    * Update active tasks in database.
    */
   private saveStateDebounced(): void {
-    // With WAL mode SQLite, we can just do it instantly. 
-    // We only update active tasks here to save cycles.
+    
+    
     try {
       const trans = db.transaction((activeIds: string[]) => {
         for (const id of activeIds) {
@@ -210,7 +216,7 @@ export class DownloadManager {
     }
   }
 
-  // Public API
+  
   getActiveCount(): number {
     return this.active.size
   }
@@ -230,10 +236,10 @@ export class DownloadManager {
     if (!isHttpUrl(input.url)) {
       throw new Error('URL must be http or https')
     }
-    // Apply optional subfolder (sanitized to prevent directory traversal)
+    
     const rawSubfolder = (input.subfolderName ?? '').trim()
-    // eslint-disable-next-line no-useless-escape
-    const safeSubfolder = rawSubfolder.replace(/[\/\\:*?"<>|]/g, '').trim()
+    
+    const safeSubfolder = rawSubfolder.replace(/[/\\:*?"<>|]/g, '').trim()
     const finalDirectory = safeSubfolder
       ? path.join(input.directory, safeSubfolder)
       : input.directory
@@ -353,8 +359,8 @@ export class DownloadManager {
     if (created.length > 0) {
       this.saveStateImmediate()
       for (const task of created) sendUpdate(this.win, task)
-      // Small delay to let the frontend React closure cleanly unmount/resolve the batch adding logic
-      // before we fire status transitions to 'downloading' via IPC channels.
+      
+      
       setTimeout(() => this.schedule(), 100)
     }
     return created
@@ -382,14 +388,14 @@ export class DownloadManager {
     task.speedBytesPerSec = null
     this.saveStateImmediate()
     sendUpdate(this.win, task)
-    this.active.delete(id) // Ensure it's removed from active set
+    this.active.delete(id) 
     this.schedule()
     return task
   }
 
   async resume(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
-    // Ignore tasks that are already active or terminal
+    
     if (
       task.status === 'completed' || task.status === 'canceled' ||
       task.status === 'downloading' || task.status === 'merging' ||
@@ -426,11 +432,13 @@ export class DownloadManager {
     this.active.delete(id)
     this.schedule()
 
-    // Clean up partial file
+    
     await delay(100)
     try {
       if (existsSync(task.filePath)) await fs.unlink(task.filePath)
-    } catch { /* ignore cleanup errors */ }
+    } catch {
+      // A locked partial file can be removed by the next cleanup pass.
+    }
 
     return task
   }
@@ -439,7 +447,7 @@ export class DownloadManager {
     const task = this.tasks.get(id)
     if (!task) return
 
-    // Stop active download first
+    
     const runtime = this.runtime.get(id)
     if (runtime) {
       runtime.abortController?.abort()
@@ -447,7 +455,7 @@ export class DownloadManager {
       this.runtime.delete(id)
     }
 
-    // Delete physical file if requested
+    
     if (deleteFile && task.filePath) {
       try {
         if (existsSync(task.filePath)) {
@@ -503,7 +511,7 @@ export class DownloadManager {
     }
   }
 
-  // Internals
+  
 
   private detectEngine(url: string): DownloadEngine {
     const low = url.toLowerCase()
@@ -538,7 +546,7 @@ export class DownloadManager {
           sendUpdate(this.win, t)
         }
 
-        // Only write to SQLite when UI is updated (throttled to 5 times/sec) to avoid DB lock/CPU spike
+        
         if (shouldUpdateDb) {
           try {
             taskDb.updateStatusAndProgress.run({
@@ -568,7 +576,7 @@ export class DownloadManager {
     }
   }
 
-  // Queue Scheduler
+  
   private schedule(): void {
     const available = this.maxConcurrent - this.active.size
     if (available <= 0) return
@@ -605,17 +613,17 @@ export class DownloadManager {
       const engine = entry.create()
       this.engines.set(id, engine)
 
-      // Create context for the engine to report progress and update state
+      
       const context = this.createContext(id)
 
       await entry.start(engine, task, context)
       this.engines.delete(id)
 
-      // Post-download processing (e.g., merging for High-Res Youtube)
-      // If task requires merge, we could call this.mediaProcessor.merge(...) here.
+      
+      
 
-      // If the user paused/canceled the task while the engine was running,
-      // the engine should not overwrite that state with "completed".
+      
+      
       if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
         task.status = 'completed'
         task.updatedAtMs = nowMs()

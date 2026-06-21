@@ -126,7 +126,7 @@ export function throttledSendUpdate(
 ): boolean {
   if (!win || win.isDestroyed()) return false
   const now = Date.now()
-  // Always send lifecycle / state-change updates immediately
+  
   const isProgress = task.status === 'downloading' || task.status === 'merging' || task.status === 'converting'
   if (!isProgress || now - runtime.lastIpcAtMs >= IPC_THROTTLE_MS) {
     runtime.lastIpcAtMs = now
@@ -149,15 +149,17 @@ export function killProcessTree(child: ChildProcessWithoutNullStreams | null): v
   if (!child) return
   const pid = child.pid
   if (!pid) {
-    try { child.kill('SIGKILL') } catch { /* already dead */ }
+    try { child.kill('SIGKILL') } catch {
+      // The child may already be gone.
+    }
     return
   }
   
-  // Check if process is still running to avoid "Process not found" spam
+  
   try {
     process.kill(pid, 0)
   } catch {
-    return // Process is already dead
+    return 
   }
 
   if (process.platform === 'win32') {
@@ -167,13 +169,17 @@ export function killProcessTree(child: ChildProcessWithoutNullStreams | null): v
       stdio: 'ignore',
     })
     killer.on('error', () => {
-      try { child.kill('SIGKILL') } catch { /* already dead */ }
+      try { child.kill('SIGKILL') } catch {
+        // The child may already be gone.
+      }
     })
   } else {
     try {
       process.kill(-pid, 'SIGKILL')
     } catch {
-      try { child.kill('SIGKILL') } catch { /* already dead */ }
+      try { child.kill('SIGKILL') } catch {
+        // The child may already be gone.
+      }
     }
   }
 }
