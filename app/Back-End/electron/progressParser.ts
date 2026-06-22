@@ -216,14 +216,14 @@ export function parseStateTransition(
     if (possiblePath) detectedPath = possiblePath
   }
 
-  // Postprocess template: CORTEX_PP:<filepath>
+  
   const ppMatch = /CORTEX_PP:(.+)$/.exec(line)
   if (ppMatch) {
     const ppPath = ppMatch[1].trim()
     if (ppPath && ppPath !== 'NA') detectedPath = ppPath
   }
 
-  // Merger state detection (lightweight muxing)
+  
   if (line.includes('[Merger]') || line.includes('Merging formats')) {
     task.downloadPercent = 100
     task.status = 'merging'
@@ -236,7 +236,7 @@ export function parseStateTransition(
     return { transitioned: true, detectedPath }
   }
 
-  // Converting/recoding state detection
+  
   if (
     line.includes('[VideoConvertor]') ||
     line.includes('[FFmpegVideoConvertor]') ||

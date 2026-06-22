@@ -246,7 +246,7 @@ export class DownloadManager {
         ? this.detectEngine(input.url)
         : requestedEngine
 
-    // Build safe filename
+    
     let filename = sanitizeFilename(input.filename || input.title || getDefaultFilename(input.url))
     filename = filenameTransforms[engine]?.(filename) ?? filename
     filename = withExtension(filename, targetFormat)
@@ -297,7 +297,7 @@ export class DownloadManager {
       if (!isHttpUrl(input.url)) continue
 
       const rawSubfolder = (input.subfolderName ?? '').trim()
-      // eslint-disable-next-line no-useless-escape
+      
       const safeSubfolder = rawSubfolder.replace(/[\/\\:*?"<>|]/g, '').trim()
       const finalDirectory = safeSubfolder
         ? path.join(input.directory, safeSubfolder)

@@ -63,3 +63,4 @@ output.json
 
 # TypeScript build info
 *.tsbuildinfo
+app/scripts/strip-comments.cjs

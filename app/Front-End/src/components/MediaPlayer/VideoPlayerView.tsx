@@ -40,7 +40,7 @@ export function VideoPlayerView({
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP,
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
 }: VideoViewProps) {
-  const [isBuffering, setIsBuffering] = React.useState(false);
+  const [isBuffering, setIsBuffering] = React.useState(true);
   const [showMediaInfo, setShowMediaInfo] = React.useState(false);
   const [subtitles, setSubtitles] = React.useState<import('../../../../Shared/types').PlayerSubtitleTrack[]>([]);
   const [activeSubtitle, setActiveSubtitle] = React.useState<number>(-1);
@@ -87,9 +87,11 @@ export function VideoPlayerView({
             onEnded={onEnded}
             onPlay={() => { setIsBuffering(false); onPlay(); }}
             onPause={onPause}
+            onLoadStart={() => setIsBuffering(true)}
             onWaiting={() => setIsBuffering(true)}
             onPlaying={() => setIsBuffering(false)}
             onCanPlay={() => setIsBuffering(false)}
+            onLoadedData={() => setIsBuffering(false)}
             crossOrigin="anonymous"
             playsInline
           >

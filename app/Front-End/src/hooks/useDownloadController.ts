@@ -322,7 +322,7 @@ export function useDownloadController({
       showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
       return
     }
-    if (!/^https?:\/\
+    if (!/^https?:\/\//i.test(trimmed)) {
       setGlobalError('Invalid URL')
       setTimeout(() => setGlobalError(null), 2500)
       return
