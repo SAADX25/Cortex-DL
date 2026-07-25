@@ -10,9 +10,9 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { db, taskDb } from './db'
 import type {
   DownloadTask, TaskRuntime, StartInput, EngineContext,
-  DownloadEngine,
+  DownloadEngine, AudioFormat, TargetFormat,
 } from './types'
-import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL } from './types'
+import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
@@ -243,7 +243,7 @@ export class DownloadManager {
     const requestedEngine = input.engine ?? 'auto'
     const engine: DownloadEngine =
       requestedEngine === 'auto'
-        ? this.detectEngine(input.url)
+        ? this.detectEngine(input.url, targetFormat)
         : requestedEngine
 
     
@@ -309,7 +309,7 @@ export class DownloadManager {
       const requestedEngine = input.engine ?? 'auto'
       const engine: DownloadEngine =
         requestedEngine === 'auto'
-          ? this.detectEngine(input.url)
+          ? this.detectEngine(input.url, targetFormat)
           : requestedEngine
 
       let filename = sanitizeFilename(input.filename || input.title || getDefaultFilename(input.url))
@@ -444,7 +444,6 @@ export class DownloadManager {
     const task = this.tasks.get(id)
     if (!task) return
 
-    
     const runtime = this.runtime.get(id)
     if (runtime) {
       runtime.abortController?.abort()
@@ -452,20 +451,55 @@ export class DownloadManager {
       this.runtime.delete(id)
     }
 
-    
-    if (deleteFile && task.filePath) {
-      try {
-        if (existsSync(task.filePath)) {
-          await fs.unlink(task.filePath)
+    if (deleteFile) {
+      const pathsToDelete = new Set<string>()
+
+      if (task.filePath) {
+        pathsToDelete.add(task.filePath)
+      }
+
+      if (task.directory && existsSync(task.directory)) {
+        try {
+          const files = await fs.readdir(task.directory)
+          const baseNameNoExt = task.filePath ? path.parse(task.filePath).name : ''
+          const titleBase = task.title ? sanitizeFilename(task.title) : ''
+
+          for (const f of files) {
+            const fPath = path.join(task.directory, f)
+            const fNameNoExt = path.parse(f).name
+
+            if (
+              f.startsWith(`${task.id}.`) ||
+              (baseNameNoExt && (fNameNoExt === baseNameNoExt || fNameNoExt.startsWith(`${baseNameNoExt}_`))) ||
+              (titleBase && (fNameNoExt === titleBase || fNameNoExt.startsWith(`${titleBase}_`)))
+            ) {
+              pathsToDelete.add(fPath)
+            }
+          }
+        } catch (err) {
+          log.warn(`[DownloadManager] Directory scan error during delete:`, err)
         }
-      } catch (err: unknown) {
-        if (err instanceof Error && (err as any).code !== 'ENOENT') {
-          const isLocked = (err as any).code === 'EBUSY' || (err as any).code === 'EPERM' || (err as any).code === 'EACCES'
-          throw new Error(
-            isLocked
-              ? 'File is currently in use. Close any player or app using it, then try again.'
-              : `Failed to delete file: ${err.message}`
-          )
+      }
+
+      for (const p of pathsToDelete) {
+        if (!existsSync(p)) continue
+        let unlinked = false
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await fs.unlink(p)
+            unlinked = true
+            break
+          } catch (err: any) {
+            if (err?.code === 'ENOENT') {
+              unlinked = true
+              break
+            }
+            log.warn(`[DownloadManager] Attempt ${attempt + 1} failed to delete ${p}: ${err?.message}`)
+            await delay(200)
+          }
+        }
+        if (!unlinked && existsSync(p)) {
+          log.error(`[DownloadManager] Failed to delete file: ${p}`)
         }
       }
     }
@@ -510,13 +544,17 @@ export class DownloadManager {
 
   
 
-  private detectEngine(url: string): DownloadEngine {
+  private detectEngine(url: string, targetFormat?: TargetFormat): DownloadEngine {
     const low = url.toLowerCase()
     if (
       low.includes('youtube.com') || low.includes('youtu.be') ||
       low.includes('facebook.com') || low.includes('instagram.com') ||
       low.includes('twitter.com') || low.includes('tiktok.com')
     ) return 'ytdlp'
+
+    if (targetFormat && AUDIO_FORMATS.includes(targetFormat as AudioFormat)) {
+      return 'ffmpeg'
+    }
     return 'direct'
   }
 

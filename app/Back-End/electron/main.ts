@@ -341,7 +341,9 @@ function startMediaStreamingServer(): void {
         if (t.directory) candidateRoots.add(t.directory)
       }
       const isUnder = (p: string, root: string) => {
-        const rel = path.relative(root, p)
+        const pNorm = path.normalize(p).toLowerCase()
+        const rootNorm = path.normalize(root).toLowerCase()
+        const rel = path.relative(rootNorm, pNorm)
         return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
       }
       let allowed = false

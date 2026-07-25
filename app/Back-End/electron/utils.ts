@@ -6,10 +6,10 @@ import type { DownloadTask, TaskRuntime } from './types'
 import { UPDATE_CHANNEL } from './types'
 
 export function sanitizeFilename(name: string): string {
-  let sanitized = name.replace(/[^\w\s\u0600-\u06FF-]/g, '')
+  let sanitized = name.replace(/[/\\:*?"<>|\x00-\x1f]/g, '').trim()
   sanitized = sanitized.replace(/[\s_]+/g, '_')
   sanitized = sanitized.replace(/-+/g, '-')
-  sanitized = sanitized.replace(/^[-_]+|[-_]+$/g, '')
+  sanitized = sanitized.replace(/^[-_.]+|[-_.]+$|\.+$/g, '')
   return sanitized.length > 0 ? sanitized : 'download'
 }
 

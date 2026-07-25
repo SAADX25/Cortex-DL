@@ -252,7 +252,7 @@ export class YoutubeEngine implements IEngine {
   }
 
   private selectProfile(task: DownloadTask): Profile {
-    if (task.targetFormat === 'mp3') return 'proAudio'
+    if (AUDIO_FORMATS.includes(task.targetFormat as AudioFormat)) return 'proAudio'
     if (task.targetFormat === 'mp4') return 'bestVideo'
     return 'default'
   }
@@ -464,12 +464,11 @@ export class YoutubeEngine implements IEngine {
       const start = task.startTime || '00:00:00'
       const end = task.endTime || 'inf'
       args.push('--download-sections', `*${start}-${end}`)
+      args.push('--force-keyframes-at-cuts')
     }
 
     return args
   }
-
-  
 
   private parseHeightFromFormatId(formatId: string | undefined | null): number | null {
     if (!formatId) return null
@@ -486,6 +485,7 @@ export class YoutubeEngine implements IEngine {
     runtime: TaskRuntime,
   ): string[] {
     const hasSubtitles = task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)
+    const isTrimmedTask = Boolean(task.startTime || task.endTime)
 
     const ytArgs: string[] = [
       '--newline',
@@ -495,7 +495,6 @@ export class YoutubeEngine implements IEngine {
       '--no-playlist',
       '--geo-bypass',
       '--force-ipv4',
-      
       
       ...(hasSubtitles ? [] : ['--no-warnings']),
       '--force-overwrites',
@@ -514,31 +513,34 @@ export class YoutubeEngine implements IEngine {
       ...getJsRuntimeArgs(),
     ]
 
-    
+    const isAudio = AUDIO_FORMATS.includes(task.targetFormat as AudioFormat)
 
-    if (task.targetFormat === 'mp4') {
-      const isTrimmedTask = Boolean(task.startTime || task.endTime)
+    if (isAudio) {
+      const extraFfmpegFlags = isTrimmedTask ? '-avoid_negative_ts make_zero -async 1 ' : ''
+      ytArgs.push(
+        '--postprocessor-args', `ExtractAudio+ffmpeg:-y -threads 2 -max_muxing_queue_size 1024 ${extraFfmpegFlags}`.trim(),
+        '--embed-thumbnail',
+        '--add-metadata'
+      )
+    } else if (task.targetFormat === 'mp4') {
       if (isTrimmedTask) {
-        ytArgs.push('--postprocessor-args', 'ffmpeg_i:-movflags +faststart')
+        ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 2 -c:v copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024 -movflags +faststart')
       } else if (hasSubtitles) {
-        
-        
         ytArgs.push(
           '--postprocessor-args',
-          'Merger+ffmpeg:-y -threads 0 -c:a aac -c:s mov_text -movflags +faststart'
+          'Merger+ffmpeg:-y -threads 2 -c:v copy -c:a aac -c:s mov_text -max_muxing_queue_size 1024 -movflags +faststart'
         )
       } else {
-        
         ytArgs.push(
           '--postprocessor-args',
-          'Merger+ffmpeg:-y -threads 0 -c:a aac -movflags +faststart'
+          'Merger+ffmpeg:-y -threads 2 -c:v copy -c:a aac -max_muxing_queue_size 1024 -movflags +faststart'
         )
       }
     } else {
-      ytArgs.push('--postprocessor-args', 'Merger+ffmpeg:-y -threads 0')
+      const extraFfmpegFlags = isTrimmedTask ? 'ffmpeg:-y -threads 2 -c:v copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024' : 'Merger+ffmpeg:-y -threads 2 -c:v copy -max_muxing_queue_size 1024'
+      ytArgs.push('--postprocessor-args', extraFfmpegFlags)
     }
 
-    
     const ffmpegExePath = getBinaryPath('ffmpeg')
     if (existsSync(ffmpegExePath)) ytArgs.push('--ffmpeg-location', opts.ffmpegDir)
 
@@ -549,17 +551,20 @@ export class YoutubeEngine implements IEngine {
       log.info(`[YoutubeEngine] Subtitle args: lang=${task.subtitleLanguage}, auto=${task.subtitleIsAutomatic}, embedded=true`)
     }
 
-    
     const heightConstraint = this.parseHeightFromFormatId(task.ytdlpFormatId)
 
     switch (profile) {
       case 'proAudio': {
-        ytArgs.push('-x', '--audio-format', 'mp3', '--audio-quality', '0')
-        ytArgs.push('-f', 'bestaudio/best')
+        let audioFmt = task.targetFormat as string
+        if (audioFmt === 'ogg') audioFmt = 'vorbis'
+        if (audioFmt === 'wma') audioFmt = 'wav'
+
+        ytArgs.push('-x', '--audio-format', audioFmt, '-f', 'bestaudio/best')
+        if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
+        log.info(`[YoutubeEngine] ProAudio profile applied: format=${audioFmt}, multi-threaded=true, metadata=embedded`)
         break
       }
       case 'bestVideo': {
-        
         const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
         ytArgs.push(
           '-f',
@@ -580,7 +585,6 @@ export class YoutubeEngine implements IEngine {
           ytArgs.push('-x', '--audio-format', audioFmt, '-f', 'bestaudio/best')
           if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
         } else if (VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
-          
           const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
           ytArgs.push('-f', `bestvideo${heightFilter}+bestaudio/best`, '-S', 'res,fps')
           if (heightConstraint) {

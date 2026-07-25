@@ -186,7 +186,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
               onAnalyze={handleAnalyzeUrlDirectly}
               onClear={() => setUrl('')}
               initialUrl={url}
-            />
+             />
           </div>
 
           {}
@@ -208,13 +208,16 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                   setIsAudioMode(true)
                   setTargetFormat('mp3')
                   setSelectedSubtitleLanguage('')
+                  setSelectedQuality('')
+                  setSelectedYtdlpFormatId(null)
+                  setTargetResolution(null)
                 }}
               >
                 {t.btn_audio}
               </button>
             </div>
 
-            {}
+            {/* Save folder & speed limit controls */}
             <div className="chip-group flex flex-row items-center gap-3">
               <div className="cortex-pill cursor-pointer" onClick={onPickFolder}>
                 <span className="text-lg">📁</span>
@@ -251,10 +254,9 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
             </div>
           </div>
 
-          {}
+          {/* Analysis View */}
           {analyzeResult && (
             <div className="fade-in">
-              {}
               {analyzeResult.kind === 'playlist' ? (
                 <PlaylistView
                   analyzeResult={analyzeResult}
@@ -282,10 +284,10 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                 />
               )}
 
-              {}
+              {/* Advanced Options */}
               <div className="advanced-options">
                 <div className="format-quality-row">
-                  {}
+                  {/* Format Selection */}
                   <div className="option-box">
                     <label className="option-label">{t.format_label || 'File Format'}</label>
                     <div className="flex flex-wrap gap-2" style={{ padding: 6 }}>

@@ -49,8 +49,10 @@ function spawnFfmpeg(
   startTime?: string,
   endTime?: string,
 ): ChildProcessWithoutNullStreams {
-  
-    const pre = ['-y', '-threads', '2', '-progress', 'pipe:2']
+  const pre = ['-y', '-threads', '2', '-max_muxing_queue_size', '1024', '-progress', 'pipe:2']
+  if (startTime || endTime) {
+    pre.push('-avoid_negative_ts', 'make_zero', '-async', '1')
+  }
   if (startTime) pre.push('-ss', startTime)   
   pre.push('-i', url)
 
