@@ -14,13 +14,21 @@ const Sidebar: React.FC<SidebarProps> = ({ lang }) => {
 
   const activeTab = useUIStore((s) => s.activeTab)
   const setActiveTab = useUIStore((s) => s.setActiveTab)
-  const activeDownloadCount = useDownloadStore(
-    (s) => Array.from(s.tasks.values()).filter((t) => t.status === 'downloading').length
-  )
 
-  const navItems: Array<{ id: 'add' | 'downloads' | 'settings'; label: string; icon: any; badge?: number }> = [
+  const taskIds = useDownloadStore((s) => s.taskIds)
+  const tasks = useDownloadStore((s) => s.tasks)
+
+  const activeCount = taskIds.filter((id) => {
+    const task = tasks.get(id)
+    return task && (task.status === 'downloading' || task.status === 'queued' || task.status === 'converting')
+  }).length
+
+  const totalCount = taskIds.length
+  const badgeCount = activeCount > 0 ? activeCount : totalCount
+
+  const navItems: Array<{ id: 'add' | 'downloads' | 'settings'; label: string; icon: any; badge?: number; isActiveBadge?: boolean }> = [
     { id: 'add', label: t.nav_add, icon: Plus },
-    { id: 'downloads', label: t.nav_downloads, icon: DownloadCloud, badge: activeDownloadCount },
+    { id: 'downloads', label: t.nav_downloads, icon: DownloadCloud, badge: badgeCount, isActiveBadge: activeCount > 0 },
     { id: 'settings', label: t.nav_settings, icon: Settings },
   ]
 
@@ -30,14 +38,14 @@ const Sidebar: React.FC<SidebarProps> = ({ lang }) => {
         <h1 className="cortex-logo-text">Cortex DL</h1>
       </div>
       
-      <nav className="nav-menu">
+      <nav className="nav-menu flex flex-col gap-2">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = activeTab === item.id
           return (
             <button
               key={item.id}
-              className={`nav-item relative ${isActive ? 'active' : ''}`}
+              className={`nav-item relative flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-all duration-300 ${isActive ? 'active' : ''}`}
               onClick={() => setActiveTab(item.id)}
             >
               {isActive && (
@@ -48,16 +56,17 @@ const Sidebar: React.FC<SidebarProps> = ({ lang }) => {
                   transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                 />
               )}
-              <span className="nav-icon relative z-10">
+              <span className="nav-icon relative z-10 flex items-center justify-center">
                 <Icon size={20} />
               </span>
-              <span className="nav-text relative z-10">{item.label}</span>
-              {item.badge != null && item.badge > 0 && (
+              <span className="nav-text relative z-10 font-medium">{item.label}</span>
+
+              {item.badge != null && (
                 <motion.span
-                  initial={{ scale: 0.7, opacity: 0 }}
+                  initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  key={item.badge}
-                  className="nav-badge relative z-10"
+                  key={`${item.badge}-${item.isActiveBadge}`}
+                  className={`nav-badge-pill relative z-10 ${item.isActiveBadge ? 'active-pulse' : ''}`}
                 >
                   {item.badge}
                 </motion.span>

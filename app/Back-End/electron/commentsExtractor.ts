@@ -16,7 +16,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       '--skip-download',
       '--playlist-items', '0',
       '--verbose',
-      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
+      ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
       ...getYtdlpCookieArgs(),
       ...getJsRuntimeArgs(),
       url

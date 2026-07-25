@@ -14,7 +14,7 @@ const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
 const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
 const MIN_BUN_VERSION: VersionTuple = [1, 2, 11]
 const MAX_BUN_VERSION: VersionTuple = [1, 3, 14]
-export const YOUTUBE_EXTRACTOR_ARGS = 'youtube:player_client=default,web,android'
+export const YOUTUBE_EXTRACTOR_ARGS = ''
 export const YOUTUBE_AUTH_REQUIRED_CODE = 'YOUTUBE_AUTH_REQUIRED'
 
 const YOUTUBE_AUTH_ERROR_PATTERNS = [
@@ -596,12 +596,11 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
       isPlaylist ? '--yes-playlist' : '--no-playlist',
       '--no-check-certificate',
       '--geo-bypass',
-      '--force-ipv4',
       '--no-warnings',
       '--ignore-errors',
       '--socket-timeout', '10',
       '--no-cache-dir',
-      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
+      ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
       ...getYtdlpCookieArgs(),
     ]
 
