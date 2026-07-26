@@ -4,65 +4,8 @@ import { useDownloadCardVM, type DisplayPhase, type DownloadCardVM } from '../ho
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
 import type { Language } from '../translations'
 import { translations } from '../translations'
+import SmartImage from './SmartImage'
 import './DownloadCard.css'
-
-const THUMB_FALLBACK_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90'><rect width='100%' height='100%' fill='%23081126'/><text x='50%' y='50%' font-size='12' fill='%239ca3af' dominant-baseline='middle' text-anchor='middle'>No image</text></svg>"
-
-const SmartImage: React.FC<any> = ({ src, alt, className, style, ...rest }) => {
-  const [imgSrc, setImgSrc] = React.useState<string | undefined>(src)
-  const [thumbPort, setThumbPort] = React.useState(3345)
-
-  
-  React.useEffect(() => {
-    if (window.cortexDl?.getMediaPort) {
-      window.cortexDl.getMediaPort().then((port) => setThumbPort(port)).catch(() => {})
-    }
-  }, [])
-
-  React.useEffect(() => {
-    let cancelled = false
-    setImgSrc(src)
-    if (src && /instagram|cdninstagram/i.test(src)) {
-      (async () => {
-        try {
-          const filePath = await window.cortexDl.fetchThumbnail(src)
-          if (!cancelled && filePath) {
-            
-            const streamUrl = `http://127.0.0.1:${thumbPort}/?path=${encodeURIComponent(filePath)}`
-            setImgSrc(streamUrl)
-          }
-        } catch (err) {
-          
-        }
-      })()
-    }
-    return () => { cancelled = true }
-  }, [src, thumbPort])
-
-  return (
-    <>
-      <img
-        src={imgSrc || THUMB_FALLBACK_DATA_URI}
-        alt="bg-blur"
-        className="dc-thumb-bg"
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        aria-hidden="true"
-        onError={(e: any) => { e.currentTarget.style.display = 'none' }}
-      />
-      <img
-        src={imgSrc || THUMB_FALLBACK_DATA_URI}
-        alt={alt || ''}
-        className={className}
-        style={style}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        onError={(e: any) => { e.currentTarget.onerror = null; e.currentTarget.src = THUMB_FALLBACK_DATA_URI }}
-        {...rest}
-      />
-    </>
-  )
-}
 
 interface DownloadCardProps {
   id: string
@@ -79,7 +22,6 @@ const ProgressBar: React.FC<{
   isIndeterminate: boolean
   progressBarRef?: React.RefObject<HTMLDivElement>
 }> = React.memo(({ percent, phase, isIndeterminate, progressBarRef }) => {
-  
   const phaseToBarClass: Record<string, string> = {
     downloading: 'downloading',
     starting: 'downloading',
@@ -111,30 +53,34 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   const t = translations[lang]
   const vm = useDownloadCardVM({ id, lang, onOpenFile, onOpenFolder, onDelete, onError })
 
-  
-  
-  
   const progressBarRef = useRef<HTMLDivElement>(null)
   const speedTextRef = useRef<HTMLSpanElement>(null)
   const percentTextRef = useRef<HTMLSpanElement>(null)
   const vmRef = useRef<DownloadCardVM | null>(vm)
   vmRef.current = vm
 
-  
-  const [forceUpdateKey, setForceUpdateKey] = useState(0)
+  /**
+   * Use a state flag for structural re-renders instead of `key`.
+   * Changing `key` on the card root causes full unmount → remount,
+   * which breaks CSS transitions and causes a visible flash.
+   * A simple boolean toggle triggers a targeted React re-render
+   * while keeping the DOM node alive.
+   */
+  const [structuralVersion, setStructuralVersion] = useState(0)
 
-  
   useHighFrequencyIPC(id, {
     progressBarRef,
     speedTextRef,
     percentTextRef,
     vmRef,
     onStructuralChange: () => {
-      
-      
-      setForceUpdateKey(k => k + 1)
+      setStructuralVersion((v) => v + 1)
     },
   })
+
+  // Suppress the structuralVersion lint warning — it's intentionally used
+  // only to trigger a re-render, not referenced in JSX.
+  void structuralVersion
 
   if (!vm) return null
 
@@ -142,14 +88,15 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   const isPostProcessing = vm.phase === 'merging' || vm.phase === 'converting' || vm.phase === 'trimming'
 
   return (
-    <div className={`dc-card ${vm.phase}`} key={forceUpdateKey}>
-      {}
+    <div className={`dc-card ${vm.phase}`}>
+      {/* Thumbnail */}
       <div className="dc-thumb">
         {vm.thumbnail ? (
-          <SmartImage 
-            src={vm.thumbnail} 
-            alt="thumbnail" 
-            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }} 
+          <SmartImage
+            src={vm.thumbnail}
+            alt="thumbnail"
+            withBlurBg
+            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }}
           />
         ) : (
           <div className="dc-thumb-placeholder">
@@ -158,15 +105,15 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
         )}
       </div>
 
-      {}
+      {/* Body */}
       <div className="dc-body">
-        {}
+        {/* Header */}
         <div className="dc-header">
           <h4 className="dc-title" title={vm.title}>{vm.title}</h4>
           <span className={`dc-format-tag ${vm.formatTag}`}>{vm.formatTag}</span>
         </div>
 
-        {}
+        {/* Meta row */}
         <div className="dc-meta">
           {isPostProcessing ? (
             <span className="dc-phase-badge processing" style={{ color: vm.phaseColor }}>
@@ -179,7 +126,6 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
             </span>
           )}
 
-          {}
           {(isActive || isPostProcessing || vm.phase === 'completed') && (
             <div className="dc-stats">
               {vm.speedLabel && vm.speedLabel !== '-' && (
@@ -197,11 +143,11 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           )}
         </div>
 
-        {}
+        {/* Progress bar */}
         <div className="dc-progress">
-          <ProgressBar 
-            percent={vm.percent} 
-            phase={vm.phase} 
+          <ProgressBar
+            percent={vm.percent}
+            phase={vm.phase}
             isIndeterminate={vm.isIndeterminate}
             progressBarRef={progressBarRef}
           />
@@ -210,43 +156,43 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           </div>
         </div>
 
-        {}
+        {/* Error message */}
         {vm.errorMessage && <div className="dc-error">{vm.errorMessage}</div>}
 
-        {}
+        {/* Action buttons */}
         <div className="dc-actions">
           <div className="dc-action-group">
             {vm.showPause && (
-              <button className="dc-btn primary" onClick={vm.onPause}>
+              <button className="dc-btn primary" onClick={vm.onPause} aria-label={t.btn_pause}>
                 {t.btn_pause}
               </button>
             )}
             {vm.showResume && (
-              <button className="dc-btn success" onClick={vm.onResume}>
+              <button className="dc-btn success" onClick={vm.onResume} aria-label={t.btn_resume}>
                 {t.btn_resume}
               </button>
             )}
             {vm.showCancel && (
-              <button className="dc-btn danger" onClick={vm.onCancel}>
+              <button className="dc-btn danger" onClick={vm.onCancel} aria-label={t.btn_cancel}>
                 {t.btn_cancel}
               </button>
             )}
             {vm.showPlay && (
-              <button className="dc-btn-icon ghost-success" onClick={vm.onPlay} title={t.btn_play}>
+              <button className="dc-btn-icon ghost-success" onClick={vm.onPlay} title={t.btn_play} aria-label={t.btn_play}>
                 <Play size={20} />
               </button>
             )}
             {vm.showOpenFolder && (
-              <button className="dc-btn-icon ghost-warning" onClick={vm.onOpenFolder} title={t.btn_folder}>
+              <button className="dc-btn-icon ghost-warning" onClick={vm.onOpenFolder} title={t.btn_folder} aria-label={t.btn_folder}>
                 <FolderOpen size={20} />
               </button>
             )}
           </div>
           <div className="dc-action-group">
-            <button className="dc-btn ghost" onClick={() => vm.onDelete(false)}>
+            <button className="dc-btn ghost" onClick={() => vm.onDelete(false)} aria-label={t.btn_remove}>
               {t.btn_remove}
             </button>
-            <button className="dc-btn-icon ghost-danger" onClick={() => vm.onDelete(true)} title={t.btn_delete}>
+            <button className="dc-btn-icon ghost-danger" onClick={() => vm.onDelete(true)} title={t.btn_delete} aria-label={t.btn_delete}>
               <Trash2 size={20} />
             </button>
           </div>

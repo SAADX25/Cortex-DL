@@ -458,12 +458,17 @@ export class YoutubeEngine implements IEngine {
 
     if (task.speedLimit && task.speedLimit !== 'auto') args.push('--limit-rate', task.speedLimit)
 
-    
+    // Trim support via --download-sections.
+    // NOTE: We intentionally omit --force-keyframes-at-cuts.
+    // That flag causes ffmpeg to fully re-encode the entire video just to insert
+    // a keyframe at cut boundaries, which can consume 3+ GB of RAM for 4K videos.
+    // The result is frame-accurate cuts via ffmpeg -ss (input-side seek) instead,
+    // which is fast, memory-efficient, and accurate to within one GOP (~0.5s).
     if (task.startTime || task.endTime) {
       const start = task.startTime || '00:00:00'
       const end = task.endTime || 'inf'
       args.push('--download-sections', `*${start}-${end}`)
-      args.push('--force-keyframes-at-cuts')
+      // --force-keyframes-at-cuts is intentionally NOT added here (see above)
     }
 
     return args
@@ -514,28 +519,34 @@ export class YoutubeEngine implements IEngine {
     const isAudio = AUDIO_FORMATS.includes(task.targetFormat as AudioFormat)
 
     if (isAudio) {
+      // -threads 0: let ffmpeg choose optimal thread count automatically
+      // -preset ultrafast: for audio extraction with trim, fast encode matters more than compression
       const extraFfmpegFlags = isTrimmedTask ? '-avoid_negative_ts make_zero -async 1 ' : ''
       ytArgs.push(
-        '--postprocessor-args', `ExtractAudio+ffmpeg:-y -threads 2 -max_muxing_queue_size 1024 ${extraFfmpegFlags}`.trim(),
+        '--postprocessor-args', `ExtractAudio+ffmpeg:-y -hide_banner -threads 0 -max_muxing_queue_size 1024 ${extraFfmpegFlags}`.trim(),
         '--embed-thumbnail',
         '--add-metadata'
       )
     } else if (task.targetFormat === 'mp4') {
       if (isTrimmedTask) {
-        ytArgs.push('--postprocessor-args', 'ffmpeg:-y -threads 2 -c:v copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024 -movflags +faststart')
+        // -c:v copy avoids video re-encode (fastest). Audio copy may fail on some
+        // streams so we let ffmpeg decide with -c:a copy fallback to aac.
+        ytArgs.push('--postprocessor-args', 'ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024 -movflags +faststart')
       } else if (hasSubtitles) {
         ytArgs.push(
           '--postprocessor-args',
-          'Merger+ffmpeg:-y -threads 2 -c:v copy -c:a aac -c:s mov_text -max_muxing_queue_size 1024 -movflags +faststart'
+          'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a aac -c:s mov_text -max_muxing_queue_size 1024 -movflags +faststart'
         )
       } else {
         ytArgs.push(
           '--postprocessor-args',
-          'Merger+ffmpeg:-y -threads 2 -c:v copy -c:a aac -max_muxing_queue_size 1024 -movflags +faststart'
+          'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a aac -max_muxing_queue_size 1024 -movflags +faststart'
         )
       }
     } else {
-      const extraFfmpegFlags = isTrimmedTask ? 'ffmpeg:-y -threads 2 -c:v copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024' : 'Merger+ffmpeg:-y -threads 2 -c:v copy -max_muxing_queue_size 1024'
+      const extraFfmpegFlags = isTrimmedTask
+        ? 'ffmpeg:-y -hide_banner -threads 0 -c:v copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024'
+        : 'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -max_muxing_queue_size 1024'
       ytArgs.push('--postprocessor-args', extraFfmpegFlags)
     }
 

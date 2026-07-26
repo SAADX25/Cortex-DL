@@ -262,12 +262,6 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       : ''
 
     
-    if (isDownloading) {
-      console.debug('[VM]', task.id, 'phase=', phase, 'bytes=', task.downloadedBytes,
-        '/', task.totalBytes, 'speed=', task.speedBytesPerSec,
-        '→ speedLabel=', speedLabel, 'etaLabel=', etaLabel, 'percent=', percent)
-    }
-
     
     const phaseEmoji = phase === 'merging' ? '⚙️' : phase === 'trimming' ? '✂️' : phase === 'converting' ? '🔄' : ''
     const phaseBadge = isPostProcessing

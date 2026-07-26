@@ -235,6 +235,23 @@
   padding: 16px;
 }
 
+/* Soft amber notice — preview unavailable but slider still works */
+.advanced-trimmer__notice--warn {
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 8px;
+  background: rgba(120, 53, 15, 0.22);
+  color: #fcd34d;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+
+/* Hide the <video> element when preview failed — keep DOM node alive so
+   videoRef stays valid for potential future re-tries */
+.advanced-trimmer__video--hidden {
+  display: none;
+}
+
 .advanced-trimmer__loading-overlay {
   display: flex;
   flex-direction: column;

@@ -378,7 +378,6 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
                         <AdvancedTrimmer
                           key={trimmerSource.videoUrl}
                           videoUrl={trimmerSource.videoUrl}
-                          originalUrl={url}
                           duration={trimmerSource.duration}
                           initialStartTime={startTime}
                           initialEndTime={endTime}

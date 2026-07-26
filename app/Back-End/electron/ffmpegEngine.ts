@@ -49,11 +49,23 @@ function spawnFfmpeg(
   startTime?: string,
   endTime?: string,
 ): ChildProcessWithoutNullStreams {
-  const pre = ['-y', '-threads', '2', '-max_muxing_queue_size', '1024', '-progress', 'pipe:2']
+  // -threads 0: auto-detect optimal thread count
+  // -hide_banner: suppress verbose build info
+  // -probesize / -analyzeduration: limit how much of the stream ffmpeg reads
+  //   upfront when probing media info — prevents RAM spikes for large streams.
+  const pre = [
+    '-y',
+    '-hide_banner',
+    '-probesize', '10M',
+    '-analyzeduration', '5000000',
+    '-threads', '0',
+    '-max_muxing_queue_size', '1024',
+    '-progress', 'pipe:2',
+  ]
   if (startTime || endTime) {
     pre.push('-avoid_negative_ts', 'make_zero', '-async', '1')
   }
-  if (startTime) pre.push('-ss', startTime)   
+  if (startTime) pre.push('-ss', startTime)
   pre.push('-i', url)
 
   
@@ -80,9 +92,11 @@ function spawnFfmpeg(
       case 'mkv':  tail = ['-c', 'copy', outputPath]; break
       case 'avi':  tail = ['-c:v', 'copy', '-c:a', 'mp3', outputPath]; break
       case 'mov':  tail = ['-c', 'copy', '-movflags', '+faststart', outputPath]; break
-      case 'webm': tail = ['-c:v', 'libvpx-vp9', '-c:a', 'libopus', '-b:v', '0', '-crf', '30', '-threads', '2', '-speed', '4', outputPath]; break
+      // webm requires full re-encode; ultrafast preset minimises CPU impact
+      case 'webm': tail = ['-c:v', 'libvpx-vp9', '-c:a', 'libopus', '-b:v', '0', '-crf', '30', '-threads', '0', '-speed', '5', '-deadline', 'realtime', outputPath]; break
       case 'gif':  tail = ['-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0', outputPath]; break
-      default:     tail = ['-c', 'copy', '-bsf:a', 'aac_adtstoasc', outputPath]
+      // mp4: use copy for video to avoid re-encode; aac for audio
+      default:     tail = ['-c:v', 'copy', '-c:a', 'aac', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', outputPath]
     }
   }
 

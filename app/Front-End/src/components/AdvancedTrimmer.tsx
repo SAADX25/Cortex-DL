@@ -188,24 +188,29 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             <Loader size={28} className="advanced-trimmer__spinner" aria-hidden="true" />
             <span>Extracting preview stream…</span>
           </div>
-        ) : streamError ? (
-          <div className="advanced-trimmer__notice advanced-trimmer__notice--error">
-            <AlertCircle size={15} aria-hidden="true" />
-            <span>{streamError}</span>
-          </div>
         ) : (
-          <video
-            ref={videoRef}
-            className="advanced-trimmer__video"
-            src={streamUrl ?? undefined}
-            controls
-            muted
-            preload="auto"
-            onError={() =>
-              setStreamError('Preview failed to load. The trim range can still be saved.')
-            }
-            onLoadedMetadata={() => setStreamError(null)}
-          />
+          <>
+            {streamError && (
+              <div className="advanced-trimmer__notice advanced-trimmer__notice--warn">
+                <AlertCircle size={15} aria-hidden="true" />
+                <span>
+                  Video preview unavailable — the trim range still works normally.
+                </span>
+              </div>
+            )}
+            <video
+              ref={videoRef}
+              className={`advanced-trimmer__video${streamError ? ' advanced-trimmer__video--hidden' : ''}`}
+              src={streamUrl ?? undefined}
+              controls
+              muted
+              preload="auto"
+              onError={() =>
+                setStreamError('Preview failed to load. The trim range can still be saved.')
+              }
+              onLoadedMetadata={() => setStreamError(null)}
+            />
+          </>
         )}
       </div>
 

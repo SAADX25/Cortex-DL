@@ -192,7 +192,9 @@ body {
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  /* border-right separates sidebar from main content in LTR;
+     border-left is correct for RTL — the browser handles this via dir= */
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 
@@ -2793,4 +2795,176 @@ body {
   50% {
     box-shadow: 0 0 20px rgba(56, 189, 248, 0.28), inset 0 1px 0 rgba(56, 189, 248, 0.15);
   }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §17  TOAST NOTIFICATION
+   — Animated status toast (top-right corner)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.toast-notification {
+  position: fixed;
+  right: 20px;
+  top: 20px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  padding: 12px 18px;
+  border-radius: 12px;
+  box-shadow:
+    0 8px 30px rgba(2, 6, 23, 0.6),
+    0 0 0 1px rgba(56, 189, 248, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  z-index: 9000;
+  font-size: 0.92rem;
+  font-weight: 500;
+  max-width: 320px;
+  pointer-events: none;
+  border-left: 3px solid var(--accent-primary);
+}
+
+[dir="rtl"] .toast-notification {
+  right: auto;
+  left: 20px;
+  border-left: none;
+  border-right: 3px solid var(--accent-primary);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §18  DOWNLOAD LIST TOOLBAR & MODAL BUTTONS
+   — Replaces inline styles in DownloadList.tsx
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Toolbar row (search + clear-all) */
+.dl-toolbar {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+/* Search input container */
+.search-bar-container {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Clear-search button (absolute inside .search-bar-container) */
+.clear-search-btn {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.clear-search-btn:hover {
+  color: #f8fafc;
+}
+
+[dir="rtl"] .clear-search-btn {
+  right: auto;
+  left: 15px;
+}
+
+/* "Clear All" button */
+.dl-clear-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.05);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.dl-clear-all-btn:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Modal option buttons (Clear History / Delete Files) */
+.dl-modal-option-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  text-align: left;
+  width: 100%;
+  border: 1px solid transparent;
+}
+
+.dl-modal-option-btn h4 {
+  margin: 0 0 0.4rem 0;
+  font-size: 1.1rem;
+}
+
+.dl-modal-option-btn p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.dl-modal-option-btn.primary {
+  background-color: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+}
+
+.dl-modal-option-btn.primary:hover {
+  background-color: rgba(56, 189, 248, 0.18);
+}
+
+.dl-modal-option-btn.danger {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.dl-modal-option-btn.danger:hover {
+  background-color: rgba(239, 68, 68, 0.18);
+}
+
+/* Icon inside modal option buttons */
+.dl-modal-option-icon {
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: -2px;
+  flex-shrink: 0;
+}
+
+.dl-modal-option-icon.primary {
+  background-color: rgba(56, 189, 248, 0.2);
+}
+
+.dl-modal-option-icon.danger {
+  background-color: rgba(239, 68, 68, 0.2);
+}
+
+/* DownloadCard will-change hint for smoother hover transform */
+.dc-card {
+  will-change: transform;
 }

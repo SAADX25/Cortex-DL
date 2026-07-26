@@ -798,7 +798,7 @@ export async function getDirectStreamUrl(
   for (const formatSelector of formatSelectors) {
     const args: string[] = [
       '-f', formatSelector,
-      '-g',                    
+      '-g',                    // print direct URL only
       '--no-playlist',
       '--no-check-certificate',
       '--geo-bypass',
@@ -806,7 +806,10 @@ export async function getDirectStreamUrl(
       '--no-warnings',
       '--socket-timeout', '10',
       '--no-cache-dir',
-      '--extractor-args', YOUTUBE_EXTRACTOR_ARGS,
+      // Guard: only pass --extractor-args when the value is non-empty.
+      // Passing an empty string causes yt-dlp to throw:
+      //   "wrong --extractor-args formatting; it should be IE_KEY:ARGS, not """
+      ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
       ...getYtdlpCookieArgs(),
     ]
 
