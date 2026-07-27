@@ -108,14 +108,19 @@ export const UrlInputBar = React.memo((
 })
 UrlInputBar.displayName = 'UrlInputBar'
 
-/** Tab page animation — shared between all main tabs */
-const tabMotionProps = {
-  initial: { opacity: 0, y: 12, scale: 0.99 },
-  animate: { opacity: 1, y: 0, scale: 1 },
-  exit:    { opacity: 0, y: -12, scale: 0.99 },
-  transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] as any },
-  style: { width: '100%', height: '100%', display: 'flex', flexDirection: 'column' as const },
-}
+/**
+ * Tab pane wrapper — all tabs stay mounted to avoid first-visit jank.
+ * Only the active tab is visible; inactive tabs use display:none so
+ * React keeps their state and DOM in memory (instant re-show).
+ */
+const tabPaneStyle = (isActive: boolean): React.CSSProperties => ({
+  width: '100%',
+  height: '100%',
+  display: isActive ? 'flex' : 'none',
+  flexDirection: 'column',
+  opacity: isActive ? 1 : 0,
+  transition: 'opacity 0.18s ease',
+})
 
 function App() {
   const ctrl = useAppController()
@@ -154,88 +159,80 @@ function App() {
           )}
         </AnimatePresence>
 
-        {/* ── Main Tab Content ── */}
-        <AnimatePresence mode="wait">
-          {activeTab === 'add' && (
-            <motion.div key="add" {...tabMotionProps}>
-              <AddDownloadTab
-                MAX_BATCH_ITEMS={ctrl.MAX_BATCH_ITEMS}
-                subfolderName={ctrl.subfolderName}                 setSubfolderName={ctrl.setSubfolderName}
-                speedLimit={ctrl.speedLimit}                       setSpeedLimit={ctrl.setSpeedLimit}
-                targetFormat={ctrl.targetFormat}                   setTargetFormat={ctrl.setTargetFormat}
-                isAudioMode={ctrl.isAudioMode}                     setIsAudioMode={ctrl.setIsAudioMode}
-                selectedQuality={ctrl.selectedQuality}             setSelectedQuality={ctrl.setSelectedQuality}
-                selectedSubtitleLanguage={ctrl.selectedSubtitleLanguage}
-                setSelectedSubtitleLanguage={ctrl.setSelectedSubtitleLanguage}
-                selectedVariantUrl={ctrl.selectedVariantUrl}       setSelectedVariantUrl={ctrl.setSelectedVariantUrl}
-                startTime={ctrl.startTime}                         setStartTime={ctrl.setStartTime}
-                endTime={ctrl.endTime}                             setEndTime={ctrl.setEndTime}
-                availableVideoQualities={ctrl.availableVideoQualities}
-                setSelectedYtdlpFormatId={ctrl.setSelectedYtdlpFormatId}
-                setTargetResolution={ctrl.setTargetResolution}
-                onPasteAndAnalyze={ctrl.onPasteAndAnalyze}
-                handleAnalyzeUrlDirectly={ctrl.handleAnalyzeUrlDirectly}
-                onPickFolder={ctrl.onPickFolder}
-                onDownloadNow={ctrl.onDownloadNow}
-                onAddToList={ctrl.onAddToList}
-                onStartBatchDownload={ctrl.onStartBatchDownload}
-                onOpenExternal={ctrl.onOpenExternal}
-                setCommentsSuccessPath={ctrl.setCommentsSuccessPath}
-                setIsCommentsDownloading={ctrl.setIsCommentsDownloading}
-                lang={lang}
-                SmartImage={BoundSmartImage}
-                UrlInputBar={UrlInputBar}
-                variantLabel={variantLabel}
-                YouTubeMusicIcon={YouTubeMusicIcon}
-                removeAnalyzedPlaylistVideo={ctrl.removeAnalyzedPlaylistVideo}
-                togglePlaylistItemSelected={ctrl.togglePlaylistItemSelected}
-                selectAllPlaylistItems={ctrl.selectAllPlaylistItems}
-                deselectAllPlaylistItems={ctrl.deselectAllPlaylistItems}
-                clearPlaylistItems={ctrl.clearPlaylistItems}
-              />
-            </motion.div>
-          )}
+        {/* ── Main Tab Content — all tabs stay mounted for instant switching ── */}
+        <div style={tabPaneStyle(activeTab === 'add')}>
+          <AddDownloadTab
+            MAX_BATCH_ITEMS={ctrl.MAX_BATCH_ITEMS}
+            subfolderName={ctrl.subfolderName}                 setSubfolderName={ctrl.setSubfolderName}
+            speedLimit={ctrl.speedLimit}                       setSpeedLimit={ctrl.setSpeedLimit}
+            targetFormat={ctrl.targetFormat}                   setTargetFormat={ctrl.setTargetFormat}
+            isAudioMode={ctrl.isAudioMode}                     setIsAudioMode={ctrl.setIsAudioMode}
+            selectedQuality={ctrl.selectedQuality}             setSelectedQuality={ctrl.setSelectedQuality}
+            selectedSubtitleLanguage={ctrl.selectedSubtitleLanguage}
+            setSelectedSubtitleLanguage={ctrl.setSelectedSubtitleLanguage}
+            selectedVariantUrl={ctrl.selectedVariantUrl}       setSelectedVariantUrl={ctrl.setSelectedVariantUrl}
+            startTime={ctrl.startTime}                         setStartTime={ctrl.setStartTime}
+            endTime={ctrl.endTime}                             setEndTime={ctrl.setEndTime}
+            availableVideoQualities={ctrl.availableVideoQualities}
+            setSelectedYtdlpFormatId={ctrl.setSelectedYtdlpFormatId}
+            setTargetResolution={ctrl.setTargetResolution}
+            onPasteAndAnalyze={ctrl.onPasteAndAnalyze}
+            handleAnalyzeUrlDirectly={ctrl.handleAnalyzeUrlDirectly}
+            onPickFolder={ctrl.onPickFolder}
+            onDownloadNow={ctrl.onDownloadNow}
+            onAddToList={ctrl.onAddToList}
+            onStartBatchDownload={ctrl.onStartBatchDownload}
+            onOpenExternal={ctrl.onOpenExternal}
+            setCommentsSuccessPath={ctrl.setCommentsSuccessPath}
+            setIsCommentsDownloading={ctrl.setIsCommentsDownloading}
+            lang={lang}
+            SmartImage={BoundSmartImage}
+            UrlInputBar={UrlInputBar}
+            variantLabel={variantLabel}
+            YouTubeMusicIcon={YouTubeMusicIcon}
+            removeAnalyzedPlaylistVideo={ctrl.removeAnalyzedPlaylistVideo}
+            togglePlaylistItemSelected={ctrl.togglePlaylistItemSelected}
+            selectAllPlaylistItems={ctrl.selectAllPlaylistItems}
+            deselectAllPlaylistItems={ctrl.deselectAllPlaylistItems}
+            clearPlaylistItems={ctrl.clearPlaylistItems}
+          />
+        </div>
 
-          {activeTab === 'downloads' && (
-            <motion.div key="downloads" {...tabMotionProps}>
-              <DownloadList
-                lang={lang}
-                onOpenFile={ctrl.onOpenFile}
-                onOpenFolder={ctrl.onOpenFolder}
-                onDelete={ctrl.onDelete}
-              />
-            </motion.div>
-          )}
+        <div style={tabPaneStyle(activeTab === 'downloads')}>
+          <DownloadList
+            lang={lang}
+            onOpenFile={ctrl.onOpenFile}
+            onOpenFolder={ctrl.onOpenFolder}
+            onDelete={ctrl.onDelete}
+          />
+        </div>
 
-          {activeTab === 'settings' && (
-            <motion.div key="settings" {...tabMotionProps}>
-              <SettingsTab
-                lang={lang}
-                setLang={ctrl.setLang}
-                totalDownloadedBytes={ctrl.totalDownloadedBytes}
-                onResetStats={ctrl.onResetStats}
-                useInAppPlayer={ctrl.useInAppPlayer}
-                setUseInAppPlayer={ctrl.setUseInAppPlayer}
-                cookieFilePath={ctrl.cookieFilePath}
-                cookieValidation={ctrl.cookieValidation}
-                healthCheck={ctrl.healthCheck}
-                healthChecking={ctrl.healthChecking}
-                onSelectCookieFile={ctrl.onSelectCookieFile}
-                onClearCookieFile={ctrl.onClearCookieFile}
-                onRefreshHealth={ctrl.refreshHealth}
-                concurrentDownloads={ctrl.concurrentDownloads}
-                setConcurrentDownloads={ctrl.setConcurrentDownloads}
-                updateStatus={ctrl.updateStatus}
-                onCheckForUpdates={ctrl.onCheckForUpdates}
-                onRestartAndInstall={ctrl.onRestartAndInstall}
-                engineUpdateStatus={ctrl.engineUpdateStatus}
-                engineVersion={ctrl.engineVersion}
-                onUpdateEngine={ctrl.onUpdateEngine}
-                onUninstall={ctrl.onUninstall}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div style={tabPaneStyle(activeTab === 'settings')}>
+          <SettingsTab
+            lang={lang}
+            setLang={ctrl.setLang}
+            totalDownloadedBytes={ctrl.totalDownloadedBytes}
+            onResetStats={ctrl.onResetStats}
+            useInAppPlayer={ctrl.useInAppPlayer}
+            setUseInAppPlayer={ctrl.setUseInAppPlayer}
+            cookieFilePath={ctrl.cookieFilePath}
+            cookieValidation={ctrl.cookieValidation}
+            healthCheck={ctrl.healthCheck}
+            healthChecking={ctrl.healthChecking}
+            onSelectCookieFile={ctrl.onSelectCookieFile}
+            onClearCookieFile={ctrl.onClearCookieFile}
+            onRefreshHealth={ctrl.refreshHealth}
+            concurrentDownloads={ctrl.concurrentDownloads}
+            setConcurrentDownloads={ctrl.setConcurrentDownloads}
+            updateStatus={ctrl.updateStatus}
+            onCheckForUpdates={ctrl.onCheckForUpdates}
+            onRestartAndInstall={ctrl.onRestartAndInstall}
+            engineUpdateStatus={ctrl.engineUpdateStatus}
+            engineVersion={ctrl.engineVersion}
+            onUpdateEngine={ctrl.onUpdateEngine}
+            onUninstall={ctrl.onUninstall}
+          />
+        </div>
       </main>
 
       {/* ── Confirm Modal ── */}

@@ -95,16 +95,25 @@ body {
   display: flex;
   height: 100vh;
   width: 100vw;
+  background-color: #0b1120;
+  background-image: 
+    radial-gradient(circle at 90% 10%, rgba(56, 189, 248, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 15% 90%, rgba(129, 140, 248, 0.10) 0%, transparent 45%);
+  position: relative;
+  overflow: hidden;
 }
 
 .main-content {
   flex: 1;
   overflow-y: auto;
   padding: 2rem 3rem;
-  background: var(--bg-main);
+  background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .tab-content {
+  width: 100%;
   max-width: 1000px;
   margin: 0 auto;
 }
@@ -142,18 +151,14 @@ body {
 .content-header.sticky-search-header {
   position: sticky;
   top: -2rem;
-  /* Sticky to top of page while offsetting main-content padding */
   z-index: 50;
-  /* Ensure it stays above list items */
-  background-color: var(--bg-main);
-  /* Solid color matching background to hide elements underneath */
+  background: rgba(11, 17, 32, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   padding: 2rem 0 1rem 0;
-  /* Inner padding to preserve layout */
   margin-top: -2rem;
-  /* Negative margin to compensate space and stick directly */
   margin-bottom: 2rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  /* Subtle border line at the bottom */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .content-header h1 {
@@ -188,13 +193,15 @@ body {
 
 .sidebar {
   width: var(--sidebar-width);
-  background: var(--bg-sidebar);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
-  /* border-right separates sidebar from main content in LTR;
-     border-left is correct for RTL — the browser handles this via dir= */
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  z-index: 10;
 }
 
 
@@ -434,11 +441,13 @@ body {
 }
 
 .panel {
-  background: var(--bg-card);
+  background: rgba(30, 41, 59, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   padding: 2rem;
   border-radius: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 
 
@@ -758,50 +767,41 @@ body {
 .hero-input-container {
   position: relative;
   width: 100%;
-  transition: transform 0.2s ease;
-}
-
-.hero-input-container:hover {
-  transform: translateY(-2px);
 }
 
 .hero-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
-  background: rgba(15, 23, 42, 0.6);
-  /* Darker shade */
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   padding: 4px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .hero-input-wrapper:focus-within {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.15), 0 10px 30px -10px rgba(56, 189, 248, 0.3);
-  transform: scale(1.01);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2), 0 8px 25px -5px rgba(56, 189, 248, 0.25);
 }
 
 .hero-input {
   flex: 1;
   background: transparent;
   border: none;
-  color: #fff;
+  color: #ffffff;
   font-size: 0.95rem;
-  /* slightly smaller */
   padding: 0.55rem 0.9rem;
-  /* vertically compact */
   height: 42px;
-  /* reduced height */
   outline: none;
   font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .hero-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.35);
 }
 
 .hero-clear-btn {
@@ -2837,70 +2837,184 @@ body {
    — Replaces inline styles in DownloadList.tsx
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Toolbar row (search + clear-all) */
-.dl-toolbar {
-  width: 100%;
+/* ═══════════════════════════════════════════════════════════════════════════
+   § DOWNLOAD LIST PRO HEADER & SEARCH TOOLBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dl-header-pro {
+  position: sticky;
+  top: -2rem;
+  z-index: 50;
+  background: rgba(11, 17, 32, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 1.5rem 0 1rem 0;
+  margin-top: -2rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.dl-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dl-main-title {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.dl-subtitle-muted {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0;
+  font-weight: 500;
+}
+
+.dl-toolbar-row {
+  display: flex;
   align-items: center;
   gap: 1rem;
-  margin: 1rem 0;
-}
-
-/* Search input container */
-.search-bar-container {
-  position: relative;
   width: 100%;
-  max-width: 500px;
 }
 
-/* Clear-search button (absolute inside .search-bar-container) */
-.clear-search-btn {
+/* Glassmorphic Interactive Search Box */
+.dl-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.dl-search-icon {
   position: absolute;
-  right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
+  left: 14px;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+[dir="rtl"] .dl-search-icon {
+  left: auto;
+  right: 14px;
+}
+
+.dl-search-input {
+  width: 100%;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0 70px 0 40px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-font-smoothing: antialiased;
+}
+
+[dir="rtl"] .dl-search-input {
+  padding: 0 40px 0 70px;
+}
+
+.dl-search-input:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dl-search-input:focus {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18), 0 8px 25px rgba(56, 189, 248, 0.12);
+}
+
+.dl-search-input:focus ~ .dl-search-icon {
+  color: #38bdf8;
+}
+
+.dl-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.dl-kbd-hint {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-family: monospace;
+}
+
+[dir="rtl"] .dl-kbd-hint {
+  right: auto;
+  left: 12px;
+}
+
+.dl-clear-btn {
+  position: absolute;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
   border: none;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   display: flex;
   align-items: center;
-  padding: 4px;
-  border-radius: 4px;
-  transition: color 0.15s;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
-.clear-search-btn:hover {
-  color: #f8fafc;
+.dl-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
 }
 
-[dir="rtl"] .clear-search-btn {
+[dir="rtl"] .dl-clear-btn {
   right: auto;
-  left: 15px;
+  left: 10px;
 }
 
-/* "Clear All" button */
-.dl-clear-all-btn {
+/* Clear All Button Pro */
+.dl-clear-all-btn-pro {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-  background-color: rgba(239, 68, 68, 0.05);
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.06);
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.9rem;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  font-size: 0.85rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
   white-space: nowrap;
 }
 
-.dl-clear-all-btn:hover {
-  background-color: rgba(239, 68, 68, 0.12);
+.dl-clear-all-btn-pro:hover {
+  background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+  transform: translateY(-1px);
 }
 
 /* Modal option buttons (Clear History / Delete Files) */
@@ -2967,4 +3081,48 @@ body {
 /* DownloadCard will-change hint for smoother hover transform */
 .dc-card {
   will-change: transform;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § drag and drop interactive zone
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.drag-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 2rem;
+  pointer-events: none;
+}
+
+.drag-drop-dashed-border {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed #38bdf8;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  box-shadow: inset 0 0 30px rgba(56, 189, 248, 0.15), 0 0 40px rgba(56, 189, 248, 0.2);
+  animation: pulse-dashed-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-dashed-glow {
+  0%, 100% {
+    border-color: #38bdf8;
+    box-shadow: inset 0 0 30px rgba(56, 189, 248, 0.15), 0 0 30px rgba(56, 189, 248, 0.2);
+  }
+  50% {
+    border-color: #818cf8;
+    box-shadow: inset 0 0 45px rgba(129, 140, 248, 0.25), 0 0 50px rgba(129, 140, 248, 0.35);
+  }
 }

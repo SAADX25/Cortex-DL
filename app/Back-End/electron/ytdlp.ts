@@ -11,7 +11,7 @@ import { db } from './db'
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 
 const ANALYSIS_CACHE_MAX = 50 
 const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
-const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
+const MIN_NODE_VERSION: VersionTuple = [18, 0, 0]
 const MIN_BUN_VERSION: VersionTuple = [1, 2, 11]
 const MAX_BUN_VERSION: VersionTuple = [1, 3, 14]
 export const YOUTUBE_EXTRACTOR_ARGS = ''
@@ -140,11 +140,21 @@ function getExistingBinaryPath(name: string): string | null {
 }
 
 function getRuntimeVersion(candidate: JsRuntimeCandidate): VersionTuple | null {
+  // Fast-path: Electron Node is already running in memory — 0ms check!
+  if (candidate.command === process.execPath) {
+    return parseVersion(process.versions.node)
+  }
+
+  // If command is a file path, verify existence before calling spawnSync
+  if (candidate.command.includes('/') || candidate.command.includes('\\')) {
+    if (!existsSync(candidate.command)) return null
+  }
+
   try {
     const result = spawnSync(candidate.command, ['--version'], {
       windowsHide: true,
       encoding: 'utf8',
-      timeout: 3000,
+      timeout: 800,
       env: candidate.env ?? process.env,
     })
     if (result.error) return null
@@ -176,18 +186,22 @@ function selectJsRuntime(): JsRuntimeSelection {
   const bundledNode = getExistingBinaryPath('node')
   const bundledBun = getExistingBinaryPath('bun')
 
+  // 1. Electron Node (Built-in, 0ms execution, always present, Node >= 22)
+  candidates.push({
+    label: 'Electron Node',
+    spec: `node:${process.execPath}`,
+    command: process.execPath,
+    minVersion: MIN_NODE_VERSION,
+    env: electronNodeEnv,
+  })
+
+  // 2. Bundled runtimes (if present on disk)
   if (bundledDeno) {
     candidates.push({ label: 'Deno', spec: `deno:${bundledDeno}`, command: bundledDeno, minVersion: MIN_DENO_VERSION })
   }
   if (bundledNode) {
     candidates.push({ label: 'Node', spec: `node:${bundledNode}`, command: bundledNode, minVersion: MIN_NODE_VERSION })
   }
-
-  candidates.push(
-    { label: 'Deno', spec: 'deno', command: 'deno', minVersion: MIN_DENO_VERSION },
-    { label: 'Node', spec: 'node', command: 'node', minVersion: MIN_NODE_VERSION },
-  )
-
   if (bundledBun) {
     candidates.push({
       label: 'Bun',
@@ -197,17 +211,6 @@ function selectJsRuntime(): JsRuntimeSelection {
       maxVersion: MAX_BUN_VERSION,
     })
   }
-
-  candidates.push(
-    { label: 'Bun', spec: 'bun', command: 'bun', minVersion: MIN_BUN_VERSION, maxVersion: MAX_BUN_VERSION },
-    {
-      label: 'Electron Node',
-      spec: `node:${process.execPath}`,
-      command: process.execPath,
-      minVersion: MIN_NODE_VERSION,
-      env: electronNodeEnv,
-    },
-  )
 
   for (const candidate of candidates) {
     const selected = trySelectRuntime(candidate)

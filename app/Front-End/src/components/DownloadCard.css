@@ -11,10 +11,13 @@
               box-shadow 0.3s ease;
   position: relative;
   box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.3);
+  will-change: transform;
+  transform: translateZ(0);
+  contain: layout style;
 }
 
 .dc-card:hover {
-  transform: translateY(-6px);
+  transform: translateY(-6px) translateZ(0);
   border-color: var(--accent-primary);
   box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
 }
@@ -44,7 +47,8 @@
   filter: blur(18px) brightness(0.5);
   opacity: 0.6 !important;
   z-index: 1 !important;
-  transform: scale(1.1); /* eliminate blur vignette edges */
+  transform: scale(1.1) translateZ(0); /* eliminate blur vignette edges */
+  will-change: transform;
 }
 
 .dc-thumb img:not(.dc-thumb-bg) {

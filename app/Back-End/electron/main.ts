@@ -22,10 +22,7 @@ import { getBinaryPath } from './paths'
 
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
-app.commandLine.appendSwitch('enable-zero-copy')
-app.commandLine.appendSwitch('disable-software-rasterizer')
-app.commandLine.appendSwitch('enable-hardware-overlays')
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization')
+app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization')
 
 process.on('unhandledRejection', (reason) => {
   log.error('UNHANDLED REJECTION:', reason)
@@ -139,7 +136,9 @@ async function loadBackendServices() {
   cleanupUpdaterCache()
   
   try {
-    await autoUpdater.checkForUpdatesAndNotify()
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      log.error('Deferred update check failed:', err)
+    })
   } catch (err) {
     log.error('Deferred update check failed:', err)
   }
@@ -174,6 +173,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1100,
     height: 720,
+    minWidth: 850,
+    minHeight: 580,
     title: 'Cortex DL',
     icon: iconPath,
     autoHideMenuBar: true,
@@ -528,6 +529,6 @@ if (!gotTheLock) {
         log.error('[Backend] loadBackendServices failed — downloads will not work:', err)
         serviceReadyResolve()
       })
-    }, 1500)
+    }, 100)
   })
 }

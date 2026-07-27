@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react'
-import { X, Trash2, DownloadCloud } from 'lucide-react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
+import { X, Trash2, DownloadCloud, Search } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useTaskIds, getTasksSnapshot, useDownloadStore } from '../stores/downloadStore'
 import { useUIStore } from '../stores/useUIStore'
@@ -15,12 +15,7 @@ interface DownloadListProps {
   onDelete: (id: string, deleteFile: boolean) => void
 }
 
-/** Animation variants for each card entering/exiting the list */
-const cardVariants = {
-  hidden: { opacity: 0, y: 16, scale: 0.98 },
-  visible: { opacity: 1, y: 0, scale: 1 },
-  exit: { opacity: 0, y: -8, scale: 0.97 },
-}
+
 
 const DownloadList: React.FC<DownloadListProps> = (props) => {
   const { lang, onOpenFile, onOpenFolder, onDelete } = props
@@ -31,6 +26,23 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
   const debouncedSearchQuery = useDebounce(searchInput, 300)
 
   const [showClearModal, setShowClearModal] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Keyboard shortcuts: Ctrl+F / Ctrl+K to focus search, Esc to clear & blur
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'k')) {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        setSearchInput('')
+        searchInputRef.current?.blur()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const handleClearAll = async (deleteFiles: boolean) => {
     setShowClearModal(false)
@@ -63,54 +75,66 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
 
   return (
     <div className="tab-content fade-in">
-      {/* Sticky header */}
-      <header className="content-header sticky-search-header" style={{ flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
-        <div style={{ width: '100%', textAlign: 'left' }}>
-          <h1>{t.downloads_title}</h1>
-          <p className="muted">{t.total_tasks}: {totalCount}</p>
+      {/* ── Professional Sticky Header & Interactive Search Toolbar ── */}
+      <header className="dl-header-pro">
+        {/* Top: Title and Subtitle under each other */}
+        <div className="dl-title-section">
+          <h1 className="dl-main-title">{t.downloads_title}</h1>
+          <p className="dl-subtitle-muted">{t.total_tasks}: {totalCount}</p>
         </div>
 
-        {/* Search + Clear All */}
-        <div className="dl-toolbar">
-          <div className="search-bar-container">
+        {/* Bottom: Search Bar + Clear All Button Row */}
+        <div className="dl-toolbar-row">
+          {/* Interactive Glassmorphic Search Bar */}
+          <div className="dl-search-box">
+            <Search size={18} className="dl-search-icon" aria-hidden="true" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder={t.search_placeholder}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="search-input-centered"
+              className="dl-search-input"
               aria-label={t.search_placeholder}
             />
             <AnimatePresence>
+              {!searchInput && (
+                <span className="dl-kbd-hint">Ctrl K</span>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
               {searchInput && (
                 <motion.button
-                  className="clear-search-btn"
-                  onClick={() => setSearchInput('')}
+                  className="dl-clear-btn"
+                  onClick={() => {
+                    setSearchInput('')
+                    searchInputRef.current?.focus()
+                  }}
                   aria-label="Clear search"
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ duration: 0.15 }}
                 >
-                  <X size={18} />
+                  <X size={15} />
                 </motion.button>
               )}
             </AnimatePresence>
           </div>
 
+          {/* Clear All Button */}
           <AnimatePresence>
             {totalCount > 0 && (
               <motion.button
-                className="dl-clear-all-btn"
+                className="dl-clear-all-btn-pro"
                 onClick={() => setShowClearModal(true)}
                 title={lang === 'ar' ? 'مسح الكل' : 'Clear All'}
-                aria-label={lang === 'ar' ? 'مسح الكل' : 'Clear All'}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.2 }}
               >
-                <Trash2 size={18} />
+                <Trash2 size={16} />
                 <span>{lang === 'ar' ? 'مسح الكل' : 'Clear All'}</span>
               </motion.button>
             )}
@@ -211,35 +235,20 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
       {/* Downloads list */}
       <section className="downloads-list">
         <div className="task-grid">
-          <AnimatePresence mode="popLayout">
-            {filteredIds.map((id, index) => (
-              <motion.div
-                key={id}
-                layout
-                variants={cardVariants}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                transition={{
-                  duration: 0.28,
-                  ease: [0.16, 1, 0.3, 1],
-                  delay: index < 8 ? index * 0.04 : 0,  // stagger only first 8 for perf
-                }}
-              >
-                <DownloadCard
-                  id={id}
-                  lang={lang}
-                  onOpenFile={onOpenFile}
-                  onOpenFolder={onOpenFolder}
-                  onDelete={onDelete}
-                  onError={onError}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+          {filteredIds.map((id) => (
+            <DownloadCard
+              key={id}
+              id={id}
+              lang={lang}
+              onOpenFile={onOpenFile}
+              onOpenFolder={onOpenFolder}
+              onDelete={onDelete}
+              onError={onError}
+            />
+          ))}
         </div>
 
-        {/* Empty state */}
+        {/* Empty state: No downloads exist */}
         {totalCount === 0 && (
           <motion.div
             className="empty-state"

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Language, translations } from '../translations'
-import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors } from 'lucide-react'
+import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
 import { useUIStore } from '../stores/useUIStore'
@@ -126,6 +127,37 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   const showToast = useUIStore((s) => s.showToast)
 
   const [isTrimmerOpen, setIsTrimmerOpen] = useState(false)
+  const [isDraggingOver, setIsDraggingOver] = useState(false)
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDraggingOver) setIsDraggingOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDraggingOver(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingOver(false)
+
+    const droppedText = e.dataTransfer.getData('text') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('URL')
+    if (droppedText) {
+      const trimmed = droppedText.trim()
+      if (trimmed) {
+        setUrl(trimmed)
+        handleAnalyzeUrlDirectly(trimmed)
+        showToast(t.drag_drop_toast)
+      }
+    }
+  }
 
   const trimmerSource = useMemo(() => {
     if (isAudioMode || analyzeResult?.kind !== 'ytdlp' || !analyzeResult.duration) return null
@@ -165,10 +197,45 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   }
 
   return (
-    <div className="tab-content fade-in centered-layout flex flex-col h-full">
+    <div
+      className="tab-content fade-in centered-layout flex flex-col h-full relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* ── Interactive Drag & Drop Visual Zone Overlay ── */}
+      <AnimatePresence>
+        {isDraggingOver && (
+          <motion.div
+            className="drag-drop-overlay"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
+            <div className="drag-drop-dashed-border">
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(56, 189, 248, 0.15)', padding: '20px', borderRadius: '50%' }}
+              >
+                <UploadCloud size={54} className="text-cyan-400" />
+              </motion.div>
+
+              <div style={{ textAlign: 'center' }}>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f8fafc', margin: 0, marginBottom: '8px' }}>
+                  {t.drag_drop_title}
+                </h2>
+                <p style={{ fontSize: '0.95rem', color: '#94a3b8', margin: 0 }}>
+                  {t.drag_drop_subtitle}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header className="content-header centered-header">
         <h1 className="gradient-text">{t.add_title}</h1>
-        <p className="muted">{t.add_subtitle}</p>
       </header>
 
       <section className="minimal-panel">

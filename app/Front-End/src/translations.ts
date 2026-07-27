@@ -171,6 +171,9 @@ export interface Translations {
   health_writable: string;
   health_not_writable: string;
   health_cookie_optional: string;
+  drag_drop_title: string;
+  drag_drop_subtitle: string;
+  drag_drop_toast: string;
 }
 
 export const defaultLanguage: Language = 'en';
@@ -346,6 +349,9 @@ export const translations: Record<Language, Translations> = {
     health_writable: "قابل للكتابة",
     health_not_writable: "غير قابل للكتابة",
     health_cookie_optional: "غير محدد (اختياري)",
+    drag_drop_title: "أسقط الرابط هنا للتحليل والمتابعة 🚀",
+    drag_drop_subtitle: "سيتم التعرف على الفيديو تلقائياً وجلب خيارات التحميل",
+    drag_drop_toast: "🚀 تم التقاط الرابط ومباشرة التحليل!",
   },
   en: {
     nav_add: "Add Link",
@@ -517,5 +523,8 @@ export const translations: Record<Language, Translations> = {
     health_writable: "Writable",
     health_not_writable: "Not writable",
     health_cookie_optional: "Not configured (optional)",
+    drag_drop_title: "Drop URL here to analyze 🚀",
+    drag_drop_subtitle: "Your video will be automatically detected and options extracted",
+    drag_drop_toast: "🚀 Link captured & analysis started!",
   }
 };
