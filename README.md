@@ -239,7 +239,3 @@ These controls reduce common desktop-app risks, but they are not a security guar
 - Added YouTube cookie-file validation and clearer login/CAPTCHA errors.
 - Refined download progress, queue handling, output processing, settings, and in-app playback.
 - Updated Windows packaging to include `yt-dlp.exe`, `ffmpeg.exe`, `ffprobe.exe`, and `deno.exe`.
-
-## License
-
-License: Not specified yet.
