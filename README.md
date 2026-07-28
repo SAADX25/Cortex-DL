@@ -1,6 +1,6 @@
 # Cortex-DL
 
-**Current release:** v1.6.0
+**Current release:** v1.7.0
 
 **Platform:** Windows x64
 
@@ -170,10 +170,10 @@ npm run build
 The build runs TypeScript checks, creates the Vite/Electron bundles, and packages a Windows x64 NSIS installer. Output is written to:
 
 ```text
-app/release/1.6.0/
+app/release/1.7.0/
 ```
 
-The configured installer name is `Cortex DL Setup 1.6.0.exe`. The build script clears the existing `app/release/` directory before packaging. `npm run dist` is an alias for the same build.
+The configured installer name is `Cortex DL Setup 1.7.0.exe`. The build script clears the existing `app/release/` directory before packaging. `npm run dist` is an alias for the same build.
 ## Bundled Tools
 
 The following executables are present in `app/bin/` and copied to `resources/bin/` in the packaged Windows application:
@@ -231,6 +231,17 @@ These controls reduce common desktop-app risks, but they are not a security guar
 - DRM-protected media is not supported.
 - Playlist and batch selection is limited to 50 items per batch.
 - Pause and resume behavior depends on the selected engine and the remote server.
+
+## Release Notes - v1.7.0
+
+- Redesigned UI with improved layout, animations, and visual polish across all components.
+- Added smart thumbnail support with `SmartImage` component for download cards.
+- Improved download queue management and concurrent scheduling logic.
+- Updated yt-dlp engine with better error handling and stream extraction reliability.
+- Refreshed Sidebar navigation with updated layout and transitions.
+- Refined `AdvancedTrimmer`, `ConfirmModal`, and `DownloadCard` styles and behavior.
+- Added open-source community files: MIT License, Code of Conduct, Contributing guide, Security policy, and GitHub issue and pull-request templates.
+- General code cleanup, dead-code removal, and stability improvements.
 
 ## Release Notes - v1.6.0
 
