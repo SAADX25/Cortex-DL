@@ -40,16 +40,19 @@ export function AudioPlayerView({
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose,
   isMiniMode, toggleMiniMode, currentTheme = 'midnight', toggleTheme
 }: AudioViewProps) {
+  const [hasError, setHasError] = React.useState(false);
+
   return (
     <div className={`audio-view-wrapper ${isMiniMode ? 'mini-mode' : 'fullscreen-mode'}`}>
       <audio
         ref={audioRef}
         src={fileUrl}
         onTimeUpdate={onTimeUpdate}
-        onLoadedMetadata={onLoadedMetadata}
+        onLoadedMetadata={() => { setHasError(false); onLoadedMetadata(); }}
         onEnded={onEnded}
-        onPlay={onPlay}
+        onPlay={() => { setHasError(false); onPlay(); }}
         onPause={onPause}
+        onError={() => setHasError(true)}
         crossOrigin="anonymous"
       />
 
@@ -71,17 +74,24 @@ export function AudioPlayerView({
 
       <div className={`audio-player-body theme-${currentTheme}`}>
         <div className={`audio-ambient-bg ${isPlaying ? 'active' : ''}`} />
-        <div className="audio-center-stage">
-          <div className={`vinyl-record ${isPlaying ? 'spinning' : ''}`}>
-            <div className="vinyl-groove vinyl-groove-1" />
-            <div className="vinyl-groove vinyl-groove-2" />
-            <div className="vinyl-groove vinyl-groove-3" />
-            <div className="vinyl-groove vinyl-groove-4" />
-            <div className="vinyl-label">
-              <div className="vinyl-center-dot" />
+        {hasError ? (
+          <div style={{ color: '#f87171', zIndex: 10, display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{ fontSize: '15px', fontWeight: 600 }}>Unable to play audio file</span>
+          </div>
+        ) : (
+          <div className="audio-center-stage">
+            <div className={`vinyl-record ${isPlaying ? 'spinning' : ''}`}>
+              <div className="vinyl-groove vinyl-groove-1" />
+              <div className="vinyl-groove vinyl-groove-2" />
+              <div className="vinyl-groove vinyl-groove-3" />
+              <div className="vinyl-groove vinyl-groove-4" />
+              <div className="vinyl-label">
+                <div className="vinyl-center-dot" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {}

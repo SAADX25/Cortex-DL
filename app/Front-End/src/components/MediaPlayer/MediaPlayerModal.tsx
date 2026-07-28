@@ -34,8 +34,17 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const [isMiniMode, setIsMiniMode] = useState(false);
   const [currentTheme, setCurrentTheme] = useState('midnight');
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState<number>(() => {
+    const saved = localStorage.getItem('cortexdl_media_volume');
+    if (saved !== null) {
+      const val = parseFloat(saved);
+      if (!isNaN(val) && val >= 0 && val <= 1) return val;
+    }
+    return 1;
+  });
+  const [isMuted, setIsMuted] = useState<boolean>(() => {
+    return localStorage.getItem('cortexdl_media_muted') === 'true';
+  });
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -45,8 +54,16 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const [hideForPiP, setHideForPiP] = useState(false);
 
   useEffect(() => {
+    localStorage.setItem('cortexdl_media_volume', volume.toString());
+  }, [volume]);
+
+  useEffect(() => {
+    localStorage.setItem('cortexdl_media_muted', isMuted.toString());
+  }, [isMuted]);
+
+  useEffect(() => {
     if (window.cortexDl?.getMediaPort) {
-      window.cortexDl.getMediaPort().then(setMediaPort).catch(() => {});
+      window.cortexDl.getMediaPort().then(setMediaPort).catch(() => { });
     }
   }, []);
 
@@ -72,7 +89,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   }, [isMiniMode]);
 
   const toggleMiniMode = () => setIsMiniMode(prev => !prev);
-  
+
   const toggleTheme = () => {
     const themes = ['midnight', 'crimson', 'emerald', 'onyx'];
     setCurrentTheme(prev => {
@@ -81,10 +98,10 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     });
   };
 
-  
+
   useEffect(() => {
     if (document.pictureInPictureElement) {
-       document.exitPictureInPicture().catch(() => {});
+      document.exitPictureInPicture().catch(() => { });
     }
 
     setHideForPiP(false);
@@ -94,7 +111,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     if (mediaRef.current) {
       mediaRef.current.pause();
       try { mediaRef.current.currentTime = 0; } catch (e) {
-        
+
       }
     }
     if (videoRef.current) videoRef.current.pause();
@@ -113,11 +130,11 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     hideTimerRef.current = setTimeout(() => {
       setShowControls(false);
       setIsIdle(true);
-      setShowSettings(false); 
+      setShowSettings(false);
     }, 2000);
   }, [clearHideTimer]);
 
-  
+
 
   useEffect(() => {
     if (!isOpen || mediaType !== 'audio') return;
@@ -145,7 +162,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
         source = audioCtx.createMediaElementSource(audioEl);
         (audioEl as HTMLAudioElement & { __audioCache?: { ctx: AudioContext; source: MediaElementAudioSourceNode } }).__audioCache = { ctx: audioCtx, source };
       }
-      
+
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
@@ -215,12 +232,12 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       cancelAnimationFrame(rafId);
       animationFrameRef.current = null;
       try { if (source && analyser) source.disconnect(analyser); } catch (_) {
-        
+
       }
       try { if (analyser) analyser.disconnect(); } catch (_) {
-        
+
       }
-      
+
       audioContextRef.current = null;
       analyserRef.current = null;
       sourceRef.current = null;
@@ -242,6 +259,18 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   }, [isPlaying]);
 
   const handleClose = useCallback(() => {
+
+    const freeDecoder = (el: HTMLVideoElement | HTMLAudioElement | null) => {
+      if (!el) return;
+      try {
+        el.pause();
+        el.removeAttribute('src');
+        el.load();
+      } catch (_) { }
+    };
+    freeDecoder(videoRef.current);
+    freeDecoder(audioRef.current);
+
     if (mediaType === 'video' && document.pictureInPictureElement === videoRef.current) {
       setHideForPiP(true);
     } else {
@@ -249,7 +278,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     }
   }, [mediaType, onClose]);
 
-  
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -285,7 +314,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-    
+
   }, [handleClose, isFullscreen, isOpen, mediaType, togglePlay]);
 
   useEffect(() => {
@@ -294,7 +323,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  
+
   useEffect(() => {
     if (!isOpen) {
       const release = (el: HTMLVideoElement | HTMLAudioElement | HTMLCanvasElement | null) => {
@@ -323,13 +352,13 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     }
   }, [isOpen, clearHideTimer]);
 
-  
-  
+
+
   useEffect(() => {
     const mediaObj = mediaRef.current;
     const videoObj = videoRef.current;
     const audioObj = audioRef.current;
-    
+
     return () => {
       const releaseStrict = (el: HTMLVideoElement | HTMLAudioElement | null) => {
         if (el && typeof el.pause === 'function') {
@@ -344,40 +373,41 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     };
   }, []);
 
-  
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    
+
     const handleLeavePiP = () => {
-       setIsMiniMode(false);
-       setHideForPiP(false);
-       if (window.cortexDl?.showMainWindow) {
-         window.cortexDl.showMainWindow().catch(console.error);
-       }
+      setIsMiniMode(false);
+      setHideForPiP(false);
+      if (window.cortexDl?.showMainWindow) {
+        window.cortexDl.showMainWindow().catch(console.error);
+      }
     };
-    
+
     video.addEventListener('leavepictureinpicture', handleLeavePiP);
     return () => video.removeEventListener('leavepictureinpicture', handleLeavePiP);
   }, [isOpen, mediaType]);
 
   useEffect(() => {
     mediaRef.current = mediaType === 'video' ? videoRef.current : audioRef.current;
-  }, [mediaType]);
+  }, [mediaType, filePath, isOpen]);
 
   useEffect(() => {
-    if (mediaRef.current) {
-      mediaRef.current.volume = isMuted ? 0 : volume;
-      mediaRef.current.playbackRate = playbackSpeed;
+    const el = mediaRef.current || (mediaType === 'video' ? videoRef.current : audioRef.current);
+    if (el) {
+      el.volume = isMuted ? 0 : volume;
+      el.playbackRate = playbackSpeed;
     }
-  }, [volume, isMuted, playbackSpeed]);
+  }, [volume, isMuted, playbackSpeed, filePath, isOpen, mediaType, isPlaying]);
 
   useEffect(() => {
     clearHideTimer();
     startHideTimer();
   }, [isPlaying, clearHideTimer, startHideTimer]);
 
-  
+
   useEffect(() => {
     if (mediaType !== 'video') return;
 
@@ -385,7 +415,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     let isActive = true;
 
     let lastTime = 0;
-    const fpsLimit = 1000 / 15; 
+    const fpsLimit = 1000 / 15;
 
     const drawAmbilightFrame = (timestamp: number) => {
       if (!isActive) return;
@@ -393,27 +423,29 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       if (timestamp - lastTime >= fpsLimit) {
         const video = videoRef.current;
         const canvas = ambilightRef.current;
-        
+
         if (video && canvas && !video.paused && !video.ended) {
           if (video.videoWidth > 0 && video.videoHeight > 0) {
             if (canvas.width !== 160) {
-               canvas.width = 160;
-               canvas.height = Math.round((160 * video.videoHeight) / video.videoWidth);
+              canvas.width = 160;
+              canvas.height = Math.round((160 * video.videoHeight) / video.videoWidth);
             }
             const ctx = canvas.getContext('2d');
             if (ctx) {
-              
-              
-              
+
+
+
               if (video.videoWidth <= 2560) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                try {
+                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                } catch (_) {}
               }
             }
           }
         }
         lastTime = timestamp;
       }
-      
+
       if (isActive) {
         rafId = requestAnimationFrame(drawAmbilightFrame);
       }
@@ -429,14 +461,19 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     };
   }, [isPlaying, mediaType]);
 
-  
+
 
   const handleTimeUpdate = () => {
-    
+
   };
 
   const handleLoadedMetadata = () => {
-    if (mediaRef.current) setDuration(mediaRef.current.duration);
+    const el = mediaRef.current || (mediaType === 'video' ? videoRef.current : audioRef.current);
+    if (el) {
+      setDuration(el.duration);
+      el.volume = isMuted ? 0 : volume;
+      el.playbackRate = playbackSpeed;
+    }
   };
 
   const handleSeek = (time: number) => {

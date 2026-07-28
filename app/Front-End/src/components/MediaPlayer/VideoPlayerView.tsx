@@ -42,6 +42,7 @@ export function VideoPlayerView({
 }: VideoViewProps) {
   const [isBuffering, setIsBuffering] = React.useState(true);
   const [showMediaInfo, setShowMediaInfo] = React.useState(false);
+  const [hasError, setHasError] = React.useState(false);
   const [subtitles, setSubtitles] = React.useState<import('../../../../Shared/types').PlayerSubtitleTrack[]>([]);
   const [activeSubtitle, setActiveSubtitle] = React.useState<number>(-1);
 
@@ -91,7 +92,8 @@ export function VideoPlayerView({
             onWaiting={() => setIsBuffering(true)}
             onPlaying={() => setIsBuffering(false)}
             onCanPlay={() => setIsBuffering(false)}
-            onLoadedData={() => setIsBuffering(false)}
+            onLoadedData={() => { setIsBuffering(false); setHasError(false); }}
+            onError={() => { setIsBuffering(false); setHasError(true); }}
             crossOrigin="anonymous"
             playsInline
           >
@@ -113,7 +115,15 @@ export function VideoPlayerView({
             })}
           </video>
 
-          {isBuffering && (
+          {hasError && (
+            <div className="buffering-overlay" style={{ background: 'rgba(0,0,0,0.85)', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span style={{ fontSize: '15px', fontWeight: 600 }}>Unable to play video file</span>
+              <span style={{ fontSize: '13px', opacity: 0.8 }}>File may be corrupted, missing, or in an unsupported format.</span>
+            </div>
+          )}
+
+          {isBuffering && !hasError && (
             <div className="buffering-overlay">
                <div className="spinner-buffering"></div>
             </div>
