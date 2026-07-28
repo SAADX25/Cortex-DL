@@ -8,8 +8,6 @@ Cortex-DL is a desktop download manager built with Electron, React, TypeScript, 
 
 It can analyze supported media links, queue downloads, select output formats, process media with FFmpeg, and keep download state between sessions. The Windows build includes the command-line tools it needs, so normal users do not need to install yt-dlp, FFmpeg, ffprobe, or Deno separately.
 
-**Product Page:** [saadx.software/#cortex-dl](https://saadx.software/#cortex-dl)
-
 Use Cortex-DL only for content you are authorized to download. Website terms, copyright rules, and access restrictions still apply.
 
 ## 2. Directory Structure
