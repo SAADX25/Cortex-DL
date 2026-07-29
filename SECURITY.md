@@ -20,7 +20,7 @@ Only the latest version of Cortex DL receives security updates and bug fixes.
 If you discover a security vulnerability or flaw in Cortex DL, **please do not open a public GitHub issue**. Instead, report it privately:
 
 1. Send an email describing the issue to your email address here.
-[haddad.hgcr@gmail.com]
+[seed.rabade@gmail.com]
 
 2. Provide a clear description of the vulnerability and steps to reproduce it.
 
