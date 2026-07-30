@@ -23,6 +23,3 @@ If you feel like a user is violating these guidelines or feel treated unfairly, 
 If you need to report an issue or contact the repository maintainers regarding the Code of Conduct, please contact:
 
 **Email:** [seed.rabade@gmail.com](mailto:seed.rabade@gmail.com)
-
-The best way is joining our official Discord community and opening a modmail ticket.
-
