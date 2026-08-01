@@ -12,7 +12,7 @@
 
   <br />
 
-  ### 🛠️ Core Technologies & Frameworks
+  ### 🛠️ Built With
 
   [![Electron](https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://electronjs.org/)
   [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -23,8 +23,6 @@
   [![yt-dlp](https://img.shields.io/badge/yt--dlp-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://github.com/yt-dlp/yt-dlp)
   [![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
   [![Deno](https://img.shields.io/badge/Deno-000000?style=for-the-badge&logo=deno&logoColor=white)](https://deno.land/)
-  [![NodeJS](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-  [![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?style=for-the-badge&logo=powershell&logoColor=white)](https://microsoft.com/powershell)
 
   <br />
 
@@ -32,7 +30,7 @@
 
   It offers seamless media link analysis, multi-threaded downloading, custom format selection, FFmpeg post-processing, and queue state persistence across sessions. The Windows build comes pre-packaged with all required command-line binaries out of the box.
 
-  [✨ Key Features](#1-features) • [💻 Tech Stack](#2-technology-stack--frameworks) • [📂 Directory Structure](#3-directory-structure) • [🛠️ Bundled Tools](#6-bundled-tools) • [🔍 Troubleshooting](#9-troubleshooting)
+  [✨ Key Features](#1-features) • [📂 Directory Structure](#2-directory-structure) • [💻 Requirements](#3-requirements) • [🚀 Quick Start](#4-development-setup) • [🛠️ Bundled Tools](#6-bundled-tools) • [🔍 Troubleshooting](#9-troubleshooting)
 
   ---
 
@@ -54,23 +52,7 @@
 
 ---
 
-## 2. Technology Stack & Frameworks
-
-| Category | Technology | Role in Cortex-DL |
-| :--- | :--- | :--- |
-| **Desktop Framework** | ![Electron](https://img.shields.io/badge/Electron-47848F?style=flat-square&logo=electron&logoColor=white) | Cross-platform desktop runtime, window management, and native system tray integration. |
-| **Frontend UI** | ![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB) | Reactive UI component renderer with custom hooks & tab management. |
-| **Language** | ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white) | End-to-end type safety shared across Electron IPC, backend engines, and frontend. |
-| **Bundler & Tooling** | ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white) | Lightning-fast HMR development server and optimized renderer bundling. |
-| **Database & Queue** | ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white) | Embedded ACID database for task queue persistence, state recovery, and history. |
-| **Media Downloader** | ![yt-dlp](https://img.shields.io/badge/yt--dlp-FF0000?style=flat-square&logo=youtube&logoColor=white) | Extracts formats, metadata, sub-tracks, comments, and video streams from 1000+ sites. |
-| **Media Processor** | ![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white) | Merges video/audio streams, handles HLS variants, video trimming, and audio extraction. |
-| **JS Runtime** | ![Deno](https://img.shields.io/badge/Deno-000000?style=flat-square&logo=deno&logoColor=white) | Embedded JS execution engine supporting advanced yt-dlp extractor scripts. |
-| **State Management** | ![Zustand](https://img.shields.io/badge/Zustand-443E38?style=flat-square&logo=react&logoColor=white) | High-frequency reactive state management for real-time progress & queue sync. |
-
----
-
-## 3. Directory Structure
+## 2. Directory Structure
 
 ### 📂 Full Project Tree
 
@@ -196,7 +178,7 @@ Cortex DL/
 
 ---
 
-## 4. Requirements
+## 3. Requirements
 
 For local development and building from source:
 
@@ -210,7 +192,7 @@ For local development and building from source:
 
 ---
 
-## 5. Development Setup
+## 4. Development Setup
 
 Clone the repository, navigate to the application package, install dependencies, and launch the Vite + Electron development environment:
 
@@ -245,7 +227,7 @@ npm run lint
 
 ---
 
-## 6. Build for Windows
+## 5. Build for Windows
 
 To build a standalone production installer for Windows x64:
 
@@ -263,7 +245,7 @@ app/release/1.7.0/Cortex DL Setup 1.7.0.exe
 
 ---
 
-## 7. Bundled Tools
+## 6. Bundled Tools
 
 The following executables are maintained under `app/bin/` and automatically embedded into `resources/bin/` during packaging:
 
@@ -276,7 +258,7 @@ The following executables are maintained under `app/bin/` and automatically embe
 
 ---
 
-## 8. YouTube & Cookie Management
+## 7. YouTube & Cookie Management
 
 > [!IMPORTANT]
 > Access to media on YouTube and restricted platforms may vary based on account status, region, age restrictions, or CAPTCHA challenges.
@@ -288,7 +270,7 @@ Cortex-DL supports configuring a Netscape-format `cookies.txt` file in **Setting
 
 ---
 
-## 9. Privacy & Local Data Security
+## 8. Privacy & Local Data Security
 
 Cortex-DL is built with a **privacy-first** architecture:
 
@@ -299,7 +281,7 @@ Cortex-DL is built with a **privacy-first** architecture:
 
 ---
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 > [!TIP]
 > Use the **Health Check** panel in application Settings to quickly verify binary status and folder permissions.
@@ -334,12 +316,11 @@ Cortex-DL minimizes to the Windows System Tray by default. Check the tray icon i
 
 ---
 
-## 11. Release Notes - v1.7.0
+## 10. Release Notes - v1.7.0
 
 - 🎨 **Visual Redesign**: Sleek UI overhaul with modern component layout, micro-interactions, and visual polish.
 - 🖼️ **Smart Thumbnail Rendering**: Integrated `SmartImage` component for robust thumbnail caching and fallback handling.
 - ⚡ **Optimized Queue Engine**: Enhanced concurrent task scheduling, rate limiting, and IPC progress throttling.
-- 🛠️ **Refreshed Navigation**: Redesigned Sidebar, `AdvancedTrimmer`, `ConfirmModal`, and `DownloadCard` components.
 - 📜 **Open-Source Compliance**: Added MIT License, Contributing Guide, Code of Conduct, Security Policy, and GitHub Issue Templates.
 
 ---
