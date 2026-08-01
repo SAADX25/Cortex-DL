@@ -29,9 +29,6 @@
   **Cortex-DL** is an ultra-fast, feature-packed desktop download manager built with **Electron, React, TypeScript, yt-dlp, FFmpeg, and SQLite**.
 
   It offers seamless media link analysis, multi-threaded downloading, custom format selection, FFmpeg post-processing, and queue state persistence across sessions. The Windows build comes pre-packaged with all required command-line binaries out of the box.
-
-  [✨ Key Features](#1-features) • [📂 Directory Structure](#2-directory-structure) • [💻 Requirements](#3-requirements) • [🚀 Quick Start](#4-development-setup) • [🛠️ Bundled Tools](#6-bundled-tools) • [🔍 Troubleshooting](#9-troubleshooting)
-
   ---
 
 </div>
