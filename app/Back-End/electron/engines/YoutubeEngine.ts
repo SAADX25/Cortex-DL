@@ -6,7 +6,7 @@ import log from 'electron-log'
 import type { DownloadTask, EngineContext, TaskRuntime, AudioFormat, VideoFormat } from '../types'
 import { AUDIO_FORMATS, VIDEO_FORMATS } from '../types'
 import { getBinaryPath } from '../paths'
-import { nowMs, sanitizeFilename, getFileSizeIfExists, parseTimeToSeconds, sendNotification, killProcessTree } from '../utils'
+import { nowMs, sanitizeFilename, getFileSizeIfExists, parseTimeToSeconds, sendNotification } from '../utils'
 import {
   parseDownloadProgress,
   parseFfmpegProgress,
@@ -218,14 +218,15 @@ export class YoutubeEngine implements IEngine {
   }
 
   pause(): void {
-    
-    log.info(`[YoutubeEngine] Pausing (Killing) process...`)
-    killProcessTree(this.childProcess)
+    // Signal abort — actual process tree kill is handled by DownloadManager.
+    log.info(`[YoutubeEngine] Pausing — aborting child process...`)
+    this.childProcess?.kill()
   }
 
   stop(): void {
-    log.info(`[YoutubeEngine] Stopping (Killing) process...`)
-    killProcessTree(this.childProcess)
+    // Signal abort — actual process tree kill is handled by DownloadManager.
+    log.info(`[YoutubeEngine] Stopping — aborting child process...`)
+    this.childProcess?.kill()
   }
 
   private static async ensureYtdlpFresh(): Promise<void> {

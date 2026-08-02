@@ -19,10 +19,10 @@ build/
 release/
 bin/
 !app/bin/
-app/bin/*
-!app/bin/yt-dlp.exe
-!app/bin/ffmpeg.exe
-!app/bin/deno.exe
+app/bin/*.exe
+app/bin/*.zip
+app/bin/*.tmp
+app/bin/*-extract-tmp/
 
 # Editor directories and files
 .vscode/*

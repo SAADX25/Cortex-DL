@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar'
 import SettingsTab from './components/SettingsTab'
 import AddDownloadTab from './components/AddDownloadTab'
 import SmartImage from './components/SmartImage'
+import SetupOverlay from './components/SetupOverlay'
 import { useAppController, variantLabel } from './hooks/useAppController'
 import { useUIStore } from './stores/useUIStore'
 import React from 'react'
@@ -129,6 +130,16 @@ function App() {
   const activeTab = useUIStore((s) => s.activeTab)
   const toastMsg  = useUIStore((s) => s.toastMsg)
 
+  const [setupState, setSetupState] = useState<{ status: string; progress: number; message: string } | null>(null)
+
+  useEffect(() => {
+    if (window.cortexDl && window.cortexDl.onSetupProgress) {
+      return window.cortexDl.onSetupProgress((state) => {
+        setSetupState(state)
+      })
+    }
+  }, [])
+
   /**
    * SmartImage is bound to the resolved thumb port so Instagram thumbnails
    * are proxied correctly. Created once per port value — not per render.
@@ -136,6 +147,10 @@ function App() {
   const BoundSmartImage = React.useMemo<React.FC<any>>(() => {
     return (props: any) => <SmartImage {...props} thumbPort={ctrl.thumbPort} />
   }, [ctrl.thumbPort])
+
+  if (setupState && setupState.status !== 'done') {
+    return <SetupOverlay setupState={setupState} />
+  }
 
   return (
     <div className="app-container" dir={lang === 'ar' ? 'rtl' : 'ltr'}>

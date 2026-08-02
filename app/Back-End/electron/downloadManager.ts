@@ -16,7 +16,7 @@ import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
-  killProcessTree,
+  killProcessTree, flushPendingIpc,
 } from './utils'
 
 import type { IEngine } from './engines/IEngine'
@@ -378,7 +378,7 @@ export class DownloadManager {
 
     const runtime = this.mustGetRuntime(id)
     runtime.abortController?.abort()
-    killProcessTree(runtime.child)
+    await killProcessTree(runtime.child)
 
     task.status = 'paused'
     task.updatedAtMs = nowMs()
@@ -419,7 +419,7 @@ export class DownloadManager {
     }
 
     runtime.abortController?.abort()
-    killProcessTree(runtime.child)
+    await killProcessTree(runtime.child)
 
     task.status = 'canceled'
     task.updatedAtMs = nowMs()
@@ -447,7 +447,7 @@ export class DownloadManager {
     const runtime = this.runtime.get(id)
     if (runtime) {
       runtime.abortController?.abort()
-      killProcessTree(runtime.child)
+      await killProcessTree(runtime.child)
       this.runtime.delete(id)
     }
 
@@ -660,6 +660,9 @@ export class DownloadManager {
       
       
       if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
+        // Flush any trailing throttled IPC update so the renderer receives
+        // the final progress snapshot before the completion event.
+        flushPendingIpc(task.id)
         task.status = 'completed'
         task.updatedAtMs = nowMs()
         log.info(`[DM] Task ${id} completed successfully`)

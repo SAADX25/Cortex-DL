@@ -13,7 +13,10 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron'
 import { existsSync, rmSync, statSync, createReadStream } from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
-import type { DownloadManager } from './downloadManager'
+import { DownloadManager } from './downloadManager'
+import { runSetup } from './setup'
+
+export let downloads: DownloadManager | null = null
 import { registerIpcHandlers } from './ipc/handlers'
 import { createTray } from './tray'
 import { db } from './db'
@@ -30,7 +33,6 @@ process.on('unhandledRejection', (reason) => {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-let downloads: DownloadManager | null = null
 let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
 
 let serviceReadyResolve: () => void
@@ -492,8 +494,14 @@ if (!gotTheLock) {
     }
   })
 
-  app.on('before-quit', () => {
+  app.on('before-quit', async () => {
     isQuitting = true
+    // Kill all active child processes (yt-dlp, ffmpeg) before the app exits.
+    // pauseAll() calls killProcessTree for each running process.
+    if (downloads && downloads.getActiveCount() > 0) {
+      log.info(`[Shutdown] Pausing ${downloads.getActiveCount()} active downloads before quit...`)
+      await downloads.pauseAll()
+    }
     downloads?.flushPendingSave()
   })
 
@@ -523,6 +531,16 @@ if (!gotTheLock) {
     startMediaStreamingServer()
     createWindow()
     initTray()
+
+    try {
+      if (win) {
+        await runSetup(win)
+      }
+    } catch (err) {
+      log.error('[Backend] Setup failed:', err)
+      // We might want to still attempt loading if it failed, or halt.
+      // We'll proceed so the app doesn't just hang, but downloads will fail later.
+    }
 
     setTimeout(() => {
       loadBackendServices().catch((err) => {

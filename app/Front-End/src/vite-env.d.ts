@@ -168,6 +168,7 @@ declare global {
       onDownloadUpdated: (callback: (task: DownloadTask) => void) => () => void
       onDownloadProgress: (callback: (data: DownloadProgressData) => void) => () => void
       onStatsUpdated: (callback: (data: { id: string; addedBytes: number }) => void) => () => void
+      onSetupProgress: (callback: (state: { status: string; progress: number; message: string }) => void) => () => void
     }
   }
 }

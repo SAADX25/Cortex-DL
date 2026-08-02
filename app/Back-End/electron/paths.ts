@@ -12,7 +12,8 @@ export function getBinaryPath(name: string): string {
     if (existsSync(binPath)) return binPath
     return path.join(process.cwd(), 'bin', binaryName)
   }
-  return path.join(process.resourcesPath, 'bin', binaryName)
+  // Production: use dynamically downloaded binaries in userData
+  return path.join(app.getPath('userData'), 'bin', binaryName)
 }
 
 export function getBinDirectory(): string {
@@ -24,5 +25,6 @@ export function getBinDirectory(): string {
     if (existsSync(cwdBin)) return cwdBin
     return path.join(root, 'bin')
   }
-  return path.join(process.resourcesPath, 'bin')
+  // Production: use dynamically downloaded binaries in userData
+  return path.join(app.getPath('userData'), 'bin')
 }

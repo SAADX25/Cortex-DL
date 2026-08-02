@@ -63,9 +63,12 @@ const domRegistry = new Map<string, RegisteredDom>()
 
 let ipcListenersStarted = false
 
-const ZUSTAND_THROTTLE_MS = 500
+const ZUSTAND_THROTTLE_MS = 250
 const lastZustandSentAtMs = new Map<string, number>()
 const lastStructuralKeyById = new Map<string, string>()
+
+/** Terminal statuses that must always propagate to Zustand immediately. */
+const ZUSTAND_BYPASS_STATUSES = new Set(['completed', 'error', 'canceled', 'paused'])
 
 export function useHighFrequencyIPC(
   taskId: string | undefined,
@@ -267,6 +270,10 @@ function maybeUpsertToZustand(
   const now = Date.now()
   const id = task.id
 
+  // Terminal states always bypass the throttle — the user must see
+  // completion/error/pause reflected immediately in the React tree.
+  const isTerminal = ZUSTAND_BYPASS_STATUSES.has(task.status)
+
   const key = structuralKey(task)
   const prevKey = lastStructuralKeyById.get(id)
   const structuralChanged = prevKey !== key
@@ -274,7 +281,7 @@ function maybeUpsertToZustand(
   const lastAt = lastZustandSentAtMs.get(id) ?? 0
   const throttleOk = now - lastAt >= ZUSTAND_THROTTLE_MS
 
-  const shouldSend = structuralChanged || lastAt === 0 || throttleOk
+  const shouldSend = isTerminal || structuralChanged || lastAt === 0 || throttleOk
   if (!shouldSend) return
 
   lastStructuralKeyById.set(id, key)

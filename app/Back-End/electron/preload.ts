@@ -141,6 +141,11 @@ contextBridge.exposeInMainWorld('cortexDl', {
     ipcRenderer.on('cortexdl:download-stats-updated', listener)
     return () => ipcRenderer.off('cortexdl:download-stats-updated', listener)
   },
+  onSetupProgress(callback: (state: { status: string; progress: number; message: string }) => void): () => void {
+    const listener = (_event: unknown, state: any) => callback(state)
+    ipcRenderer.on('cortexdl:setup-progress', listener)
+    return () => ipcRenderer.off('cortexdl:setup-progress', listener)
+  },
   onYouTubeOAuthCode(callback: (data: { taskId: string; url: string; code: string; message?: string }) => void): () => void {
     const listener = (_event: unknown, data: { taskId: string; url: string; code: string; message?: string }) => callback(data)
     ipcRenderer.on(YOUTUBE_OAUTH_CHANNEL, listener)
