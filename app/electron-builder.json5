@@ -37,13 +37,7 @@
     "!node_modules/**/.vscode/**",
     "!**/*.log"
   ],
-  "extraResources": [
-    {
-      "from": "bin",
-      "to": "bin",
-      "filter": ["yt-dlp.exe", "ffmpeg.exe", "deno.exe", "ffprobe.exe"]
-    }
-  ],
+  "extraResources": [],
   "mac": {
     "target": [
       "dmg"
