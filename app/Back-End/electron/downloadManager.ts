@@ -424,6 +424,8 @@ export class DownloadManager {
     task.status = 'canceled'
     task.updatedAtMs = nowMs()
     task.speedBytesPerSec = null
+    task.resumeChunks = undefined
+    task.supportsRanges = undefined
     this.saveStateImmediate()
     sendUpdate(this.win, task)
     this.active.delete(id)

@@ -136,9 +136,14 @@ function App() {
     if (window.cortexDl && window.cortexDl.onSetupProgress) {
       return window.cortexDl.onSetupProgress((state) => {
         setSetupState(state)
+        // After setup finishes downloading engines, refresh the health check
+        // so the UI immediately reflects the newly installed binaries
+        if (state.status === 'done') {
+          ctrl.refreshHealth()
+        }
       })
     }
-  }, [])
+  }, [ctrl.refreshHealth])
 
   /**
    * SmartImage is bound to the resolved thumb port so Instagram thumbnails

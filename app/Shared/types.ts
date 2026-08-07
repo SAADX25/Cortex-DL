@@ -65,6 +65,10 @@ export type DownloadTask = {
   subtitleLanguage?: string
   subtitleIsAutomatic?: boolean
   fps?: number | string
+  /** Persisted chunk state for DirectEngine pause/resume. Cleared on completion. */
+  resumeChunks?: { start: number; end: number; downloaded: number; completed: boolean }[]
+  /** Whether the server supports HTTP Range requests (cached from HEAD). */
+  supportsRanges?: boolean
 }
 
 export type HlsVariant = {

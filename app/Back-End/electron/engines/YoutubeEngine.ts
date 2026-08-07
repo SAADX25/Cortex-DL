@@ -510,9 +510,9 @@ export class YoutubeEngine implements IEngine {
       '--file-access-retries', '5',
       '--socket-timeout', '10',
       
-      '-N', '8',
-      '--concurrent-fragments', '4',
-      '--http-chunk-size', '5.0M',
+      '-N', '10',
+      '--concurrent-fragments', '6',
+      '--http-chunk-size', '10.0M',
       ...this.buildAuthArgs(task, runtime),
       ...getJsRuntimeArgs(),
     ]
@@ -532,22 +532,22 @@ export class YoutubeEngine implements IEngine {
       if (isTrimmedTask) {
         // -c:v copy avoids video re-encode (fastest). Audio copy may fail on some
         // streams so we let ffmpeg decide with -c:a copy fallback to aac.
-        ytArgs.push('--postprocessor-args', 'ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024 -movflags +faststart')
+        ytArgs.push('--postprocessor-args', 'ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 4096 -movflags +faststart')
       } else if (hasSubtitles) {
         ytArgs.push(
           '--postprocessor-args',
-          'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a aac -c:s mov_text -max_muxing_queue_size 1024 -movflags +faststart'
+          'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a copy -c:s mov_text -max_muxing_queue_size 4096 -movflags +faststart'
         )
       } else {
         ytArgs.push(
           '--postprocessor-args',
-          'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a aac -max_muxing_queue_size 1024 -movflags +faststart'
+          'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a copy -max_muxing_queue_size 4096 -movflags +faststart'
         )
       }
     } else {
       const extraFfmpegFlags = isTrimmedTask
-        ? 'ffmpeg:-y -hide_banner -threads 0 -c:v copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 1024'
-        : 'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -max_muxing_queue_size 1024'
+        ? 'ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a copy -avoid_negative_ts make_zero -async 1 -max_muxing_queue_size 4096'
+        : 'Merger+ffmpeg:-y -hide_banner -threads 0 -c:v copy -c:a copy -max_muxing_queue_size 4096'
       ytArgs.push('--postprocessor-args', extraFfmpegFlags)
     }
 
@@ -578,7 +578,7 @@ export class YoutubeEngine implements IEngine {
         const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
         ytArgs.push(
           '-f',
-          `bestvideo${heightFilter}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${heightFilter}+bestaudio/best`
+          `bestvideo${heightFilter}[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo${heightFilter}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${heightFilter}+bestaudio/best`
         )
         if (heightConstraint) {
           log.info(`[YoutubeEngine] Quality constraint applied: height<=${heightConstraint}`)
@@ -596,7 +596,7 @@ export class YoutubeEngine implements IEngine {
           if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
         } else if (VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
           const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
-          ytArgs.push('-f', `bestvideo${heightFilter}+bestaudio/best`, '-S', 'res,fps')
+          ytArgs.push('-f', `bestvideo${heightFilter}[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo${heightFilter}+bestaudio/best`, '-S', 'res,fps')
           if (heightConstraint) {
             log.info(`[YoutubeEngine] Quality constraint applied (default): height<=${heightConstraint}`)
           }
