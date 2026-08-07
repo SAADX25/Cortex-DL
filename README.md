@@ -313,12 +313,12 @@ Cortex-DL minimizes to the Windows System Tray by default. Check the tray icon i
 
 ---
 
-## 10. Release Notes - v1.7.0
+## 10. Release Notes - v1.8.0
 
-- 🎨 **Visual Redesign**: Sleek UI overhaul with modern component layout, micro-interactions, and visual polish.
-- 🖼️ **Smart Thumbnail Rendering**: Integrated `SmartImage` component for robust thumbnail caching and fallback handling.
-- ⚡ **Optimized Queue Engine**: Enhanced concurrent task scheduling, rate limiting, and IPC progress throttling.
-- 📜 **Open-Source Compliance**: Added MIT License, Contributing Guide, Code of Conduct, Security Policy, and GitHub Issue Templates.
+- ⏸️ **True Resume (Direct Downloads)**: Chunk progress is now persisted in SQLite, allowing seamless pause and resume for direct links without restarting from 0%.
+- ⚡ **Ultra-Fast YouTube Engine**: Upgraded internal downloader with 10 concurrent threads and 10MB chunks to maximize bandwidth utilization.
+- 📺 **Universal Compatibility**: Enforced H.264 video and AAC audio formats to guarantee smooth playback on older TVs, phones, and devices without hardware acceleration.
+- 🪶 **Zero-CPU Merging**: Switched FFmpeg processing to pure stream copying (`-c copy`), reducing CPU load to near 0% and merging 4K files in seconds.
 
 ---
 
