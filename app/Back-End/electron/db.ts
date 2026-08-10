@@ -11,6 +11,14 @@ db.pragma('journal_mode = WAL')
 
 db.pragma('auto_vacuum = INCREMENTAL')
 
+// NORMAL is the recommended pairing with WAL: it skips the fsync on every
+// transaction commit (only checkpointing needs one), which is safe here
+// because WAL already guarantees the database file itself can never be
+// corrupted by a crash — at worst a handful of milliseconds of the most
+// recent writes could be lost, which is an explicit, accepted trade-off of
+// the write-behind persistence model in `downloadManager.ts` (Priority 3).
+db.pragma('synchronous = NORMAL')
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,

@@ -67,6 +67,13 @@ export type TaskRuntime = {
   lastIpcAtMs: number
   retries: number
   ignoreCookies?: boolean
+  /**
+   * Timestamp (ms) before which this task must not be picked up by
+   * `DownloadManager.schedule()`. Set by `scheduleRetry()` while a
+   * task-level retry backoff is pending, so the backoff never occupies an
+   * active concurrency slot (see EngineContext.scheduleRetry).
+   */
+  retryAt?: number
 }
 
 export interface EngineContext {
@@ -79,6 +86,13 @@ export interface EngineContext {
   saveState: () => void
   
   flushSave: () => void
+  /**
+   * Requests that the DownloadManager re-attempt this task after `delayMs`,
+   * without occupying an active download slot for the duration of the
+   * backoff. Engines must set `task.status = 'queued'` and return from
+   * `download()` immediately after calling this — never sleep inline.
+   */
+  scheduleRetry: (delayMs: number) => void
   sendStats: (id: string, addedBytes: number) => void
   sendYouTubeOAuthCode: (payload: YouTubeOAuthCodePayload) => void
 }

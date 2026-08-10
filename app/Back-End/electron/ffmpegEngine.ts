@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { promises as fs } from 'node:fs'
-import { setTimeout as delay } from 'node:timers/promises'
 import type { DownloadTask, TaskRuntime, EngineContext, AudioFormat, TargetFormat } from './types'
 import { AUDIO_FORMATS } from './types'
 import { getBinaryPath } from './paths'
@@ -248,7 +247,12 @@ export async function runFfmpegDownload(
       task.errorMessage = `FFmpeg failed, retrying (${runtime.retries}/3)...`
       task.updatedAtMs = nowMs()
       ctx.sendUpdate(task)
-      await delay(3000 * runtime.retries)
+      // ── Priority 4 (applied for consistency): blocking retry logic fix ──
+      // This engine had the exact same issue as YoutubeEngine: sleeping
+      // inline here occupies an active concurrency slot in
+      // DownloadManager for the full backoff. Retry scheduling is now
+      // owned by the DownloadManager (see EngineContext.scheduleRetry).
+      ctx.scheduleRetry(3000 * runtime.retries)
       return
     }
 

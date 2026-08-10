@@ -46,6 +46,8 @@ export class DownloadManager {
   private win: BrowserWindow | null = null
   private maxConcurrent = 3
   private active = new Set<string>()
+  /** Pending retry-backoff timers, keyed by task id (Priority 4). */
+  private retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   constructor() {
     this.loadState()
@@ -176,25 +178,81 @@ export class DownloadManager {
 
   
 
-  private saveStateDebounced(): void {
-    
-    
+  /**
+   * ── Priority 3: Decoupled write-behind persistence ─────────────────────
+   *
+   * Previously, every progress tick (up to ~10/sec per active download via
+   * `throttledSendUpdate`) triggered a *synchronous* better-sqlite3 write
+   * inline on the hot path (`sendUpdate` context callback), and
+   * `saveStateDebounced()` — despite its name — was not actually debounced
+   * at all: it ran a fresh DB transaction over *every* active task on every
+   * single call. Under load (several concurrent downloads, each emitting
+   * progress independently) this coupled disk I/O directly to the
+   * event-loop-blocking hot path and caused UI/IPC jank.
+   *
+   * The fix: the hot path only marks a task id "dirty" (an O(1) Set
+   * insert). A single interval timer flushes every currently-dirty task in
+   * one batched transaction at most once per WRITE_BEHIND_INTERVAL_MS,
+   * regardless of how many progress ticks happened in between, and the
+   * timer tears itself down when there is nothing left to flush. Lifecycle
+   * -critical transitions (add/pause/resume/cancel/complete/error) are
+   * infrequent user- or terminal-state-driven events, not the hot path, so
+   * they continue to go through `saveStateImmediate()` for zero data loss.
+   */
+  private static readonly WRITE_BEHIND_INTERVAL_MS = 1000
+  private dirtyIds = new Set<string>()
+  private writeBehindTimer: ReturnType<typeof setInterval> | null = null
+
+  private markDirty(id: string): void {
+    this.dirtyIds.add(id)
+    if (!this.writeBehindTimer) {
+      this.writeBehindTimer = setInterval(
+        () => this.flushDirty(),
+        DownloadManager.WRITE_BEHIND_INTERVAL_MS,
+      )
+      // Never keep the process alive just for this housekeeping timer.
+      this.writeBehindTimer.unref?.()
+    }
+  }
+
+  private flushDirty(): void {
+    if (this.dirtyIds.size === 0) {
+      if (this.writeBehindTimer) {
+        clearInterval(this.writeBehindTimer)
+        this.writeBehindTimer = null
+      }
+      return
+    }
+
+    const ids = Array.from(this.dirtyIds)
+    this.dirtyIds.clear()
+
     try {
-      const trans = db.transaction((activeIds: string[]) => {
-        for (const id of activeIds) {
+      const trans = db.transaction((idsToFlush: string[]) => {
+        for (const id of idsToFlush) {
           const t = this.tasks.get(id)
           if (t) this.upsertTaskToDb(t)
         }
       })
-      trans(Array.from(this.active))
-    } catch (e) {
-      log.error('DB debounced save error', e)
+      trans(ids)
+    } catch (err) {
+      log.error('[DM] Write-behind flush failed, re-queuing dirty ids:', err)
+      // Don't drop the update on a transient failure — retry on the next tick.
+      for (const id of ids) this.dirtyIds.add(id)
     }
   }
 
-  
-
   flushPendingSave(): void {
+    // saveStateImmediate() below persists the full in-memory state of every
+    // task unconditionally, which is a superset of anything still pending
+    // in the write-behind queue, so the queue can simply be dropped.
+    if (this.writeBehindTimer) {
+      clearInterval(this.writeBehindTimer)
+      this.writeBehindTimer = null
+    }
+    this.dirtyIds.clear()
+    for (const timer of this.retryTimers.values()) clearTimeout(timer)
+    this.retryTimers.clear()
     this.saveStateImmediate()
   }
 
@@ -365,6 +423,7 @@ export class DownloadManager {
 
   async pause(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
+    this.clearRetryTimer(id)
     const isPauseable = task.status === 'downloading'
       || task.status === 'merging'
       || task.status === 'converting'
@@ -411,6 +470,7 @@ export class DownloadManager {
   async cancel(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
     const runtime = this.mustGetRuntime(id)
+    this.clearRetryTimer(id)
 
     const engine = this.engines.get(id)
     if (engine) {
@@ -446,6 +506,8 @@ export class DownloadManager {
     const task = this.tasks.get(id)
     if (!task) return
 
+    this.clearRetryTimer(id)
+    this.dirtyIds.delete(id)
     const runtime = this.runtime.get(id)
     if (runtime) {
       runtime.abortController?.abort()
@@ -576,30 +638,17 @@ export class DownloadManager {
     const runtime = this.mustGetRuntime(taskId)
     return {
       sendUpdate: (t) => {
-        let shouldUpdateDb = true
-        if (runtime) {
-          shouldUpdateDb = throttledSendUpdate(this.win, t, runtime)
-        } else {
-          sendUpdate(this.win, t)
-        }
-
-        
-        if (shouldUpdateDb) {
-          try {
-            taskDb.updateStatusAndProgress.run({
-              id: t.id,
-              status: t.status,
-              progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
-              full_payload: JSON.stringify(t)
-            })
-          } catch (dbErr) {
-            log.error('DB Update Error:', dbErr)
-          }
-        }
+        // IPC broadcast stays throttled/leading-trailing as before. DB
+        // persistence is fully decoupled from it now (Priority 3): we just
+        // mark the task dirty and let the write-behind timer batch the
+        // actual disk write, instead of writing inline on this hot path.
+        throttledSendUpdate(this.win, t, runtime)
+        this.markDirty(taskId)
       },
       runtime,
-      saveState: () => this.saveStateDebounced(),
+      saveState: () => this.markDirty(taskId),
       flushSave: () => this.saveStateImmediate(taskId),
+      scheduleRetry: (delayMs: number) => this.scheduleRetry(taskId, delayMs),
       sendStats: (id, addedBytes) => {
         if (this.win && !this.win.isDestroyed()) {
           this.win.webContents.send(STATS_CHANNEL, { id, addedBytes })
@@ -613,13 +662,58 @@ export class DownloadManager {
     }
   }
 
-  
+  /**
+   * ── Priority 4: retry scheduling owned by DownloadManager ──────────────
+   * Cancels any pending retry timer for `id` and clears the runtime's
+   * `retryAt` marker. Safe to call even if no retry is pending.
+   */
+  private clearRetryTimer(id: string): void {
+    const timer = this.retryTimers.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      this.retryTimers.delete(id)
+    }
+    const runtime = this.runtime.get(id)
+    if (runtime) runtime.retryAt = undefined
+  }
+
+  /**
+   * Schedules task `id` to become eligible for `schedule()` again after
+   * `delayMs`, without occupying an active concurrency slot in the
+   * meantime. Engines call this (via `EngineContext.scheduleRetry`) instead
+   * of sleeping inline inside `download()` — sleeping inline would keep the
+   * task counted in `this.active` for the full backoff, starving other
+   * queued downloads of a slot for as long as ~60s.
+   */
+  private scheduleRetry(id: string, delayMs: number): void {
+    this.clearRetryTimer(id)
+    const runtime = this.runtime.get(id)
+    if (runtime) runtime.retryAt = nowMs() + delayMs
+
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(id)
+      const rt = this.runtime.get(id)
+      if (rt) rt.retryAt = undefined
+      this.schedule()
+    }, delayMs)
+    timer.unref?.()
+    this.retryTimers.set(id, timer)
+  }
+
   private schedule(): void {
     const available = this.maxConcurrent - this.active.size
     if (available <= 0) return
 
+    const now = nowMs()
     const candidates = Array.from(this.tasks.values())
-      .filter(t => t.status === 'queued' && !this.active.has(t.id))
+      .filter(t => {
+        if (t.status !== 'queued' || this.active.has(t.id)) return false
+        // Tasks awaiting a retry backoff are not eligible until it elapses
+        // (see scheduleRetry) — they must not consume a concurrency slot.
+        const retryAt = this.runtime.get(t.id)?.retryAt
+        if (retryAt && retryAt > now) return false
+        return true
+      })
       .sort((a, b) => a.createdAtMs - b.createdAtMs)
 
     for (const task of candidates.slice(0, available)) {
@@ -671,9 +765,39 @@ export class DownloadManager {
       }
 
     } catch (err: unknown) {
-      log.error(`[DM] Task ${id} failed:`, err)
-      task.status = 'error'
-      task.errorMessage = err instanceof Error ? err.message : 'Unknown engine error'
+      // ── Priority 5 (crucial): pause()/cancel() race fix ────────────────
+      // pause()/cancel() can run concurrently with the in-flight
+      // `entry.start()` above: they abort the runtime's AbortController and
+      // kill the child process tree, which causes most engines'
+      // `download()` to reject (e.g. DirectEngine explicitly rethrows on
+      // abort). That rejection lands here — but by the time it does,
+      // pause()/cancel() have *already* set `task.status` to 'paused' /
+      // 'canceled'. Unconditionally overwriting it to 'error' would clobber
+      // that legitimate, more recent user-initiated transition with a
+      // misleading "Download aborted" error. Only report a real error if
+      // the task is still in an active state that this failure actually
+      // explains.
+      // Read via a widened alias — TS's control-flow narrowing from the try
+      // block's earlier `if (task.status === ...)` check would otherwise
+      // (incorrectly, since an exception can land here from any point in
+      // the try block, including mid-await) treat some of these branches
+      // as unreachable.
+      const currentStatus: string = task.status
+      const stillActive = currentStatus === 'downloading'
+        || currentStatus === 'merging'
+        || currentStatus === 'converting'
+
+      if (stillActive) {
+        log.error(`[DM] Task ${id} failed:`, err)
+        task.status = 'error'
+        task.errorMessage = err instanceof Error ? err.message : 'Unknown engine error'
+      } else {
+        log.info(
+          `[DM] Task ${id} threw after status changed to '${task.status}' ` +
+          `(pause/cancel race, not a real failure) — ignoring: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+        )
+      }
       this.engines.delete(id)
     } finally {
       this.active.delete(id)

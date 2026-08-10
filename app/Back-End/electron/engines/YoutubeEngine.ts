@@ -205,7 +205,15 @@ export class YoutubeEngine implements IEngine {
       task.errorMessage = `Download failed, retrying (${runtime.retries}/${MAX_RETRIES})...`
       task.updatedAtMs = nowMs()
       context.sendUpdate(task)
-      await new Promise<void>((r) => setTimeout(r, backoffMs))
+      // ── Priority 4: blocking retry logic fix ───────────────────────────
+      // This used to `await new Promise(r => setTimeout(r, backoffMs))`
+      // right here, inside `download()`. Because DownloadManager awaits
+      // this whole call while holding an active concurrency slot for the
+      // task, that sleep (up to 60s) blocked another queued download from
+      // ever starting. Retry scheduling is now owned by the
+      // DownloadManager: it re-queues this task after `backoffMs` without
+      // occupying a slot in the meantime.
+      context.scheduleRetry(backoffMs)
       return
     }
 
@@ -288,52 +296,71 @@ export class YoutubeEngine implements IEngine {
 
     const proc = spawn(ytDlpPath, metaArgs, { windowsHide: true, detached: false, env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' } })
 
-    const metaOut = await Promise.race<string>([
-      (async () => {
-        let out = ''
-        for await (const chunk of proc.stdout) out += chunk.toString()
-        return out
-      })(),
-      new Promise<string>((_, rej) =>
-        setTimeout(() => {
-          try { proc.kill() } catch {
-            
-          }
-          rej(new Error('meta timeout'))
-        }, META_TIMEOUT_MS)
-      ),
-    ])
+    // ── Priority 4: process lifecycle hole fix ─────────────────────────────
+    // This metadata-prefetch process was previously never wired into
+    // `runtime.child` or the abort signal, so a pause()/cancel() that
+    // arrived *during* prefetch had nothing to kill: the process kept
+    // running orphaned in the background even after the task was reported
+    // as paused/canceled. It's now tracked exactly like the real download
+    // attempt, and unconditionally detached again in `finally` regardless
+    // of how this function exits (success, timeout, or abort).
+    this.childProcess = proc
+    runtime.child = proc
+    const onAbort = () => { try { proc.kill() } catch { /* already dead */ } }
+    runtime.abortController?.signal.addEventListener('abort', onAbort, { once: true })
 
-    if (!metaOut || runtime.abortController?.signal.aborted) return
-
-    let info: any = null
     try {
-      info = JSON.parse(metaOut.trim())
-    } catch {
+      const metaOut = await Promise.race<string>([
+        (async () => {
+          let out = ''
+          for await (const chunk of proc.stdout) out += chunk.toString()
+          return out
+        })(),
+        new Promise<string>((_, rej) =>
+          setTimeout(() => {
+            try { proc.kill() } catch {
+              
+            }
+            rej(new Error('meta timeout'))
+          }, META_TIMEOUT_MS)
+        ),
+      ])
+
+      if (!metaOut || runtime.abortController?.signal.aborted) return
+
+      let info: any = null
+      try {
+        info = JSON.parse(metaOut.trim())
+      } catch {
+        
+        const start = metaOut.indexOf('{')
+        const end = metaOut.lastIndexOf('}')
+        if (start >= 0 && end > start) info = JSON.parse(metaOut.slice(start, end + 1))
+      }
+
+      if (!info) return
+
+      if (info.title) task.title = String(info.title)
+
       
-      const start = metaOut.indexOf('{')
-      const end = metaOut.lastIndexOf('}')
-      if (start >= 0 && end > start) info = JSON.parse(metaOut.slice(start, end + 1))
+      if (typeof info.duration === 'number') {
+        log.info(`[YoutubeEngine] Duration for ${task.id}: ${info.duration}s`)
+      }
+
+      const thumbs = Array.isArray(info.thumbnails) ? info.thumbnails : null
+      const thumb =
+        info.thumbnail
+        ?? (thumbs && thumbs.length ? thumbs[thumbs.length - 1]?.url : null)
+
+      if (thumb) task.thumbnail = String(thumb)
+
+      task.updatedAtMs = nowMs()
+      context.sendUpdate(task)
+    } finally {
+      runtime.abortController?.signal.removeEventListener('abort', onAbort)
+      if (this.childProcess === proc) this.childProcess = null
+      if (runtime.child === proc) runtime.child = null
     }
-
-    if (!info) return
-
-    if (info.title) task.title = String(info.title)
-
-    
-    if (typeof info.duration === 'number') {
-      log.info(`[YoutubeEngine] Duration for ${task.id}: ${info.duration}s`)
-    }
-
-    const thumbs = Array.isArray(info.thumbnails) ? info.thumbnails : null
-    const thumb =
-      info.thumbnail
-      ?? (thumbs && thumbs.length ? thumbs[thumbs.length - 1]?.url : null)
-
-    if (thumb) task.thumbnail = String(thumb)
-
-    task.updatedAtMs = nowMs()
-    context.sendUpdate(task)
   }
 
   private async runYtdlpAttempt(
@@ -442,6 +469,20 @@ export class YoutubeEngine implements IEngine {
       proc.on('close', (code) => resolve(code ?? 1))
       proc.on('error', () => resolve(1))
     })
+
+    // ── Priority 4: process lifecycle hole fix ─────────────────────────────
+    // Once the process has exited, drop every reference to it and detach its
+    // stream listeners. Previously `this.childProcess` / `runtime.child`
+    // were left pointing at the dead handle indefinitely: a later
+    // pause()/cancel() targeting a *new* in-flight attempt (or metadata
+    // prefetch) could then race against — or simply waste a `killProcessTree`
+    // call on — a process that had already exited. Detaching the listeners
+    // also lets the closures they capture (task/context/ffmpegState) be
+    // garbage collected instead of being pinned for the task's lifetime.
+    proc.stdout.removeAllListeners()
+    proc.stderr.removeAllListeners()
+    if (this.childProcess === proc) this.childProcess = null
+    if (runtime.child === proc) runtime.child = null
 
     return { exitCode, detectedFinalPath, stderr: ffmpegState.stderr }
   }
