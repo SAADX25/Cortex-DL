@@ -1,79 +1,62 @@
 import React from 'react'
 import { RefreshCw, AlertTriangle, ShieldAlert, FolderOpen, X, ExternalLink } from 'lucide-react'
-import { Language, translations } from '../translations'
+import { translations } from '../translations'
+import type { Translations, Language } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
+import { useLang, useSettingsStore } from '../stores/useSettingsStore'
 
 declare const __APP_VERSION__: string
 
-interface SettingsTabProps {
-  lang: Language
-  setLang: (lang: Language) => void
-  totalDownloadedBytes: number
-  onResetStats: () => void
-  useInAppPlayer: boolean
-  setUseInAppPlayer: (val: boolean) => void
-  cookieFilePath: string | null
-  cookieValidation: CookieValidationResult | null
-  healthCheck: AppHealthCheck | null
-  healthChecking: boolean
-  onSelectCookieFile: () => void
-  onClearCookieFile: () => void
-  onRefreshHealth: () => void
-  concurrentDownloads: number
-  setConcurrentDownloads: (val: number) => void
-  updateStatus: any
-  onCheckForUpdates: () => void
-  onRestartAndInstall: () => void
-  engineUpdateStatus: any
-  engineVersion: string
-  onUpdateEngine: () => void
-  onUninstall: () => void
+function getCookieStatusText(t: Translations, validation: CookieValidationResult): string {
+  switch (validation.code) {
+    case 'valid': return t.youtube_cookie_valid
+    case 'cleared': return t.youtube_cookie_cleared
+    case 'missing': return t.youtube_cookie_missing
+    case 'not_file': return t.youtube_cookie_not_file
+    case 'invalid_header': return t.youtube_cookie_invalid_header
+    case 'missing_youtube': return t.youtube_cookie_missing_youtube
+    case 'read_error': return t.youtube_cookie_read_error
+    case 'save_error': return t.youtube_cookie_save_error
+    default: return validation.message
+  }
 }
 
-const SettingsTab: React.FC<SettingsTabProps> = ({
-  lang,
-  setLang,
-  totalDownloadedBytes,
-  onResetStats,
-  useInAppPlayer,
-  setUseInAppPlayer,
-  cookieFilePath,
-  cookieValidation,
-  healthCheck,
-  healthChecking,
-  onSelectCookieFile,
-  onClearCookieFile,
-  onRefreshHealth,
-  concurrentDownloads,
-  setConcurrentDownloads,
-  updateStatus,
-  onCheckForUpdates,
-  onRestartAndInstall,
-  engineUpdateStatus,
-  engineVersion,
-  onUpdateEngine,
-  onUninstall,
-}) => {
+/**
+ * No props: every value/action this tab needs comes straight from
+ * `useSettingsStore`, so changing e.g. `engineVersion` no longer forces
+ * `App` (and therefore every other tab) to re-render — only this component
+ * re-renders, and only when a field it actually reads changes.
+ */
+const SettingsTab: React.FC = () => {
+  const lang = useLang()
   const t = translations[lang]
+
+  const setLang = useSettingsStore((s) => s.setLang)
+  const totalDownloadedBytes = useSettingsStore((s) => s.totalDownloadedBytes)
+  const onResetStats = useSettingsStore((s) => s.onResetStats)
+  const useInAppPlayer = useSettingsStore((s) => s.useInAppPlayer)
+  const setUseInAppPlayer = useSettingsStore((s) => s.setUseInAppPlayer)
+  const cookieFilePath = useSettingsStore((s) => s.cookieFilePath)
+  const cookieValidation = useSettingsStore((s) => s.cookieValidation)
+  const healthCheck = useSettingsStore((s) => s.healthCheck)
+  const healthChecking = useSettingsStore((s) => s.healthChecking)
+  const onSelectCookieFile = useSettingsStore((s) => s.onSelectCookieFile)
+  const onClearCookieFile = useSettingsStore((s) => s.onClearCookieFile)
+  const refreshHealth = useSettingsStore((s) => s.refreshHealth)
+  const concurrentDownloads = useSettingsStore((s) => s.concurrentDownloads)
+  const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
+  const updateStatus = useSettingsStore((s) => s.updateStatus)
+  const onCheckForUpdates = useSettingsStore((s) => s.onCheckForUpdates)
+  const onRestartAndInstall = useSettingsStore((s) => s.onRestartAndInstall)
+  const engineUpdateStatus = useSettingsStore((s) => s.engineUpdateStatus)
+  const engineVersion = useSettingsStore((s) => s.engineVersion)
+  const onUpdateEngine = useSettingsStore((s) => s.onUpdateEngine)
+  const onUninstall = useSettingsStore((s) => s.onUninstall)
 
   
   const cookieFileName = cookieFilePath
     ? cookieFilePath.split(/[\\/]/).pop() ?? cookieFilePath
     : null
-
-  const getCookieStatusText = (validation: CookieValidationResult): string => {
-    switch (validation.code) {
-      case 'valid': return t.youtube_cookie_valid
-      case 'cleared': return t.youtube_cookie_cleared
-      case 'missing': return t.youtube_cookie_missing
-      case 'not_file': return t.youtube_cookie_not_file
-      case 'invalid_header': return t.youtube_cookie_invalid_header
-      case 'missing_youtube': return t.youtube_cookie_missing_youtube
-      case 'read_error': return t.youtube_cookie_read_error
-      case 'save_error': return t.youtube_cookie_save_error
-      default: return validation.message
-    }
-  }
 
   const healthRows = healthCheck
     ? [
@@ -95,7 +78,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         {
           label: t.health_cookies,
           ok: healthCheck.cookies.valid || healthCheck.cookies.code === 'missing',
-          detail: healthCheck.cookies.code === 'missing' ? t.health_cookie_optional : getCookieStatusText(healthCheck.cookies),
+          detail: healthCheck.cookies.code === 'missing' ? t.health_cookie_optional : getCookieStatusText(t, healthCheck.cookies),
         },
         {
           label: t.health_download_directory,
@@ -164,11 +147,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             <div className="row-control">
               <div
                 className={`toggle-switch ${useInAppPlayer ? 'active' : ''}`}
-                onClick={() => {
-                  const newValue = !useInAppPlayer
-                  setUseInAppPlayer(newValue)
-                  localStorage.setItem('cortex-inapp-player', String(newValue))
-                }}
+                onClick={() => setUseInAppPlayer(!useInAppPlayer)}
               >
                 <div className="toggle-switch-thumb" />
               </div>
@@ -305,7 +284,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 role="status"
                 style={{ fontSize: '0.82rem', color: cookieValidation.valid ? '#22c55e' : '#f87171' }}
               >
-                {getCookieStatusText(cookieValidation)}
+                {getCookieStatusText(t, cookieValidation)}
               </span>
             )}
 
@@ -400,7 +379,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
             <button
               className="btn-ghost-primary"
-              onClick={onRefreshHealth}
+              onClick={refreshHealth}
               disabled={healthChecking}
             >
               <RefreshCw size={16} className={healthChecking ? 'spin' : ''} />

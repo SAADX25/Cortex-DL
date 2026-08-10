@@ -1,7 +1,20 @@
 import { create } from 'zustand'
 import type { BatchItem } from '../components/AddDownloadTab'
+import type { ModalConfig } from '../hooks/types'
 
 export type ActiveTab = 'add' | 'downloads' | 'settings'
+
+export type MediaPlayerFile = { filePath: string; title?: string }
+
+const DEFAULT_MODAL_CONFIG: ModalConfig = {
+  isOpen: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  cancelText: 'Cancel',
+  onConfirm: () => {},
+  type: 'danger',
+}
 
 interface UIStoreState {
   activeTab: ActiveTab
@@ -26,6 +39,15 @@ interface UIStoreState {
   setAnalyzeResult: (result: AnalyzeResult | null) => void
   analyzing: boolean
   setAnalyzing: (v: boolean) => void
+
+  
+  modalConfig: ModalConfig
+  setModalConfig: (updater: ModalConfig | ((prev: ModalConfig) => ModalConfig)) => void
+  closeModal: () => void
+
+  
+  mediaPlayerFile: MediaPlayerFile | null
+  setMediaPlayerFile: (file: MediaPlayerFile | null) => void
 }
 
 export const useUIStore = create<UIStoreState>((set) => ({
@@ -67,6 +89,18 @@ export const useUIStore = create<UIStoreState>((set) => ({
   setAnalyzeResult: (result) => set({ analyzeResult: result }),
   analyzing: false,
   setAnalyzing: (v) => set({ analyzing: v }),
+
+  
+  modalConfig: DEFAULT_MODAL_CONFIG,
+  setModalConfig: (updater) =>
+    set((state) => ({
+      modalConfig: typeof updater === 'function' ? updater(state.modalConfig) : updater,
+    })),
+  closeModal: () => set((state) => ({ modalConfig: { ...state.modalConfig, isOpen: false } })),
+
+  
+  mediaPlayerFile: null,
+  setMediaPlayerFile: (file) => set({ mediaPlayerFile: file }),
 }))
 
 export const useActiveTab = () => useUIStore((s) => s.activeTab)
@@ -84,3 +118,6 @@ export const useUrl = () => useUIStore((s) => s.url)
 
 export const useAnalyzeResult = () => useUIStore((s) => s.analyzeResult)
 export const useAnalyzing = () => useUIStore((s) => s.analyzing)
+
+export const useModalConfig = () => useUIStore((s) => s.modalConfig)
+export const useMediaPlayerFile = () => useUIStore((s) => s.mediaPlayerFile)

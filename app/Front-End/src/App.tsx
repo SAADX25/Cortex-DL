@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ClipboardPaste } from 'lucide-react'
 import './App.css'
 import ConfirmModal from './components/ConfirmModal'
 import MediaPlayerModal from './components/MediaPlayer/MediaPlayerModal'
@@ -8,106 +7,13 @@ import DownloadList from './components/DownloadList'
 import Sidebar from './components/Sidebar'
 import SettingsTab from './components/SettingsTab'
 import AddDownloadTab from './components/AddDownloadTab'
-import SmartImage from './components/SmartImage'
 import SetupOverlay from './components/SetupOverlay'
-import { useAppController, variantLabel } from './hooks/useAppController'
 import { useUIStore } from './stores/useUIStore'
+import { useSettingsStore } from './stores/useSettingsStore'
+import { useCommentsStore, initCommentsStore } from './stores/useCommentsStore'
+import { useSettingsInit } from './hooks/useSettingsInit'
+import { useDownloadInit } from './hooks/useDownloadInit'
 import React from 'react'
-
-/** YouTube Music icon — a play button inside a circle */
-export const YouTubeMusicIcon = ({ size = 22, ...props }: { size?: number } & any) => {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10.5 8.5 L15.5 12 L10.5 15.5 Z" fill="currentColor" />
-    </svg>
-  )
-}
-
-/**
- * URL input bar — paste & go, or type a URL and analyze.
- * Memoized to avoid unnecessary re-renders from parent state changes.
- */
-export const UrlInputBar = React.memo((
-  {
-    analyzing,
-    batchCount,
-    maxBatchItems,
-    placeholderText,
-    pasteAndGoText,
-    onPasteAndAnalyze,
-    onAnalyze,
-    onClear,
-    initialUrl = '',
-  }: {
-    analyzing: boolean
-    batchCount: number
-    maxBatchItems: number
-    placeholderText: string
-    pasteAndGoText: string
-    onPasteAndAnalyze: () => void
-    onAnalyze: (url: string) => void
-    onClear: () => void
-    initialUrl: string
-  }
-) => {
-  const [localUrl, setLocalUrl] = useState(initialUrl)
-
-  useEffect(() => {
-    setLocalUrl(initialUrl)
-  }, [initialUrl])
-
-  return (
-    <div className="hero-input-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-      <input
-        className="hero-input"
-        value={localUrl}
-        onChange={(e) => setLocalUrl(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && localUrl.trim() && !analyzing) onAnalyze(localUrl) }}
-        placeholder={batchCount >= maxBatchItems ? `Batch full (${maxBatchItems}/${maxBatchItems}). Start download to clear.` : placeholderText}
-        dir="auto"
-        aria-label="URL input"
-      />
-      {localUrl && (
-        <button
-          className="hero-clear-btn"
-          onClick={() => { setLocalUrl(''); onClear() }}
-          aria-label="Clear URL"
-        >
-          <X size={20} />
-        </button>
-      )}
-      <button
-        className="hero-action-btn"
-        onClick={localUrl.trim().length === 0 ? onPasteAndAnalyze : () => onAnalyze(localUrl)}
-        disabled={analyzing}
-        aria-label={localUrl.trim().length === 0 ? pasteAndGoText : 'Analyze URL'}
-      >
-        {analyzing ? (
-          <div className="spinner-sm"></div>
-        ) : localUrl.trim().length === 0 ? (
-          <>
-            <ClipboardPaste size={20} />
-            <span>{pasteAndGoText}</span>
-          </>
-        ) : (
-          <>
-            <span>🔍</span>
-            <span>Analyze</span>
-          </>
-        )}
-      </button>
-    </div>
-  )
-})
-UrlInputBar.displayName = 'UrlInputBar'
 
 /**
  * Tab pane wrapper — all tabs stay mounted to avoid first-visit jank.
@@ -124,11 +30,33 @@ const tabPaneStyle = (isActive: boolean): React.CSSProperties => ({
 })
 
 function App() {
-  const ctrl = useAppController()
-  const lang = ctrl.lang
+  // ── One-time side-effect wiring for each state slice ──
+  // Dismantles the old `useAppController` god hook: instead of one big hook
+  // funneling every piece of app state through `App` (and re-rendering the
+  // whole tree on any change anywhere), each slice owns its own init effects
+  // and leaf components read only the selectors they actually render.
+  useSettingsInit()
+  useDownloadInit()
+  useEffect(() => {
+    const dispose = initCommentsStore()
+    return () => dispose()
+  }, [])
+
+  const lang = useSettingsStore((s) => s.lang)
+  const refreshHealth = useSettingsStore((s) => s.refreshHealth)
 
   const activeTab = useUIStore((s) => s.activeTab)
-  const toastMsg  = useUIStore((s) => s.toastMsg)
+  const toastMsg = useUIStore((s) => s.toastMsg)
+  const modalConfig = useUIStore((s) => s.modalConfig)
+  const closeModal = useUIStore((s) => s.closeModal)
+  const mediaPlayerFile = useUIStore((s) => s.mediaPlayerFile)
+  const setMediaPlayerFile = useUIStore((s) => s.setMediaPlayerFile)
+
+  const isCommentsDownloading = useCommentsStore((s) => s.isCommentsDownloading)
+  const commentsSuccessPath = useCommentsStore((s) => s.commentsSuccessPath)
+  const commentsProgress = useCommentsStore((s) => s.commentsProgress)
+  const setIsCommentsDownloading = useCommentsStore((s) => s.setIsCommentsDownloading)
+  const setCommentsSuccessPath = useCommentsStore((s) => s.setCommentsSuccessPath)
 
   const [setupState, setSetupState] = useState<{ status: string; progress: number; message: string } | null>(null)
 
@@ -139,17 +67,11 @@ function App() {
         // After setup finishes downloading engines, refresh the health check
         // so the UI immediately reflects the newly installed binaries
         if (state.status === 'done') {
-          ctrl.refreshHealth()
+          void refreshHealth()
         }
       })
     }
-  }, [ctrl.refreshHealth])
-
-  /**
-   * SmartImage resolves the token-protected media endpoint itself, so it can be
-   * passed straight down with a stable component identity.
-   */
-  const BoundSmartImage = SmartImage as React.FC<any>
+  }, [refreshHealth])
 
   if (setupState && setupState.status !== 'done') {
     return <SetupOverlay setupState={setupState} />
@@ -157,7 +79,7 @@ function App() {
 
   return (
     <div className="app-container" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <Sidebar lang={lang} />
+      <Sidebar />
 
       <main className="main-content">
         {/* ── Animated Toast Notification ── */}
@@ -179,108 +101,46 @@ function App() {
 
         {/* ── Main Tab Content — all tabs stay mounted for instant switching ── */}
         <div style={tabPaneStyle(activeTab === 'add')}>
-          <AddDownloadTab
-            MAX_BATCH_ITEMS={ctrl.MAX_BATCH_ITEMS}
-            subfolderName={ctrl.subfolderName}                 setSubfolderName={ctrl.setSubfolderName}
-            speedLimit={ctrl.speedLimit}                       setSpeedLimit={ctrl.setSpeedLimit}
-            targetFormat={ctrl.targetFormat}                   setTargetFormat={ctrl.setTargetFormat}
-            isAudioMode={ctrl.isAudioMode}                     setIsAudioMode={ctrl.setIsAudioMode}
-            selectedQuality={ctrl.selectedQuality}             setSelectedQuality={ctrl.setSelectedQuality}
-            selectedSubtitleLanguage={ctrl.selectedSubtitleLanguage}
-            setSelectedSubtitleLanguage={ctrl.setSelectedSubtitleLanguage}
-            selectedVariantUrl={ctrl.selectedVariantUrl}       setSelectedVariantUrl={ctrl.setSelectedVariantUrl}
-            startTime={ctrl.startTime}                         setStartTime={ctrl.setStartTime}
-            endTime={ctrl.endTime}                             setEndTime={ctrl.setEndTime}
-            availableVideoQualities={ctrl.availableVideoQualities}
-            setSelectedYtdlpFormatId={ctrl.setSelectedYtdlpFormatId}
-            setTargetResolution={ctrl.setTargetResolution}
-            onPasteAndAnalyze={ctrl.onPasteAndAnalyze}
-            handleAnalyzeUrlDirectly={ctrl.handleAnalyzeUrlDirectly}
-            onPickFolder={ctrl.onPickFolder}
-            onDownloadNow={ctrl.onDownloadNow}
-            onAddToList={ctrl.onAddToList}
-            onStartBatchDownload={ctrl.onStartBatchDownload}
-            onOpenExternal={ctrl.onOpenExternal}
-            setCommentsSuccessPath={ctrl.setCommentsSuccessPath}
-            setIsCommentsDownloading={ctrl.setIsCommentsDownloading}
-            lang={lang}
-            SmartImage={BoundSmartImage}
-            UrlInputBar={UrlInputBar}
-            variantLabel={variantLabel}
-            YouTubeMusicIcon={YouTubeMusicIcon}
-            removeAnalyzedPlaylistVideo={ctrl.removeAnalyzedPlaylistVideo}
-            togglePlaylistItemSelected={ctrl.togglePlaylistItemSelected}
-            selectAllPlaylistItems={ctrl.selectAllPlaylistItems}
-            deselectAllPlaylistItems={ctrl.deselectAllPlaylistItems}
-            clearPlaylistItems={ctrl.clearPlaylistItems}
-          />
+          <AddDownloadTab />
         </div>
 
         <div style={tabPaneStyle(activeTab === 'downloads')}>
-          <DownloadList
-            lang={lang}
-            onOpenFile={ctrl.onOpenFile}
-            onOpenFolder={ctrl.onOpenFolder}
-            onDelete={ctrl.onDelete}
-          />
+          <DownloadList />
         </div>
 
         <div style={tabPaneStyle(activeTab === 'settings')}>
-          <SettingsTab
-            lang={lang}
-            setLang={ctrl.setLang}
-            totalDownloadedBytes={ctrl.totalDownloadedBytes}
-            onResetStats={ctrl.onResetStats}
-            useInAppPlayer={ctrl.useInAppPlayer}
-            setUseInAppPlayer={ctrl.setUseInAppPlayer}
-            cookieFilePath={ctrl.cookieFilePath}
-            cookieValidation={ctrl.cookieValidation}
-            healthCheck={ctrl.healthCheck}
-            healthChecking={ctrl.healthChecking}
-            onSelectCookieFile={ctrl.onSelectCookieFile}
-            onClearCookieFile={ctrl.onClearCookieFile}
-            onRefreshHealth={ctrl.refreshHealth}
-            concurrentDownloads={ctrl.concurrentDownloads}
-            setConcurrentDownloads={ctrl.setConcurrentDownloads}
-            updateStatus={ctrl.updateStatus}
-            onCheckForUpdates={ctrl.onCheckForUpdates}
-            onRestartAndInstall={ctrl.onRestartAndInstall}
-            engineUpdateStatus={ctrl.engineUpdateStatus}
-            engineVersion={ctrl.engineVersion}
-            onUpdateEngine={ctrl.onUpdateEngine}
-            onUninstall={ctrl.onUninstall}
-          />
+          <SettingsTab />
         </div>
       </main>
 
       {/* ── Confirm Modal ── */}
       <ConfirmModal
-        isOpen={ctrl.modalConfig.isOpen}
-        title={ctrl.modalConfig.title}
-        message={ctrl.modalConfig.message}
-        confirmText={ctrl.modalConfig.confirmText}
-        cancelText={ctrl.modalConfig.cancelText}
-        type={ctrl.modalConfig.type}
+        isOpen={modalConfig.isOpen}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        confirmText={modalConfig.confirmText}
+        cancelText={modalConfig.cancelText}
+        type={modalConfig.type}
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
-        onConfirm={ctrl.modalConfig.onConfirm}
+        onConfirm={modalConfig.onConfirm}
         onCancel={() => {
-          ctrl.closeModal()
-          ctrl.modalConfig.onCancel?.()
+          closeModal()
+          modalConfig.onCancel?.()
         }}
       />
 
       {/* ── Media Player Modal ── */}
       <MediaPlayerModal
-        isOpen={!!ctrl.mediaPlayerFile}
-        filePath={ctrl.mediaPlayerFile?.filePath || ''}
-        title={ctrl.mediaPlayerFile?.title}
+        isOpen={!!mediaPlayerFile}
+        filePath={mediaPlayerFile?.filePath || ''}
+        title={mediaPlayerFile?.title}
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
-        onClose={() => ctrl.setMediaPlayerFile(null)}
+        onClose={() => setMediaPlayerFile(null)}
       />
 
       {/* ── Comments Download Modal ── */}
       <AnimatePresence>
-        {ctrl.isCommentsDownloading && (
+        {isCommentsDownloading && (
           <motion.div
             className="modal-overlay"
             style={{ zIndex: 9999 }}
@@ -297,7 +157,7 @@ function App() {
               exit={{ opacity: 0, scale: 0.92, y: 16 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             >
-              {!ctrl.commentsSuccessPath ? (
+              {!commentsSuccessPath ? (
                 <>
                   <div className="spinner-sm" style={{ margin: '0 auto 16px auto', borderTopColor: '#3b82f6', width: '36px', height: '36px', borderWidth: '3px' }}></div>
                   <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600 }}>
@@ -305,8 +165,8 @@ function App() {
                   </h3>
                   <p style={{ marginTop: '12px', color: '#94a3b8', fontSize: '0.95rem', marginBottom: 0, animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
                     {lang === 'ar'
-                      ? (ctrl.commentsProgress ? `جاري استخراج التعليقات... ${ctrl.commentsProgress.current} / ~${ctrl.commentsProgress.total}` : 'جاري الاتصال...')
-                      : (ctrl.commentsProgress ? `Extracting comments... ${ctrl.commentsProgress.current} / ~${ctrl.commentsProgress.total}` : 'Connecting...')}
+                      ? (commentsProgress ? `جاري استخراج التعليقات... ${commentsProgress.current} / ~${commentsProgress.total}` : 'جاري الاتصال...')
+                      : (commentsProgress ? `Extracting comments... ${commentsProgress.current} / ~${commentsProgress.total}` : 'Connecting...')}
                   </p>
                 </>
               ) : (
@@ -323,11 +183,11 @@ function App() {
                     <button
                       className="btn btn-primary"
                       onClick={() => {
-                        if (ctrl.commentsSuccessPath) {
-                          window.cortexDl.openFile(ctrl.commentsSuccessPath)
+                        if (commentsSuccessPath) {
+                          window.cortexDl.openFile(commentsSuccessPath)
                         }
-                        ctrl.setIsCommentsDownloading(false)
-                        ctrl.setCommentsSuccessPath(null)
+                        setIsCommentsDownloading(false)
+                        setCommentsSuccessPath(null)
                       }}
                       style={{ padding: '8px 16px', fontSize: '0.9rem' }}
                     >
@@ -343,8 +203,8 @@ function App() {
                     <button
                       className="btn"
                       onClick={() => {
-                        ctrl.setIsCommentsDownloading(false)
-                        ctrl.setCommentsSuccessPath(null)
+                        setIsCommentsDownloading(false)
+                        setCommentsSuccessPath(null)
                       }}
                       style={{ padding: '8px 16px', fontSize: '0.9rem', backgroundColor: '#334155', color: '#f8fafc', border: '1px solid #475569' }}
                     >

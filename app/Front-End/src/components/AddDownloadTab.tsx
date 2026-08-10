@@ -1,10 +1,32 @@
 import React, { useState, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Language, translations } from '../translations'
+import { translations } from '../translations'
 import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
+import UrlInputBar from './UrlInputBar'
+import SmartImage from './SmartImage'
+import { YouTubeMusicIcon } from './icons/YouTubeMusicIcon'
+import { variantLabel } from '../lib/variantLabel'
+import { MAX_BATCH_ITEMS } from '../constants/limits'
 import { useUIStore } from '../stores/useUIStore'
+import { useLang } from '../stores/useSettingsStore'
+import { useFormStore, useAvailableVideoQualities } from '../stores/useFormStore'
+import {
+  onPasteAndAnalyze,
+  handleAnalyzeUrlDirectly,
+  onPickFolder,
+  onDownloadNow,
+  onAddToList,
+  onStartBatchDownload,
+  onOpenExternal,
+  removeAnalyzedPlaylistVideo,
+  togglePlaylistItemSelected,
+  selectAllPlaylistItems,
+  deselectAllPlaylistItems,
+  clearPlaylistItems,
+} from '../actions/downloadActions'
+import { useCommentsStore } from '../stores/useCommentsStore'
 
 import UrlAnalysisView from './AddDownloadTab/UrlAnalysisView'
 import PlaylistView from './AddDownloadTab/PlaylistView'
@@ -26,93 +48,16 @@ export type BatchItem = {
   errorMessage?: string
 }
 
-interface AddDownloadTabProps {
-  MAX_BATCH_ITEMS: number
-  subfolderName: string
-  setSubfolderName: (val: string) => void
-  speedLimit: string
-  setSpeedLimit: (val: string) => void
-  targetFormat: any
-  setTargetFormat: (val: any) => void
-  isAudioMode: boolean
-  setIsAudioMode: (val: boolean) => void
-  selectedQuality: string
-  setSelectedQuality: (val: string) => void
-  selectedSubtitleLanguage: string
-  setSelectedSubtitleLanguage: (val: string) => void
-  selectedVariantUrl: string | null
-  setSelectedVariantUrl: (val: string | null) => void
-  startTime: string
-  setStartTime: (val: string) => void
-  endTime: string
-  setEndTime: (val: string) => void
-  availableVideoQualities: any[] | null
-  setSelectedYtdlpFormatId: (val: string | null) => void
-  setTargetResolution: (val: number | null) => void
-  onPasteAndAnalyze: () => void
-  handleAnalyzeUrlDirectly: (val: string) => void
-  onPickFolder: () => void
-  onDownloadNow: () => void
-  onAddToList: () => void
-  onStartBatchDownload: () => void
-  onOpenExternal: (url: string) => void
-  setCommentsSuccessPath: (val: string | null) => void
-  setIsCommentsDownloading: (val: boolean) => void
-  lang: Language
-  SmartImage: React.FC<any>
-  UrlInputBar: React.FC<any>
-  variantLabel: (v: any, lang: Language) => string
-  YouTubeMusicIcon: React.FC<any>
-  removeAnalyzedPlaylistVideo: (index: number) => void
-  togglePlaylistItemSelected: (index: number) => void
-  selectAllPlaylistItems: (indices?: number[]) => void
-  deselectAllPlaylistItems: (indices?: number[]) => void
-  clearPlaylistItems: () => void
-}
-
-const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
-  MAX_BATCH_ITEMS,
-  subfolderName,
-  setSubfolderName,
-  speedLimit,
-  setSpeedLimit,
-  targetFormat,
-  setTargetFormat,
-  isAudioMode,
-  setIsAudioMode,
-  selectedQuality,
-  setSelectedQuality,
-  selectedSubtitleLanguage,
-  setSelectedSubtitleLanguage,
-  selectedVariantUrl,
-  setSelectedVariantUrl,
-  startTime,
-  setStartTime,
-  endTime,
-  setEndTime,
-  availableVideoQualities,
-  setSelectedYtdlpFormatId,
-  setTargetResolution,
-  onPasteAndAnalyze,
-  handleAnalyzeUrlDirectly,
-  onPickFolder,
-  onDownloadNow,
-  onAddToList,
-  onStartBatchDownload,
-  onOpenExternal,
-  setCommentsSuccessPath,
-  setIsCommentsDownloading,
-  lang,
-  SmartImage,
-  UrlInputBar,
-  variantLabel,
-  YouTubeMusicIcon,
-  removeAnalyzedPlaylistVideo,
-  togglePlaylistItemSelected,
-  selectAllPlaylistItems,
-  deselectAllPlaylistItems,
-  clearPlaylistItems
-}) => {
+/**
+ * No props: every field this tab renders now comes straight from the
+ * `useFormStore`/`useUIStore`/`useSettingsStore` slices, and every callback
+ * comes from the stable `downloadActions` module. This is what used to be
+ * ~30 props threaded down from `App` via the `useAppController` god hook —
+ * any one of which changing forced this entire tab (and everything inside
+ * it) to re-render.
+ */
+const AddDownloadTab: React.FC = () => {
+  const lang = useLang()
   const t = translations[lang]
 
   
@@ -125,6 +70,32 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
   const analyzeResult = useUIStore((s) => s.analyzeResult)
   const analyzing = useUIStore((s) => s.analyzing)
   const showToast = useUIStore((s) => s.showToast)
+
+  
+  const subfolderName = useFormStore((s) => s.subfolderName)
+  const setSubfolderName = useFormStore((s) => s.setSubfolderName)
+  const speedLimit = useFormStore((s) => s.speedLimit)
+  const setSpeedLimit = useFormStore((s) => s.setSpeedLimit)
+  const targetFormat = useFormStore((s) => s.targetFormat)
+  const setTargetFormat = useFormStore((s) => s.setTargetFormat)
+  const isAudioMode = useFormStore((s) => s.isAudioMode)
+  const setIsAudioMode = useFormStore((s) => s.setIsAudioMode)
+  const selectedQuality = useFormStore((s) => s.selectedQuality)
+  const setSelectedQuality = useFormStore((s) => s.setSelectedQuality)
+  const selectedSubtitleLanguage = useFormStore((s) => s.selectedSubtitleLanguage)
+  const setSelectedSubtitleLanguage = useFormStore((s) => s.setSelectedSubtitleLanguage)
+  const selectedVariantUrl = useFormStore((s) => s.selectedVariantUrl)
+  const setSelectedVariantUrl = useFormStore((s) => s.setSelectedVariantUrl)
+  const startTime = useFormStore((s) => s.startTime)
+  const setStartTime = useFormStore((s) => s.setStartTime)
+  const endTime = useFormStore((s) => s.endTime)
+  const setEndTime = useFormStore((s) => s.setEndTime)
+  const setSelectedYtdlpFormatId = useFormStore((s) => s.setSelectedYtdlpFormatId)
+  const setTargetResolution = useFormStore((s) => s.setTargetResolution)
+  const availableVideoQualities = useAvailableVideoQualities()
+
+  const setCommentsSuccessPath = useCommentsStore((s) => s.setCommentsSuccessPath)
+  const setIsCommentsDownloading = useCommentsStore((s) => s.setIsCommentsDownloading)
 
   const [isTrimmerOpen, setIsTrimmerOpen] = useState(false)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
@@ -153,7 +124,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
       const trimmed = droppedText.trim()
       if (trimmed) {
         setUrl(trimmed)
-        handleAnalyzeUrlDirectly(trimmed)
+        void handleAnalyzeUrlDirectly(trimmed)
         showToast(t.drag_drop_toast)
       }
     }
@@ -306,10 +277,7 @@ const AddDownloadTab: React.FC<AddDownloadTabProps> = ({
               <select
                 className="speed-select h-[42px] rounded-full"
                 value={speedLimit}
-                onChange={(e) => {
-                  setSpeedLimit(e.target.value)
-                  localStorage.setItem('cortex-speed-limit', e.target.value)
-                }}
+                onChange={(e) => setSpeedLimit(e.target.value)}
                 title="Download Speed Limit"
               >
                 <option value="auto">⚡ {t.speed_auto}</option>

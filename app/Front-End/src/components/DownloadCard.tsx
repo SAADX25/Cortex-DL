@@ -2,14 +2,13 @@ import React, { useRef, useState } from 'react'
 import { Play, FolderOpen, Trash2 } from 'lucide-react'
 import { useDownloadCardVM, type DisplayPhase, type DownloadCardVM } from '../hooks/useDownloadCardVM'
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
-import type { Language } from '../translations'
+import { useLang } from '../stores/useSettingsStore'
 import { translations } from '../translations'
 import SmartImage from './SmartImage'
 import './DownloadCard.css'
 
 interface DownloadCardProps {
   id: string
-  lang: Language
   onOpenFile: (filePath: string, title?: string) => void
   onOpenFolder: (filePath: string) => void
   onDelete: (id: string, deleteFile: boolean) => void
@@ -49,7 +48,8 @@ const ProgressBar: React.FC<{
 ProgressBar.displayName = 'ProgressBar'
 
 const DownloadCard: React.FC<DownloadCardProps> = (props) => {
-  const { id, lang, onOpenFile, onOpenFolder, onDelete, onError } = props
+  const { id, onOpenFile, onOpenFolder, onDelete, onError } = props
+  const lang = useLang()
   const t = translations[lang]
   const vm = useDownloadCardVM({ id, lang, onOpenFile, onOpenFolder, onDelete, onError })
 

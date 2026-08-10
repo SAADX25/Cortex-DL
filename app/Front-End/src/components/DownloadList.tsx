@@ -1,27 +1,35 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { X, Trash2, DownloadCloud, Search } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useTaskIds, getTasksSnapshot, useDownloadStore } from '../stores/downloadStore'
+import { useTaskIds, useTasksVersion, getTasksSnapshot, useDownloadStore } from '../stores/downloadStore'
 import { useUIStore } from '../stores/useUIStore'
+import { useLang } from '../stores/useSettingsStore'
 import { useDebounce } from '../hooks/useDebounce'
+import { onOpenFile, onOpenFolder, onDelete } from '../actions/downloadActions'
 import DownloadCard from './DownloadCard'
-import type { Language } from '../translations'
 import { translations } from '../translations'
 
-interface DownloadListProps {
-  lang: Language
-  onOpenFile: (filePath: string, title?: string) => void
-  onOpenFolder: (filePath: string) => void
-  onDelete: (id: string, deleteFile: boolean) => void
-}
-
-
-
-const DownloadList: React.FC<DownloadListProps> = (props) => {
-  const { lang, onOpenFile, onOpenFolder, onDelete } = props
+/**
+ * No props — sources `lang` from the settings store and its callbacks
+ * directly from the stable `downloadActions` module, so `App` no longer
+ * needs to thread any of this down (see Priority 3/5 of the front-end
+ * audit).
+ */
+const DownloadList: React.FC = () => {
+  const lang = useLang()
   const onError = useUIStore((s) => s.setGlobalError)
   const t = translations[lang]
   const taskIds = useTaskIds()
+
+  // ── Priority 4: search staleness fix ──────────────────────────────────
+  // `taskIds` only changes reference when tasks are added/removed, but a
+  // task's title/url can change in place (e.g. batch items resolve their
+  // real title asynchronously after being added). Without depending on the
+  // store's version counter, the memo below would keep filtering against a
+  // stale snapshot of task titles taken the last time a task was added or
+  // removed, even while the user is actively typing in the search box.
+  const tasksVersion = useTasksVersion()
+
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearchQuery = useDebounce(searchInput, 300)
 
@@ -69,7 +77,12 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
         (task.url || '').toLowerCase().includes(q)
       )
     })
-  }, [taskIds, debouncedSearchQuery])
+    // `tasksVersion` is intentionally in the dependency list even though
+    // it's unused in the body — it's what makes this memo re-run whenever
+    // any task's fields are updated in place, not just when tasks are
+    // added/removed (see the comment on `tasksVersion` above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskIds, debouncedSearchQuery, tasksVersion])
 
   const totalCount = taskIds.length
 
@@ -239,7 +252,6 @@ const DownloadList: React.FC<DownloadListProps> = (props) => {
             <DownloadCard
               key={id}
               id={id}
-              lang={lang}
               onOpenFile={onOpenFile}
               onOpenFolder={onOpenFolder}
               onDelete={onDelete}

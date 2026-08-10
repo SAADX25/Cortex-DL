@@ -1,30 +1,29 @@
 import React from 'react'
 import { Plus, DownloadCloud, Settings, Github } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Language, translations } from '../translations'
+import { translations } from '../translations'
 import { useUIStore } from '../stores/useUIStore'
-import { useDownloadStore } from '../stores/downloadStore'
+import { useLang } from '../stores/useSettingsStore'
+import { useActiveDownloadCount, useTotalDownloadCount } from '../stores/downloadStore'
 
-interface SidebarProps {
-  lang: Language
-}
-
-const Sidebar: React.FC<SidebarProps> = ({ lang }) => {
+/**
+ * No props: Sidebar sources everything it renders directly from the
+ * relevant Zustand slices instead of receiving a `lang` prop threaded down
+ * from `App` — one fewer link in the god-hook prop chain, and this
+ * component now only re-renders when `activeTab`, `lang`, or the derived
+ * download counts actually change (see `useActiveDownloadCount` /
+ * `useTotalDownloadCount`, which avoid subscribing to the raw task Map).
+ */
+const Sidebar: React.FC = () => {
+  const lang = useLang()
   const t = translations[lang]
 
   const activeTab = useUIStore((s) => s.activeTab)
   const setActiveTab = useUIStore((s) => s.setActiveTab)
 
-  const taskIds = useDownloadStore((s) => s.taskIds)
-  const tasks   = useDownloadStore((s) => s.tasks)
-
-  const activeCount = taskIds.filter((id) => {
-    const task = tasks.get(id)
-    return task && (task.status === 'downloading' || task.status === 'queued' || task.status === 'converting')
-  }).length
-
-  const totalCount  = taskIds.length
-  const badgeCount  = activeCount > 0 ? activeCount : totalCount
+  const activeCount = useActiveDownloadCount()
+  const totalCount = useTotalDownloadCount()
+  const badgeCount = activeCount > 0 ? activeCount : totalCount
 
   const navItems: Array<{
     id: 'add' | 'downloads' | 'settings'
