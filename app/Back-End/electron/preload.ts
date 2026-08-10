@@ -154,6 +154,9 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getMediaPort(): Promise<number> {
     return ipcRenderer.invoke('cortexdl:get-media-port')
   },
+  getMediaEndpoint(): Promise<{ port: number; token: string }> {
+    return ipcRenderer.invoke('cortexdl:get-media-endpoint')
+  },
   fetchThumbnail(url: string): Promise<string> {
     return ipcRenderer.invoke('cortexdl:fetch-thumbnail', url)
   },

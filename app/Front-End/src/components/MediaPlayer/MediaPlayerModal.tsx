@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { VideoPlayerView } from './VideoPlayerView';
 import { AudioPlayerView } from './AudioPlayerView';
+import { buildMediaUrl, useMediaEndpoint } from '../../lib/mediaEndpoint';
 import './MediaPlayer.css';
 
 interface MediaPlayerModalProps {
@@ -20,13 +21,6 @@ function getMediaType(filePath: string): MediaType {
   if (videoExts.includes(ext)) return 'video';
   if (audioExts.includes(ext)) return 'audio';
   return 'unknown';
-}
-
-const DEFAULT_MEDIA_SERVER_PORT = 3345;
-
-function toStreamUrl(filePath: string, port: number): string {
-  if (!filePath) return '';
-  return `http://127.0.0.1:${port}/?path=${encodeURIComponent(filePath)}`;
 }
 
 export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir = 'ltr' }: MediaPlayerModalProps) {
@@ -50,7 +44,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
-  const [mediaPort, setMediaPort] = useState(DEFAULT_MEDIA_SERVER_PORT);
+  const mediaEndpoint = useMediaEndpoint();
   const [hideForPiP, setHideForPiP] = useState(false);
 
   useEffect(() => {
@@ -60,12 +54,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   useEffect(() => {
     localStorage.setItem('cortexdl_media_muted', isMuted.toString());
   }, [isMuted]);
-
-  useEffect(() => {
-    if (window.cortexDl?.getMediaPort) {
-      window.cortexDl.getMediaPort().then(setMediaPort).catch(() => { });
-    }
-  }, []);
 
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
@@ -80,7 +68,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   const mediaType = getMediaType(filePath);
-  const fileUrl = toStreamUrl(filePath, mediaPort);
+  const fileUrl = buildMediaUrl(filePath, mediaEndpoint);
   const displayTitle = title || '';
 
   const isMiniModeRef = useRef(isMiniMode);
@@ -550,7 +538,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       >
         {mediaType === 'video' && (
           <VideoPlayerView
-            mediaPort={mediaPort}
+            mediaEndpoint={mediaEndpoint}
             fileUrl={fileUrl}
             title={displayTitle}
             filePath={filePath}

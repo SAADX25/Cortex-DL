@@ -10,7 +10,8 @@ log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
 import { app, BrowserWindow, dialog, session, shell } from 'electron'
-import { existsSync, rmSync, statSync, createReadStream } from 'node:fs'
+import { existsSync, rmSync, createReadStream, promises as fsPromises } from 'node:fs'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import http from 'node:http'
 import os from 'node:os'
 import { DownloadManager } from './downloadManager'
@@ -53,18 +54,18 @@ function cleanupUpdaterCache() {
 }
 
 async function loadBackendServices() {
-  
+
   const { autoUpdater: electronUpdater } = await import('electron-updater')
   const { DownloadManager } = await import('./downloadManager')
 
-  
+
   autoUpdater = electronUpdater
 
-  
-  autoUpdater.logger = log
-  autoUpdater.autoDownload = false 
 
-  
+  autoUpdater.logger = log
+  autoUpdater.autoDownload = false
+
+
   autoUpdater.on('update-downloaded', async () => {
     log?.info('Update downloaded. Prompting for install...')
     if (win) win.webContents.send('update-status', { status: 'downloaded' })
@@ -123,20 +124,20 @@ async function loadBackendServices() {
     if (win) win.webContents.send('update-status', { status: 'progress', percent: progressObj.percent })
   })
 
-  
+
   if (win && !downloads) {
     downloads = new DownloadManager()
     downloads.attachWindow(win)
     log.info('[Backend] DownloadManager initialized')
   }
 
-  
+
   serviceReadyResolve()
 
-  
+
   log.info('Backend services loaded. Running startup checks...')
   cleanupUpdaterCache()
-  
+
   try {
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       log.error('Deferred update check failed:', err)
@@ -156,10 +157,10 @@ let win: BrowserWindow | null = null
 let isQuitting = false
 
 function initTray() {
-  const iconPath = VITE_DEV_SERVER_URL 
-    ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico') 
+  const iconPath = VITE_DEV_SERVER_URL
+    ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico')
     : path.join(RENDERER_DIST, 'CortexDL.ico');
-    
+
   createTray(
     iconPath,
     () => win,
@@ -168,8 +169,8 @@ function initTray() {
 }
 
 function createWindow() {
-  const iconPath = VITE_DEV_SERVER_URL 
-    ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico') 
+  const iconPath = VITE_DEV_SERVER_URL
+    ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico')
     : path.join(RENDERER_DIST, 'CortexDL.ico');
 
   win = new BrowserWindow({
@@ -180,7 +181,7 @@ function createWindow() {
     title: 'Cortex DL',
     icon: iconPath,
     autoHideMenuBar: true,
-    show: false, 
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -189,23 +190,23 @@ function createWindow() {
     },
   })
 
-  
+
   try {
     win.setMenu(null)
   } catch (err) {
     log.warn('Failed to remove menu:', err)
   }
 
-  
+
   win.once('ready-to-show', () => {
     win?.show()
   })
 
-  
+
   win.on('close', (event) => {
     if (!isQuitting) {
-      event.preventDefault(); 
-      win?.hide();            
+      event.preventDefault();
+      win?.hide();
     }
     return false;
   });
@@ -221,9 +222,9 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
-  
+
   const MEDIA_CORS_WHITELIST = [
-    /(^|\.)googlevideo\.com$/i,   
+    /(^|\.)googlevideo\.com$/i,
     /(^|\.)youtube\.com$/i,
     /(^|\.)ytimg\.com$/i,
     /(^|\.)fbcdn\.net$/i,
@@ -259,6 +260,27 @@ const MEDIA_SERVER_PORT_MAX_TRIES = 10
 export let MEDIA_SERVER_PORT = MEDIA_SERVER_PORT_BASE
 let mediaServer: http.Server | null = null
 
+/**
+ * Per-launch capability token for the local media server.
+ *
+ * The server reads files off the user's disk, so it must be unreachable by any
+ * other process or web page on the machine. Request origin cannot be that
+ * boundary: Chromium sends `Origin: null` for `file://` documents (our packaged
+ * renderer) and omits the header entirely for plain <img>/<video> loads, so any
+ * local client can trivially reproduce an "allowed" origin. Instead every
+ * request must present `?token=<MEDIA_SERVER_TOKEN>`; the value is regenerated
+ * on each launch and handed to the renderer over IPC only.
+ */
+export const MEDIA_SERVER_TOKEN = randomBytes(32).toString('hex')
+const MEDIA_TOKEN_BUFFER = Buffer.from(MEDIA_SERVER_TOKEN, 'utf8')
+
+function isValidMediaToken(candidate: string | null): boolean {
+  if (!candidate) return false
+  const provided = Buffer.from(candidate, 'utf8')
+  if (provided.length !== MEDIA_TOKEN_BUFFER.length) return false
+  return timingSafeEqual(provided, MEDIA_TOKEN_BUFFER)
+}
+
 const MIME_TYPES: Record<string, string> = {
   '.mp4':  'video/mp4',
   '.mkv':  'video/x-matroska',
@@ -285,16 +307,218 @@ const MIME_TYPES: Record<string, string> = {
   '.srt':  'text/plain',
 }
 
-function startMediaStreamingServer(): void {
-  if (mediaServer) return
+/**
+ * Compiled once and reused. The media server touches settings on every request,
+ * and `db.prepare()` recompiles SQL synchronously on the main thread.
+ */
+let settingsValueStmt: ReturnType<typeof db.prepare> | null = null
 
-  const devUrl = VITE_DEV_SERVER_URL ? VITE_DEV_SERVER_URL.replace(/\/$/, '') : null
-  const appOrigin = devUrl || 'file://'
+function readSettingValue(key: string): string | null {
+  try {
+    if (!settingsValueStmt) {
+      settingsValueStmt = db.prepare('SELECT value FROM settings WHERE key = ?')
+    }
+    const row = settingsValueStmt.get(key) as { value?: string } | undefined
+    return row?.value ?? null
+  } catch (err) {
+    log.warn(`[MediaServer] Failed to read setting '${key}':`, err)
+    return null
+  }
+}
 
-  const server = http.createServer((req, res) => {
+const MEDIA_ROOTS_TTL_MS = 5_000
+let mediaRootsCache: { roots: string[]; builtAtMs: number } | null = null
+
+async function buildMediaRoots(): Promise<string[]> {
+  const candidates = new Set<string>()
+  candidates.add(app.getPath('downloads'))
+  candidates.add(path.join(os.tmpdir(), 'cortexdl-thumbs'))
+
+  const configuredDir = readSettingValue('downloadDirectory')
+  if (configuredDir) candidates.add(configuredDir)
+
+  const tasks = downloads ? downloads.list() : []
+  for (const task of tasks) {
+    if (task.directory) candidates.add(task.directory)
+  }
+
+  // Roots are symlink-resolved as well, so they can be compared against the
+  // resolved request path. (On macOS os.tmpdir() is itself a symlink.)
+  const roots: string[] = []
+  for (const candidate of candidates) {
+    try {
+      roots.push(await fsPromises.realpath(candidate))
+    } catch {
+      roots.push(path.resolve(candidate))
+    }
+  }
+  return roots
+}
+
+async function getMediaRoots(forceRebuild: boolean): Promise<string[]> {
+  const now = Date.now()
+  if (!forceRebuild && mediaRootsCache && now - mediaRootsCache.builtAtMs < MEDIA_ROOTS_TTL_MS) {
+    return mediaRootsCache.roots
+  }
+  const roots = await buildMediaRoots()
+  mediaRootsCache = { roots, builtAtMs: now }
+  return roots
+}
+
+function isUnderRoot(target: string, root: string): boolean {
+  const rel = path.relative(root, target)
+  if (!rel) return false
+  return !rel.startsWith('..') && !path.isAbsolute(rel)
+}
+
+/**
+ * True when `target` sits inside a directory the app is allowed to serve.
+ * A miss forces a single cache rebuild, so a file in a brand-new task folder is
+ * never rejected merely because the cached root list is a few seconds stale.
+ */
+async function isServablePath(target: string): Promise<boolean> {
+  const resolved = path.resolve(target)
+
+  const cachedRoots = await getMediaRoots(false)
+  if (cachedRoots.some((root) => isUnderRoot(resolved, root))) return true
+
+  const freshRoots = await getMediaRoots(true)
+  return freshRoots.some((root) => isUnderRoot(resolved, root))
+}
+
+/** Blocks DNS-rebinding: only loopback Host headers are accepted. */
+function isLoopbackHost(hostHeader: string | undefined): boolean {
+  if (!hostHeader) return false
+  const withoutPort = hostHeader.replace(/:\d+$/, '').toLowerCase()
+  return withoutPort === '127.0.0.1' || withoutPort === 'localhost' || withoutPort === '[::1]'
+}
+
+/**
+ * Defence in depth only — the capability token is the real gate. A missing
+ * Origin (plain <img>/<video> load) and the literal `null` (a `file://`
+ * document using `crossOrigin="anonymous"`) are both legitimate for us.
+ */
+function isAllowedOrigin(origin: string | undefined, appOrigin: string): boolean {
+  if (!origin || origin === 'null') return true
+  return origin === appOrigin
+}
+
+const SUBTITLE_EXTRACT_TIMEOUT_MS = 30_000
+
+function streamEmbeddedSubtitle(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  filePath: string,
+  rawStreamIndex: string | null,
+  corsOrigin: string,
+): void {
+  // Only a bare stream number is accepted; anything else could select an
+  // unintended (e.g. video) stream and produce a huge conversion.
+  const streamIndex = rawStreamIndex && /^\d{1,3}$/.test(rawStreamIndex) ? rawStreamIndex : '0'
+
+  res.writeHead(200, {
+    'Content-Type': 'text/vtt',
+    'Access-Control-Allow-Origin': corsOrigin,
+  })
+
+  if (req.method === 'HEAD') {
+    res.end()
+    return
+  }
+
+  const ffmpegPath = getBinaryPath('ffmpeg')
+  if (!existsSync(ffmpegPath)) {
+    log.warn('[MediaServer] ffmpeg is missing — cannot extract embedded subtitles')
+    res.end()
+    return
+  }
+
+  const child = spawn(ffmpegPath, [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-i', filePath,
+    '-map', `0:${streamIndex}`,
+    '-f', 'webvtt',
+    'pipe:1'
+  ], { windowsHide: true })
+
+  let finished = false
+
+  const finish = () => {
+    if (finished) return
+    finished = true
+    clearTimeout(timer)
+    try { child.kill('SIGKILL') } catch { /* already exited */ }
+    if (!res.writableEnded) res.end()
+  }
+
+  const timer = setTimeout(() => {
+    log.warn(`[MediaServer] Subtitle extraction timed out for stream ${streamIndex}`)
+    finish()
+  }, SUBTITLE_EXTRACT_TIMEOUT_MS)
+
+  // stderr MUST be drained. ffmpeg blocks once the OS pipe buffer fills, which
+  // would hang this request (and leak the process) forever.
+  let stderrTail = ''
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderrTail = (stderrTail + chunk.toString()).slice(-8192)
+  })
+
+  child.stdout.pipe(res)
+
+  child.on('error', (err) => {
+    log.error('[MediaServer] FFmpeg subtitle extraction error:', err)
+    finish()
+  })
+
+  child.on('close', (code) => {
+    if (code !== 0 && stderrTail.trim()) {
+      log.warn(`[MediaServer] FFmpeg subtitle exit ${code}: ${stderrTail.trim()}`)
+    }
+    finished = true
+    clearTimeout(timer)
+    if (!res.writableEnded) res.end()
+  })
+
+  res.on('close', finish)
+  req.on('aborted', finish)
+}
+
+function pipeFileStream(
+  stream: ReturnType<typeof createReadStream>,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): void {
+  const destroy = () => {
+    if (!stream.destroyed) stream.destroy()
+  }
+
+  res.on('close', destroy)
+  req.on('aborted', destroy)
+
+  stream.on('error', (err) => {
+    log.error('[MediaServer] Read stream error:', err)
+    destroy()
+    if (!res.writableEnded) res.end()
+  })
+
+  stream.pipe(res)
+}
+
+async function handleMediaRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  appOrigin: string,
+): Promise<void> {
+  try {
+    if (!isLoopbackHost(req.headers.host)) {
+      res.writeHead(403)
+      res.end('Forbidden host')
+      return
+    }
+
     const requestOrigin = req.headers.origin
-    
-    if (requestOrigin && requestOrigin !== appOrigin && requestOrigin !== 'null') {
+    if (!isAllowedOrigin(requestOrigin, appOrigin)) {
       res.writeHead(403)
       res.end('Unauthorized origin')
       return
@@ -305,6 +529,7 @@ function startMediaStreamingServer(): void {
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Range')
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length')
+    res.setHeader('Cache-Control', 'no-store')
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204)
@@ -312,142 +537,139 @@ function startMediaStreamingServer(): void {
       return
     }
 
-    try {
-      const urlObj = new URL(req.url ?? '/', `http://127.0.0.1:${MEDIA_SERVER_PORT}`)
-      const rawFilePath = urlObj.searchParams.get('path')
-
-      if (!rawFilePath) {
-        res.writeHead(400)
-        res.end('Missing path parameter')
-        return
-      }
-
-      const filePath = path.normalize(rawFilePath)
-      if (!path.isAbsolute(filePath)) {
-        res.writeHead(400)
-        res.end('Path must be absolute')
-        return
-      }
-
-      
-      const downloadsDir = app.getPath('downloads')
-      const thumbsDir = path.join(os.tmpdir(), 'cortexdl-thumbs')
-      const candidateRoots = new Set<string>([downloadsDir, thumbsDir])
-      const settingsTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get('settings') as { name: string } | undefined
-      if (settingsTable) {
-        const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('downloadDirectory') as { value: string } | undefined
-        const configuredDir = row?.value
-        if (configuredDir) candidateRoots.add(configuredDir)
-      }
-      const tasks = downloads ? downloads.list() : []
-      for (const t of tasks) {
-        if (t.directory) candidateRoots.add(t.directory)
-      }
-      const isUnder = (p: string, root: string) => {
-        const pNorm = path.normalize(p).toLowerCase()
-        const rootNorm = path.normalize(root).toLowerCase()
-        const rel = path.relative(rootNorm, pNorm)
-        return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
-      }
-      let allowed = false
-      for (const root of candidateRoots) {
-        if (isUnder(filePath, root)) { allowed = true; break }
-      }
-      if (!allowed) {
-        res.writeHead(403)
-        res.end('Forbidden path')
-        return
-      }
-
-      const ext = path.extname(filePath).toLowerCase()
-      if (!MIME_TYPES[ext]) {
-        res.writeHead(403)
-        res.end('Forbidden file type')
-        return
-      }
-
-      if (!existsSync(filePath)) {
-        res.writeHead(404)
-        res.end('File not found')
-        return
-      }
-
-      const isSubtitleReq = urlObj.searchParams.get('subtitle') === 'true'
-      if (isSubtitleReq) {
-        const streamIndex = urlObj.searchParams.get('streamIndex') || '0'
-        res.writeHead(200, {
-          'Content-Type': 'text/vtt',
-          'Access-Control-Allow-Origin': corsOrigin
-        })
-
-        if (req.method === 'HEAD') {
-          res.end()
-          return
-        }
-
-        const ffmpegPath = getBinaryPath('ffmpeg')
-        const p = spawn(ffmpegPath, [
-          '-i', filePath,
-          '-map', `0:${streamIndex}`,
-          '-f', 'webvtt',
-          'pipe:1'
-        ], { windowsHide: true })
-
-        p.stdout.pipe(res)
-        
-        req.on('close', () => p.kill('SIGKILL'))
-        req.on('aborted', () => p.kill('SIGKILL'))
-        p.on('error', (err) => {
-          log.error('[MediaServer] FFmpeg subtitle extraction error:', err)
-          if (!res.headersSent) res.end()
-        })
-        return
-      }
-
-      const stat = statSync(filePath)
-      const fileSize = stat.size
-      const contentType = MIME_TYPES[ext] ?? 'application/octet-stream'
-      const rangeHeader = req.headers['range']
-
-      if (rangeHeader) {
-        const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
-        const start = match ? parseInt(match[1], 10) : 0
-        const end   = (match && match[2]) ? parseInt(match[2], 10) : fileSize - 1
-        const clampedEnd = Math.min(end, fileSize - 1)
-        const chunkSize = clampedEnd - start + 1
-
-        res.writeHead(206, {
-          'Content-Range':  `bytes ${start}-${clampedEnd}/${fileSize}`,
-          'Accept-Ranges':  'bytes',
-          'Content-Length': chunkSize,
-          'Content-Type':   contentType,
-        })
-        const stream206 = createReadStream(filePath, { start, end: clampedEnd })
-        req.on('close',   () => stream206.destroy())
-        req.on('aborted', () => stream206.destroy())
-        stream206.pipe(res)
-      } else {
-        res.writeHead(200, {
-          'Content-Length': fileSize,
-          'Content-Type':   contentType,
-          'Accept-Ranges':  'bytes',
-        })
-        if (req.method === 'HEAD') {
-          res.end()
-        } else {
-          const stream200 = createReadStream(filePath)
-          req.on('close',   () => stream200.destroy())
-          req.on('aborted', () => stream200.destroy())
-          stream200.pipe(res)
-        }
-      }
-    } catch (err) {
-      log.error('[MediaServer] Error:', err)
-      if (!res.headersSent) {
-        res.writeHead(500)
-        res.end('Internal server error')
-      }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { 'Allow': 'GET, HEAD, OPTIONS' })
+      res.end('Method not allowed')
+      return
     }
+
+    const urlObj = new URL(req.url ?? '/', `http://127.0.0.1:${MEDIA_SERVER_PORT}`)
+
+    if (!isValidMediaToken(urlObj.searchParams.get('token'))) {
+      log.warn('[MediaServer] Rejected a request that carried no valid capability token')
+      res.writeHead(401)
+      res.end('Unauthorized')
+      return
+    }
+
+    const rawFilePath = urlObj.searchParams.get('path')
+    if (!rawFilePath || rawFilePath.includes('\0')) {
+      res.writeHead(400)
+      res.end('Missing or invalid path parameter')
+      return
+    }
+
+    const requestedPath = path.normalize(rawFilePath)
+    if (!path.isAbsolute(requestedPath)) {
+      res.writeHead(400)
+      res.end('Path must be absolute')
+      return
+    }
+
+    // Resolve symlinks *before* the allow-list check so a link planted inside a
+    // served directory cannot point at an arbitrary location on disk.
+    let filePath: string
+    try {
+      filePath = await fsPromises.realpath(requestedPath)
+    } catch {
+      res.writeHead(404)
+      res.end('File not found')
+      return
+    }
+
+    if (!(await isServablePath(filePath))) {
+      res.writeHead(403)
+      res.end('Forbidden path')
+      return
+    }
+
+    const ext = path.extname(filePath).toLowerCase()
+    const contentType = MIME_TYPES[ext]
+    if (!contentType) {
+      res.writeHead(403)
+      res.end('Forbidden file type')
+      return
+    }
+
+    let stat: Awaited<ReturnType<typeof fsPromises.stat>>
+    try {
+      stat = await fsPromises.stat(filePath)
+    } catch {
+      res.writeHead(404)
+      res.end('File not found')
+      return
+    }
+
+    if (!stat.isFile()) {
+      res.writeHead(403)
+      res.end('Not a regular file')
+      return
+    }
+
+    if (urlObj.searchParams.get('subtitle') === 'true') {
+      streamEmbeddedSubtitle(req, res, filePath, urlObj.searchParams.get('streamIndex'), corsOrigin)
+      return
+    }
+
+    const fileSize = stat.size
+    const rangeHeader = req.headers['range']
+
+    if (req.method === 'HEAD') {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type':   contentType,
+        'Accept-Ranges':  'bytes',
+      })
+      res.end()
+      return
+    }
+
+    if (rangeHeader) {
+      const match = /bytes=(\d*)-(\d*)/.exec(rangeHeader)
+      const start = match && match[1] ? parseInt(match[1], 10) : 0
+      const requestedEnd = match && match[2] ? parseInt(match[2], 10) : fileSize - 1
+      const clampedEnd = Math.min(requestedEnd, fileSize - 1)
+
+      if (!Number.isFinite(start) || start > clampedEnd || start >= fileSize) {
+        res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` })
+        res.end()
+        return
+      }
+
+      res.writeHead(206, {
+        'Content-Range':  `bytes ${start}-${clampedEnd}/${fileSize}`,
+        'Accept-Ranges':  'bytes',
+        'Content-Length': clampedEnd - start + 1,
+        'Content-Type':   contentType,
+      })
+      pipeFileStream(createReadStream(filePath, { start, end: clampedEnd }), req, res)
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type':   contentType,
+        'Accept-Ranges':  'bytes',
+      })
+      pipeFileStream(createReadStream(filePath), req, res)
+    }
+  } catch (err) {
+    log.error('[MediaServer] Error:', err)
+    if (!res.headersSent) {
+      res.writeHead(500)
+      res.end('Internal server error')
+    } else if (!res.writableEnded) {
+      res.end()
+    }
+  }
+}
+
+function startMediaStreamingServer(): void {
+  if (mediaServer) return
+
+  const devUrl = VITE_DEV_SERVER_URL ? VITE_DEV_SERVER_URL.replace(/\/$/, '') : null
+  const appOrigin = devUrl || 'file://'
+
+  const server = http.createServer((req, res) => {
+    void handleMediaRequest(req, res, appOrigin)
   })
 
   let attempt = 0
@@ -463,7 +685,8 @@ function startMediaStreamingServer(): void {
       const nextPort = MEDIA_SERVER_PORT_BASE + attempt
       if (attempt < MEDIA_SERVER_PORT_MAX_TRIES) {
         log.warn(`[MediaServer] Port ${MEDIA_SERVER_PORT} in use, trying ${nextPort}…`)
-        server.close()
+        // A failed listen never opened a handle, so calling close() here would
+        // itself emit ERR_SERVER_NOT_RUNNING and mask the retry.
         tryListen(nextPort)
       } else {
         log.error(`[MediaServer] All ports ${MEDIA_SERVER_PORT_BASE}–${nextPort} are in use. Media server could not start.`)
@@ -475,10 +698,23 @@ function startMediaStreamingServer(): void {
 
   server.on('listening', () => {
     mediaServer = server
-    log.info(`[MediaServer] Streaming server ready at http://127.0.0.1:${MEDIA_SERVER_PORT}`)
+    log.info(`[MediaServer] Streaming server ready at http://127.0.0.1:${MEDIA_SERVER_PORT} (token-protected)`)
   })
 
   tryListen(MEDIA_SERVER_PORT)
+}
+
+function stopMediaStreamingServer(): void {
+  const server = mediaServer
+  if (!server) return
+  mediaServer = null
+  try {
+    server.closeAllConnections?.()
+    server.close()
+    log.info('[MediaServer] Streaming server stopped')
+  } catch (err) {
+    log.warn('[MediaServer] Failed to stop cleanly:', err)
+  }
 }
 
 const gotTheLock = app.requestSingleInstanceLock()
@@ -496,6 +732,7 @@ if (!gotTheLock) {
 
   app.on('before-quit', async () => {
     isQuitting = true
+    stopMediaStreamingServer()
     // Kill all active child processes (yt-dlp, ffmpeg) before the app exits.
     // pauseAll() calls killProcessTree for each running process.
     if (downloads && downloads.getActiveCount() > 0) {
@@ -518,12 +755,13 @@ if (!gotTheLock) {
     }
   })
 
-  
+
   registerIpcHandlers({
     getWin: () => win,
     getDownloads: () => downloads,
     getAutoUpdater: () => autoUpdater,
     getMediaPort: () => MEDIA_SERVER_PORT,
+    getMediaToken: () => MEDIA_SERVER_TOKEN,
     serviceReadyPromise
   })
 

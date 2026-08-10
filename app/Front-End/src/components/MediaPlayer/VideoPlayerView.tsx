@@ -1,9 +1,10 @@
 import React from 'react';
 import { PlayerControls } from './PlayerControls';
 import { MediaInfoOverlay } from './MediaInfoOverlay';
+import { buildMediaUrl, type MediaEndpoint } from '../../lib/mediaEndpoint';
 
 interface VideoViewProps {
-  mediaPort: number;
+  mediaEndpoint: MediaEndpoint | null;
   fileUrl: string;
   title: string;
   filePath: string;
@@ -35,7 +36,7 @@ interface VideoViewProps {
 }
 
 export function VideoPlayerView({
-  mediaPort, fileUrl, title, filePath, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
+  mediaEndpoint, fileUrl, title, filePath, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
   isFullscreen, showControls, videoRef, mediaRef, ambilightRef,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP,
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
@@ -81,7 +82,7 @@ export function VideoPlayerView({
           <video
             ref={videoRef}
             className="main-video"
-            src={fileUrl}
+            src={fileUrl || undefined}
             onClick={togglePlay}
             onTimeUpdate={onTimeUpdate}
             onLoadedMetadata={onLoadedMetadata}
@@ -98,10 +99,12 @@ export function VideoPlayerView({
             playsInline
           >
             {subtitles.map((sub, i) => {
-              const srcUrl = sub.isEmbedded 
-                ? `http://127.0.0.1:${mediaPort}/?path=${encodeURIComponent(filePath)}&subtitle=true&streamIndex=${sub.streamIndex}`
-                : `http://127.0.0.1:${mediaPort}/?path=${encodeURIComponent(sub.filePath!)}`
-                
+              const srcUrl = sub.isEmbedded
+                ? buildMediaUrl(filePath, mediaEndpoint, { subtitle: 'true', streamIndex: sub.streamIndex })
+                : buildMediaUrl(sub.filePath, mediaEndpoint)
+
+              if (!srcUrl) return null
+
               return (
                 <track
                   key={`${i}-${sub.label}`}

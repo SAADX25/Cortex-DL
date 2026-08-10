@@ -46,7 +46,7 @@ export function AudioPlayerView({
     <div className={`audio-view-wrapper ${isMiniMode ? 'mini-mode' : 'fullscreen-mode'}`}>
       <audio
         ref={audioRef}
-        src={fileUrl}
+        src={fileUrl || undefined}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={() => { setHasError(false); onLoadedMetadata(); }}
         onEnded={onEnded}

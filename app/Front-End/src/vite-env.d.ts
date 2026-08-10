@@ -155,6 +155,7 @@ declare global {
       uninstallApp: () => Promise<void>
 
       getMediaPort: () => Promise<number>
+      getMediaEndpoint: () => Promise<{ port: number; token: string }>
       fetchThumbnail: (url: string) => Promise<string>
       getMediaFps: (filePath: string) => Promise<number | null>
       getDirectStreamUrl: (url: string) => Promise<string>

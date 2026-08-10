@@ -4,9 +4,10 @@
  * Handles:
  * - Instagram CDN thumbnails via local proxy (fetchThumbnail IPC)
  * - Fallback SVG when image fails to load
- * - Optional thumbPort for streaming from local media server
+ * - Resolves the token-protected local media endpoint on its own
  */
 import React, { useState, useEffect } from 'react'
+import { buildMediaUrl, useMediaEndpoint } from '../lib/mediaEndpoint'
 
 const THUMB_FALLBACK_DATA_URI =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90'><rect width='100%' height='100%' fill='%23081126'/><text x='50%' y='50%' font-size='12' fill='%239ca3af' dominant-baseline='middle' text-anchor='middle'>No image</text></svg>"
@@ -14,8 +15,6 @@ const THUMB_FALLBACK_DATA_URI =
 interface SmartImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   /** Remote URL of the thumbnail (can be Instagram CDN) */
   src?: string
-  /** Optional port for the local media-server proxy */
-  thumbPort?: number
   /** Whether to render a blurred background layer (used in DownloadCard) */
   withBlurBg?: boolean
   /** CSS class for the blurred background layer */
@@ -30,38 +29,25 @@ interface SmartImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
  */
 const SmartImage: React.FC<SmartImageProps> = ({
   src,
-  thumbPort,
   withBlurBg = false,
   bgClassName = 'dc-thumb-bg',
   alt = '',
   ...rest
 }) => {
   const [imgSrc, setImgSrc] = useState<string | undefined>(src)
-  const [resolvedPort, setResolvedPort] = useState<number>(thumbPort ?? 3345)
-
-  // Resolve thumb port from IPC if not provided via prop
-  useEffect(() => {
-    if (thumbPort != null) {
-      setResolvedPort(thumbPort)
-      return
-    }
-    if (window.cortexDl?.getMediaPort) {
-      window.cortexDl.getMediaPort().then((port) => setResolvedPort(port)).catch(() => {})
-    }
-  }, [thumbPort])
+  const mediaEndpoint = useMediaEndpoint()
 
   // Proxy Instagram CDN URLs through local thumbnail server
   useEffect(() => {
     let cancelled = false
     setImgSrc(src)
 
-    if (src && /instagram|cdninstagram/i.test(src)) {
+    if (src && /instagram|cdninstagram/i.test(src) && mediaEndpoint) {
       ;(async () => {
         try {
           const filePath = await window.cortexDl.fetchThumbnail(src)
           if (!cancelled && filePath) {
-            const streamUrl = `http://127.0.0.1:${resolvedPort}/?path=${encodeURIComponent(filePath)}`
-            setImgSrc(streamUrl)
+            setImgSrc(buildMediaUrl(filePath, mediaEndpoint))
           }
         } catch {
           // Silently fall back to original src
@@ -72,7 +58,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
     return () => {
       cancelled = true
     }
-  }, [src, resolvedPort])
+  }, [src, mediaEndpoint])
 
   const finalSrc = imgSrc || THUMB_FALLBACK_DATA_URI
 

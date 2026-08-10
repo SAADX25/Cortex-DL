@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { translations } from '../translations'
 import type { Language } from '../translations'
 import type { ModalConfig } from './types'
@@ -23,14 +23,6 @@ export function useAppController() {
     onConfirm: () => {}, type: 'danger'
   })
   const closeModal = () => setModalConfig(prev => ({ ...prev, isOpen: false }))
-
-  
-  const [thumbPort, setThumbPort] = useState(3345)
-  useEffect(() => {
-    if (window.cortexDl?.getMediaPort) {
-      window.cortexDl.getMediaPort().then((port) => setThumbPort(port)).catch(() => {})
-    }
-  }, [])
 
   
   const settings = useSettingsController({ setModalConfig })
@@ -100,9 +92,6 @@ export function useAppController() {
 
     
     modalConfig, closeModal,
-
-    
-    thumbPort,
 
     
     onPickFolder: downloads.onPickFolder,

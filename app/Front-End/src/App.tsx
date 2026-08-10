@@ -146,12 +146,10 @@ function App() {
   }, [ctrl.refreshHealth])
 
   /**
-   * SmartImage is bound to the resolved thumb port so Instagram thumbnails
-   * are proxied correctly. Created once per port value — not per render.
+   * SmartImage resolves the token-protected media endpoint itself, so it can be
+   * passed straight down with a stable component identity.
    */
-  const BoundSmartImage = React.useMemo<React.FC<any>>(() => {
-    return (props: any) => <SmartImage {...props} thumbPort={ctrl.thumbPort} />
-  }, [ctrl.thumbPort])
+  const BoundSmartImage = SmartImage as React.FC<any>
 
   if (setupState && setupState.status !== 'done') {
     return <SetupOverlay setupState={setupState} />

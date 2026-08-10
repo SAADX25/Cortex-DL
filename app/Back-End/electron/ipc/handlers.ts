@@ -20,6 +20,8 @@ export interface IpcDependencies {
   getDownloads: () => DownloadManager | null
   getAutoUpdater: () => typeof import('electron-updater').autoUpdater | null
   getMediaPort: () => number
+  /** Per-launch capability token required by every local media-server request. */
+  getMediaToken: () => string
   serviceReadyPromise: Promise<void>
 }
 
@@ -74,7 +76,7 @@ async function getAppHealthCheck(): Promise<AppHealthCheck> {
 }
 
 export function registerIpcHandlers(deps: IpcDependencies) {
-  const { getWin, getDownloads, getAutoUpdater, getMediaPort, serviceReadyPromise } = deps
+  const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, serviceReadyPromise } = deps
 
   ipcMain.on('log-message', (_event, level, message) => {
     if (log && log[level as keyof typeof log]) {
@@ -407,6 +409,11 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   })
 
   ipcMain.handle('cortexdl:get-media-port', () => getMediaPort())
+
+  ipcMain.handle('cortexdl:get-media-endpoint', () => ({
+    port: getMediaPort(),
+    token: getMediaToken(),
+  }))
 
   ipcMain.handle('cortexdl:select-cookie-file', async () => {
     const win = getWin()
