@@ -4,8 +4,6 @@
 
   # ⚡ Cortex-DL
 
-  ### *Next-Generation Desktop Download Manager for Windows*
-
   [![Release](https://img.shields.io/badge/Release-v1.7.0-blue.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/SAADX25/Cortex-DL/releases)
   [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/SAADX25/Cortex-DL)
   [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
