@@ -1,8 +1,6 @@
 import { BrowserWindow } from 'electron'
 import log from 'electron-log'
-import {
-  existsSync, readdirSync, unlinkSync
-} from 'node:fs'
+import { existsSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -13,6 +11,7 @@ import type {
   DownloadEngine, AudioFormat, TargetFormat,
 } from './types'
 import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
+import { updateTaskProgress } from '../../Shared/progressModel'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
@@ -46,8 +45,10 @@ export class DownloadManager {
   private win: BrowserWindow | null = null
   private maxConcurrent = 3
   private active = new Set<string>()
+  private pausingAll = false
   /** Pending retry-backoff timers, keyed by task id (Priority 4). */
   private retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private countedStats = new Set<string>()
 
   constructor() {
     this.loadState()
@@ -96,51 +97,16 @@ export class DownloadManager {
             task.status = 'paused'
             task.speedBytesPerSec = null
           }
+          if (task.status === 'completed') this.countedStats.add(task.id)
+          updateTaskProgress(task)
           this.tasks.set(task.id, task)
           this.runtime.set(task.id, this.freshRuntime())
         } catch (e) {
           log.error('Failed to parse task from DB row:', e)
         }
       }
-      this.cleanupOrphanFiles()
     } catch (err) {
       log.error('Error loading tasks from DB:', err)
-    }
-  }
-
-  
-
-  private cleanupOrphanFiles(): void {
-    
-    const knownIds = new Set(this.tasks.keys())
-    const directories = new Set<string>()
-    for (const task of this.tasks.values()) {
-      if (task.directory) directories.add(task.directory)
-    }
-
-    
-    const UUID_RE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\./i
-
-    for (const dir of directories) {
-      try {
-        if (!existsSync(dir)) continue
-        const files = readdirSync(dir)
-        for (const file of files) {
-          const match = UUID_RE.exec(file)
-          if (!match) continue
-          const fileId = match[1]
-          if (knownIds.has(fileId)) continue 
-          const orphanPath = path.join(dir, file)
-          try {
-            unlinkSync(orphanPath)
-            log.info(`[Cleanup] Deleted orphan: ${file}`)
-          } catch {
-            
-          }
-        }
-      } catch {
-        
-      }
     }
   }
 
@@ -163,6 +129,7 @@ export class DownloadManager {
   }
 
   private upsertTaskToDb(t: DownloadTask) {
+    updateTaskProgress(t)
     taskDb.upsertTask.run({
       id: t.id,
       title: t.title || t.filename,
@@ -309,7 +276,8 @@ export class DownloadManager {
     filename = filenameTransforms[engine]?.(filename) ?? filename
     filename = withExtension(filename, targetFormat)
 
-    const filePath = path.join(finalDirectory, filename)
+    const filePath = this.reserveOutputPath(finalDirectory, filename)
+    filename = path.basename(filePath)
     const now = nowMs()
 
     const task: DownloadTask = {
@@ -374,7 +342,8 @@ export class DownloadManager {
       filename = filenameTransforms[engine]?.(filename) ?? filename
       filename = withExtension(filename, targetFormat)
 
-      const filePath = path.join(finalDirectory, filename)
+      const filePath = this.reserveOutputPath(finalDirectory, filename)
+      filename = path.basename(filePath)
       const now = nowMs()
 
       const task: DownloadTask = {
@@ -427,7 +396,12 @@ export class DownloadManager {
     const isPauseable = task.status === 'downloading'
       || task.status === 'merging'
       || task.status === 'converting'
+      || task.status === 'queued'
     if (!isPauseable) return task
+
+    task.status = 'paused'
+    task.updatedAtMs = nowMs()
+    task.speedBytesPerSec = null
 
     const engine = this.engines.get(id)
     if (engine) {
@@ -439,12 +413,10 @@ export class DownloadManager {
     runtime.abortController?.abort()
     await killProcessTree(runtime.child)
 
-    task.status = 'paused'
-    task.updatedAtMs = nowMs()
-    task.speedBytesPerSec = null
+    this.clearRetryTimer(id)
     this.saveStateImmediate()
     sendUpdate(this.win, task)
-    this.active.delete(id) 
+    this.active.delete(id)
     this.schedule()
     return task
   }
@@ -471,6 +443,8 @@ export class DownloadManager {
     const task = this.mustGet(id)
     const runtime = this.mustGetRuntime(id)
     this.clearRetryTimer(id)
+    task.status = 'canceled'
+    task.updatedAtMs = nowMs()
 
     const engine = this.engines.get(id)
     if (engine) {
@@ -481,8 +455,6 @@ export class DownloadManager {
     runtime.abortController?.abort()
     await killProcessTree(runtime.child)
 
-    task.status = 'canceled'
-    task.updatedAtMs = nowMs()
     task.speedBytesPerSec = null
     task.resumeChunks = undefined
     task.supportsRanges = undefined
@@ -498,6 +470,7 @@ export class DownloadManager {
     } catch {
       
     }
+    await this.removeTaskFragments(task)
 
     return task
   }
@@ -507,6 +480,9 @@ export class DownloadManager {
     if (!task) return
 
     this.clearRetryTimer(id)
+    task.status = 'canceled'
+    this.engines.get(id)?.stop()
+    this.engines.delete(id)
     this.dirtyIds.delete(id)
     const runtime = this.runtime.get(id)
     if (runtime) {
@@ -525,18 +501,9 @@ export class DownloadManager {
       if (task.directory && existsSync(task.directory)) {
         try {
           const files = await fs.readdir(task.directory)
-          const baseNameNoExt = task.filePath ? path.parse(task.filePath).name : ''
-          const titleBase = task.title ? sanitizeFilename(task.title) : ''
-
           for (const f of files) {
             const fPath = path.join(task.directory, f)
-            const fNameNoExt = path.parse(f).name
-
-            if (
-              f.startsWith(`${task.id}.`) ||
-              (baseNameNoExt && (fNameNoExt === baseNameNoExt || fNameNoExt.startsWith(`${baseNameNoExt}_`))) ||
-              (titleBase && (fNameNoExt === titleBase || fNameNoExt.startsWith(`${titleBase}_`)))
-            ) {
+            if (f.startsWith(`${task.id}.`)) {
               pathsToDelete.add(fPath)
             }
           }
@@ -544,6 +511,7 @@ export class DownloadManager {
           log.warn(`[DownloadManager] Directory scan error during delete:`, err)
         }
       }
+      await this.removeTaskFragments(task)
 
       for (const p of pathsToDelete) {
         if (!existsSync(p)) continue
@@ -570,6 +538,7 @@ export class DownloadManager {
 
     this.tasks.delete(id)
     this.active.delete(id)
+    this.countedStats.delete(id)
     try { taskDb.deleteTask.run(id) } catch { log.error('DB delete failed') }
     this.schedule()
   }
@@ -582,17 +551,22 @@ export class DownloadManager {
     for (const id of completedIds) {
       this.tasks.delete(id)
       this.runtime.delete(id)
+      this.countedStats.delete(id)
+      this.dirtyIds.delete(id)
     }
     try { taskDb.clearCompleted.run() } catch { log.error('DB clearCompleted failed') }
   }
 
   async pauseAll(): Promise<void> {
+    this.pausingAll = true
     const activeIds = Array.from(this.tasks.values())
-      .filter(t => t.status === 'downloading' || t.status === 'queued')
+      .filter(t => t.status === 'downloading' || t.status === 'queued' || t.status === 'merging' || t.status === 'converting')
       .map(t => t.id)
 
-    for (const id of activeIds) {
-      await this.pause(id)
+    try {
+      for (const id of activeIds) await this.pause(id)
+    } finally {
+      this.pausingAll = false
     }
   }
 
@@ -628,6 +602,18 @@ export class DownloadManager {
     return task
   }
 
+  private reserveOutputPath(directory: string, filename: string): string {
+    const parsed = path.parse(filename)
+    let candidate = path.join(directory, filename)
+    let suffix = 1
+    const reserved = (filePath: string) => existsSync(filePath) ||
+      Array.from(this.tasks.values()).some(t => t.filePath === filePath)
+    while (reserved(candidate)) {
+      candidate = path.join(directory, `${parsed.name}_${suffix++}${parsed.ext}`)
+    }
+    return candidate
+  }
+
   private mustGetRuntime(id: string): TaskRuntime {
     const rt = this.runtime.get(id)
     if (!rt) throw new Error('Task runtime not found')
@@ -638,6 +624,8 @@ export class DownloadManager {
     const runtime = this.mustGetRuntime(taskId)
     return {
       sendUpdate: (t) => {
+        if (this.tasks.get(taskId) !== t) return
+        updateTaskProgress(t)
         // IPC broadcast stays throttled/leading-trailing as before. DB
         // persistence is fully decoupled from it now (Priority 3): we just
         // mark the task dirty and let the write-behind timer batch the
@@ -646,10 +634,13 @@ export class DownloadManager {
         this.markDirty(taskId)
       },
       runtime,
-      saveState: () => this.markDirty(taskId),
-      flushSave: () => this.saveStateImmediate(taskId),
+      saveState: () => { if (this.tasks.has(taskId)) this.markDirty(taskId) },
+      flushSave: () => { if (this.tasks.has(taskId)) this.saveStateImmediate(taskId) },
       scheduleRetry: (delayMs: number) => this.scheduleRetry(taskId, delayMs),
       sendStats: (id, addedBytes) => {
+        if (!this.tasks.has(id)) return
+        if (this.countedStats.has(id)) return
+        this.countedStats.add(id)
         if (this.win && !this.win.isDestroyed()) {
           this.win.webContents.send(STATS_CHANNEL, { id, addedBytes })
         }
@@ -686,12 +677,14 @@ export class DownloadManager {
    * queued downloads of a slot for as long as ~60s.
    */
   private scheduleRetry(id: string, delayMs: number): void {
+    if (this.tasks.get(id)?.status !== 'queued') return
     this.clearRetryTimer(id)
     const runtime = this.runtime.get(id)
     if (runtime) runtime.retryAt = nowMs() + delayMs
 
     const timer = setTimeout(() => {
       this.retryTimers.delete(id)
+      if (this.tasks.get(id)?.status !== 'queued') return
       const rt = this.runtime.get(id)
       if (rt) rt.retryAt = undefined
       this.schedule()
@@ -701,6 +694,7 @@ export class DownloadManager {
   }
 
   private schedule(): void {
+    if (this.pausingAll) return
     const available = this.maxConcurrent - this.active.size
     if (available <= 0) return
 
@@ -735,6 +729,9 @@ export class DownloadManager {
     log.info(`[DM] Executing engine '${task.engine}' for task ${id}`)
     try {
       task.status = 'downloading'
+      task.overallProgress = null
+      task.phaseProgress = null
+      task.speedBytesPerSec = null
       task.updatedAtMs = nowMs()
       sendUpdate(this.win, task)
       
@@ -750,6 +747,8 @@ export class DownloadManager {
       await entry.start(engine, task, context)
       this.engines.delete(id)
 
+      if (this.tasks.get(id) !== task) return
+
       
       
 
@@ -762,6 +761,10 @@ export class DownloadManager {
         task.status = 'completed'
         task.updatedAtMs = nowMs()
         log.info(`[DM] Task ${id} completed successfully`)
+      }
+      if (task.status === 'completed') {
+        const size = await fs.stat(task.filePath).then(s => s.size).catch(() => 0)
+        if (size > 0 && !this.countedStats.has(id)) this.createContext(id).sendStats(id, size)
       }
 
     } catch (err: unknown) {
@@ -801,9 +804,23 @@ export class DownloadManager {
       this.engines.delete(id)
     } finally {
       this.active.delete(id)
-      this.saveStateImmediate(id)
-      sendUpdate(this.win, task)
+      if (this.tasks.get(id) === task) {
+        updateTaskProgress(task)
+        this.saveStateImmediate(id)
+        sendUpdate(this.win, task)
+      }
       this.schedule()
+    }
+  }
+
+  private async removeTaskFragments(task: DownloadTask): Promise<void> {
+    const tempDir = path.join(task.directory, '.cortex_temp')
+    for (const dir of [task.directory, tempDir]) {
+      const files = await fs.readdir(dir).catch(() => [])
+      for (const name of files) {
+        if (!name.startsWith(`${task.id}.`)) continue
+        await fs.unlink(path.join(dir, name)).catch(() => {})
+      }
     }
   }
 }

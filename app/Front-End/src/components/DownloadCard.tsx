@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef } from 'react'
 import { Play, FolderOpen, Trash2 } from 'lucide-react'
 import { useDownloadCardVM, type DisplayPhase, type DownloadCardVM } from '../hooks/useDownloadCardVM'
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
@@ -59,28 +59,12 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   const vmRef = useRef<DownloadCardVM | null>(vm)
   vmRef.current = vm
 
-  /**
-   * Use a state flag for structural re-renders instead of `key`.
-   * Changing `key` on the card root causes full unmount → remount,
-   * which breaks CSS transitions and causes a visible flash.
-   * A simple boolean toggle triggers a targeted React re-render
-   * while keeping the DOM node alive.
-   */
-  const [structuralVersion, setStructuralVersion] = useState(0)
-
   useHighFrequencyIPC(id, {
     progressBarRef,
     speedTextRef,
     percentTextRef,
     vmRef,
-    onStructuralChange: () => {
-      setStructuralVersion((v) => v + 1)
-    },
   })
-
-  // Suppress the structuralVersion lint warning — it's intentionally used
-  // only to trigger a re-render, not referenced in JSX.
-  void structuralVersion
 
   if (!vm) return null
 

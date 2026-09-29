@@ -2,6 +2,8 @@ import { useMemo, useCallback } from 'react'
 import { useTask } from '../stores/downloadStore'
 import type { Language } from '../translations'
 import { translations } from '../translations'
+import { getProgressView } from '../../../Shared/progressModel'
+import type { DownloadPhase } from '../../../Shared/types'
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '-'
@@ -32,17 +34,7 @@ function formatEta(remainingBytes: number, speedBps: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export type DisplayPhase =
-  | 'queued'
-  | 'starting'
-  | 'downloading'
-  | 'merging'
-  | 'converting'
-  | 'trimming'
-  | 'paused'
-  | 'completed'
-  | 'error'
-  | 'canceled'
+export type DisplayPhase = DownloadPhase
 
 export interface DownloadCardVM {
   
@@ -110,28 +102,9 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     
     
     
-    let phase: DisplayPhase
-    const hasProgress = task.downloadedBytes > 0
-      || (task.speedBytesPerSec != null && task.speedBytesPerSec > 0)
-      || (task.downloadPercent != null && task.downloadPercent > 0)
-    const isTrimmedTask = Boolean(task.startTime || task.endTime)
-    if (task.status === 'downloading' && !hasProgress) {
-      phase = 'starting'
-    } else if (task.status === 'downloading' && isTrimmedTask) {
-      
-      
-      phase = 'trimming'
-    } else if (task.status === 'downloading' && task.downloadPercent != null && task.downloadPercent >= 100) {
-      
-      
-      phase = 'merging'
-    } else if (task.status === 'converting' && (task.startTime || task.endTime)) {
-      phase = 'trimming'
-    } else {
-      phase = task.status as DisplayPhase
-    }
+    const progress = getProgressView(task)
+    const phase = progress.phase
 
-    
     const phaseLabels: Record<DisplayPhase, string> = {
       queued: t.status_queued,
       starting: t.accelerating,
@@ -168,79 +141,14 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     
     
     
-    const DOWNLOAD_WEIGHT = 0.90
-    const POST_WEIGHT = 0.10
-
     const isPostProcessing = phase === 'merging' || phase === 'converting' || phase === 'trimming'
-    const isTrimMode = phase === 'trimming'
-    const convPct = task.convertingPercent != null && !isNaN(task.convertingPercent) && task.convertingPercent > 0
-      ? task.convertingPercent
-      : null
-    const dlPct = task.downloadPercent != null && !isNaN(task.downloadPercent) && task.downloadPercent > 0
-      ? task.downloadPercent
-      : null
-    const trimPct = isTrimMode ? (convPct ?? dlPct) : null
+    const convPct = isPostProcessing ? progress.phaseProgress : null
+    const percent = progress.overallProgress ?? 0
+    const percentLabel = progress.percentLabel
+    const isIndeterminate = progress.isIndeterminate
 
-    let percent: number
-    let percentLabel: string
-    let isIndeterminate = false
-
-    if (task.status === 'completed') {
-      percent = 100
-      percentLabel = '100%'
-    } else if (isTrimMode) {
-      
-      
-      if (trimPct !== null) {
-        percent = trimPct
-        percentLabel = `${trimPct}%`
-      } else {
-        percent = 0
-        percentLabel = ''
-        isIndeterminate = true
-      }
-    } else if (isPostProcessing) {
-      
-      
-      const basePercent = Math.round(DOWNLOAD_WEIGHT * 100) 
-      if (convPct !== null) {
-        percent = Math.min(99, basePercent + Math.round(POST_WEIGHT * convPct))
-        percentLabel = `${percent}%`
-      } else {
-        
-        
-        percent = basePercent
-        percentLabel = `${basePercent}%`
-      }
-    } else if (dlPct !== null && dlPct > 0) {
-      
-      percent = Math.min(Math.round(DOWNLOAD_WEIGHT * 100), Math.round(DOWNLOAD_WEIGHT * dlPct))
-      percentLabel = `${percent}%`
-      if (phase === 'starting') {
-        isIndeterminate = true
-        percentLabel = ''
-      }
-    } else if (task.totalBytes && task.totalBytes > 0) {
-      
-      const rawPct = Math.min(100, Math.round((task.downloadedBytes / task.totalBytes) * 100))
-      percent = Math.min(Math.round(DOWNLOAD_WEIGHT * 100), Math.round(DOWNLOAD_WEIGHT * rawPct))
-      percentLabel = `${percent}%`
-      if (phase === 'starting') {
-        isIndeterminate = true
-        percentLabel = ''
-      }
-    } else {
-      
-      percent = 0
-      percentLabel = ''
-      if (phase === 'downloading' || phase === 'starting') {
-        isIndeterminate = true
-      }
-    }
-
-    
     const knownTotal = task.totalBytes != null && task.totalBytes > 0
-    const remaining = knownTotal ? task.totalBytes! - task.downloadedBytes : 0
+    const remaining = knownTotal ? Math.max(0, task.totalBytes! - task.downloadedBytes) : 0
     const isDownloading = task.status === 'downloading'
     const isActivePhase = isDownloading || isPostProcessing
     let sizeLabel = ''
@@ -270,7 +178,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     const finalPhaseLabel = isPostProcessing ? phaseBadge : phaseLabels[phase]
 
     
-    const showPause = task.status === 'downloading' || task.status === 'queued'
+    const showPause = task.status === 'downloading' || task.status === 'queued' || task.status === 'merging' || task.status === 'converting'
     const showResume = task.status === 'paused' || task.status === 'error'
     const showCancel = task.status !== 'completed' && task.status !== 'canceled'
     const showPlay = task.status === 'completed'

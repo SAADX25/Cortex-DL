@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { DownloadTask, TaskRuntime } from './types'
+import { updateTaskProgress } from '../../Shared/progressModel'
 import { UPDATE_CHANNEL } from './types'
 
 export function sanitizeFilename(name: string): string {
@@ -99,6 +100,7 @@ export function parseTotalFromContentRange(value: string | null): number | null 
 }
 
 export function sendUpdate(win: BrowserWindow | null, task: DownloadTask): void {
+  updateTaskProgress(task)
   if (!win || win.isDestroyed()) return
   win.webContents.send(UPDATE_CHANNEL, task)
 }
@@ -136,6 +138,7 @@ export function throttledSendUpdate(
   task: DownloadTask,
   runtime: TaskRuntime,
 ): boolean {
+  updateTaskProgress(task)
   if (!win || win.isDestroyed()) return false
 
   // Terminal states: flush any pending trailing, then send immediately.

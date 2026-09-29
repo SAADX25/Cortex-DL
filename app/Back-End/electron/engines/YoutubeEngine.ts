@@ -5,6 +5,7 @@ import path from 'node:path'
 import log from 'electron-log'
 import type { DownloadTask, EngineContext, TaskRuntime, AudioFormat, VideoFormat } from '../types'
 import { AUDIO_FORMATS, VIDEO_FORMATS } from '../types'
+import { isSupportedMediaPath, findTaskMediaFile } from '../mediaFiles'
 import { getBinaryPath } from '../paths'
 import { nowMs, sanitizeFilename, getFileSizeIfExists, parseTimeToSeconds, sendNotification } from '../utils'
 import {
@@ -29,6 +30,8 @@ interface YtdlpRunResult {
   stderr: string
 }
 
+const wasStopped = (task: DownloadTask) => task.status === 'paused' || task.status === 'canceled'
+
 export class YoutubeEngine implements IEngine {
   private static updatePromise: Promise<void> | null = null
   private childProcess: ChildProcessWithoutNullStreams | null = null
@@ -38,6 +41,7 @@ export class YoutubeEngine implements IEngine {
 
     
     await YoutubeEngine.ensureYtdlpFresh()
+    if (wasStopped(task)) return
 
     const runtime = context.runtime
     this.childProcess = null
@@ -84,6 +88,7 @@ export class YoutubeEngine implements IEngine {
       
       log.warn(`[YoutubeEngine] Metadata prefetch failed for ${task.id}:`, e instanceof Error ? e.message : e)
     })
+    if (runtime.abortController?.signal.aborted || wasStopped(task)) return
 
     const args = this.buildYtdlpArgs(task, profile, { ffmpegDir }, runtime)
     const runResult = await this.runYtdlpAttempt(task, context, runtime, args, profile)
@@ -92,34 +97,15 @@ export class YoutubeEngine implements IEngine {
     if (runtime.abortController?.signal.aborted) return
 
     
-    let downloadedTempPath: string | null = runResult.detectedFinalPath
-    if (!downloadedTempPath || !existsSync(downloadedTempPath)) {
-      try {
-        const files = await fsPromises.readdir(task.directory)
-        downloadedTempPath = files
-          .map((f) => path.join(task.directory, f))
-          .find((p) => path.basename(p).startsWith(`${task.id}.`)) ?? null
-      } catch {
-        downloadedTempPath = null
-      }
-    }
+    const downloadedTempPath = await findTaskMediaFile(task, runResult.detectedFinalPath)
 
     
+    // Only a successful yt-dlp terminal state can certify a complete file.
     let isSuccess = runResult.exitCode === 0
-    if (!isSuccess && downloadedTempPath && existsSync(downloadedTempPath)) {
-      const sizeTemp = await getFileSizeIfExists(downloadedTempPath)
-      const isMedia = /\.(mp4|mkv|webm|mp3|m4a|ogg|wav|flv|avi|mov)$/i.test(downloadedTempPath)
-      
-      
-      if (isMedia && sizeTemp > 50 * 1024) {
-        log.warn(`[YoutubeEngine] Task ${task.id} exited with ${runResult.exitCode} but generated valid media file. Treating as success.`)
-        isSuccess = true
-      }
-    }
 
     if (isSuccess) {
       const finalPathToRename = downloadedTempPath || runResult.detectedFinalPath
-      const isMedia = finalPathToRename && /\.(mp4|mkv|webm|mp3|m4a|ogg|wav|flv|avi|mov)$/i.test(finalPathToRename)
+      const isMedia = finalPathToRename && isSupportedMediaPath(finalPathToRename)
       
       if (!isMedia) {
         log.error(`[YoutubeEngine] Task ${task.id} exited with 0 but no valid media file was found (found: ${finalPathToRename}). The download was likely blocked by YouTube.`)
@@ -153,7 +139,10 @@ export class YoutubeEngine implements IEngine {
 
       if (isSuccess) {
 
-      await this.renameDownloaded(task, finalPathToRename)
+      await this.renameDownloaded(task, finalPathToRename, runtime, context)
+      if (await getFileSizeIfExists(task.filePath) <= 0 || !isSupportedMediaPath(task.filePath)) {
+        throw new Error('yt-dlp finished without a supported final media file')
+      }
 
       task.status = 'completed'
       task.updatedAtMs = nowMs()
@@ -285,7 +274,6 @@ export class YoutubeEngine implements IEngine {
       '--dump-json',
       '--no-warnings',
       '--no-playlist',
-      '--no-check-certificate',
       '--no-mtime',
       '--geo-bypass',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
@@ -308,6 +296,7 @@ export class YoutubeEngine implements IEngine {
     runtime.child = proc
     const onAbort = () => { try { proc.kill() } catch { /* already dead */ } }
     runtime.abortController?.signal.addEventListener('abort', onAbort, { once: true })
+    let timeout: ReturnType<typeof setTimeout> | null = null
 
     try {
       const metaOut = await Promise.race<string>([
@@ -316,14 +305,12 @@ export class YoutubeEngine implements IEngine {
           for await (const chunk of proc.stdout) out += chunk.toString()
           return out
         })(),
-        new Promise<string>((_, rej) =>
-          setTimeout(() => {
-            try { proc.kill() } catch {
-              
-            }
+        new Promise<string>((_, rej) => {
+          timeout = setTimeout(() => {
+            try { proc.kill() } catch { /* process already exited */ }
             rej(new Error('meta timeout'))
           }, META_TIMEOUT_MS)
-        ),
+        }),
       ])
 
       if (!metaOut || runtime.abortController?.signal.aborted) return
@@ -339,6 +326,14 @@ export class YoutubeEngine implements IEngine {
       }
 
       if (!info) return
+
+      const selected = Array.isArray(info.requested_formats) ? info.requested_formats : [info]
+      const bytes = selected.map((format: { filesize?: number; filesize_approx?: number }) =>
+        format.filesize ?? format.filesize_approx ?? 0)
+      if (bytes.length && bytes.every((n: number) => Number.isFinite(n) && n > 0)) {
+        task.ytdlpExpectedBytes = bytes.reduce((sum: number, n: number) => sum + n, 0)
+        task.totalBytes = task.ytdlpExpectedBytes ?? null
+      }
 
       if (info.title) task.title = String(info.title)
 
@@ -357,6 +352,7 @@ export class YoutubeEngine implements IEngine {
       task.updatedAtMs = nowMs()
       context.sendUpdate(task)
     } finally {
+      if (timeout) clearTimeout(timeout)
       runtime.abortController?.signal.removeEventListener('abort', onAbort)
       if (this.childProcess === proc) this.childProcess = null
       if (runtime.child === proc) runtime.child = null
@@ -536,13 +532,12 @@ export class YoutubeEngine implements IEngine {
     const ytArgs: string[] = [
       '--newline',
       '--progress',
-      '--no-check-certificate',
       '--no-mtime',
       '--no-playlist',
       '--geo-bypass',
       
       ...(hasSubtitles ? [] : ['--no-warnings']),
-      '--force-overwrites',
+      '--continue',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
       '--throttled-rate', YOUTUBE_THROTTLED_RATE,
       '--progress-template', 'download:CORTEX_DL:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s:%(progress.speed)s',
@@ -675,7 +670,7 @@ export class YoutubeEngine implements IEngine {
     return ytArgs
   }
 
-  private async renameDownloaded(task: DownloadTask, detectedFinalPath: string | null): Promise<void> {
+  private async renameDownloaded(task: DownloadTask, detectedFinalPath: string | null, runtime: TaskRuntime, context: EngineContext): Promise<void> {
     const desiredExt = path.extname(task.filePath) 
     const safeBase = sanitizeFilename((task.title || task.filename).replace(new RegExp(`${desiredExt}$`), ''))
     const desiredFilename = `${safeBase}${desiredExt || ''}`
@@ -694,7 +689,7 @@ export class YoutubeEngine implements IEngine {
       }
     }
 
-    if (!downloadedPath || !existsSync(downloadedPath)) return
+    if (!downloadedPath || !existsSync(downloadedPath)) throw new Error('yt-dlp produced no final media file')
 
     
     const dExt = path.extname(downloadedPath).toLowerCase()
@@ -710,17 +705,25 @@ export class YoutubeEngine implements IEngine {
     }
 
     if (needsFfmpeg && ffmpegArgs.length > 0) {
+      task.status = 'converting'
+      task.convertingPercent = undefined
+      context.sendUpdate(task)
       log.info(`[YoutubeEngine] Executing FFMPEG for ${desiredExt} conversion...`)
       const success = await new Promise<boolean>((resolve) => {
         const p = spawn(getBinaryPath('ffmpeg'), ffmpegArgs, { windowsHide: true })
+        this.childProcess = p
+        runtime.child = p
         p.on('close', (code) => resolve(code === 0))
         p.on('error', () => resolve(false))
       })
+      this.childProcess = null
+      runtime.child = null
+      if (runtime.abortController?.signal.aborted) throw new Error('Conversion aborted')
       if (success) {
-        fsPromises.unlink(downloadedPath).catch(() => {})
+        await fsPromises.unlink(downloadedPath).catch(() => {})
         downloadedPath = ffmpegArgs[ffmpegArgs.length - 1]
       } else {
-        log.warn(`[YoutubeEngine] Failed to convert ${downloadedPath} to ${desiredExt}`)
+        throw new Error(`Failed to convert media to ${desiredExt}`)
       }
     }
 
@@ -729,8 +732,8 @@ export class YoutubeEngine implements IEngine {
     if (existsSync(targetPath)) {
       const parsed = path.parse(targetPathBase)
       let counter = 1
-      while (existsSync(`${parsed.dir}\\${parsed.name}_${counter}${parsed.ext}`) && counter < 1000) counter++
-      targetPath = `${parsed.dir}\\${parsed.name}_${counter}${parsed.ext}`
+      while (existsSync(path.join(parsed.dir, `${parsed.name}_${counter}${parsed.ext}`)) && counter < 1000) counter++
+      targetPath = path.join(parsed.dir, `${parsed.name}_${counter}${parsed.ext}`)
     }
 
     

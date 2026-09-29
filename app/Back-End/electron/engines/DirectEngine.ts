@@ -8,7 +8,7 @@ import type { FileHandle } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import type { Readable } from 'node:stream';
-import { nowMs } from '../utils';
+import { nowMs, computeSpeed } from '../utils';
 import { db } from '../db';
 
 interface ChunkInfo {
@@ -97,6 +97,11 @@ export class DirectEngine implements IEngine {
     this.stopRequested = false;
     this.numChunks = getNumChunksFromSettings();
     this.adoptController(new AbortController(), context);
+    if (context) {
+      context.runtime.lastSpeedSampleAtMs = null;
+      context.runtime.lastSpeedSampleBytes = null;
+    }
+    task.speedBytesPerSec = null;
 
     try {
       // ── HEAD request to probe server capabilities ──────────────────
@@ -163,6 +168,12 @@ export class DirectEngine implements IEngine {
       }
 
       // ── Cleanup resume state on success ────────────────────────────
+      const finalSize = (await fsPromises.stat(task.filePath)).size;
+      if (task.totalBytes && finalSize !== task.totalBytes) {
+        throw new Error(`Direct download size mismatch: expected ${task.totalBytes}, got ${finalSize}`);
+      }
+      task.downloadedBytes = finalSize;
+      this.reportProgress(task, context);
       task.resumeChunks = undefined;
       task.supportsRanges = undefined;
 
@@ -241,6 +252,11 @@ export class DirectEngine implements IEngine {
       startByte = 0;
       writeFlags = 'w';
       task.downloadedBytes = 0;
+    }
+    if (startByte > 0 && response.status === 206 &&
+        !String(response.headers['content-range'] ?? '').startsWith(`bytes ${startByte}-`)) {
+      response.data.destroy();
+      throw new Error('Server returned a mismatched Content-Range');
     }
 
     const contentLength = parseInt(String(response.headers['content-length'] ?? '0'), 10);
@@ -484,6 +500,10 @@ export class DirectEngine implements IEngine {
         `server answered ${response.status} to a Range request`
       );
     }
+    if (!String(response.headers['content-range'] ?? '').startsWith(`bytes ${resumeStart}-${chunk.end}/`)) {
+      response.data.destroy();
+      throw new RangeUnsupportedError('server returned a mismatched Content-Range');
+    }
 
     const stream = response.data;
     let position = resumeStart;
@@ -576,6 +596,7 @@ export class DirectEngine implements IEngine {
 
   private reportProgress(task: DownloadTask, context?: EngineContext): void {
     this.lastProgressUpdate = nowMs();
+    if (context) computeSpeed(task, context.runtime);
 
     if (context?.sendUpdate) {
       context.sendUpdate(task);

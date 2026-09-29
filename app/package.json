@@ -17,6 +17,7 @@
     "build": "npm run clean && tsc && vite build && electron-builder",
     "dist": "npm run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test": "node --test tests/*.test.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

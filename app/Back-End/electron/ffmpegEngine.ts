@@ -8,6 +8,8 @@ import { nowMs, getFileSizeIfExists, sendNotification, parseTimeToSeconds } from
 import { parseFfmpegProgress, flushLines, logRawProgressChunk } from './progressParser'
 import type { FfmpegState } from './progressParser'
 
+const wasStopped = (task: DownloadTask) => task.status === 'paused' || task.status === 'canceled'
+
 export async function isFfmpegAvailable(): Promise<boolean> {
   try {
     const p = spawn(getBinaryPath('ffmpeg'), ['-version'], { windowsHide: true, detached: false })
@@ -19,26 +21,6 @@ export async function isFfmpegAvailable(): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-async function isOutputValid(filePath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const proc = spawn(getBinaryPath('ffmpeg'), [
-        '-v', 'error', '-i', filePath, '-t', '1', '-f', 'null', '-',
-      ], { windowsHide: true, detached: false })
-
-      let stderr = ''
-      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
-
-      const timer = setTimeout(() => { proc.kill(); resolve(false) }, 5000)
-
-      proc.on('close', (code) => { clearTimeout(timer); resolve(code === 0 && !stderr.trim()) })
-      proc.on('error', () => { clearTimeout(timer); resolve(false) })
-    } catch {
-      resolve(false)
-    }
-  })
 }
 
 function spawnFfmpeg(
@@ -84,6 +66,9 @@ function spawnFfmpeg(
       case 'flac': tail = ['-vn', '-acodec', 'flac', outputPath]; break
       case 'wav':  tail = ['-vn', '-acodec', 'pcm_s16le', outputPath]; break
       case 'ogg':  tail = ['-vn', '-acodec', 'libvorbis', '-q:a', '6', outputPath]; break
+      case 'aac':  tail = ['-vn', '-acodec', 'aac', '-b:a', '256k', '-f', 'adts', outputPath]; break
+      case 'opus': tail = ['-vn', '-acodec', 'libopus', '-b:a', '192k', outputPath]; break
+      case 'wma':  tail = ['-vn', '-acodec', 'wmav2', '-b:a', '192k', outputPath]; break
       default:     tail = ['-vn', '-acodec', 'libmp3lame', '-q:a', '0', outputPath]
     }
   } else {
@@ -93,6 +78,8 @@ function spawnFfmpeg(
       case 'mov':  tail = ['-c', 'copy', '-movflags', '+faststart', outputPath]; break
       // webm requires full re-encode; ultrafast preset minimises CPU impact
       case 'webm': tail = ['-c:v', 'libvpx-vp9', '-c:a', 'libopus', '-b:v', '0', '-crf', '30', '-threads', '0', '-speed', '5', '-deadline', 'realtime', outputPath]; break
+      case 'ogv':  tail = ['-c:v', 'libtheora', '-c:a', 'libvorbis', outputPath]; break
+      case 'm4v':  tail = ['-c:v', 'copy', '-c:a', 'aac', '-f', 'mp4', outputPath]; break
       case 'gif':  tail = ['-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0', outputPath]; break
       // mp4: use copy for video to avoid re-encode; aac for audio
       default:     tail = ['-c:v', 'copy', '-c:a', 'aac', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', outputPath]
@@ -107,7 +94,9 @@ export async function runFfmpegDownload(
   runtime: TaskRuntime,
   ctx: EngineContext,
 ): Promise<void> {
-  if (!(await isFfmpegAvailable())) {
+  const available = await isFfmpegAvailable()
+  if (wasStopped(task)) return
+  if (!available) {
     task.status = 'error'
     task.errorMessage = 'FFmpeg is not installed or not found in PATH'
     task.updatedAtMs = nowMs()
@@ -116,22 +105,12 @@ export async function runFfmpegDownload(
   }
 
   
-  const existingSize = await getFileSizeIfExists(task.filePath)
-  if (existingSize > 0) {
-    const valid = await isOutputValid(task.filePath)
-    if (valid) {
-      task.status = 'completed'
-      task.totalBytes = existingSize
-      task.downloadedBytes = existingSize
-      runtime.retries = 0
-      ctx.flushSave()
-      ctx.sendUpdate(task)
-      sendNotification('Download Complete', `${task.title || task.filename} was already downloaded.`)
-      return
-    }
-    
-    await fs.unlink(task.filePath).catch(() => {})
-  }
+  // FFmpeg output cannot be safely appended. An interrupted file may decode
+  // its first second, so every new attempt starts with a fresh output.
+  await fs.unlink(task.filePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error
+  })
+  if (wasStopped(task)) return
 
   runtime.abortController?.abort()
   runtime.abortController = new AbortController()
@@ -140,6 +119,8 @@ export async function runFfmpegDownload(
 
   task.totalBytes = null
   task.downloadedBytes = 0
+  task.downloadPercent = undefined
+  task.convertingPercent = undefined
   task.speedBytesPerSec = null
   task.status = 'downloading'
   task.errorMessage = null
@@ -220,19 +201,14 @@ export async function runFfmpegDownload(
     if (runtime.abortController?.signal.aborted) return
 
     if (exitCode === 0) {
+      const finalSize = await getFileSizeIfExists(task.filePath)
+      if (finalSize <= 0) throw new Error('FFmpeg exited successfully without an output file')
       task.status = 'completed'
       task.updatedAtMs = nowMs()
       runtime.retries = 0
 
-      try {
-        const finalSize = await getFileSizeIfExists(task.filePath)
-        if (finalSize > 0) {
-          task.totalBytes = finalSize
-          task.downloadedBytes = finalSize
-        }
-      } catch {
-        
-      }
+      task.totalBytes = finalSize
+      task.downloadedBytes = finalSize
 
       ctx.flushSave()
       ctx.sendUpdate(task)

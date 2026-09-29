@@ -597,7 +597,6 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
     const args = [
       '--dump-single-json',
       isPlaylist ? '--yes-playlist' : '--no-playlist',
-      '--no-check-certificate',
       '--geo-bypass',
       '--no-warnings',
       '--ignore-errors',
@@ -803,7 +802,6 @@ export async function getDirectStreamUrl(
       '-f', formatSelector,
       '-g',                    // print direct URL only
       '--no-playlist',
-      '--no-check-certificate',
       '--geo-bypass',
       '--force-ipv4',
       '--no-warnings',

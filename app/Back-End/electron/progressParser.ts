@@ -34,12 +34,20 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
     const speed = parseFloat(tplMatch[3])
 
     if (!isNaN(dlBytes) && dlBytes >= 0) {
-      task.downloadedBytes = Math.round(dlBytes)
+      // yt-dlp resets this counter for each selected stream. Keep a
+      // monotonic byte estimate across the video/audio boundary.
+      if (dlBytes < (task.ytdlpStreamBytes ?? 0)) {
+        task.ytdlpCompletedStreamBytes = (task.ytdlpCompletedStreamBytes ?? 0) + (task.ytdlpStreamTotalBytes ?? task.ytdlpStreamBytes ?? 0)
+      }
+      task.ytdlpStreamBytes = Math.round(dlBytes)
+      task.downloadedBytes = Math.round((task.ytdlpCompletedStreamBytes ?? 0) + dlBytes)
       changed = true
     }
     if (!isNaN(totalEst) && totalEst > 0) {
-      if (task.totalBytes !== Math.round(totalEst)) {
-        task.totalBytes = Math.round(totalEst)
+      task.ytdlpStreamTotalBytes = Math.round(totalEst)
+      const aggregateTotal = task.ytdlpExpectedBytes ?? (task.ytdlpCompletedStreamBytes ?? 0) + Math.round(totalEst)
+      if (task.totalBytes !== aggregateTotal) {
+        task.totalBytes = aggregateTotal
         changed = true
       }
     }
@@ -207,6 +215,9 @@ export function parseStateTransition(
   ctx: { sendUpdate: (task: DownloadTask) => void; saveState: () => void },
 ): TransitionResult {
   let detectedPath: string | null = null
+  if (task.status === 'paused' || task.status === 'canceled' || task.status === 'error' || task.status === 'completed') {
+    return { transitioned: false, detectedPath }
+  }
 
   
   const destMatch = /Destination:\s*(.+)$/.exec(line)
@@ -227,7 +238,7 @@ export function parseStateTransition(
   if (line.includes('[Merger]') || line.includes('Merging formats')) {
     task.downloadPercent = 100
     task.status = 'merging'
-    task.convertingPercent = 0
+    task.convertingPercent = undefined
     state.totalDuration = null
     const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(state.stderr)
     if (durMatch) state.totalDuration = parseTimeToSeconds(durMatch[1])
@@ -251,7 +262,7 @@ export function parseStateTransition(
   ) {
     task.downloadPercent = 100
     task.status = 'converting'
-    task.convertingPercent = 0
+    task.convertingPercent = undefined
     state.totalDuration = null
     const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(state.stderr)
     if (durMatch) state.totalDuration = parseTimeToSeconds(durMatch[1])

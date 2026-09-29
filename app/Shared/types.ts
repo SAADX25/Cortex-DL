@@ -9,6 +9,7 @@ export type DownloadStatus =
   | 'canceled'
 
 export type DownloadEngine = 'direct' | 'ffmpeg' | 'ytdlp'
+export type DownloadPhase = DownloadStatus | 'starting' | 'trimming'
 
 export type VideoFormat = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'ogv' | 'm4v' | 'gif'
 export type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac' | 'aac' | 'opus' | 'wma'
@@ -46,6 +47,10 @@ export type DownloadTask = {
   engine: DownloadEngine
   targetFormat: TargetFormat
   status: DownloadStatus
+  phase?: DownloadPhase
+  phaseProgress?: number | null
+  overallProgress?: number | null
+  hasPostProcessing?: boolean
   totalBytes: number | null
   downloadedBytes: number
   speedBytesPerSec: number | null
@@ -65,6 +70,10 @@ export type DownloadTask = {
   subtitleLanguage?: string
   subtitleIsAutomatic?: boolean
   fps?: number | string
+  ytdlpExpectedBytes?: number
+  ytdlpCompletedStreamBytes?: number
+  ytdlpStreamBytes?: number
+  ytdlpStreamTotalBytes?: number
   /** Persisted chunk state for DirectEngine pause/resume. Cleared on completion. */
   resumeChunks?: { start: number; end: number; downloaded: number; completed: boolean }[]
   /** Whether the server supports HTTP Range requests (cached from HEAD). */
