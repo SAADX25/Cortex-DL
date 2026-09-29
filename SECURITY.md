@@ -11,7 +11,7 @@ Only the latest version of Cortex DL receives security updates and bug fixes.
 | Version | Supported          |
 | ------- | ------------------ |
 | Latest  | :white_check_mark: |
-| < 1.7.0   | :x:                |
+| < 2.0.0   | :x:                |
 
 ---
 
