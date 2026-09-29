@@ -5,6 +5,7 @@ import { buildMediaUrl, type MediaEndpoint } from '../../lib/mediaEndpoint';
 
 interface VideoViewProps {
   mediaEndpoint: MediaEndpoint | null;
+  sessionId: string;
   fileUrl: string;
   title: string;
   filePath: string;
@@ -36,7 +37,7 @@ interface VideoViewProps {
 }
 
 export function VideoPlayerView({
-  mediaEndpoint, fileUrl, title, filePath, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
+  mediaEndpoint, sessionId, fileUrl, title, filePath, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
   isFullscreen, showControls, videoRef, mediaRef, ambilightRef,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP,
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
@@ -49,7 +50,9 @@ export function VideoPlayerView({
 
   React.useEffect(() => {
     if (filePath && window.cortexDl?.getSubtitles) {
-      window.cortexDl.getSubtitles(filePath).then(subs => {
+      let cancelled = false;
+      window.cortexDl.getSubtitles(filePath, sessionId).then(subs => {
+        if (cancelled) return;
         setSubtitles(subs);
         if (subs && subs.length > 0) {
           setActiveSubtitle(0); 
@@ -57,8 +60,9 @@ export function VideoPlayerView({
           setActiveSubtitle(-1);
         }
       }).catch(console.error);
+      return () => { cancelled = true; };
     }
-  }, [filePath]);
+  }, [filePath, sessionId]);
 
   
   React.useEffect(() => {
@@ -83,6 +87,7 @@ export function VideoPlayerView({
             ref={videoRef}
             className="main-video"
             src={fileUrl || undefined}
+            preload="metadata"
             onClick={togglePlay}
             onTimeUpdate={onTimeUpdate}
             onLoadedMetadata={onLoadedMetadata}
@@ -100,8 +105,8 @@ export function VideoPlayerView({
           >
             {subtitles.map((sub, i) => {
               const srcUrl = sub.isEmbedded
-                ? buildMediaUrl(filePath, mediaEndpoint, { subtitle: 'true', streamIndex: sub.streamIndex })
-                : buildMediaUrl(sub.filePath, mediaEndpoint)
+                ? buildMediaUrl(filePath, mediaEndpoint, { session: sessionId, subtitle: 'true', streamIndex: sub.streamIndex })
+                : buildMediaUrl(sub.filePath, mediaEndpoint, { session: sessionId })
 
               if (!srcUrl) return null
 
@@ -145,6 +150,7 @@ export function VideoPlayerView({
         <span className="player-header-title">{title}</span>
         <div className="player-header-actions">
            <MediaInfoOverlay 
+             sessionId={sessionId}
              title={title}
              filePath={filePath}
              videoWidth={videoRef.current?.videoWidth}

@@ -19,10 +19,11 @@ import { runSetup } from './setup'
 
 export let downloads: DownloadManager | null = null
 import { registerIpcHandlers } from './ipc/handlers'
-import { createTray } from './tray'
+import { createTray, destroyTray } from './tray'
 import { db } from './db'
 import { spawn } from 'node:child_process'
 import { getBinaryPath } from './paths'
+import { MediaRequestRegistry } from './mediaRequestRegistry'
 
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
@@ -155,6 +156,8 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'Front-End', 'dist'
 
 let win: BrowserWindow | null = null
 let isQuitting = false
+let shutdownPromise: Promise<void> | null = null
+let shutdownFinished = false
 
 function initTray() {
   const iconPath = VITE_DEV_SERVER_URL
@@ -206,10 +209,11 @@ function createWindow() {
   win.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
+      win?.webContents.send('cortexdl:close-media-player');
       win?.hide();
     }
-    return false;
   });
+  win.on('closed', () => { win = null });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
@@ -259,6 +263,7 @@ const MEDIA_SERVER_PORT_BASE = Number(process.env.MEDIA_SERVER_PORT) || 3345
 const MEDIA_SERVER_PORT_MAX_TRIES = 10
 export let MEDIA_SERVER_PORT = MEDIA_SERVER_PORT_BASE
 let mediaServer: http.Server | null = null
+const mediaRequests = new MediaRequestRegistry()
 
 /**
  * Per-launch capability token for the local media server.
@@ -411,6 +416,7 @@ function streamEmbeddedSubtitle(
   filePath: string,
   rawStreamIndex: string | null,
   corsOrigin: string,
+  playerSession: string | null,
 ): void {
   // Only a bare stream number is accepted; anything else could select an
   // unintended (e.g. video) stream and produce a huge conversion.
@@ -443,11 +449,14 @@ function streamEmbeddedSubtitle(
   ], { windowsHide: true })
 
   let finished = false
+  let untrack = () => {}
 
   const finish = () => {
     if (finished) return
     finished = true
     clearTimeout(timer)
+    res.off('close', finish)
+    req.off('aborted', finish)
     try { child.kill('SIGKILL') } catch { /* already exited */ }
     if (!res.writableEnded) res.end()
   }
@@ -473,36 +482,52 @@ function streamEmbeddedSubtitle(
 
   child.on('close', (code) => {
     if (code !== 0 && stderrTail.trim()) {
-      log.warn(`[MediaServer] FFmpeg subtitle exit ${code}: ${stderrTail.trim()}`)
+      log.warn(`[MediaServer] FFmpeg subtitle exit ${code}${VITE_DEV_SERVER_URL ? `: ${stderrTail.trim()}` : ''}`)
     }
     finished = true
     clearTimeout(timer)
+    untrack()
+    res.off('close', finish)
+    req.off('aborted', finish)
     if (!res.writableEnded) res.end()
   })
 
   res.on('close', finish)
   req.on('aborted', finish)
+  untrack = mediaRequests.track(playerSession, 'subtitle', finish)
 }
 
 function pipeFileStream(
   stream: ReturnType<typeof createReadStream>,
   req: http.IncomingMessage,
   res: http.ServerResponse,
+  playerSession: string | null,
 ): void {
+  let finished = false
+  let untrack = () => {}
   const destroy = () => {
+    if (finished) return
+    finished = true
+    res.off('close', destroy)
+    req.off('aborted', destroy)
     if (!stream.destroyed) stream.destroy()
+    if (!res.writableEnded) res.destroy()
   }
-
   res.on('close', destroy)
   req.on('aborted', destroy)
+  stream.on('close', () => {
+    untrack()
+    destroy()
+  })
 
   stream.on('error', (err) => {
-    log.error('[MediaServer] Read stream error:', err)
+    log.error('[MediaServer] Read stream error:', (err as NodeJS.ErrnoException).code ?? 'unknown')
     destroy()
     if (!res.writableEnded) res.end()
   })
 
-  stream.pipe(res)
+  untrack = mediaRequests.track(playerSession, 'stream', destroy)
+  if (!finished) stream.pipe(res)
 }
 
 async function handleMediaRequest(
@@ -549,6 +574,13 @@ async function handleMediaRequest(
       log.warn('[MediaServer] Rejected a request that carried no valid capability token')
       res.writeHead(401)
       res.end('Unauthorized')
+      return
+    }
+
+    const playerSession = urlObj.searchParams.get('session')
+    if ((playerSession && !/^[a-zA-Z0-9-]{1,80}$/.test(playerSession)) || mediaRequests.isClosed(playerSession)) {
+      res.writeHead(410)
+      res.end('Media session closed')
       return
     }
 
@@ -607,7 +639,7 @@ async function handleMediaRequest(
     }
 
     if (urlObj.searchParams.get('subtitle') === 'true') {
-      streamEmbeddedSubtitle(req, res, filePath, urlObj.searchParams.get('streamIndex'), corsOrigin)
+      streamEmbeddedSubtitle(req, res, filePath, urlObj.searchParams.get('streamIndex'), corsOrigin, playerSession)
       return
     }
 
@@ -642,14 +674,14 @@ async function handleMediaRequest(
         'Content-Length': clampedEnd - start + 1,
         'Content-Type':   contentType,
       })
-      pipeFileStream(createReadStream(filePath, { start, end: clampedEnd }), req, res)
+      pipeFileStream(createReadStream(filePath, { start, end: clampedEnd }), req, res, playerSession)
     } else {
       res.writeHead(200, {
         'Content-Length': fileSize,
         'Content-Type':   contentType,
         'Accept-Ranges':  'bytes',
       })
-      pipeFileStream(createReadStream(filePath), req, res)
+      pipeFileStream(createReadStream(filePath), req, res, playerSession)
     }
   } catch (err) {
     log.error('[MediaServer] Error:', err)
@@ -671,6 +703,7 @@ function startMediaStreamingServer(): void {
   const server = http.createServer((req, res) => {
     void handleMediaRequest(req, res, appOrigin)
   })
+  server.keepAliveTimeout = 5000
 
   let attempt = 0
 
@@ -704,17 +737,25 @@ function startMediaStreamingServer(): void {
   tryListen(MEDIA_SERVER_PORT)
 }
 
-function stopMediaStreamingServer(): void {
+async function stopMediaStreamingServer(): Promise<void> {
+  await mediaRequests.closeAll()
   const server = mediaServer
   if (!server) return
   mediaServer = null
-  try {
-    server.closeAllConnections?.()
-    server.close()
-    log.info('[MediaServer] Streaming server stopped')
-  } catch (err) {
-    log.warn('[MediaServer] Failed to stop cleanly:', err)
-  }
+  await new Promise<void>(resolve => {
+    try {
+      server.close(err => {
+        if (err) log.warn('[MediaServer] Failed to stop cleanly:', err)
+        resolve()
+      })
+      server.closeAllConnections?.()
+      server.closeIdleConnections?.()
+    } catch (err) {
+      log.warn('[MediaServer] Failed to stop cleanly:', err)
+      resolve()
+    }
+  })
+  log.info('[MediaServer] Streaming server stopped')
 }
 
 const gotTheLock = app.requestSingleInstanceLock()
@@ -730,16 +771,29 @@ if (!gotTheLock) {
     }
   })
 
-  app.on('before-quit', async () => {
+  app.on('before-quit', (event) => {
     isQuitting = true
-    stopMediaStreamingServer()
-    // Kill all active child processes (yt-dlp, ffmpeg) before the app exits.
-    // pauseAll() calls killProcessTree for each running process.
-    if (downloads && downloads.getActiveCount() > 0) {
-      log.info(`[Shutdown] Pausing ${downloads.getActiveCount()} active downloads before quit...`)
-      await downloads.pauseAll()
-    }
-    downloads?.flushPendingSave()
+    if (shutdownFinished) return
+    event.preventDefault()
+    if (shutdownPromise) return
+    shutdownPromise = (async () => {
+      await stopMediaStreamingServer()
+      destroyTray()
+      // pauseAll() terminates active download children before the final quit.
+      try {
+        if (downloads && downloads.getActiveCount() > 0) {
+          log.info(`[Shutdown] Pausing ${downloads.getActiveCount()} active downloads before quit...`)
+          await downloads.pauseAll()
+        }
+      } finally {
+        downloads?.flushPendingSave()
+      }
+    })().catch(err => {
+      log.error('[Shutdown] Cleanup failed:', err)
+    }).finally(() => {
+      shutdownFinished = true
+      app.quit()
+    })
   })
 
   app.on('window-all-closed', () => {
@@ -750,6 +804,7 @@ if (!gotTheLock) {
   })
 
   app.on('activate', () => {
+    if (isQuitting) return
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
@@ -762,6 +817,10 @@ if (!gotTheLock) {
     getAutoUpdater: () => autoUpdater,
     getMediaPort: () => MEDIA_SERVER_PORT,
     getMediaToken: () => MEDIA_SERVER_TOKEN,
+    closeMediaSession: session => mediaRequests.closeSession(session),
+    getMediaRequestStats: () => mediaRequests.snapshot(),
+    trackMediaProcess: (session, kind, stop) => mediaRequests.track(session, kind === 'probe' ? 'probe' : 'subtitle', stop),
+    isMediaSessionClosed: session => mediaRequests.isClosed(session),
     serviceReadyPromise
   })
 

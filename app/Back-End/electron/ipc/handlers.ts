@@ -22,6 +22,10 @@ export interface IpcDependencies {
   getMediaPort: () => number
   /** Per-launch capability token required by every local media-server request. */
   getMediaToken: () => string
+  closeMediaSession: (session: string) => Promise<void>
+  getMediaRequestStats: () => { streams: number; ffmpegProcesses: number; probeProcesses: number; sessions: number }
+  trackMediaProcess: (session: string, kind: 'ffmpeg' | 'probe', stop: () => void) => () => void
+  isMediaSessionClosed: (session: string) => boolean
   serviceReadyPromise: Promise<void>
 }
 
@@ -76,7 +80,7 @@ async function getAppHealthCheck(): Promise<AppHealthCheck> {
 }
 
 export function registerIpcHandlers(deps: IpcDependencies) {
-  const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, serviceReadyPromise } = deps
+  const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
 
   ipcMain.on('log-message', (_event, level, message) => {
     if (log && log[level as keyof typeof log]) {
@@ -357,14 +361,21 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:get-media-fps', async (_event, filePath: string) => {
+  ipcMain.handle('cortexdl:get-media-fps', async (_event, filePath: string, playerSession: string) => {
+    if (isMediaSessionClosed(playerSession)) return null
+    let untrack = () => {}
     try {
       const { MediaProcessor } = await import('../engines/MediaProcessor')
+      if (isMediaSessionClosed(playerSession)) return null
       const processor = new MediaProcessor()
+      untrack = trackMediaProcess(playerSession, 'ffmpeg', () => processor.killAll())
+      if (isMediaSessionClosed(playerSession)) return null
       return await processor.getFps(filePath)
     } catch (err) {
       log.error('Failed to get media FPS:', err)
       return null
+    } finally {
+      untrack()
     }
   })
 
@@ -414,6 +425,23 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     port: getMediaPort(),
     token: getMediaToken(),
   }))
+
+  ipcMain.handle('cortexdl:close-media-session', (_event, session: string) => {
+    return closeMediaSession(session)
+  })
+
+  ipcMain.handle('cortexdl:get-media-diagnostics', async () => {
+    if (app.isPackaged && process.env.CORTEX_DL_MEDIA_DIAGNOSTICS !== '1') return null
+    return {
+      processMetrics: app.getAppMetrics().map(metric => ({
+        pid: metric.pid,
+        type: metric.type,
+        memory: metric.memory,
+      })),
+      mainMemory: await process.getProcessMemoryInfo(),
+      requests: getMediaRequestStats(),
+    }
+  })
 
   ipcMain.handle('cortexdl:select-cookie-file', async () => {
     const win = getWin()
@@ -465,8 +493,9 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:get-subtitles', async (_event, videoPath: string) => {
+  ipcMain.handle('cortexdl:get-subtitles', async (_event, videoPath: string, playerSession: string) => {
     try {
+      if (isMediaSessionClosed(playerSession)) return []
       if (!videoPath || !existsSync(videoPath)) return []
 
       const dir = path.dirname(videoPath)
@@ -496,6 +525,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       try {
         const ffprobePath = getBinaryPath('ffprobe')
         if (existsSync(ffprobePath) && (ext === '.mp4' || ext === '.mkv' || ext === '.webm')) {
+          if (isMediaSessionClosed(playerSession)) return []
           const probeData = await new Promise<string>((resolve, reject) => {
             let output = ''
             const p = spawn(ffprobePath, [
@@ -504,14 +534,25 @@ export function registerIpcHandlers(deps: IpcDependencies) {
               '-select_streams', 's',
               '-of', 'json',
               videoPath
-            ], { windowsHide: true })
+            ], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+            const untrack = trackMediaProcess(playerSession, 'probe', () => p.kill())
+            const timer = setTimeout(() => p.kill(), 15_000)
             
-            p.stdout.on('data', d => { output += d.toString() })
+            p.stdout.on('data', d => {
+              output += d.toString()
+              if (output.length > 1024 * 1024) p.kill()
+            })
             p.on('close', code => {
+              clearTimeout(timer)
+              untrack()
               if (code === 0) resolve(output)
               else reject(new Error('ffprobe failed'))
             })
-            p.on('error', reject)
+            p.on('error', err => {
+              clearTimeout(timer)
+              untrack()
+              reject(err)
+            })
           })
 
           const parsed = JSON.parse(probeData)

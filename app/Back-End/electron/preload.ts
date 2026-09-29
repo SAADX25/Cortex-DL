@@ -157,11 +157,22 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getMediaEndpoint(): Promise<{ port: number; token: string }> {
     return ipcRenderer.invoke('cortexdl:get-media-endpoint')
   },
+  closeMediaSession(session: string): Promise<void> {
+    return ipcRenderer.invoke('cortexdl:close-media-session', session)
+  },
+  getMediaDiagnostics(): Promise<unknown> {
+    return ipcRenderer.invoke('cortexdl:get-media-diagnostics')
+  },
+  onCloseMediaPlayer(callback: () => void): () => void {
+    const listener = () => callback()
+    ipcRenderer.on('cortexdl:close-media-player', listener)
+    return () => ipcRenderer.off('cortexdl:close-media-player', listener)
+  },
   fetchThumbnail(url: string): Promise<string> {
     return ipcRenderer.invoke('cortexdl:fetch-thumbnail', url)
   },
-  getMediaFps(filePath: string): Promise<number | null> {
-    return ipcRenderer.invoke('cortexdl:get-media-fps', filePath)
+  getMediaFps(filePath: string, session: string): Promise<number | null> {
+    return ipcRenderer.invoke('cortexdl:get-media-fps', filePath, session)
   },
   getDirectStreamUrl(url: string): Promise<string> {
     return invokeRendererSafe('cortexdl:get-direct-stream-url', url)
@@ -175,7 +186,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
   setCookieFile(filePath: string | null): Promise<CookieValidationResult> {
     return ipcRenderer.invoke('cortexdl:set-cookie-file', filePath)
   },
-  getSubtitles(filePath: string): Promise<import('../../Shared/types').PlayerSubtitleTrack[]> {
-    return ipcRenderer.invoke('cortexdl:get-subtitles', filePath)
+  getSubtitles(filePath: string, session: string): Promise<import('../../Shared/types').PlayerSubtitleTrack[]> {
+    return ipcRenderer.invoke('cortexdl:get-subtitles', filePath, session)
   },
 })
