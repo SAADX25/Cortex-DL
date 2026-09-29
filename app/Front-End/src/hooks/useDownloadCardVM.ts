@@ -55,7 +55,6 @@ export interface DownloadCardVM {
   sizeLabel: string        
   speedLabel: string       
   etaLabel: string         
-  convertingPercent: number | null
 
   
   errorMessage: string | null
@@ -198,7 +197,6 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       sizeLabel,
       speedLabel,
       etaLabel,
-      convertingPercent: convPct,
       errorMessage: task.errorMessage === 'YOUTUBE_AUTH_REQUIRED' ? t.youtube_auth_required : task.errorMessage ?? null,
       showPause,
       showResume,

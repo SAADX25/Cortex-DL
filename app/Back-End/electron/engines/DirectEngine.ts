@@ -159,6 +159,7 @@ export class DirectEngine implements IEngine {
           log.warn(
             `[DirectEngine] Task ${task.id}: ${error.message} — restarting as a single stream`
           );
+          task.supportsRanges = false;
           await this.discardOutput(task);
           this.adoptController(new AbortController(), context);
           await this.downloadSingleStream(task, context);

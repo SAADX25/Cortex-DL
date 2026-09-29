@@ -99,7 +99,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     if (mediaRef.current) {
       mediaRef.current.pause();
       try { mediaRef.current.currentTime = 0; } catch (e) {
-
+        // The media element may have been detached.
       }
     }
     if (videoRef.current) videoRef.current.pause();
@@ -220,10 +220,10 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       cancelAnimationFrame(rafId);
       animationFrameRef.current = null;
       try { if (source && analyser) source.disconnect(analyser); } catch (_) {
-
+        // Audio graph teardown is best effort.
       }
       try { if (analyser) analyser.disconnect(); } catch (_) {
-
+        // Audio graph teardown is best effort.
       }
 
       audioContextRef.current = null;
@@ -254,7 +254,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
         el.pause();
         el.removeAttribute('src');
         el.load();
-      } catch (_) { }
+      } catch (_) { /* Detached media elements need no further cleanup. */ }
     };
     freeDecoder(videoRef.current);
     freeDecoder(audioRef.current);
@@ -426,7 +426,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
               if (video.videoWidth <= 2560) {
                 try {
                   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                } catch (_) {}
+                } catch (_) { /* Keep the previous frame if drawing fails. */ }
               }
             }
           }

@@ -1,10 +1,11 @@
 import React, { useRef } from 'react'
 import { Play, FolderOpen, Trash2 } from 'lucide-react'
-import { useDownloadCardVM, type DisplayPhase, type DownloadCardVM } from '../hooks/useDownloadCardVM'
+import { useDownloadCardVM, type DisplayPhase } from '../hooks/useDownloadCardVM'
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
 import { useLang } from '../stores/useSettingsStore'
 import { translations } from '../translations'
 import SmartImage from './SmartImage'
+import { AUDIO_FORMATS } from '../../../Shared/types'
 import './DownloadCard.css'
 
 interface DownloadCardProps {
@@ -56,14 +57,11 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   const progressBarRef = useRef<HTMLDivElement>(null)
   const speedTextRef = useRef<HTMLSpanElement>(null)
   const percentTextRef = useRef<HTMLSpanElement>(null)
-  const vmRef = useRef<DownloadCardVM | null>(vm)
-  vmRef.current = vm
 
   useHighFrequencyIPC(id, {
     progressBarRef,
     speedTextRef,
     percentTextRef,
-    vmRef,
   })
 
   if (!vm) return null
@@ -84,7 +82,7 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           />
         ) : (
           <div className="dc-thumb-placeholder">
-            {vm.formatTag === 'mp3' || vm.formatTag === 'wav' || vm.formatTag === 'm4a' || vm.formatTag === 'ogg' || vm.formatTag === 'flac' ? '🎵' : '🎬'}
+            {AUDIO_FORMATS.includes(vm.formatTag as (typeof AUDIO_FORMATS)[number]) ? '🎵' : '🎬'}
           </div>
         )}
       </div>

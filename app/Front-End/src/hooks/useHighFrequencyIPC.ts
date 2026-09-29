@@ -1,49 +1,36 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import type { DownloadTask } from '../../../Shared/types'
 import { getProgressView } from '../../../Shared/progressModel'
-import type { DownloadCardVM } from './useDownloadCardVM'
 
 interface RegisteredDom {
   progressBarRef?: RefObject<HTMLDivElement | null>
   speedTextRef?: RefObject<HTMLSpanElement | null>
   percentTextRef?: RefObject<HTMLSpanElement | null>
-  vmRef?: RefObject<DownloadCardVM | null>
 }
 
 const domRegistry = new Map<string, RegisteredDom>()
 const lastZustandSentAtMs = new Map<string, number>()
 const lastStructuralKeyById = new Map<string, string>()
-const lastTaskById = new Map<string, DownloadTask>()
 let ipcListenersStarted = false
 const ZUSTAND_THROTTLE_MS = 250
 const TERMINAL = new Set(['completed', 'error', 'canceled', 'paused'])
 
 export function startHighFrequencyIPCListeners(opts: {
   upsertTask: (task: DownloadTask) => void
-  getTaskById: (id: string) => DownloadTask | undefined
 }): () => void {
   if (ipcListenersStarted) return () => {}
   ipcListenersStarted = true
   const receive = (task: DownloadTask) => {
     if (!task?.id) return
-    lastTaskById.set(task.id, task)
     updateDomForTask(task)
     maybeUpsertToZustand(task, opts)
   }
   const disposeUpdated = window.cortexDl.onDownloadUpdated(receive)
-  const disposeProgress = window.cortexDl.onDownloadProgress((data: DownloadProgressData) => {
-    const id = data?.id ?? data?.Id
-    if (!id) return
-    const task = lastTaskById.get(id) ?? opts.getTaskById(id)
-    if (task) receive(task)
-  })
   return () => {
     disposeUpdated()
-    disposeProgress()
     ipcListenersStarted = false
     lastZustandSentAtMs.clear()
     lastStructuralKeyById.clear()
-    lastTaskById.clear()
   }
 }
 
@@ -57,7 +44,6 @@ export function useHighFrequencyIPC(taskId: string | undefined, options: Registe
       get progressBarRef() { return optionsRef.current.progressBarRef },
       get speedTextRef() { return optionsRef.current.speedTextRef },
       get percentTextRef() { return optionsRef.current.percentTextRef },
-      get vmRef() { return optionsRef.current.vmRef },
     }
     domRegistry.set(taskId, refs)
     return () => { domRegistry.delete(taskId) }

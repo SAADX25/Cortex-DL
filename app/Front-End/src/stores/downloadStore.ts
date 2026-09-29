@@ -170,7 +170,6 @@ export function initDownloadStore(): () => void {
   
   const disposeIPC = startHighFrequencyIPCListeners({
     upsertTask,
-    getTaskById: (id) => useDownloadStore.getState().tasks.get(id),
   })
 
   

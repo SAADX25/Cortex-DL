@@ -1,3 +1,5 @@
+import { AUDIO_FORMATS as SHARED_AUDIO_FORMATS } from '../../../Shared/types'
+
 export type FormatOption = { value: string; label: string }
 
 export const VIDEO_FORMATS: FormatOption[] = [
@@ -10,16 +12,7 @@ export const VIDEO_FORMATS: FormatOption[] = [
   { value: 'm4v', label: 'M4V' },
 ]
 
-export const AUDIO_FORMATS: FormatOption[] = [
-  { value: 'mp3', label: 'MP3' },
-  { value: 'wav', label: 'WAV' },
-  { value: 'm4a', label: 'M4A' },
-  { value: 'ogg', label: 'OGG' },
-  { value: 'flac', label: 'FLAC' },
-  { value: 'aac', label: 'AAC' },
-  { value: 'opus', label: 'OPUS' },
-  { value: 'wma', label: 'WMA' },
-]
+export const AUDIO_FORMATS: FormatOption[] = SHARED_AUDIO_FORMATS.map(value => ({ value, label: value.toUpperCase() }))
 
 export const FORMAT_GROUPS = [
   { label: 'VIDEO', options: VIDEO_FORMATS },

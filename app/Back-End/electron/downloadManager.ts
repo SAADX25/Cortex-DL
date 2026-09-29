@@ -12,6 +12,8 @@ import type {
 } from './types'
 import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
+import { isAudioFormat, matchesAudioFormat } from './audioFormats'
+import { probeMediaFile } from './mediaFiles'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
@@ -63,7 +65,7 @@ export class DownloadManager {
         if ([3, 5, 10].includes(parsed)) this.maxConcurrent = parsed
       }
     } catch {
-      
+      // Keep the default concurrency when settings are unavailable.
     }
   }
 
@@ -135,7 +137,7 @@ export class DownloadManager {
       title: t.title || t.filename,
       url: t.url,
       status: t.status,
-      progress: Math.min(100, Math.round(((t.downloadedBytes || 0) / (t.totalBytes || 1)) * 100)) || 0,
+      progress: t.overallProgress ?? null,
       size: t.totalBytes || 0,
       thumbnail: t.thumbnail || '',
       engine: t.engine,
@@ -324,7 +326,7 @@ export class DownloadManager {
 
       const rawSubfolder = (input.subfolderName ?? '').trim()
       
-      const safeSubfolder = rawSubfolder.replace(/[\/\\:*?"<>|]/g, '').trim()
+      const safeSubfolder = rawSubfolder.replace(/[/\\:*?"<>|]/g, '').trim()
       const finalDirectory = safeSubfolder
         ? path.join(input.directory, safeSubfolder)
         : input.directory
@@ -468,7 +470,7 @@ export class DownloadManager {
     try {
       if (existsSync(task.filePath)) await fs.unlink(task.filePath)
     } catch {
-      
+      // The task-owned file may already have been removed.
     }
     await this.removeTaskFragments(task)
 
@@ -733,6 +735,7 @@ export class DownloadManager {
       task.phaseProgress = null
       task.speedBytesPerSec = null
       task.updatedAtMs = nowMs()
+      updateTaskProgress(task)
       sendUpdate(this.win, task)
       
       const entry = engines.get(task.engine)
@@ -748,6 +751,13 @@ export class DownloadManager {
       this.engines.delete(id)
 
       if (this.tasks.get(id) !== task) return
+
+      if (task.status === 'downloading' && task.engine === 'direct' && isAudioFormat(task.targetFormat)) {
+        const probe = await probeMediaFile(task.filePath, child => { context.runtime.child = child })
+        if (!matchesAudioFormat(task.targetFormat, probe)) {
+          throw new Error(`Direct download is not a valid ${task.targetFormat} audio file`)
+        }
+      }
 
       
       

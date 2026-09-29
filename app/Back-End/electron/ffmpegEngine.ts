@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { promises as fs } from 'node:fs'
-import type { DownloadTask, TaskRuntime, EngineContext, AudioFormat, TargetFormat } from './types'
-import { AUDIO_FORMATS } from './types'
+import type { DownloadTask, TaskRuntime, EngineContext, TargetFormat } from './types'
+import { audioOutputArgs, isAudioFormat, matchesAudioFormat } from './audioFormats'
+import { probeMediaFile } from './mediaFiles'
 import { getBinaryPath } from './paths'
 import { nowMs, getFileSizeIfExists, sendNotification, parseTimeToSeconds } from './utils'
 import { parseFfmpegProgress, flushLines, logRawProgressChunk } from './progressParser'
@@ -12,7 +13,7 @@ const wasStopped = (task: DownloadTask) => task.status === 'paused' || task.stat
 
 export async function isFfmpegAvailable(): Promise<boolean> {
   try {
-    const p = spawn(getBinaryPath('ffmpeg'), ['-version'], { windowsHide: true, detached: false })
+    const p = spawn(getBinaryPath('ffmpeg'), ['-version'], { windowsHide: true, detached: false, stdio: 'ignore' })
     const exitCode: number = await new Promise((resolve) => {
       p.on('close', (code) => resolve(code ?? 1))
       p.on('error', () => resolve(1))
@@ -40,7 +41,6 @@ function spawnFfmpeg(
     '-probesize', '10M',
     '-analyzeduration', '5000000',
     '-threads', '0',
-    '-max_muxing_queue_size', '1024',
     '-progress', 'pipe:2',
   ]
   if (startTime || endTime) {
@@ -59,18 +59,8 @@ function spawnFfmpeg(
 
   let tail: string[]
 
-  if (AUDIO_FORMATS.includes(format as AudioFormat)) {
-    switch (format) {
-      case 'mp3':  tail = ['-vn', '-acodec', 'libmp3lame', '-q:a', '0', outputPath]; break
-      case 'm4a':  tail = ['-vn', '-acodec', 'aac', '-b:a', '256k', outputPath]; break
-      case 'flac': tail = ['-vn', '-acodec', 'flac', outputPath]; break
-      case 'wav':  tail = ['-vn', '-acodec', 'pcm_s16le', outputPath]; break
-      case 'ogg':  tail = ['-vn', '-acodec', 'libvorbis', '-q:a', '6', outputPath]; break
-      case 'aac':  tail = ['-vn', '-acodec', 'aac', '-b:a', '256k', '-f', 'adts', outputPath]; break
-      case 'opus': tail = ['-vn', '-acodec', 'libopus', '-b:a', '192k', outputPath]; break
-      case 'wma':  tail = ['-vn', '-acodec', 'wmav2', '-b:a', '192k', outputPath]; break
-      default:     tail = ['-vn', '-acodec', 'libmp3lame', '-q:a', '0', outputPath]
-    }
+  if (isAudioFormat(format)) {
+    tail = audioOutputArgs(format, outputPath)
   } else {
     switch (format) {
       case 'mkv':  tail = ['-c', 'copy', outputPath]; break
@@ -86,7 +76,7 @@ function spawnFfmpeg(
     }
   }
 
-  return spawn(getBinaryPath('ffmpeg'), [...pre, ...tail], { windowsHide: true, detached: false })
+  return spawn(getBinaryPath('ffmpeg'), [...pre, '-max_muxing_queue_size', '1024', ...tail], { windowsHide: true, detached: false })
 }
 
 export async function runFfmpegDownload(
@@ -203,6 +193,13 @@ export async function runFfmpegDownload(
     if (exitCode === 0) {
       const finalSize = await getFileSizeIfExists(task.filePath)
       if (finalSize <= 0) throw new Error('FFmpeg exited successfully without an output file')
+      if (isAudioFormat(task.targetFormat)) {
+        const probe = await probeMediaFile(task.filePath, child => { runtime.child = child })
+        if (runtime.abortController?.signal.aborted) return
+        if (!matchesAudioFormat(task.targetFormat, probe)) {
+          throw new Error(`FFmpeg produced an invalid ${task.targetFormat} audio file`)
+        }
+      }
       task.status = 'completed'
       task.updatedAtMs = nowMs()
       runtime.retries = 0

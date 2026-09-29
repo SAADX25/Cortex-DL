@@ -27,47 +27,38 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
 
   
   
-  const tplMatch = /CORTEX_DL:(\S+):(\S+):(\S+)/.exec(line)
+  const tplMatch = /CORTEX_DL\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|\s]+)/.exec(line)
   if (tplMatch) {
-    const dlBytes = parseFloat(tplMatch[1])
-    const totalEst = parseFloat(tplMatch[2])
-    const speed = parseFloat(tplMatch[3])
-
-    if (!isNaN(dlBytes) && dlBytes >= 0) {
-      // yt-dlp resets this counter for each selected stream. Keep a
-      // monotonic byte estimate across the video/audio boundary.
-      if (dlBytes < (task.ytdlpStreamBytes ?? 0)) {
-        task.ytdlpCompletedStreamBytes = (task.ytdlpCompletedStreamBytes ?? 0) + (task.ytdlpStreamTotalBytes ?? task.ytdlpStreamBytes ?? 0)
-      }
-      task.ytdlpStreamBytes = Math.round(dlBytes)
-      task.downloadedBytes = Math.round((task.ytdlpCompletedStreamBytes ?? 0) + dlBytes)
-      changed = true
+    const [, formatId, filename, downloadedText, totalText, speedText] = tplMatch
+    const downloaded = Number(downloadedText)
+    const total = Number(totalText)
+    const speed = Number(speedText)
+    if (!Number.isFinite(downloaded) || downloaded < 0) return false
+    // A reconnect or resume can reset the counter for the *same* stream.
+    // The stream key, rather than a counter drop, identifies a new format.
+    const key = `${formatId}|${filename}`
+    const streams = task.ytdlpStreams ?? (task.ytdlpStreams = {})
+    const previous = streams[key]
+    streams[key] = {
+      downloaded: Math.max(previous?.downloaded ?? 0, Math.round(downloaded)),
+      total: Number.isFinite(total) && total > 0
+        ? Math.max(previous?.total ?? 0, Math.round(total))
+        : previous?.total ?? null,
     }
-    if (!isNaN(totalEst) && totalEst > 0) {
-      task.ytdlpStreamTotalBytes = Math.round(totalEst)
-      const aggregateTotal = task.ytdlpExpectedBytes ?? (task.ytdlpCompletedStreamBytes ?? 0) + Math.round(totalEst)
-      if (task.totalBytes !== aggregateTotal) {
-        task.totalBytes = aggregateTotal
-        changed = true
-      }
-    }
-    if (!isNaN(speed) && speed >= 0) {
-      const roundedSpeed = Math.round(speed)
-      if (task.speedBytesPerSec !== roundedSpeed) {
-        task.speedBytesPerSec = roundedSpeed
-        changed = true
-      }
-    }
-
-    if (task.totalBytes && task.totalBytes > 0 && task.downloadedBytes > 0) {
-      task.downloadPercent = Math.min(100, Math.round((task.downloadedBytes / task.totalBytes) * 100))
-    } else if (!isNaN(dlBytes) && !isNaN(totalEst) && totalEst > 0) {
-      task.downloadPercent = Math.min(100, Math.round((dlBytes / totalEst) * 100))
-    }
-    return changed
+    const values = Object.values(streams)
+    task.downloadedBytes = values.reduce((sum, stream) => sum + stream.downloaded, 0)
+    const observedTotal = values.reduce((sum, stream) => sum + (stream.total ?? 0), 0)
+    const expected = task.ytdlpExpectedBytes ?? 0
+    task.totalBytes = Math.max(expected, observedTotal) || null
+    task.downloadPercent = task.totalBytes
+      ? Math.min(100, Math.round(task.downloadedBytes / task.totalBytes * 100))
+      : undefined
+    if (Number.isFinite(speed) && speed >= 0) task.speedBytesPerSec = Math.round(speed)
+    return true
   }
 
-  
+  if (task.engine === 'ytdlp' && task.ytdlpStreams && Object.keys(task.ytdlpStreams).length) return false
+
   const progressMatch = /\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+~?\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|TiB|B)/i.exec(line)
   if (progressMatch) {
     const totalVal = parseFloat(progressMatch[2])
