@@ -71,9 +71,8 @@ export type DownloadTask = {
   subtitleIsAutomatic?: boolean
   fps?: number | string
   ytdlpExpectedBytes?: number
-  ytdlpCompletedStreamBytes?: number
-  ytdlpStreamBytes?: number
-  ytdlpStreamTotalBytes?: number
+  /** Stable per-format progress survives retries and app restarts. */
+  ytdlpStreams?: Record<string, { downloaded: number; total: number | null }>
   /** Persisted chunk state for DirectEngine pause/resume. Cleared on completion. */
   resumeChunks?: { start: number; end: number; downloaded: number; completed: boolean }[]
   /** Whether the server supports HTTP Range requests (cached from HEAD). */

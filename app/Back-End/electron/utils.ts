@@ -8,6 +8,8 @@ import { updateTaskProgress } from '../../Shared/progressModel'
 import { UPDATE_CHANNEL } from './types'
 
 export function sanitizeFilename(name: string): string {
+  // Control characters are intentionally invalid in output filenames.
+  // eslint-disable-next-line no-control-regex
   let sanitized = name.replace(/[/\\:*?"<>|\x00-\x1f]/g, '').trim()
   sanitized = sanitized.replace(/[\s_]+/g, '_')
   sanitized = sanitized.replace(/-+/g, '-')

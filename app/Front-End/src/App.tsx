@@ -52,6 +52,8 @@ function App() {
   const mediaPlayerFile = useUIStore((s) => s.mediaPlayerFile)
   const setMediaPlayerFile = useUIStore((s) => s.setMediaPlayerFile)
 
+  useEffect(() => window.cortexDl.onCloseMediaPlayer(() => setMediaPlayerFile(null)), [setMediaPlayerFile])
+
   const isCommentsDownloading = useCommentsStore((s) => s.isCommentsDownloading)
   const commentsSuccessPath = useCommentsStore((s) => s.commentsSuccessPath)
   const commentsProgress = useCommentsStore((s) => s.commentsProgress)
@@ -130,13 +132,16 @@ function App() {
       />
 
       {/* ── Media Player Modal ── */}
-      <MediaPlayerModal
-        isOpen={!!mediaPlayerFile}
-        filePath={mediaPlayerFile?.filePath || ''}
-        title={mediaPlayerFile?.title}
-        dir={lang === 'ar' ? 'rtl' : 'ltr'}
-        onClose={() => setMediaPlayerFile(null)}
-      />
+      {mediaPlayerFile && (
+        <MediaPlayerModal
+          key={mediaPlayerFile.filePath}
+          isOpen
+          filePath={mediaPlayerFile.filePath}
+          title={mediaPlayerFile.title}
+          dir={lang === 'ar' ? 'rtl' : 'ltr'}
+          onClose={() => setMediaPlayerFile(null)}
+        />
+      )}
 
       {/* ── Comments Download Modal ── */}
       <AnimatePresence>

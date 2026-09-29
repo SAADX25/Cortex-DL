@@ -6,6 +6,11 @@ export function getTray(): Tray | null {
   return tray
 }
 
+export function destroyTray(): void {
+  tray?.destroy()
+  tray = null
+}
+
 export function createTray(
   iconPath: string, 
   getWin: () => BrowserWindow | null, 

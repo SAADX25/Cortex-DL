@@ -43,7 +43,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
     setImgSrc(src)
 
     if (src && /instagram|cdninstagram/i.test(src) && mediaEndpoint) {
-      ;(async () => {
+      void (async () => {
         try {
           const filePath = await window.cortexDl.fetchThumbnail(src)
           if (!cancelled && filePath) {

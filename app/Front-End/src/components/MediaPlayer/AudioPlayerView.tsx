@@ -47,6 +47,7 @@ export function AudioPlayerView({
       <audio
         ref={audioRef}
         src={fileUrl || undefined}
+        preload="metadata"
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={() => { setHasError(false); onLoadedMetadata(); }}
         onEnded={onEnded}

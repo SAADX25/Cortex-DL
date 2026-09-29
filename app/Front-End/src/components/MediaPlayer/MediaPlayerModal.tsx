@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { VideoPlayerView } from './VideoPlayerView';
 import { AudioPlayerView } from './AudioPlayerView';
 import { buildMediaUrl, useMediaEndpoint } from '../../lib/mediaEndpoint';
+import { clearMediaCanvas, releaseAudioGraph, releaseMediaElement, stopPlayerFrame } from './mediaSession';
+import { markAudioContext, markMediaSession } from './mediaDiagnostics';
 import './MediaPlayer.css';
 
 interface MediaPlayerModalProps {
@@ -45,7 +47,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const [showControls, setShowControls] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
   const mediaEndpoint = useMediaEndpoint();
-  const [hideForPiP, setHideForPiP] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('cortexdl_media_volume', volume.toString());
@@ -66,9 +67,14 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const audioCleanupRef = useRef<(() => Promise<void>) | null>(null);
+  const stopAmbilightRef = useRef<(() => void) | null>(null);
+  const sessionClosedRef = useRef(false);
+  const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const effectGenerationRef = useRef(0);
 
   const mediaType = getMediaType(filePath);
-  const fileUrl = buildMediaUrl(filePath, mediaEndpoint);
+  const fileUrl = buildMediaUrl(filePath, mediaEndpoint, { session: sessionIdRef.current });
   const displayTitle = title || '';
 
   const isMiniModeRef = useRef(isMiniMode);
@@ -86,25 +92,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     });
   };
 
-
-  useEffect(() => {
-    if (document.pictureInPictureElement) {
-      document.exitPictureInPicture().catch(() => { });
-    }
-
-    setHideForPiP(false);
-    setIsMiniMode(false);
-    setIsPlaying(false);
-
-    if (mediaRef.current) {
-      mediaRef.current.pause();
-      try { mediaRef.current.currentTime = 0; } catch (e) {
-
-      }
-    }
-    if (videoRef.current) videoRef.current.pause();
-    if (audioRef.current) audioRef.current.pause();
-  }, [filePath]);
 
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
@@ -134,33 +121,28 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let audioCtx: AudioContext;
+    if (audioContextRef.current || sessionClosedRef.current) return;
+    let audioCtx: AudioContext | null = null;
     let analyser: AnalyserNode;
     let source: MediaElementAudioSourceNode;
-    let rafId: number;
+    let rafId: number | null = null;
 
     try {
-      const cached = (audioEl as HTMLAudioElement & { __audioCache?: { ctx: AudioContext; source: MediaElementAudioSourceNode } }).__audioCache;
-      if (cached && cached.ctx.state !== 'closed') {
-        audioCtx = cached.ctx;
-        source = cached.source;
-      } else {
-        const AudioCtxCtor = window.AudioContext || (window as any).webkitAudioContext;
-        audioCtx = new AudioCtxCtor();
-        source = audioCtx.createMediaElementSource(audioEl);
-        (audioEl as HTMLAudioElement & { __audioCache?: { ctx: AudioContext; source: MediaElementAudioSourceNode } }).__audioCache = { ctx: audioCtx, source };
-      }
-
+      const AudioCtxCtor = window.AudioContext || (window as any).webkitAudioContext;
+      audioCtx = new AudioCtxCtor();
+      source = audioCtx.createMediaElementSource(audioEl);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
       analyser.connect(audioCtx.destination);
     } catch (e) {
       console.warn('[Visualizer] Web Audio setup failed:', e);
+      if (audioCtx) void audioCtx.close().catch(() => {});
       return;
     }
 
     audioContextRef.current = audioCtx;
+    markAudioContext(true);
     analyserRef.current = analyser;
     sourceRef.current = source;
 
@@ -168,6 +150,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     const dataArray = new Uint8Array(bufferLength);
 
     const draw = () => {
+      if (sessionClosedRef.current) return;
       rafId = requestAnimationFrame(draw);
       animationFrameRef.current = rafId;
 
@@ -216,55 +199,70 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
     draw();
 
-    return () => {
-      cancelAnimationFrame(rafId);
+    let cleaned = false;
+    audioCleanupRef.current = async () => {
+      if (cleaned) return;
+      cleaned = true;
+      stopPlayerFrame(rafId);
       animationFrameRef.current = null;
-      try { if (source && analyser) source.disconnect(analyser); } catch (_) {
-
-      }
-      try { if (analyser) analyser.disconnect(); } catch (_) {
-
-      }
 
       audioContextRef.current = null;
       analyserRef.current = null;
       sourceRef.current = null;
-
+      audioCleanupRef.current = null;
+      clearMediaCanvas(canvas);
+      await releaseAudioGraph(audioCtx, source, analyser);
+      markAudioContext(false);
     };
   }, [isOpen, mediaType, filePath]);
 
   const togglePlay = useCallback(() => {
-    if (!mediaRef.current) return;
+    if (!mediaRef.current || sessionClosedRef.current) return;
     if (isPlaying) {
       mediaRef.current.pause();
     } else {
       if (audioContextRef.current?.state === 'suspended') {
         audioContextRef.current.resume();
       }
-      mediaRef.current.play().catch(console.error);
+      mediaRef.current.play().catch(error => {
+        if (error?.name !== 'AbortError' && !sessionClosedRef.current) console.error(error);
+      });
     }
     setIsPlaying(p => !p);
   }, [isPlaying]);
 
+  const releasePlayerSession = useCallback((captured?: {
+    video: HTMLVideoElement | null;
+    audio: HTMLAudioElement | null;
+    ambilight: HTMLCanvasElement | null;
+    visualizer: HTMLCanvasElement | null;
+  }): Promise<void> => {
+    if (sessionClosedRef.current) return Promise.resolve();
+    sessionClosedRef.current = true;
+    const video = captured?.video ?? videoRef.current;
+    const audio = captured?.audio ?? audioRef.current;
+    clearHideTimer();
+    stopAmbilightRef.current?.();
+    stopAmbilightRef.current = null;
+    stopPlayerFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+    if (document.pictureInPictureElement === video) void document.exitPictureInPicture().catch(() => {});
+    if (document.fullscreenElement === containerRef.current) void document.exitFullscreen().catch(() => {});
+    const audioClose = audioCleanupRef.current?.() ?? Promise.resolve();
+    releaseMediaElement(video);
+    releaseMediaElement(audio);
+    clearMediaCanvas(captured?.ambilight ?? ambilightRef.current);
+    clearMediaCanvas(captured?.visualizer ?? canvasRef.current);
+    mediaRef.current = null;
+    markMediaSession(sessionIdRef.current, false);
+    void window.cortexDl.closeMediaSession(sessionIdRef.current).catch(() => {});
+    return audioClose;
+  }, [clearHideTimer]);
+
   const handleClose = useCallback(() => {
-
-    const freeDecoder = (el: HTMLVideoElement | HTMLAudioElement | null) => {
-      if (!el) return;
-      try {
-        el.pause();
-        el.removeAttribute('src');
-        el.load();
-      } catch (_) { }
-    };
-    freeDecoder(videoRef.current);
-    freeDecoder(audioRef.current);
-
-    if (mediaType === 'video' && document.pictureInPictureElement === videoRef.current) {
-      setHideForPiP(true);
-    } else {
-      onClose();
-    }
-  }, [mediaType, onClose]);
+    void releasePlayerSession();
+    onClose();
+  }, [releasePlayerSession, onClose]);
 
 
   useEffect(() => {
@@ -313,53 +311,23 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
 
   useEffect(() => {
-    if (!isOpen) {
-      const release = (el: HTMLVideoElement | HTMLAudioElement | HTMLCanvasElement | null) => {
-        if (!el) return;
-        if ('pause' in el) {
-          el.pause();
-          el.removeAttribute('src');
-          el.load();
-        } else if (el.tagName === 'CANVAS') {
-          const ctx = (el as HTMLCanvasElement).getContext('2d');
-          ctx?.clearRect(0, 0, el.width, el.height);
-        }
-      };
-      release(videoRef.current);
-      release(audioRef.current);
-      release(ambilightRef.current);
-
-      setIsPlaying(false);
-      setDuration(0);
-      clearHideTimer();
-      setShowControls(true);
-      setIsIdle(false);
-      setPlaybackSpeed(1);
-      setIsMiniMode(false);
-      setHideForPiP(false);
-    }
-  }, [isOpen, clearHideTimer]);
-
-
-
-  useEffect(() => {
-    const mediaObj = mediaRef.current;
-    const videoObj = videoRef.current;
-    const audioObj = audioRef.current;
-
-    return () => {
-      const releaseStrict = (el: HTMLVideoElement | HTMLAudioElement | null) => {
-        if (el && typeof el.pause === 'function') {
-          el.pause();
-          el.removeAttribute('src');
-          el.load();
-        }
-      };
-      releaseStrict(mediaObj);
-      releaseStrict(videoObj);
-      releaseStrict(audioObj);
+    markMediaSession(sessionIdRef.current, true);
+    const generationRef = effectGenerationRef;
+    const generation = ++generationRef.current;
+    const captured = {
+      video: videoRef.current,
+      audio: audioRef.current,
+      ambilight: ambilightRef.current,
+      visualizer: canvasRef.current,
     };
-  }, []);
+    return () => {
+      // React StrictMode replays effects without removing the DOM. The next
+      // setup invalidates this microtask; a real unmount releases the session.
+      queueMicrotask(() => {
+        if (generationRef.current === generation) void releasePlayerSession(captured);
+      });
+    };
+  }, [releasePlayerSession]);
 
 
   useEffect(() => {
@@ -368,8 +336,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
     const handleLeavePiP = () => {
       setIsMiniMode(false);
-      setHideForPiP(false);
-      if (window.cortexDl?.showMainWindow) {
+      if (!sessionClosedRef.current && window.cortexDl?.showMainWindow) {
         window.cortexDl.showMainWindow().catch(console.error);
       }
     };
@@ -399,7 +366,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   useEffect(() => {
     if (mediaType !== 'video') return;
 
-    let rafId: number;
+    let rafId: number | null = null;
     let isActive = true;
 
     let lastTime = 0;
@@ -426,7 +393,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
               if (video.videoWidth <= 2560) {
                 try {
                   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                } catch (_) {}
+                } catch (_) { /* Keep the previous frame if drawing fails. */ }
               }
             }
           }
@@ -443,9 +410,14 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       rafId = requestAnimationFrame(drawAmbilightFrame);
     }
 
-    return () => {
+    const stop = () => {
       isActive = false;
-      if (rafId) cancelAnimationFrame(rafId);
+      stopPlayerFrame(rafId);
+    };
+    stopAmbilightRef.current = stop;
+    return () => {
+      stop();
+      if (stopAmbilightRef.current === stop) stopAmbilightRef.current = null;
     };
   }, [isPlaying, mediaType]);
 
@@ -527,7 +499,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
     <div
       className={`media-player-overlay ${isMiniMode ? 'mini-mode-overlay' : ''}`}
       onClick={e => { if (e.target === e.currentTarget && !isMiniMode) handleClose() }}
-      style={hideForPiP ? { opacity: 0, pointerEvents: 'none' } : undefined}
       dir={dir}
     >
       <div
@@ -539,6 +510,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
         {mediaType === 'video' && (
           <VideoPlayerView
             mediaEndpoint={mediaEndpoint}
+            sessionId={sessionIdRef.current}
             fileUrl={fileUrl}
             title={displayTitle}
             filePath={filePath}

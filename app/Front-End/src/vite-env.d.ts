@@ -80,6 +80,7 @@ declare global {
     | { success: boolean; canceled?: boolean; error?: string; filePath?: string }
 
   interface Window {
+    __cortexMediaDiagnostics?: () => Promise<unknown>
     cortexDl: {
 
       saveSecureData(key: string, value: string): Promise<boolean>
@@ -156,14 +157,17 @@ declare global {
 
       getMediaPort: () => Promise<number>
       getMediaEndpoint: () => Promise<{ port: number; token: string }>
+      closeMediaSession: (session: string) => Promise<void>
+      getMediaDiagnostics: () => Promise<unknown>
+      onCloseMediaPlayer: (callback: () => void) => () => void
       fetchThumbnail: (url: string) => Promise<string>
-      getMediaFps: (filePath: string) => Promise<number | null>
+      getMediaFps: (filePath: string, session: string) => Promise<number | null>
       getDirectStreamUrl: (url: string) => Promise<string>
 
       selectCookieFile: () => Promise<string | null>
       getCookieFile: () => Promise<string | null>
       setCookieFile: (filePath: string | null) => Promise<CookieValidationResult>
-      getSubtitles: (filePath: string) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>
+      getSubtitles: (filePath: string, session: string) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>
 
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void
       onDownloadUpdated: (callback: (task: DownloadTask) => void) => () => void

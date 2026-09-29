@@ -339,7 +339,7 @@ export async function getYtdlpVersion(): Promise<string> {
       new Promise<number>((resolve) => {
         setTimeout(() => {
           try { p.kill() } catch {
-            
+            // The timed-out process may have exited already.
           }
           resolve(1)
         }, TIMEOUT_MS)
@@ -551,7 +551,7 @@ const stats = await stat(tempPath)
     try {
       chmodSync(binaryPath, 0o755)
     } catch {
-      
+      // chmod is best effort on platforms without POSIX permissions.
     }
     
     log.info(`[ytdlp] Update successful! Version: ${latestVersion}`)
@@ -847,7 +847,7 @@ export async function getDirectStreamUrl(
         
         const timer = setTimeout(() => {
           try { p.kill() } catch {
-            
+            // The timed-out process may have exited already.
           }
           reject(new Error('yt-dlp timed out while extracting stream URL.'))
         }, TIMEOUT_MS)

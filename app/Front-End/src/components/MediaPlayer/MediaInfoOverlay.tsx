@@ -10,30 +10,34 @@ interface MediaInfoProps {
   showOverlay: boolean;
   toggleOverlay: () => void;
   taskFps?: number | string;
+  sessionId: string;
 }
 
-export function MediaInfoOverlay({ filePath, videoWidth, videoHeight, mediaType, showOverlay, toggleOverlay, taskFps }: MediaInfoProps) {
+export function MediaInfoOverlay({ filePath, videoWidth, videoHeight, mediaType, showOverlay, toggleOverlay, taskFps, sessionId }: MediaInfoProps) {
   const extension = filePath.split('.').pop()?.toUpperCase() || 'UNKNOWN';
   const [fps, setFps] = useState<number | string | null>(taskFps || null);
 
   useEffect(() => {
+    let cancelled = false;
     if (showOverlay && mediaType === 'video' && !fps) {
       if (window.cortexDl?.getMediaFps) {
-        console.log('[MediaInfoOverlay] Fetching FPS for:', filePath);
-        window.cortexDl.getMediaFps(filePath).then((val: number | null) => {
-          console.log('[MediaInfoOverlay] Received FPS:', val);
+        window.cortexDl.getMediaFps(filePath, sessionId).then((val: number | null) => {
+          if (cancelled) return;
           if (val) {
             setFps(val);
           } else {
             setFps('Unknown');
           }
         }).catch(err => {
-          console.error('[MediaInfoOverlay] Error fetching FPS:', err);
-          setFps('Error');
+          if (!cancelled) {
+            console.error('[MediaInfoOverlay] Error fetching FPS:', err);
+            setFps('Error');
+          }
         });
       }
     }
-  }, [showOverlay, filePath, mediaType, fps]);
+    return () => { cancelled = true; };
+  }, [showOverlay, filePath, mediaType, fps, sessionId]);
 
   return (
     <>
