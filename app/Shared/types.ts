@@ -3,13 +3,14 @@ export type DownloadStatus =
   | 'downloading'
   | 'merging'
   | 'converting'
+  | 'pausing'
   | 'paused'
   | 'completed'
   | 'error'
   | 'canceled'
 
 export type DownloadEngine = 'direct' | 'ffmpeg' | 'ytdlp'
-export type DownloadPhase = DownloadStatus | 'starting' | 'trimming'
+export type DownloadPhase = DownloadStatus | 'starting' | 'preparing' | 'trimming' | 'validating' | 'finalizing'
 
 export type VideoFormat = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'ogv' | 'm4v' | 'gif'
 export type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac' | 'aac' | 'opus' | 'wma'
@@ -39,6 +40,14 @@ export type YouTubeOAuthCodePayload = {
 }
 
 export type DownloadTask = {
+  validatedAttemptId?: string
+  attemptId?: string
+  resumeDirectory?: string
+  etag?: string
+  lastModified?: string
+  ownedFiles?: string[]
+  etaSeconds?: number | null
+  outputBytes?: number
   id: string
   url: string
   directory: string
@@ -71,11 +80,12 @@ export type DownloadTask = {
   subtitleIsAutomatic?: boolean
   fps?: number | string
   ytdlpExpectedBytes?: number
-  /** Stable per-format progress survives retries and app restarts. */
+  ytdlpExpectedStreamCount?: number
+  /** Per-stream snapshots belong to the current attempt. */
   ytdlpStreams?: Record<string, { downloaded: number; total: number | null }>
   /** Persisted chunk state for DirectEngine pause/resume. Cleared on completion. */
   resumeChunks?: { start: number; end: number; downloaded: number; completed: boolean }[]
-  /** Whether the server supports HTTP Range requests (cached from HEAD). */
+  /** Revalidated on each attempt; false remembers a server that ignored Range. */
   supportsRanges?: boolean
 }
 

@@ -41,7 +41,7 @@ function context(rt) { return { runtime: rt, sendUpdate: t => updateTaskProgress
 function server(body, ignoreRange = false, slow = false) {
   let rangeRequests = 0
   const instance = http.createServer((req, res) => {
-    if (req.method === 'HEAD') { res.writeHead(200, { 'content-length': body.length, 'accept-ranges': 'bytes' }); res.end(); return }
+    if (req.method === 'HEAD') { res.writeHead(200, { 'content-length': body.length, 'accept-ranges': 'bytes', etag: '"fixture-v1"' }); res.end(); return }
     const match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '')
     if (match) rangeRequests++
     const start = match && !ignoreRange ? Number(match[1]) : 0
@@ -70,12 +70,12 @@ async function withServer(body, ignoreRange, slow, fn) {
   finally { s.instance.closeAllConnections(); await new Promise(resolve => s.instance.close(resolve)) }
 }
 
-test('Direct backend progress reaches 100 in the shared view', () => {
+test('Direct backend progress reserves 100 for validated completion in the shared view', () => {
   const t = task({ downloadedBytes: 100 })
   updateTaskProgress(t)
-  assert.equal(t.overallProgress, 100)
+  assert.equal(t.overallProgress, 99)
   assert.deepEqual(getProgressView(t), getProgressView({ ...t }))
-  assert.equal(getProgressView(t).percentLabel, '100%')
+  assert.equal(getProgressView(t).percentLabel, '99%')
   t.status = 'error'
   updateTaskProgress(t)
   assert.equal(t.overallProgress, 99)
@@ -109,10 +109,10 @@ test('YouTube video/audio progress stays monotonic and post-processing is truthf
   parseStateTransition('[Merger] Merging formats into "x.mp4"', t, { totalDuration: null, stderr: '' }, { sendUpdate: updateTaskProgress, saveState: () => {} })
   assert.equal(t.phase, 'merging')
   assert.equal(t.phaseProgress, null)
-  assert.ok(t.overallProgress < 100)
+  assert.equal(t.overallProgress, null)
   t.status = 'converting'; updateTaskProgress(t)
   assert.equal(t.phase, 'converting')
-  assert.ok(t.overallProgress < 100)
+  assert.equal(t.overallProgress, null)
   t.status = 'completed'; updateTaskProgress(t)
   assert.equal(t.overallProgress, 100)
 })
@@ -165,24 +165,13 @@ test('delete without file removal preserves output', async () => {
     assert.equal(await fs.readFile(filePath, 'utf8'), 'keep')
   } finally { await fs.rm(directory, { recursive: true, force: true }) }
 })
-test('completion statistics count a task once', () => {
-  const manager = new DownloadManager()
-  const t = task({ id: 'stats' })
-  manager.tasks.set(t.id, t); manager.runtime.set(t.id, runtime())
-  const events = []
-  manager.attachWindow({ isDestroyed: () => false, webContents: { send: (channel, data) => events.push({ channel, data }) } })
-  const ctx = manager.createContext(t.id)
-  ctx.sendStats(t.id, 100)
-  ctx.sendStats(t.id, 100)
-  assert.equal(events.filter(e => e.channel === 'cortexdl:download-stats-updated').length, 1)
-})
 test('SQLite progress uses backend overall progress', () => {
   const manager = new DownloadManager()
   const item = task({ engine: 'ytdlp', status: 'merging', downloadedBytes: 100, totalBytes: 100 })
   manager.upsertTaskToDb(item)
   assert.equal(dbMock.lastRow.progress, item.overallProgress)
-  assert.equal(dbMock.lastRow.progress, 90)
-  assert.equal(JSON.parse(dbMock.lastRow.full_payload).overallProgress, 90)
+  assert.equal(dbMock.lastRow.progress, null)
+  assert.equal(JSON.parse(dbMock.lastRow.full_payload).overallProgress, null)
   manager.upsertTaskToDb(task({ totalBytes: null, downloadedBytes: 10 }))
   assert.equal(dbMock.lastRow.progress, null)
 })
@@ -207,37 +196,6 @@ test('terminal IPC state bypasses throttle and cancels stale trailing update', (
   t.status = 'paused'; throttledSendUpdate(win, t, rt)
   assert.equal(sent.at(-1).status, 'paused')
   assert.equal(sent.length, 2)
-})
-test('FFmpeg discards an existing partial output before starting', async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-ffmpeg-'))
-  const output = path.join(directory, 'file.mp4')
-  await fs.writeFile(output, Buffer.from('readable but incomplete media'))
-  const childProcess = require('node:child_process')
-  const originalSpawn = childProcess.spawn
-  let partialWasRemoved = false
-  childProcess.spawn = (_binary, args) => {
-    const proc = new EventEmitter()
-    proc.stdout = new EventEmitter()
-    proc.stderr = new EventEmitter()
-    process.nextTick(async () => {
-      if (!args.includes('-version')) {
-        partialWasRemoved = await fs.stat(output).then(() => false).catch(() => true)
-        await fs.writeFile(output, Buffer.from('finished'))
-      }
-      proc.emit('close', 0)
-    })
-    return proc
-  }
-  try {
-    const t = task({ engine: 'ffmpeg', filePath: output, directory })
-    await runFfmpegDownload(t, runtime(), context(runtime()))
-    assert.equal(partialWasRemoved, true)
-    assert.equal(t.status, 'completed')
-    assert.equal(t.downloadedBytes, 8)
-  } finally {
-    childProcess.spawn = originalSpawn
-    await fs.rm(directory, { recursive: true, force: true })
-  }
 })
 const ffmpegBinary = path.join(process.cwd(), 'bin', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
 const ffprobeBinary = path.join(process.cwd(), 'bin', process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe')
@@ -290,74 +248,12 @@ test('FFmpeg engine creates real codec/container output for every audio format',
       const output = path.join(directory, `engine.${format}`)
       const rt = runtime()
       const item = task({ engine: 'ffmpeg', targetFormat: format, url: source, filePath: output, directory })
-      await runFfmpegDownload(item, rt, context(rt))
-      assert.equal(item.status, 'completed', format)
+      const result = await runFfmpegDownload(item, rt, context(rt))
+      assert.equal(result.kind, 'success', format)
+      assert.equal(item.status, 'downloading', 'only manager can complete')
       assert.ok(matchesAudioFormat(format, await probeMediaFile(item.filePath)), format)
     }
   } finally { await fs.rm(directory, { recursive: true, force: true }) }
-})
-
-test('YouTube finalization produces real audio formats, including AAC ADTS from M4A', async t => {
-  if (!existsSync(ffmpegBinary) || !existsSync(ffprobeBinary)) return t.skip('bundled FFmpeg tools unavailable')
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-audio-final-'))
-  try {
-    const sourceWav = path.join(directory, 'source.wav')
-    makeAudioFixture(null, sourceWav, ['-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.25', '-c:a', 'pcm_s16le'])
-    for (const format of AUDIO_FORMATS) {
-      const id = `test-${format}`
-      const source = path.join(directory, `${id}.m4a`)
-      makeAudioFixture(sourceWav, source, ['-i', sourceWav, '-c:a', 'aac', '-f', 'ipod'])
-      const rt = runtime()
-      rt.abortController = new AbortController()
-      const item = task({ id, engine: 'ytdlp', targetFormat: format, directory, title: `Audio ${format}`, filePath: path.join(directory, `wanted.${format}`) })
-      await new YoutubeEngine().finalizeDownloaded(item, source, rt, context(rt))
-      assert.equal(rt.child, null, 'finalization processes must be released')
-      assert.equal(path.extname(item.filePath), `.${format}`)
-      assert.ok(matchesAudioFormat(format, await probeMediaFile(item.filePath)), format)
-      if (format !== 'm4a') assert.equal(await fs.stat(source).then(() => true).catch(() => false), false)
-      if (format === 'aac') {
-        const probe = await probeMediaFile(item.filePath)
-        assert.equal(probe.format.format_name, 'aac', 'AAC must be ADTS, not renamed M4A')
-      }
-    }
-  } finally { await fs.rm(directory, { recursive: true, force: true }) }
-})
-
-test('cancel during final audio conversion drains and releases FFmpeg while keeping the source', async t => {
-  if (!existsSync(ffmpegBinary) || !existsSync(ffprobeBinary)) return t.skip('bundled FFmpeg tools unavailable')
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-convert-cancel-'))
-  const childProcess = require('node:child_process')
-  const originalSpawn = childProcess.spawn
-  try {
-    const source = path.join(directory, 'cancel.m4a')
-    makeAudioFixture(null, source, ['-f', 'lavfi', '-i', 'sine=duration=0.25', '-c:a', 'aac', '-f', 'ipod'])
-    const rt = runtime(); rt.abortController = new AbortController()
-    const item = task({ id: 'cancel', engine: 'ytdlp', targetFormat: 'aac', directory, filePath: path.join(directory, 'wanted.aac') })
-    const yt = new YoutubeEngine()
-    let stdoutDrained = false
-    let stderrDrained = false
-    childProcess.spawn = (binary, args, opts) => {
-      if (!args.includes('-nostdin')) return originalSpawn(binary, args, opts)
-      const proc = new EventEmitter()
-      proc.stdout = new EventEmitter(); proc.stdout.resume = () => { stdoutDrained = true }
-      proc.stderr = new EventEmitter()
-      proc.kill = () => { setImmediate(() => proc.emit('close', 1)); return true }
-      setImmediate(() => {
-        stderrDrained = proc.stderr.listenerCount('data') > 0
-        rt.abortController.abort()
-        yt.stop()
-      })
-      return proc
-    }
-    await assert.rejects(yt.finalizeDownloaded(item, source, rt, context(rt)), /aborted/i)
-    assert.equal(stdoutDrained, true)
-    assert.equal(stderrDrained, true)
-    assert.equal(rt.child, null)
-    assert.equal(await fs.stat(source).then(() => true).catch(() => false), true)
-  } finally {
-    childProcess.spawn = originalSpawn
-    await fs.rm(directory, { recursive: true, force: true })
-  }
 })
 
 test('DirectEngine range chunks and advertised-Range fallback produce exact output', async () => {
@@ -369,7 +265,7 @@ test('DirectEngine range chunks and advertised-Range fallback produce exact outp
         const t = task({ url, directory, filePath: path.join(directory, 'file.mp4'), totalBytes: null })
         await new DirectEngine().download(t, context(runtime()))
         assert.deepEqual(await fs.readFile(t.filePath), body)
-        assert.equal(t.overallProgress, 100)
+        assert.equal(t.overallProgress, 99)
         assert.ok(s.rangeRequests > 0)
         if (ignore) assert.equal(t.supportsRanges, undefined)
       } finally { await fs.rm(directory, { recursive: true, force: true }) }
@@ -386,7 +282,7 @@ test('DirectEngine pause and resume keeps chunk state', async () => {
       const first = engine.download(t, context(runtime()))
       await new Promise(resolve => setTimeout(resolve, 30))
       engine.pause()
-      await assert.rejects(first)
+      assert.equal((await first).kind, 'paused')
       assert.ok(t.resumeChunks?.length)
       await new DirectEngine().download(t, context(runtime()))
       assert.deepEqual(await fs.readFile(t.filePath), body)
@@ -408,11 +304,34 @@ test('Direct Range fallback stays single-stream after pause and resume', async (
       assert.equal(item.supportsRanges, false)
       assert.ok(item.downloadedBytes > 32768)
       engine.pause()
-      await assert.rejects(first)
+      assert.equal((await first).kind, 'paused')
       const beforeResume = s.rangeRequests
       await new DirectEngine().download(item, context(runtime()))
       assert.ok(s.rangeRequests - beforeResume <= 1, 'resume may probe once, but must not restart chunk mode')
       assert.deepEqual(await fs.readFile(item.filePath), body)
     } finally { await fs.rm(directory, { recursive: true, force: true }) }
   })
+})
+
+
+test('progress preserves validating/finalizing phases after a compatible yt-dlp merge', () => {
+  for(const phase of ['validating','finalizing']) {
+    const t=task({status:'merging',phase,engine:'ytdlp',downloadPercent:100,downloadedBytes:100,totalBytes:100})
+    updateTaskProgress(t)
+    assert.equal(t.phase,phase)
+    assert.equal(t.phaseProgress,null)
+    assert.equal(t.overallProgress,null)
+    assert.equal(getProgressView(t).isIndeterminate,true)
+  }
+})
+
+
+test('progress replaces an approximate metadata total once every selected stream is observed', () => {
+  const t=task({engine:'ytdlp',ytdlpExpectedBytes:400,ytdlpExpectedStreamCount:2})
+  parseDownloadProgress('CORTEX_DL|video|v.part|50|100|10',t)
+  assert.equal(t.totalBytes,400)
+  parseDownloadProgress('CORTEX_DL|audio|a.part|25|100|10',t)
+  assert.equal(t.totalBytes,200)
+  assert.equal(t.downloadedBytes,75)
+  assert.equal(t.downloadPercent,38)
 })

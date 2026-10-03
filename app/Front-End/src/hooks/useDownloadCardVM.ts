@@ -107,6 +107,10 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     const phaseLabels: Record<DisplayPhase, string> = {
       queued: t.status_queued,
       starting: t.accelerating,
+      preparing: t.accelerating,
+      pausing: t.status_paused,
+      validating: lang === 'ar' ? 'التحقق من الملف' : 'Validating',
+      finalizing: lang === 'ar' ? 'إنهاء التنزيل' : 'Finalizing',
       downloading: t.status_downloading,
       merging: t.status_merging,
       converting: t.status_converting,
@@ -121,6 +125,10 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     const phaseColors: Record<DisplayPhase, string> = {
       queued: 'var(--text-muted)',
       starting: 'var(--accent-primary)',
+      preparing: 'var(--accent-primary)',
+      pausing: 'var(--warning)',
+      validating: '#a78bfa',
+      finalizing: '#a78bfa',
       downloading: '#3b82f6',
       merging: '#a78bfa',
       converting: '#a78bfa',
@@ -147,11 +155,12 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     const isIndeterminate = progress.isIndeterminate
 
     const knownTotal = task.totalBytes != null && task.totalBytes > 0
-    const remaining = knownTotal ? Math.max(0, task.totalBytes! - task.downloadedBytes) : 0
-    const isDownloading = task.status === 'downloading'
+    const remaining = task.etaSeconds ?? 0
+    const isDownloading = phase === 'downloading'
     const isActivePhase = isDownloading || isPostProcessing
     let sizeLabel = ''
-    if (isActivePhase || task.status === 'completed') {
+    if (task.status === 'completed' && task.outputBytes != null) sizeLabel = formatBytes(task.outputBytes)
+    else if (isActivePhase || task.status === 'completed') {
       if (knownTotal) {
         sizeLabel = `${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes!)}`
       } else if (task.downloadedBytes > 0) {
@@ -165,7 +174,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       : ''
 
     const etaLabel = isDownloading && knownTotal
-      ? formatEta(remaining, task.speedBytesPerSec ?? 0)
+      ? formatEta(remaining, 1)
       : ''
 
     

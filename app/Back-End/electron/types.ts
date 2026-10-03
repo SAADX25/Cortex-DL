@@ -71,29 +71,28 @@ export type TaskRuntime = {
    * Timestamp (ms) before which this task must not be picked up by
    * `DownloadManager.schedule()`. Set by `scheduleRetry()` while a
    * task-level retry backoff is pending, so the backoff never occupies an
-   * active concurrency slot (see EngineContext.scheduleRetry).
+   * active concurrency slot (owned by DownloadManager).
    */
   retryAt?: number
 }
 
-export interface EngineContext {
-  
-  sendUpdate: (task: DownloadTask) => void
-  
+export type EngineResult =
+  | { kind: 'success'; candidate: string }
+  | { kind: 'paused' | 'canceled' }
+  | { kind: 'retryable-error'; message: string; delayMs: number }
+  | { kind: 'fatal-error'; message: string }
 
-  runtime: TaskRuntime
-  
-  saveState: () => void
-  
-  flushSave: () => void
-  /**
-   * Requests that the DownloadManager re-attempt this task after `delayMs`,
-   * without occupying an active download slot for the duration of the
-   * backoff. Engines must set `task.status = 'queued'` and return from
-   * `download()` immediately after calling this — never sleep inline.
-   */
-  scheduleRetry: (delayMs: number) => void
-  sendStats: (id: string, addedBytes: number) => void
-  sendYouTubeOAuthCode: (payload: YouTubeOAuthCodePayload) => void
+export type AttemptRuntime = TaskRuntime & {
+  attemptId: string
+  directory: string
+  done?: Promise<void>
+  stopReason?: 'paused' | 'canceled'
 }
 
+export interface EngineContext {
+  runtime: TaskRuntime
+  sendUpdate: (task: DownloadTask) => void
+  saveState: () => void
+  flushSave: () => void
+  sendYouTubeOAuthCode: (payload: YouTubeOAuthCodePayload) => void
+}

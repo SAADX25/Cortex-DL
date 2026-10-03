@@ -1,70 +1,27 @@
 import type { DownloadPhase, DownloadTask } from './types'
+export type ProgressView = { phase: DownloadPhase; phaseProgress: number | null; overallProgress: number | null; isIndeterminate: boolean; percentLabel: string }
+const finitePercent = (n: number | null | undefined) => n != null && Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null
 
-export type ProgressView = {
-  phase: DownloadPhase
-  phaseProgress: number | null
-  overallProgress: number | null
-  isIndeterminate: boolean
-  percentLabel: string
-}
-
-const clamp = (value: number) => Math.max(0, Math.min(100, value))
-const finitePercent = (value: number | null | undefined): number | null =>
-  value != null && Number.isFinite(value) ? clamp(value) : null
-
-/** Called by the manager before every broadcast or durable state transition. */
+/** One projection for SQLite, IPC, React and the fast DOM path. No fabricated phase weights. */
 export function updateTaskProgress(task: DownloadTask): void {
-  const post = task.hasPostProcessing ?? task.engine === 'ytdlp'
-  task.hasPostProcessing = post
-  const status = task.status
-  const processing = status === 'merging' || status === 'converting'
-  const trim = Boolean(task.startTime || task.endTime)
-  const hasProgress = task.downloadedBytes > 0 || (task.downloadPercent ?? 0) > 0 || (task.speedBytesPerSec ?? 0) > 0
-  const phase: DownloadPhase = status === 'downloading'
-    ? (trim ? 'trimming' : hasProgress ? 'downloading' : 'starting')
-    : status === 'converting' && trim ? 'trimming' : status
-
-  let download = finitePercent(task.downloadPercent)
-  if (download === null && task.totalBytes && task.totalBytes > 0) {
-    download = clamp(task.downloadedBytes / task.totalBytes * 100)
-  }
-  const process = finitePercent(task.convertingPercent)
-  const phaseProgress = status === 'completed' ? 100 : processing ? process : download
-  let overall: number | null
-  if (status === 'completed') overall = 100
-  else if (processing) overall = process === null ? 90 : Math.min(99, 90 + process * 0.09)
-  else if (download === null) overall = null
-  else if (task.engine === 'ffmpeg') overall = Math.min(99, download)
-  else if (post) overall = Math.min(90, download * 0.9)
-  else overall = download
-
-  if ((status === 'error' || status === 'canceled') && overall !== null) {
-    overall = Math.min(99, overall)
-  }
-
-  // A new attempt may restart its bytes, but a live job never visually regresses.
-  if (status === 'downloading' && task.overallProgress != null && overall != null) {
-    overall = Math.max(task.overallProgress, overall)
-  }
+  const active = ['downloading', 'merging', 'converting'].includes(task.status)
+  let phase: DownloadPhase = active ? task.phase ?? task.status : task.status
+  if (active && ['paused', 'queued', 'error', 'canceled', 'completed', 'pausing'].includes(phase)) phase = 'preparing'
+  if (task.status === 'merging' && !['validating', 'finalizing'].includes(phase)) phase = 'merging'
+  if (task.status === 'converting' && !['trimming', 'validating', 'finalizing'].includes(phase)) phase = 'converting'
+  const processing = ['merging', 'converting', 'trimming'].includes(phase)
+  const download = finitePercent(task.downloadPercent ?? (task.totalBytes && task.totalBytes > 0 ? task.downloadedBytes / task.totalBytes * 100 : null))
   task.phase = phase
-  task.phaseProgress = phaseProgress
-  task.overallProgress = overall
+  task.phaseProgress = task.status === 'completed' ? 100 : ['validating', 'finalizing', 'preparing'].includes(phase) ? null : processing ? finitePercent(task.convertingPercent) : download
+  // Later phases have no meaningful total-work denominator. Show actual phase progress.
+  task.overallProgress = task.status === 'completed' ? 100 : task.phaseProgress === null ? null : Math.min(99, task.phaseProgress)
+  task.etaSeconds = phase === 'downloading' && task.totalBytes && task.speedBytesPerSec && task.speedBytesPerSec > 0
+    ? Math.max(0, (task.totalBytes - task.downloadedBytes) / task.speedBytesPerSec) : null
 }
-
-/** Both React's initial render and the fast DOM path consume this same projection. */
 export function getProgressView(task: DownloadTask): ProgressView {
-  const phase = task.phase ?? (task.status === 'downloading' && !task.downloadedBytes && !task.downloadPercent
-    ? 'starting' : task.status)
+  const phase = task.phase ?? task.status
   const overallProgress = task.status === 'completed' ? 100 : finitePercent(task.overallProgress)
   const phaseProgress = task.status === 'completed' ? 100 : finitePercent(task.phaseProgress)
-  const processing = phase === 'merging' || phase === 'converting' || phase === 'trimming'
-  const isIndeterminate = (processing && phaseProgress === null) ||
-    (overallProgress === null && (phase === 'starting' || phase === 'downloading' || processing))
-  return {
-    phase,
-    phaseProgress,
-    overallProgress,
-    isIndeterminate,
-    percentLabel: isIndeterminate || overallProgress === null ? '' : `${Math.round(overallProgress)}%`,
-  }
+  const isIndeterminate = ['starting', 'preparing', 'downloading', 'merging', 'converting', 'trimming', 'validating', 'finalizing', 'pausing'].includes(phase) && phaseProgress === null
+  return { phase, overallProgress, phaseProgress, isIndeterminate, percentLabel: isIndeterminate || overallProgress === null ? '' : `${Math.round(overallProgress)}%` }
 }

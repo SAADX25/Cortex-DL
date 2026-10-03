@@ -1,7 +1,7 @@
-import type { DownloadTask, EngineContext } from '../types';
+import type { DownloadTask, EngineContext, EngineResult } from '../types';
 
 export interface IEngine {
-  download(task: DownloadTask, context?: EngineContext): Promise<void>;
+  download(task: DownloadTask, context?: EngineContext): Promise<EngineResult>;
   pause(): void;
   stop(): void;
 }
