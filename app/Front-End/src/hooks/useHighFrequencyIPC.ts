@@ -59,8 +59,8 @@ function updateDomForTask(task: DownloadTask): void {
   if (bar) {
     bar.style.width = `${progress.isIndeterminate ? 100 : progress.overallProgress ?? 0}%`
     bar.classList.toggle('indeterminate', progress.isIndeterminate)
-    const target = progress.phase === 'trimming' ? 'converting'
-      : progress.phase === 'starting' ? 'downloading' : progress.phase
+    const target = ['trimming', 'validating', 'finalizing'].includes(progress.phase) ? 'converting'
+      : ['starting', 'preparing'].includes(progress.phase) ? 'downloading' : progress.phase
     for (const cls of PHASE_CLASSES) bar.classList.toggle(cls, cls === target)
   }
   if (refs.percentTextRef?.current) refs.percentTextRef.current.innerText = progress.percentLabel

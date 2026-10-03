@@ -1,7 +1,9 @@
 import type { IEngine } from './IEngine';
-import type { DownloadTask, EngineContext } from '../types';
+import type { DownloadTask, EngineContext, EngineResult } from '../types';
 import log from 'electron-log';
 import axios from 'axios';
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import { createWriteStream } from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
@@ -9,6 +11,7 @@ import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import type { Readable } from 'node:stream';
 import { nowMs, computeSpeed } from '../utils';
+import { setTimeout as delay } from 'node:timers/promises';
 import { db } from '../db';
 
 interface ChunkInfo {
@@ -78,6 +81,8 @@ function getNumChunksFromSettings(): number {
 }
 
 export class DirectEngine implements IEngine {
+  private readonly httpAgent = new HttpAgent({ keepAlive: false });
+  private readonly httpsAgent = new HttpsAgent({ keepAlive: false });
   private abortController: AbortController | null = null;
   private readonly MAX_RETRIES = 3;
   private readonly MIN_FILE_SIZE_FOR_CHUNKING = 5 * 1024 * 1024; // 5 MB
@@ -90,13 +95,17 @@ export class DirectEngine implements IEngine {
   /** Set only when the user paused or cancelled, never by an internal abort. */
   private stopRequested = false;
 
-  async download(task: DownloadTask, context?: EngineContext): Promise<void> {
+  async download(task: DownloadTask, context?: EngineContext): Promise<EngineResult> {
     log.info(`[DirectEngine] Starting download: ${task.url}`);
 
     this.failure = null;
     this.stopRequested = false;
     this.numChunks = getNumChunksFromSettings();
-    this.adoptController(new AbortController(), context);
+    context?.runtime.abortController?.signal.throwIfAborted();
+    const parentSignal = context?.runtime.abortController?.signal;
+    const onAbort = () => { this.stopRequested = true; this.abortController?.abort(); };
+    parentSignal?.addEventListener('abort', onAbort, { once: true });
+    this.adoptController(new AbortController());
     if (context) {
       context.runtime.lastSpeedSampleAtMs = null;
       context.runtime.lastSpeedSampleBytes = null;
@@ -108,19 +117,29 @@ export class DirectEngine implements IEngine {
       let supportsRanges = task.supportsRanges ?? false;
       let totalBytes: number | null = task.totalBytes ?? null;
 
-      // Only do HEAD if we don't already have cached info from a previous attempt
-      if (totalBytes == null || totalBytes <= 0) {
+      // Revalidate identity and size on every attempt before reusing any bytes.
+      {
         try {
           const headResponse = await axios.head(task.url, {
+            httpAgent: this.httpAgent,
+            httpsAgent: this.httpsAgent,
             timeout: 10000,
+            headers: { 'Accept-Encoding': 'identity' },
             signal: this.abortController?.signal,
           });
 
+          const etag = headResponse.headers['etag'] as string | undefined;
+          const lastModified = headResponse.headers['last-modified'] as string | undefined;
+          const unchanged = (task.etag && !task.etag.startsWith('W/') ? task.etag === etag : task.lastModified ? task.lastModified === lastModified : false) &&
+            (!task.lastModified || task.lastModified === lastModified);
+          if (task.downloadedBytes > 0 && !unchanged) await this.discardOutput(task);
+          task.etag = etag;
+          task.lastModified = lastModified;
           const contentLength = parseInt(String(headResponse.headers['content-length'] ?? '0'), 10);
           if (contentLength > 0) {
             totalBytes = contentLength;
             supportsRanges =
-              (String(headResponse.headers['accept-ranges'] ?? '').toLowerCase() === 'bytes') &&
+              task.supportsRanges !== false && (String(headResponse.headers['accept-ranges'] ?? '').toLowerCase() === 'bytes') &&
               contentLength >= this.MIN_FILE_SIZE_FOR_CHUNKING;
 
             // Cache for future resume attempts
@@ -133,6 +152,9 @@ export class DirectEngine implements IEngine {
           }
         } catch (err: unknown) {
           if (this.isAbort(err)) throw err;
+          if (task.downloadedBytes > 0) await this.discardOutput(task);
+          totalBytes = null;
+          supportsRanges = false;
           log.warn(
             `[DirectEngine] Task ${task.id} HEAD request failed, falling back to single stream:`,
             (err as any).message
@@ -161,7 +183,8 @@ export class DirectEngine implements IEngine {
           );
           task.supportsRanges = false;
           await this.discardOutput(task);
-          this.adoptController(new AbortController(), context);
+          if (parentSignal?.aborted || this.stopRequested) throw new DownloadAbortedError();
+          this.adoptController(new AbortController());
           await this.downloadSingleStream(task, context);
         }
       } else {
@@ -169,6 +192,7 @@ export class DirectEngine implements IEngine {
       }
 
       // ── Cleanup resume state on success ────────────────────────────
+      parentSignal?.throwIfAborted();
       const finalSize = (await fsPromises.stat(task.filePath)).size;
       if (task.totalBytes && finalSize !== task.totalBytes) {
         throw new Error(`Direct download size mismatch: expected ${task.totalBytes}, got ${finalSize}`);
@@ -178,28 +202,28 @@ export class DirectEngine implements IEngine {
       task.resumeChunks = undefined;
       task.supportsRanges = undefined;
 
-      log.info(`[DirectEngine] Download completed for task ${task.id}`);
+      return { kind: 'success', candidate: task.filePath };
 
     } catch (error) {
       if (this.stopRequested || this.isAbort(error)) {
         // User paused — persist chunk state for resume
         this.persistChunkState(task);
         log.warn(`[DirectEngine] Task ${task.id} download aborted — chunk state saved`);
-        throw new Error('Download aborted');
+        return { kind: 'paused' };
       }
 
       log.error(`[DirectEngine] Task ${task.id} failed:`, error);
-      throw error;
+      return { kind: 'retryable-error', message: error instanceof Error ? error.message : String(error), delayMs: 1000 * 2 ** (context?.runtime.retries ?? 0) };
     } finally {
       // Unconditionally tear down anything still in flight. A partially failed
       // chunked download must never leave sibling sockets writing to the file
       // after the task has been reported as finished.
+      parentSignal?.removeEventListener('abort', onAbort);
       const controller = this.abortController;
       controller?.abort();
       this.abortController = null;
-      if (context && context.runtime.abortController === controller) {
-        context.runtime.abortController = null;
-      }
+      this.httpAgent.destroy();
+      this.httpsAgent.destroy();
     }
   }
 
@@ -232,7 +256,9 @@ export class DirectEngine implements IEngine {
       }
     }
 
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { 'Accept-Encoding': 'identity' };
+    const validator = task.etag && !task.etag.startsWith('W/') ? task.etag : task.lastModified;
+    if (startByte > 0 && validator) headers['If-Range'] = validator;
     if (startByte > 0) {
       headers['Range'] = `bytes=${startByte}-`;
     }
@@ -240,6 +266,8 @@ export class DirectEngine implements IEngine {
     const response = await axios<Readable>({
       method: 'get',
       url: task.url,
+      httpAgent: this.httpAgent,
+      httpsAgent: this.httpsAgent,
       responseType: 'stream',
       signal: this.abortController?.signal,
       timeout: RESPONSE_TIMEOUT_MS,
@@ -247,6 +275,10 @@ export class DirectEngine implements IEngine {
       headers,
     });
 
+    if (startByte > 0 && response.status === 206 && this.identityChanged(task, response.headers)) {
+      response.data.destroy();
+      throw new RangeUnsupportedError('Remote identity changed during single-stream resume');
+    }
     // If server doesn't honor Range (returns 200 instead of 206), start fresh
     if (startByte > 0 && response.status !== 206) {
       log.warn(`[DirectEngine] Task ${task.id}: Server returned ${response.status} instead of 206 — restarting from scratch`);
@@ -260,6 +292,8 @@ export class DirectEngine implements IEngine {
       throw new Error('Server returned a mismatched Content-Range');
     }
 
+    task.etag = response.headers['etag'] as string | undefined ?? task.etag;
+    task.lastModified = response.headers['last-modified'] as string | undefined ?? task.lastModified;
     const contentLength = parseInt(String(response.headers['content-length'] ?? '0'), 10);
     if (contentLength > 0) {
       // Content-Length in a 206 response counts only the remaining bytes.
@@ -453,7 +487,7 @@ export class DirectEngine implements IEngine {
         }
 
         // Exponential backoff
-        await new Promise(r => setTimeout(r, Math.pow(2, chunk.retries) * 100));
+        await delay(Math.pow(2, chunk.retries) * 100, undefined, { signal: this.abortController?.signal });
       }
     }
   }
@@ -484,8 +518,12 @@ export class DirectEngine implements IEngine {
     const response = await axios<Readable>({
       method: 'get',
       url: task.url,
+      httpAgent: this.httpAgent,
+      httpsAgent: this.httpsAgent,
       headers: {
         'Range': `bytes=${resumeStart}-${chunk.end}`,
+        'Accept-Encoding': 'identity',
+        ...((task.etag && !task.etag.startsWith('W/') ? task.etag : task.lastModified) ? { 'If-Range': (task.etag && !task.etag.startsWith('W/') ? task.etag : task.lastModified)! } : {}),
       },
       responseType: 'stream',
       signal,
@@ -493,6 +531,10 @@ export class DirectEngine implements IEngine {
       maxRedirects: 5,
     });
 
+    if (this.identityChanged(task, response.headers)) {
+      response.data.destroy();
+      throw new RangeUnsupportedError('Remote identity changed during chunk download');
+    }
     // A 200 here means the body is the *whole* file, not our slice. Writing it
     // at `resumeStart` would silently corrupt the output.
     if (response.status !== 206) {
@@ -501,7 +543,7 @@ export class DirectEngine implements IEngine {
         `server answered ${response.status} to a Range request`
       );
     }
-    if (!String(response.headers['content-range'] ?? '').startsWith(`bytes ${resumeStart}-${chunk.end}/`)) {
+    if (String(response.headers['content-range'] ?? '') !== `bytes ${resumeStart}-${chunk.end}/${task.totalBytes}`) {
       response.data.destroy();
       throw new RangeUnsupportedError('server returned a mismatched Content-Range');
     }
@@ -525,7 +567,13 @@ export class DirectEngine implements IEngine {
         // Positional write against the shared descriptor. Awaiting each write
         // gives natural backpressure and keeps `chunk.downloadedBytes` exactly
         // in step with the bytes actually on disk, which is what resume needs.
-        await handle.write(buffer, 0, buffer.length, position);
+        if (position + buffer.length > chunk.end + 1) throw new RangeUnsupportedError('Range response exceeds requested size');
+        let written = 0;
+        while (written < buffer.length) {
+          const result = await handle.write(buffer, written, buffer.length - written, position + written);
+          if (!result.bytesWritten) throw new Error('Zero-byte file write');
+          written += result.bytesWritten;
+        }
 
         position += buffer.length;
         chunk.downloadedBytes += buffer.length;
@@ -565,18 +613,9 @@ export class DirectEngine implements IEngine {
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════
 
-  /**
-   * Installs our abort controller and publishes it on the shared task runtime,
-   * so `DownloadManager.delete()` / `pauseAll()` can tear the download down
-   * even when this engine instance is no longer registered with the manager.
-   */
-  private adoptController(controller: AbortController, context?: EngineContext): void {
+  /** Internal request-group controller; the attempt controller is never replaced. */
+  private adoptController(controller: AbortController): void {
     this.abortController = controller;
-    if (!context) return;
-
-    const previous = context.runtime.abortController;
-    if (previous && previous !== controller) previous.abort();
-    context.runtime.abortController = controller;
   }
 
   /**
@@ -611,6 +650,11 @@ export class DirectEngine implements IEngine {
       `[DirectEngine] Task ${task.id} Progress: ${progress.toFixed(2)}% ` +
       `(${this.formatBytes(task.downloadedBytes)}/${this.formatBytes(task.totalBytes || 0)})`
     );
+  }
+
+  private identityChanged(task: DownloadTask, headers: Record<string, unknown>): boolean {
+    return Boolean((task.etag && headers.etag && task.etag !== headers.etag) ||
+      (task.lastModified && headers['last-modified'] && task.lastModified !== headers['last-modified']))
   }
 
   private isAbort(error: unknown): boolean {
@@ -718,7 +762,7 @@ export class DirectEngine implements IEngine {
         end: c.end,
         downloadedBytes: c.downloaded,
         retries: 0,
-        completed: c.completed || c.downloaded >= size,
+        completed: c.downloaded >= size,
       };
     });
   }

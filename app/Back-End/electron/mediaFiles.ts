@@ -5,6 +5,7 @@ import path from 'node:path'
 import type { DownloadTask, VideoFormat } from './types'
 import { AUDIO_FORMATS, VIDEO_FORMATS } from './types'
 import type { MediaProbe } from './audioFormats'
+import { matchesMediaFormat } from './mediaFormatRegistry'
 import { getBinaryPath } from './paths'
 
 const supported = new Set<string>([...AUDIO_FORMATS, ...VIDEO_FORMATS])
@@ -27,33 +28,27 @@ export async function findTaskMediaFile(task: DownloadTask, detected: string | n
 }
 
 export function matchesVideoFormat(format: VideoFormat, probe: MediaProbe): boolean {
-  const containers = new Set((probe.format?.format_name ?? '').split(','))
-  const videoCodecs = new Set((probe.streams ?? [])
-    .filter(stream => stream.codec_type === 'video').map(stream => stream.codec_name))
-  if (videoCodecs.size === 0) return false
-  switch (format) {
-    case 'mp4': case 'm4v': case 'mov': return containers.has('mov') || containers.has('mp4')
-    case 'mkv': return containers.has('matroska')
-    case 'avi': return containers.has('avi')
-    case 'webm': return containers.has('webm') &&
-      [...videoCodecs].some(codec => codec === 'vp8' || codec === 'vp9' || codec === 'av1')
-    case 'ogv': return containers.has('ogg') && videoCodecs.has('theora')
-    case 'gif': return containers.has('gif') && videoCodecs.has('gif')
-  }
+  return matchesMediaFormat(format, probe)
 }
 
 /** Probe the actual bytes; an extension and a positive size are insufficient. */
 export async function probeMediaFile(
   filePath: string,
   track?: (child: ChildProcessWithoutNullStreams | null) => void,
+  signal?: AbortSignal,
 ): Promise<MediaProbe> {
+  signal?.throwIfAborted()
   const stat = await fs.stat(filePath)
+  signal?.throwIfAborted()
   if (!stat.isFile() || stat.size <= 0) throw new Error('Media output is empty')
   const child = spawn(getBinaryPath('ffprobe'), [
-    '-v', 'error', '-show_entries', 'format=format_name:stream=codec_type,codec_name',
+    '-v', 'error', '-show_entries', 'format=format_name,duration:stream=codec_type,codec_name,duration:stream_disposition=attached_pic',
     '-of', 'json', filePath,
   ], { windowsHide: true, detached: false })
   track?.(child)
+  const onAbort = () => { child.kill() }
+  signal?.addEventListener('abort', onAbort, { once: true })
+  if (signal?.aborted) onAbort()
   let output = ''
   child.stdout.on('data', (chunk: Buffer) => {
     output += chunk.toString()
@@ -66,12 +61,16 @@ export async function probeMediaFile(
       child.on('close', code => resolve(code ?? 1))
       child.on('error', () => resolve(1))
     })
+    signal?.throwIfAborted()
     if (exitCode !== 0 || !output || output.length > 1024 * 1024) {
       throw new Error('ffprobe could not validate the media output')
     }
     return JSON.parse(output) as MediaProbe
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener('abort', onAbort)
+    child.stdout.removeAllListeners()
+    child.stderr.removeAllListeners()
     track?.(null)
   }
 }

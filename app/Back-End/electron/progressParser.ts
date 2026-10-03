@@ -49,7 +49,8 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
     task.downloadedBytes = values.reduce((sum, stream) => sum + stream.downloaded, 0)
     const observedTotal = values.reduce((sum, stream) => sum + (stream.total ?? 0), 0)
     const expected = task.ytdlpExpectedBytes ?? 0
-    task.totalBytes = Math.max(expected, observedTotal) || null
+    const allObserved = task.ytdlpExpectedStreamCount && values.length >= task.ytdlpExpectedStreamCount && values.every(stream => stream.total !== null)
+    task.totalBytes = allObserved ? observedTotal : expected > 0 ? Math.max(expected, observedTotal) : values.every(stream => stream.total !== null) ? observedTotal || null : null
     task.downloadPercent = task.totalBytes
       ? Math.min(100, Math.round(task.downloadedBytes / task.totalBytes * 100))
       : undefined
@@ -113,48 +114,7 @@ export function parseFfmpegProgress(
     }
   }
 
-  const sizeMatch = /size=\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|kB|B)\b/i.exec(line)
-  if (sizeMatch) {
-    const sizeVal = parseFloat(sizeMatch[1])
-    const sUnit = sizeMatch[2]
-    const multiplier = /^KiB$/i.test(sUnit) ? 1024
-      : /^MiB$/i.test(sUnit) ? 1024 ** 2
-      : /^GiB$/i.test(sUnit) ? 1024 ** 3
-      : /^kB$/i.test(sUnit) ? 1000 : 1
-    const bytes = Math.round(sizeVal * multiplier)
-    if (bytes > 0) {
-      task.downloadedBytes = bytes
-      changed = true
-    }
-  } else {
-    
-    const plainSizeMatch = /^total_size=(\d+)$/.exec(line.trim())
-    if (plainSizeMatch) {
-      const bytes = parseInt(plainSizeMatch[1], 10)
-      if (bytes > 0) {
-        task.downloadedBytes = bytes
-        changed = true
-      }
-    }
-  }
-
-  const bitrateMatch = /bitrate=\s*(\d+(?:\.\d+)?)\s*(kbits|Mbits)\/s/i.exec(line)
-  if (bitrateMatch) {
-    const val = parseFloat(bitrateMatch[1])
-    const bUnit = bitrateMatch[2].toLowerCase()
-    const bitsPerSec = bUnit === 'mbits' ? val * 1_000_000 : val * 1000
-    const bytesPerSec = Math.round(bitsPerSec / 8)
-    if (bytesPerSec > 0) {
-      task.speedBytesPerSec = bytesPerSec
-      changed = true
-    }
-  }
-
-  if (!bitrateMatch && /\bspeed=\s*\d+(?:\.\d+)?x\b/.test(line)) {
-    changed = true
-  }
-
-  
+  // FFmpeg output size/bitrate describe encoded media, not downloaded bytes or network speed.
   const timeMatch = /\b(?:out_)?time=(-?\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
   const outTimeUnitsMatch = /^out_time_(?:ms|us)=(\d+)$/.exec(line.trim())
   if (timeMatch || outTimeUnitsMatch) {
@@ -165,17 +125,7 @@ export function parseFfmpegProgress(
       : parseInt(outTimeUnitsMatch![1], 10) / 1_000_000
     if (currentSec <= 0) return changed
 
-    let totalDuration = state.totalDuration
-    if (task.startTime && task.endTime) {
-      const trimDur = parseTimeToSeconds(task.endTime) - parseTimeToSeconds(task.startTime)
-      if (trimDur > 0) totalDuration = trimDur
-    } else if (!task.startTime && task.endTime) {
-      const endSec = parseTimeToSeconds(task.endTime)
-      if (endSec > 0) totalDuration = endSec
-    } else if (task.startTime && !task.endTime && state.totalDuration) {
-      const startSec = parseTimeToSeconds(task.startTime)
-      if (state.totalDuration > startSec) totalDuration = state.totalDuration - startSec
-    }
+    const totalDuration = state.totalDuration
 
     if (totalDuration && totalDuration > 0) {
       const pct = Math.min(99, Math.round((currentSec / totalDuration) * 100))

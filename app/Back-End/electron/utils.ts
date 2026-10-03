@@ -204,7 +204,7 @@ function schedulePendingTrailing(task: DownloadTask, win: BrowserWindow, runtime
   pendingTrailing.set(task.id, { timer, task: snapshot, win })
 }
 
-function clearPendingTrailing(taskId: string): void {
+export function clearPendingTrailing(taskId: string): void {
   const pending = pendingTrailing.get(taskId)
   if (pending) {
     clearTimeout(pending.timer)
@@ -229,7 +229,20 @@ export function sendNotification(title: string, body: string): void {
  *
  * All errors are swallowed — the caller will never throw.
  */
-export async function killProcessTree(child: ChildProcessWithoutNullStreams | null): Promise<void> {
+const pendingKills = new WeakMap<ChildProcessWithoutNullStreams, Promise<void>>()
+
+/** Concurrent abort/manager cleanup callers await the same process-tree teardown. */
+export function killProcessTree(child: ChildProcessWithoutNullStreams | null): Promise<void> {
+  if (!child) return Promise.resolve()
+  const existing = pendingKills.get(child)
+  if (existing) return existing
+  const pending = terminateProcessTree(child)
+  pendingKills.set(child, pending)
+  void pending.finally(() => pendingKills.delete(child))
+  return pending
+}
+
+async function terminateProcessTree(child: ChildProcessWithoutNullStreams): Promise<void> {
   if (!child) return
 
   const pid = child.pid
@@ -240,19 +253,17 @@ export async function killProcessTree(child: ChildProcessWithoutNullStreams | nu
     return
   }
 
-  // Probe whether the process is still alive before doing anything.
-  // process.kill(pid, 0) throws if the PID doesn't exist.
-  try {
-    process.kill(pid, 0)
-  } catch {
-    log.info(`[killProcessTree] PID ${pid} already exited — nothing to kill`)
-    return
-  }
+  // A PID existence probe can miss a just-spawned child. Its owning handle is
+  // authoritative; do not mistake that startup race for successful teardown.
+  if (process.platform === 'win32' && (typeof child.exitCode === 'number' || child.signalCode)) return
 
   if (process.platform === 'win32') {
     try {
       const exitCode = await spawnTaskkill(pid)
       log.info(`[killProcessTree] taskkill PID ${pid} exited with code ${exitCode}`)
+      if (exitCode !== 0) {
+        try { child.kill('SIGKILL') } catch { /* already dead */ }
+      }
     } catch (err) {
       // taskkill itself failed or timed out — fall back to direct kill.
       log.warn(`[killProcessTree] taskkill failed for PID ${pid}, falling back to SIGKILL:`, err)

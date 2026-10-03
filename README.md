@@ -4,7 +4,7 @@
 
   # ⚡ Cortex-DL
 
-  [![Release](https://img.shields.io/badge/Release-v1.7.0-blue.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/SAADX25/Cortex-DL/releases)
+  [![Release](https://img.shields.io/badge/Release-v2.0.0-blue.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/SAADX25/Cortex-DL/releases)
   [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/SAADX25/Cortex-DL)
   [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
@@ -26,7 +26,8 @@
 
   **Cortex-DL** is an ultra-fast, feature-packed desktop download manager built with **Electron, React, TypeScript, yt-dlp, FFmpeg, and SQLite**.
 
-  It offers seamless media link analysis, multi-threaded downloading, custom format selection, FFmpeg post-processing, and queue state persistence across sessions. The Windows build comes pre-packaged with all required command-line binaries out of the box.
+  It delivers seamless media link analysis, multi-threaded downloading, custom format selection, FFmpeg post-processing, an integrated zero-leak media player, and queue state persistence across sessions. The Windows build comes pre-packaged with all required command-line binaries out of the box.
+
   ---
 
 </div>
@@ -35,15 +36,17 @@
 
 ## 1. Features
 
-- 🎬 **Multi-Source Extraction**: Full URL analysis for 1000+ `yt-dlp`-supported sites, direct HTTP links, and HLS streams.
-- 🎨 **Format & Quality Control**: Video resolution selection, audio extraction, container conversion, and precision start/end trimming via FFmpeg.
-- ⚡ **High Concurrency & Queue**: Configurable simultaneous downloads (3, 5, or 10 items) powered by a SQLite persistent queue.
-- ⏯️ **Full Playback & Queue Controls**: Pause, resume, cancel, retry, delete, pause-all, and resume-all with automatic state recovery.
-- 📜 **Playlist & Batch Downloader**: Select specific playlist items or process batch queues of up to 50 items at once.
-- 💬 **Subtitles & Comments Export**: Download and embed YouTube subtitles, plus export channel/video comments to structured text files.
-- 🎥 **Integrated Media Player**: Native preview for video and audio downloads with subtitle track auto-discovery, playback controls, and stream info overlay.
-- 🌐 **Multilingual & System Integration**: Seamless English & Arabic (RTL) interface, system tray minimization, native notifications, and yt-dlp auto-updates.
-- 🩺 **Built-in System Health Check**: Real-time diagnostic panel checking `yt-dlp`, `FFmpeg`, `Deno` runtime, cookies, and folder permissions.
+- 🎬 **Multi-Source Extraction**: Full URL analysis for 1000+ `yt-dlp`-supported sites, direct HTTP/HTTPS links, and HLS/m3u8 streams.
+- 🚀 **High-Speed Chunked Direct Downloader**: Multi-segmented HTTP download engine with byte-range acceleration, fallback handling, and chunk state preservation across pause/resume cycles.
+- 🎨 **Format & Quality Control**: Video resolution selection (up to 4K/8K, 60fps), audio extraction (MP3, WAV, M4A, AAC, FLAC, OGG, OPUS, WMA), container conversion, and precision start/end trimming via FFmpeg.
+- ⚡ **High Concurrency & Persistent Queue**: Configurable simultaneous downloads (3, 5, or 10 items) powered by a crash-resilient SQLite database with monotonic progress tracking.
+- ⏯️ **Full Playback & Queue Controls**: Pause, resume, cancel, retry, delete (with or without output files), pause-all, and resume-all with automatic state recovery across sessions.
+- 📜 **Playlist & Batch Downloader**: Select specific playlist items with thumbnail previews or process batch queues of up to 50 items simultaneously.
+- 💬 **Subtitles & Comments Export**: Download and embed multi-language YouTube subtitles, plus export channel and video comments to structured text files.
+- 🎥 **Integrated In-App Media Player**: Native preview for video and audio downloads with subtitle auto-discovery, track switching, audio visualizer, ambient lighting, and stream metadata overlay.
+- 🛡️ **Zero-Leak Streaming Architecture**: Embedded local HTTP media server with session tracking, probe/FFmpeg process auto-reaping, and Web Audio context release.
+- 🌐 **Multilingual & System Integration**: Seamless English & Arabic (RTL) interface, system tray minimization, native notifications, and automatic yt-dlp engine updates.
+- 🩺 **Built-in System Health Check & Setup**: Real-time diagnostic panel and startup overlay verifying `yt-dlp`, `FFmpeg`, `ffprobe`, `Deno` runtime, cookies, and folder permissions.
 
 ---
 
@@ -54,121 +57,167 @@
 ```text
 Cortex DL/
 │
-├── 📁 .github/                                # GitHub community templates & workflow rules
-├── 📁 assets/                                 # Application branding & README assets
-│   └── 🖼️ logo.png                            # Official Cortex-DL 3D Logo
-├── 📄 .gitignore                              # Git ignore specifications
-├── 📄 CODE_OF_CONDUCT.md                      # Community code of conduct
-├── 📄 CONTRIBUTING.md                         # Developer contribution guidelines
-├── 📄 LICENSE                                 # MIT License terms
-├── 📄 README.md                               # Public project documentation
-├── 📄 SECURITY.md                             # Security disclosure policy
-├── 📄 package-lock.json                       # Root lockfile
-├── 📄 package.json                            # Root package configuration
-├── ⚙️ Cortex_Dev.bat                           # Windows development helper script
+├── 📁 .github/                                # GitHub configuration & issue templates
+│   ├── 📁 ISSUE_TEMPLATE/                     # Community issue forms
+│   │   ├── 📄 bug_report.md                   # Bug reporting template
+│   │   └── 📄 feature-request.md              # Feature suggestion template
+│   ├── 📄 FUNDING.yml                         # Project funding & sponsorship configuration
+│   └── 📄 PULL_REQUEST_TEMPLATE.md            # Pull request submission guidelines
 │
-└── 📁 app/                                    # Main application package
-    ├── 📁 Back-End/                           # Backend services & IPC orchestration
-    │   └── 📁 electron/                       # Electron main process source code
-    │       ├── 📄 main.ts                     # App entry point, window creation, service bootstrap
-    │       ├── 📄 preload.ts                  # Secure contextBridge (window.cortexDl API)
-    │       ├── 📄 tray.ts                     # System tray icon and menu management
-    │       ├── 📄 downloadManager.ts          # Queue orchestration and concurrent scheduling
-    │       ├── 📄 db.ts                       # SQLite setup and prepared statements
-    │       ├── 📄 utils.ts                    # Utilities shared across backend modules
-    │       ├── 📄 paths.ts                    # Binary and resource path resolution
-    │       ├── 📄 ytdlp.ts                    # yt-dlp analysis, updates, and stream URL extraction
-    │       ├── 📄 hls.ts                      # HLS playlist and stream variant analysis
-    │       ├── 📄 ffmpegEngine.ts             # FFmpeg-based HLS and stream downloader
-    │       ├── 📄 progressParser.ts           # yt-dlp and FFmpeg progress parsing
-    │       ├── 📄 commentsExtractor.ts        # YouTube comment extraction through yt-dlp
-    │       ├── 📄 types.ts                    # Backend types and re-exports
-    │       ├── 📄 electron-env.d.ts           # Electron environment declarations
-    │       │
-    │       ├── 📁 ipc/                        # Inter-process communication
-    │       │   └── 📄 handlers.ts             # Central IPC handler registration
-    │       │
-    │       └── 📁 engines/                    # Download & media processing engines
-    │           ├── 📄 IEngine.ts              # Download engine interface
-    │           ├── 📄 DirectEngine.ts         # Chunked HTTP downloader
-    │           ├── 📄 YoutubeEngine.ts        # yt-dlp process wrapper
-    │           ├── 📄 FfmpegEngine.ts         # FFmpeg engine adapter
-    │           └── 📄 MediaProcessor.ts       # Media merge, conversion, and FPS inspection
+├── 📁 assets/                                 # Application branding & README visual assets
+│   └── 🖼️ logo.png                            # Official Cortex-DL 3D high-resolution logo
+│
+├── 📄 .gitignore                              # Git ignore specifications
+├── 📄 CODE_OF_CONDUCT.md                      # Contributor Covenant Code of Conduct
+├── 📄 CONTRIBUTING.md                         # Contribution workflow & developer setup guide
+├── 📄 LICENSE                                 # MIT Open Source License
+├── 📄 package-lock.json                       # Workspace root lockfile
+├── 📄 package.json                            # Workspace root package manifest
+├── 📄 README.md                               # Comprehensive project documentation
+├── 📄 SECURITY.md                             # Security disclosure policy & supported versions
+│
+└── 📁 app/                                    # Core application source and packaging root
     │
-    ├── 📁 Front-End/                          # React user interface
-    │   ├── 📄 index.html                      # Main HTML entry point
-    │   └── 📁 src/                            # React application source code
-    │       ├── 📄 main.tsx                    # React entry point
-    │       ├── 📄 App.tsx                     # Root renderer component
-    │       ├── 📄 App.css                     # Global styles & layout rules
-    │       ├── 📄 translations.ts             # Arabic and English UI strings
-    │       ├── 📄 vite-env.d.ts               # Vite and Electron renderer declarations
+    ├── 📁 Back-End/                           # Electron main process & Node.js backend services
+    │   └── 📁 electron/                       # Electron orchestration modules
+    │       ├── 📁 engines/                    # Media download & conversion execution engines
+    │       │   ├── 📄 DirectEngine.ts         # Multi-chunk HTTP downloader with byte-range resume
+    │       │   ├── 📄 FfmpegEngine.ts         # FFmpeg HLS stream capture & transcode engine
+    │       │   ├── 📄 IEngine.ts              # Common download engine contract interface
+    │       │   ├── 📄 MediaProcessor.ts       # FFmpeg post-processing, stream muxing & FPS inspection
+    │       │   └── 📄 YoutubeEngine.ts        # yt-dlp process manager with live progress extraction
     │       │
-    │       ├── 📁 components/                 # UI components & modular views
-    │       │   ├── 📄 AddDownloadTab.tsx      # URL input, analysis, and format selection
-    │       │   ├── 📁 AddDownloadTab/
-    │       │   │   ├── 📄 UrlAnalysisView.tsx # Analysis results and format selection
-    │       │   │   ├── 📄 PlaylistView.tsx    # Playlist item selection
-    │       │   │   └── 📄 BatchListView.tsx   # Batch queue preview
-    │       │   ├── 📄 DownloadList.tsx       # Download queue list
-    │       │   ├── 📄 DownloadCard.tsx       # Individual download UI
-    │       │   ├── 📄 DownloadCard.css       # Download card styles
-    │       │   ├── 📄 SettingsTab.tsx        # Application settings
-    │       │   ├── 📄 Sidebar.tsx            # Navigation sidebar
-    │       │   ├── 📄 AdvancedTrimmer.tsx    # Start and end trim controls
-    │       │   ├── 📄 AdvancedTrimmer.css    # Trimmer styles
-    │       │   ├── 📄 AnimatedSegmentedControl.tsx
-    │       │   ├── 📄 CustomDropdown.tsx
-    │       │   ├── 📄 SimpleDownloader.tsx    # Quick-download mode
-    │       │   ├── 📄 SmartImage.tsx          # Smart thumbnail loader & fallbacks
-    │       │   ├── 📄 ConfirmModal.tsx       # Confirmation dialog
-    │       │   └── 📁 MediaPlayer/            # Integrated media player
-    │       │       ├── 📄 MediaPlayerModal.tsx# Media player modal
-    │       │       ├── 📄 MediaPlayer.css     # Media player styles
-    │       │       ├── 📄 VideoPlayerView.tsx # Video playback view
-    │       │       ├── 📄 AudioPlayerView.tsx # Audio playback view
-    │       │       ├── 📄 PlayerControls.tsx  # Playback controls
-    │       │       └── 📄 MediaInfoOverlay.tsx# File metadata overlay
+    │       ├── 📁 ipc/                        # Inter-Process Communication handlers
+    │       │   └── 📄 handlers.ts             # IPC registry bridging renderer events to backend logic
     │       │
-    │       ├── 📁 hooks/                      # Custom React hooks
-    │       │   ├── 📄 types.ts                # Hook-level types
-    │       │   ├── 📄 useDownloadController.ts# Download workflow
-    │       │   ├── 📄 useHighFrequencyIPC.ts  # Throttled IPC and store updates
-    │       │   ├── 📄 useDownloadCardVM.ts    # Download card view model
-    │       │   ├── 📄 useAppController.ts     # App-level coordination
-    │       │   ├── 📄 useSettingsController.ts# Settings and folder selection
-    │       │   ├── 📄 useCommentsController.ts# Comment export workflow
-    │       │   └── 📄 useDebounce.ts          # Debounce utility
-    │       │
-    │       ├── 📁 stores/                     # Global state management (Zustand)
-    │       │   ├── 📄 downloadStore.ts        # Zustand download state
-    │       │   └── 📄 useUIStore.ts           # Zustand UI state
-    │       │
-    │       └── 📁 constants/                  # Configuration & constants
-    │           └── 📄 formats.ts              # Supported output formats
+    │       ├── 📄 audioFormats.ts             # Audio format specifications, containers & FFmpeg presets
+    │       ├── 📄 commentsExtractor.ts        # YouTube comment extraction pipeline via yt-dlp
+    │       ├── 📄 db.ts                       # SQLite database initialization, schema & prepared statements
+    │       ├── 📄 downloadManager.ts          # Queue scheduling, concurrency control & lifecycle management
+    │       ├── 📄 electron-env.d.ts           # Main process environment & typing declarations
+    │       ├── 📄 ffmpegEngine.ts             # Legacy FFmpeg download routine adapter
+    │       ├── 📄 hls.ts                      # HLS stream analysis & m3u8 playlist variant parser
+    │       ├── 📄 main.ts                     # Application bootstrap, single-instance lock & window creation
+    │       ├── 📄 mediaFiles.ts               # Local HTTP streaming server, token auth & file system security
+    │       ├── 📄 mediaRequestRegistry.ts     # Active stream session registry & FFmpeg process leak prevention
+    │       ├── 📄 paths.ts                    # Dynamic path resolution for binaries, app data & resources
+    │       ├── 📄 preload.ts                  # Secure context isolation bridge (window.cortexDl)
+    │       ├── 📄 progressParser.ts           # yt-dlp, FFmpeg & direct download progress parser
+    │       ├── 📄 setup.ts                    # Startup dependency verification & environment setup
+    │       ├── 📄 tray.ts                     # Windows system tray menu, icon & background minimization
+    │       ├── 📄 types.ts                    # Backend-specific types, event payloads & re-exports
+    │       ├── 📄 utils.ts                    # Cross-cutting utility functions and file helpers
+    │       └── 📄 ytdlp.ts                    # yt-dlp extraction, format discovery & binary updater
     │
-    ├── 📁 Shared/                             # Shared type definitions
-    │   └── 📄 types.ts                        # Types shared by backend and frontend
+    ├── 📁 bin/                                # Bundled standalone binaries (Windows x64)
+    │   ├── ⚡ deno.exe                        # High-performance JS runtime for yt-dlp extractor scripts
+    │   ├── ⚡ ffmpeg.exe                      # FFmpeg multimedia processor & HLS downloader
+    │   ├── ⚡ ffprobe.exe                     # Stream analyzer & codec inspection utility
+    │   └── ⚡ yt-dlp.exe                      # YouTube & multi-platform video extraction engine
     │
-    ├── 📁 bin/                                # Bundled command-line executables
-    │   ├── ⚡ yt-dlp.exe                      # Media extraction and download engine
-    │   ├── ⚡ ffmpeg.exe                      # Media processing and HLS engine
-    │   ├── ⚡ ffprobe.exe                     # Media stream inspection tool
-    │   └── ⚡ deno.exe                        # JS runtime for yt-dlp workflows
+    ├── 📁 build/                              # Packaging & installer assets
+    │   └── 📄 installer.nsh                   # Custom NSIS installer script & Windows registry integration
     │
-    ├── 📁 scripts/                            # Build verification and post-processing scripts
-    │   ├── 📄 ensure-electron.cjs             # Verifies Electron binary integrity
-    │   └── 📄 strip-comments.cjs              # Build script for code stripping
+    ├── 📁 docs/                               # Developer reference & architecture documentation
+    │   └── 📄 media-player-diagnostics.md     # Streaming session lifecycle & memory leak diagnostic guide
     │
-    ├── 📁 build/                              # Packaging assets & icons
-    ├── 📁 release/                            # Packaged installer output
-    ├── 📄 .env.example                        # Environment variable template
-    ├── 📄 .eslintrc.cjs                       # ESLint configuration
-    ├── 📄 vite.config.ts                      # Vite and Electron build configuration
-    ├── 📄 tsconfig.json                       # Root TypeScript configuration
-    ├── 📄 tsconfig.node.json                  # Node and Electron TypeScript config
-    ├── 📄 electron-builder.json5              # Packaging and installer configuration
-    └── 📄 package.json                        # App dependencies and scripts
+    ├── 📁 Front-End/                          # Modern React 18 single-page application
+    │   ├── 📁 public/                         # Static renderer assets
+    │   │   └── 🖼️ CortexDL.ico                # Application desktop & window icon
+    │   │
+    │   ├── 📁 src/                            # React application source code
+    │   │   ├── 📁 actions/                    # Centralized user action dispatchers
+    │   │   │   └── 📄 downloadActions.ts      # Queue mutation, pause, resume, cancel & retry actions
+    │   │   │
+    │   │   ├── 📁 components/                 # UI components & modular views
+    │   │   │   ├── 📁 AddDownloadTab/         # Download creation tab sub-views
+    │   │   │   │   ├── 📄 BatchListView.tsx   # Bulk URL list parser, validator & batch preview
+    │   │   │   │   ├── 📄 PlaylistView.tsx    # YouTube playlist inspector with multi-item selection
+    │   │   │   │   └── 📄 UrlAnalysisView.tsx # Stream resolution, codec selection & audio quality controls
+    │   │   │   │
+    │   │   │   ├── 📁 icons/                  # Custom application SVG icons
+    │   │   │   │   └── 📄 YouTubeMusicIcon.tsx# YouTube Music branded SVG component
+    │   │   │   │
+    │   │   │   ├── 📁 MediaPlayer/            # In-app media player suite
+    │   │   │   │   ├── 📄 AudioPlayerView.tsx # Audio playback view with waveform visualization & cover art
+    │   │   │   │   ├── 📄 mediaDiagnostics.ts # DevTools runtime memory & stream diagnostic helpers
+    │   │   │   │   ├── 📄 MediaInfoOverlay.tsx# Codec, bitrate, FPS & stream metadata inspection overlay
+    │   │   │   │   ├── 📄 MediaPlayer.css     # Media player animations, backdrop blur & controls styling
+    │   │   │   │   ├── 📄 MediaPlayerModal.tsx# Floating modal host for video & audio playback
+    │   │   │   │   ├── 📄 mediaSession.ts     # OS MediaSession API integration & Web Audio context cleanup
+    │   │   │   │   ├── 📄 PlayerControls.tsx  # Scrub bar, playback speed, volume & subtitle selectors
+    │   │   │   │   └── 📄 VideoPlayerView.tsx # Video playback canvas with subtitle auto-loading
+    │   │   │   │
+    │   │   │   ├── 📄 AddDownloadTab.tsx      # Main download creation tab container
+    │   │   │   ├── 📄 AdvancedTrimmer.css     # Trimmer slider & timestamp editor styling
+    │   │   │   ├── 📄 AdvancedTrimmer.tsx     # Precision start/end video trimming component
+    │   │   │   ├── 📄 AnimatedSegmentedControl.tsx # Fluid animated tab & option picker
+    │   │   │   ├── 📄 ConfirmModal.tsx        # Destructive action & deletion confirmation dialog
+    │   │   │   ├── 📄 CustomDropdown.tsx      # Accessible custom dropdown with keyboard navigation
+    │   │   │   ├── 📄 DownloadCard.css        # Download card glassmorphism & progress bar styles
+    │   │   │   ├── 📄 DownloadCard.tsx        # Live download task card (speeds, ETA, progress, controls)
+    │   │   │   ├── 📄 DownloadList.tsx        # Filterable, searchable queue list with batch actions
+    │   │   │   ├── 📄 SettingsTab.tsx         # User preferences, cookie manager & system health check
+    │   │   │   ├── 📄 SetupOverlay.tsx        # First-launch binary verification & setup modal
+    │   │   │   ├── 📄 Sidebar.tsx             # Modern navigation sidebar with live queue badges
+    │   │   │   ├── 📄 SimpleDownloader.tsx    # Fast 1-click download view for quick downloads
+    │   │   │   ├── 📄 SmartImage.tsx          # Resilient thumbnail loader with fallback placeholders
+    │   │   │   └── 📄 UrlInputBar.tsx         # Modern input bar with paste detection, clear & submit
+    │   │   │
+    │   │   ├── 📁 constants/                  # Application constants & limits
+    │   │   │   ├── 📄 formats.ts              # Supported audio/video formats, extensions & MIME mappings
+    │   │   │   └── 📄 limits.ts               # Concurrency limits, max batch items & network timeouts
+    │   │   │
+    │   │   ├── 📁 hooks/                      # Custom React hooks
+    │   │   │   ├── 📄 types.ts                # Hook interface & view-model contract definitions
+    │   │   │   ├── 📄 useDebounce.ts          # Input debouncing hook for search and URL inputs
+    │   │   │   ├── 📄 useDownloadCardVM.ts    # Download card view-model calculations & status formatting
+    │   │   │   ├── 📄 useDownloadInit.ts      # Queue hydration, IPC event subscribers & session restore
+    │   │   │   ├── 📄 useHighFrequencyIPC.ts  # Throttled IPC event handler for 60 FPS UI updates
+    │   │   │   └── 📄 useSettingsInit.ts      # Settings store synchronization & directory persistence
+    │   │   │
+    │   │   ├── 📁 lib/                        # Renderer utility libraries
+    │   │   │   ├── 📄 downloadHelpers.ts      # Download item converters, filename cleaners & format validators
+    │   │   │   ├── 📄 mediaEndpoint.ts        # Local streaming server URL & token generator
+    │   │   │   └── 📄 variantLabel.ts         # Video resolution & audio quality formatting helpers
+    │   │   │
+    │   │   ├── 📁 stores/                     # Zustand reactive state stores
+    │   │   │   ├── 📄 downloadStore.ts        # Active queue, task history, and throughput metrics store
+    │   │   │   ├── 📄 useCommentsStore.ts     # YouTube comment extraction job status & output store
+    │   │   │   ├── 📄 useFormStore.ts         # Download configuration, format choice & trimming form store
+    │   │   │   ├── 📄 useSettingsStore.ts     # User preferences, thread limits, cookies & binary status store
+    │   │   │   └── 📄 useUIStore.ts           # Active navigation tab, language, theme & modal states store
+    │   │   │
+    │   │   ├── 📄 App.css                     # Global styles, typography, scrollbars & color tokens
+    │   │   ├── 📄 App.tsx                     # Main application layout, view switcher & modal host
+    │   │   ├── 📄 main.tsx                    # React DOM root mounting & bootstrap
+    │   │   ├── 📄 translations.ts             # Comprehensive English & Arabic (RTL) localization strings
+    │   │   └── 📄 vite-env.d.ts               # Vite client environment & custom window interface types
+    │   │
+    │   └── 📄 index.html                      # HTML entry point with font preloads & meta tags
+    │
+    ├── 📁 scripts/                            # Build verification and maintenance scripts
+    │   ├── 📄 ensure-electron.cjs             # Electron binary integrity verification script
+    │   └── 📄 strip-comments.cjs              # Production build comment stripping script
+    │
+    ├── 📁 Shared/                             # Cross-process shared TypeScript modules
+    │   ├── 📄 progressModel.ts                # Monotonic progress calculations, speed averaging & ETA smoothing
+    │   └── 📄 types.ts                        # Shared data models, IPC contracts, formats & download task types
+    │
+    ├── 📁 tests/                              # Automated test suite (Node.js test runner)
+    │   ├── 📄 mediaLifecycle.test.cjs         # Media player session release, canvas buffer & process cleanup tests
+    │   ├── 📄 register-ts.cjs                 # TypeScript compilation hook for native test execution
+    │   └── 📄 reliability.test.cjs            # End-to-end tests for DirectEngine, FFmpeg, yt-dlp & SQLite persistence
+    │
+    ├── 📄 .env                                # Local environment variables
+    ├── 📄 .env.example                        # Environment variable blueprint
+    ├── 📄 .eslintrc.cjs                       # ESLint static code analysis rules
+    ├── 📄 electron-builder.json5              # electron-builder packaging, NSIS & compression configuration
+    ├── 📄 package-lock.json                   # Application dependencies lockfile
+    ├── 📄 package.json                        # App dependencies, metadata & build scripts
+    ├── 📄 tsconfig.json                       # Base TypeScript configuration
+    ├── 📄 tsconfig.node.json                  # Node.js process TypeScript configuration
+    └── 📄 vite.config.ts                      # Vite build pipeline & Electron plugin integration
 ```
 
 ---
@@ -178,7 +227,7 @@ Cortex DL/
 For local development and building from source:
 
 - **OS**: Windows x64 *(current development scripts and bundled binaries target Windows)*.
-- **Node.js**: Modern LTS release (v18+ recommended) & `npm`.
+- **Node.js**: Modern LTS release (v18+ or v20+ recommended) & `npm`.
 - **Git**: For repository cloning and version control.
 - **Network**: Internet connection for dependency installation, engine updates, and media downloading.
 
@@ -205,15 +254,18 @@ npm ci
 npm run dev
 ```
 
-### ⚡ Development Helper Script (Windows)
+### 🧪 Automated Testing
 
-Windows developers can also start the development environment directly from the repository root:
+Execute the comprehensive Node.js test suite covering multi-chunk downloads, FFmpeg conversion pipelines, yt-dlp extraction, and media player streaming lifecycle:
 
 ```powershell
-.\Cortex_Dev.bat
+cd app
+npm test
 ```
 
-To execute code linting separately:
+### 🔍 Code Linting
+
+To execute static code analysis and linting:
 
 ```powershell
 cd app
@@ -235,7 +287,7 @@ npm run build
 The build pipeline performs TypeScript verification, bundles Vite and Electron resources, and generates an NSIS installer under:
 
 ```text
-app/release/1.7.0/Cortex DL Setup 1.7.0.exe
+app/release/2.0.0/Cortex DL Setup 2.0.0.exe
 ```
 
 ---
@@ -248,7 +300,7 @@ The following executables are maintained under `app/bin/` and automatically embe
 | :--- | :---: | :--- |
 | `yt-dlp.exe` | `Active` | Core media extraction, URL parsing, and stream downloading engine. |
 | `ffmpeg.exe` | `Active` | Handles HLS stream capture, video/audio merging, format conversion, and trimming. |
-| `ffprobe.exe` | `Active` | Inspects media file properties, streams, and embedded subtitle tracks. |
+| `ffprobe.exe` | `Active` | Inspects media file properties, streams, codecs, and embedded subtitle tracks. |
 | `deno.exe` | `Active` | Modern JavaScript runtime required for advanced `yt-dlp` extractor scripts. |
 
 ---
@@ -265,18 +317,32 @@ Cortex-DL supports configuring a Netscape-format `cookies.txt` file in **Setting
 
 ---
 
-## 8. Privacy & Local Data Security
+## 8. Media Player Diagnostics & Lifecycle
+
+Cortex-DL v2.0.0 features a dedicated media player lifecycle management system designed to eliminate memory leaks, orphaned FFmpeg processes, and hanging streams.
+
+Developers can inspect live player metrics directly from the DevTools console:
+
+```javascript
+await window.__cortexMediaDiagnostics()
+```
+
+Refer to [`docs/media-player-diagnostics.md`](app/docs/media-player-diagnostics.md) for full benchmarking workflows and leak verification procedures.
+
+---
+
+## 9. Privacy & Local Data Security
 
 Cortex-DL is built with a **privacy-first** architecture:
 
 - 💾 **Local Database**: All download tasks, history, and status payloads are stored in `tasks.sqlite` within Electron's local app-data folder.
 - 🔐 **Encrypted Credentials**: User authentication credentials are encrypted using Electron's native `safeStorage` API prior to storage.
-- 🌐 **Isolated Media Server**: The built-in media streaming server binds strictly to `127.0.0.1` and enforces strict CORS and path verification.
+- 🌐 **Isolated Media Server**: The built-in media streaming server binds strictly to `127.0.0.1` and enforces strict CORS, token authentication, and path verification.
 - 🛡️ **Sandbox Security**: Renderer windows run with `contextIsolation` enabled, Node integration disabled, and explicit `preload` API bridges.
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 > [!TIP]
 > Use the **Health Check** panel in application Settings to quickly verify binary status and folder permissions.

@@ -1,4 +1,4 @@
-import type { DownloadTask, EngineContext, TaskRuntime } from '../types'
+import type { DownloadTask, EngineContext, TaskRuntime, EngineResult } from '../types'
 import log from 'electron-log'
 import { runFfmpegDownload } from '../ffmpegEngine'
 import type { IEngine } from './IEngine'
@@ -6,7 +6,7 @@ import type { IEngine } from './IEngine'
 export class FfmpegEngine implements IEngine {
   private runtime: TaskRuntime | null = null
 
-  async download(task: DownloadTask, context?: EngineContext): Promise<void> {
+  async download(task: DownloadTask, context?: EngineContext): Promise<EngineResult> {
     if (!context) throw new Error('[FfmpegEngine] Missing EngineContext')
 
     this.runtime = context.runtime

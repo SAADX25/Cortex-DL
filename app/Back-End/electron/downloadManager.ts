@@ -4,20 +4,20 @@ import { existsSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { setTimeout as delay } from 'node:timers/promises'
 import { db, taskDb } from './db'
 import type {
-  DownloadTask, TaskRuntime, StartInput, EngineContext,
+  DownloadTask, TaskRuntime, AttemptRuntime, EngineResult, StartInput, EngineContext,
   DownloadEngine, AudioFormat, TargetFormat,
 } from './types'
 import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
-import { isAudioFormat, matchesAudioFormat } from './audioFormats'
+import { mediaOutputArgs, matchesMediaFormat } from './mediaFormatRegistry'
+import { runMediaProcess, trimBounds } from './mediaPipeline'
 import { probeMediaFile } from './mediaFiles'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
-  killProcessTree, flushPendingIpc,
+  killProcessTree, clearPendingTrailing, sendNotification,
 } from './utils'
 
 import type { IEngine } from './engines/IEngine'
@@ -27,7 +27,7 @@ import { FfmpegEngine } from './engines/FfmpegEngine'
 
 type EngineEntry = {
   create: () => IEngine
-  start: (engine: IEngine, task: DownloadTask, context: EngineContext) => Promise<void>
+  start: (engine: IEngine, task: DownloadTask, context: EngineContext) => Promise<EngineResult>
 }
 
 const engines = new Map<DownloadEngine, EngineEntry>([
@@ -43,12 +43,13 @@ const filenameTransforms: Partial<Record<DownloadEngine, (filename: string) => s
 export class DownloadManager {
   private tasks = new Map<string, DownloadTask>()
   private runtime = new Map<string, TaskRuntime>()
+  private attempts = new Map<string, AttemptRuntime>()
   private engines = new Map<string, IEngine>() 
   private win: BrowserWindow | null = null
   private maxConcurrent = 3
   private active = new Set<string>()
   private pausingAll = false
-  /** Pending retry-backoff timers, keyed by task id (Priority 4). */
+  /** Pending retry-backoff timers, keyed by task id. */
   private retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private countedStats = new Set<string>()
 
@@ -95,7 +96,11 @@ export class DownloadManager {
           const task: DownloadTask = JSON.parse(row.full_payload)
           if (!task.id || !task.url) continue
           
-          if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
+          if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting' || task.status === 'pausing' || task.status === 'queued') {
+            task.status = 'paused'
+            task.speedBytesPerSec = null
+          }
+          if (task.status === 'completed' && (!task.validatedAttemptId || !existsSync(task.filePath))) {
             task.status = 'paused'
             task.speedBytesPerSec = null
           }
@@ -103,6 +108,7 @@ export class DownloadManager {
           updateTaskProgress(task)
           this.tasks.set(task.id, task)
           this.runtime.set(task.id, this.freshRuntime())
+          this.upsertTaskToDb(task)
         } catch (e) {
           log.error('Failed to parse task from DB row:', e)
         }
@@ -147,27 +153,7 @@ export class DownloadManager {
 
   
 
-  /**
-   * ── Priority 3: Decoupled write-behind persistence ─────────────────────
-   *
-   * Previously, every progress tick (up to ~10/sec per active download via
-   * `throttledSendUpdate`) triggered a *synchronous* better-sqlite3 write
-   * inline on the hot path (`sendUpdate` context callback), and
-   * `saveStateDebounced()` — despite its name — was not actually debounced
-   * at all: it ran a fresh DB transaction over *every* active task on every
-   * single call. Under load (several concurrent downloads, each emitting
-   * progress independently) this coupled disk I/O directly to the
-   * event-loop-blocking hot path and caused UI/IPC jank.
-   *
-   * The fix: the hot path only marks a task id "dirty" (an O(1) Set
-   * insert). A single interval timer flushes every currently-dirty task in
-   * one batched transaction at most once per WRITE_BEHIND_INTERVAL_MS,
-   * regardless of how many progress ticks happened in between, and the
-   * timer tears itself down when there is nothing left to flush. Lifecycle
-   * -critical transitions (add/pause/resume/cancel/complete/error) are
-   * infrequent user- or terminal-state-driven events, not the hot path, so
-   * they continue to go through `saveStateImmediate()` for zero data loss.
-   */
+  /** Progress writes are batched; lifecycle transitions are persisted immediately. */
   private static readonly WRITE_BEHIND_INTERVAL_MS = 1000
   private dirtyIds = new Set<string>()
   private writeBehindTimer: ReturnType<typeof setInterval> | null = null
@@ -253,6 +239,7 @@ export class DownloadManager {
   }
 
   async add(input: StartInput): Promise<DownloadTask> {
+    trimBounds(input)
     if (!isHttpUrl(input.url)) {
       throw new Error('URL must be http or https')
     }
@@ -320,8 +307,10 @@ export class DownloadManager {
   }
 
   async addBatch(inputs: StartInput[]): Promise<DownloadTask[]> {
+    for (const input of inputs) trimBounds(input)
     const created: DownloadTask[] = []
     for (const input of inputs) {
+      trimBounds(input)
       if (!isHttpUrl(input.url)) continue
 
       const rawSubfolder = (input.subfolderName ?? '').trim()
@@ -387,7 +376,7 @@ export class DownloadManager {
       for (const task of created) sendUpdate(this.win, task)
       
       
-      setTimeout(() => this.schedule(), 100)
+      this.schedule()
     }
     return created
   }
@@ -395,47 +384,41 @@ export class DownloadManager {
   async pause(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
     this.clearRetryTimer(id)
-    const isPauseable = task.status === 'downloading'
-      || task.status === 'merging'
-      || task.status === 'converting'
-      || task.status === 'queued'
-    if (!isPauseable) return task
-
-    task.status = 'paused'
-    task.updatedAtMs = nowMs()
+    if (task.status === 'completed' || task.status === 'canceled' || task.status === 'error' || task.status === 'paused') return task
+    const attempt = this.attempts.get(id)
+    task.status = attempt ? 'pausing' : 'paused'
     task.speedBytesPerSec = null
-
-    const engine = this.engines.get(id)
-    if (engine) {
-      engine.pause()
-      this.engines.delete(id)
+    task.updatedAtMs = nowMs()
+    clearPendingTrailing(id)
+    if (attempt) {
+      attempt.stopReason ??= 'paused'
+      attempt.abortController?.abort()
+      this.engines.get(id)?.pause()
+      this.saveStateImmediate(id)
+      sendUpdate(this.win, task)
+      await killProcessTree(attempt.child)
+      await attempt.done
     }
-
-    const runtime = this.mustGetRuntime(id)
-    runtime.abortController?.abort()
-    await killProcessTree(runtime.child)
-
-    this.clearRetryTimer(id)
-    this.saveStateImmediate()
+    if (task.status === 'pausing') task.status = 'paused'
+    this.saveStateImmediate(id)
     sendUpdate(this.win, task)
-    this.active.delete(id)
     this.schedule()
     return task
   }
 
   async resume(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
-    
-    if (
-      task.status === 'completed' || task.status === 'canceled' ||
-      task.status === 'downloading' || task.status === 'merging' ||
-      task.status === 'converting' || task.status === 'queued'
-    ) return task
-
+    const attempt = this.attempts.get(id)
+    if (['pausing', 'paused', 'error'].includes(task.status)) await attempt?.done
+    if (this.tasks.get(id) !== task || !['paused', 'error'].includes(task.status)) return task
+    this.clearRetryTimer(id)
+    const runtime = this.runtime.get(id)
+    if (runtime) runtime.retries = 0
     task.errorMessage = null
     task.status = 'queued'
+    task.phase = 'queued'
     task.updatedAtMs = nowMs()
-    this.saveStateImmediate()
+    this.saveStateImmediate(id)
     sendUpdate(this.win, task)
     this.schedule()
     return task
@@ -443,104 +426,45 @@ export class DownloadManager {
 
   async cancel(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
-    const runtime = this.mustGetRuntime(id)
     this.clearRetryTimer(id)
     task.status = 'canceled'
-    task.updatedAtMs = nowMs()
-
-    const engine = this.engines.get(id)
-    if (engine) {
-      engine.stop()
-      this.engines.delete(id)
-    }
-
-    runtime.abortController?.abort()
-    await killProcessTree(runtime.child)
-
     task.speedBytesPerSec = null
-    task.resumeChunks = undefined
-    task.supportsRanges = undefined
-    this.saveStateImmediate()
-    sendUpdate(this.win, task)
-    this.active.delete(id)
-    this.schedule()
-
-    
-    await delay(100)
-    try {
-      if (existsSync(task.filePath)) await fs.unlink(task.filePath)
-    } catch {
-      // The task-owned file may already have been removed.
+    task.updatedAtMs = nowMs()
+    clearPendingTrailing(id)
+    const attempt = this.attempts.get(id)
+    if (attempt) {
+      attempt.stopReason = 'canceled'
+      attempt.abortController?.abort()
+      this.engines.get(id)?.stop()
+      await killProcessTree(attempt.child)
+      await attempt.done
     }
+    task.resumeChunks = undefined
+    task.resumeDirectory = undefined
     await this.removeTaskFragments(task)
-
+    this.saveStateImmediate(id)
+    sendUpdate(this.win, task)
+    this.schedule()
     return task
   }
 
   async delete(id: string, deleteFile: boolean): Promise<void> {
     const task = this.tasks.get(id)
     if (!task) return
-
-    this.clearRetryTimer(id)
-    task.status = 'canceled'
-    this.engines.get(id)?.stop()
-    this.engines.delete(id)
-    this.dirtyIds.delete(id)
-    const runtime = this.runtime.get(id)
-    if (runtime) {
-      runtime.abortController?.abort()
-      await killProcessTree(runtime.child)
-      this.runtime.delete(id)
-    }
-
+    await this.cancel(id)
     if (deleteFile) {
-      const pathsToDelete = new Set<string>()
-
-      if (task.filePath) {
-        pathsToDelete.add(task.filePath)
-      }
-
-      if (task.directory && existsSync(task.directory)) {
-        try {
-          const files = await fs.readdir(task.directory)
-          for (const f of files) {
-            const fPath = path.join(task.directory, f)
-            if (f.startsWith(`${task.id}.`)) {
-              pathsToDelete.add(fPath)
-            }
-          }
-        } catch (err) {
-          log.warn(`[DownloadManager] Directory scan error during delete:`, err)
-        }
-      }
-      await this.removeTaskFragments(task)
-
-      for (const p of pathsToDelete) {
-        if (!existsSync(p)) continue
-        let unlinked = false
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            await fs.unlink(p)
-            unlinked = true
-            break
-          } catch (err: any) {
-            if (err?.code === 'ENOENT') {
-              unlinked = true
-              break
-            }
-            log.warn(`[DownloadManager] Attempt ${attempt + 1} failed to delete ${p}: ${err?.message}`)
-            await delay(200)
-          }
-        }
-        if (!unlinked && existsSync(p)) {
-          log.error(`[DownloadManager] Failed to delete file: ${p}`)
-        }
+      for (const file of task.ownedFiles ?? []) {
+        if (path.dirname(path.resolve(file)) !== path.resolve(task.directory)) continue
+        await fs.unlink(file).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') log.warn('[DM] Could not delete owned file:', error)
+        })
       }
     }
-
     this.tasks.delete(id)
-    this.active.delete(id)
+    this.runtime.delete(id)
+    this.dirtyIds.delete(id)
     this.countedStats.delete(id)
+    clearPendingTrailing(id)
     try { taskDb.deleteTask.run(id) } catch { log.error('DB delete failed') }
     this.schedule()
   }
@@ -562,7 +486,7 @@ export class DownloadManager {
   async pauseAll(): Promise<void> {
     this.pausingAll = true
     const activeIds = Array.from(this.tasks.values())
-      .filter(t => t.status === 'downloading' || t.status === 'queued' || t.status === 'merging' || t.status === 'converting')
+      .filter(t => t.status === 'downloading' || t.status === 'queued' || t.status === 'merging' || t.status === 'converting' || t.status === 'pausing')
       .map(t => t.id)
 
     try {
@@ -604,62 +528,56 @@ export class DownloadManager {
     return task
   }
 
-  private reserveOutputPath(directory: string, filename: string): string {
+  private reserveOutputPath(directory: string, filename: string, exceptId?: string): string {
     const parsed = path.parse(filename)
     let candidate = path.join(directory, filename)
     let suffix = 1
     const reserved = (filePath: string) => existsSync(filePath) ||
-      Array.from(this.tasks.values()).some(t => t.filePath === filePath)
+      Array.from(this.tasks.values()).some(t => t.id !== exceptId && t.filePath === filePath)
     while (reserved(candidate)) {
       candidate = path.join(directory, `${parsed.name}_${suffix++}${parsed.ext}`)
     }
     return candidate
   }
 
-  private mustGetRuntime(id: string): TaskRuntime {
-    const rt = this.runtime.get(id)
-    if (!rt) throw new Error('Task runtime not found')
-    return rt
-  }
-
-  private createContext(taskId: string): EngineContext {
-    const runtime = this.mustGetRuntime(taskId)
+  private createContext(taskId: string, attempt: AttemptRuntime, draft: DownloadTask): EngineContext {
+    const current = () => this.isCurrent(taskId, attempt)
     return {
-      sendUpdate: (t) => {
-        if (this.tasks.get(taskId) !== t) return
-        updateTaskProgress(t)
-        // IPC broadcast stays throttled/leading-trailing as before. DB
-        // persistence is fully decoupled from it now (Priority 3): we just
-        // mark the task dirty and let the write-behind timer batch the
-        // actual disk write, instead of writing inline on this hot path.
-        throttledSendUpdate(this.win, t, runtime)
+      runtime: attempt,
+      sendUpdate: t => {
+        if (!current() || t !== draft) return
+        const task = this.mustGet(taskId)
+        // Engines work on isolated drafts. Only this projection can reach authoritative state.
+        for (const key of ['totalBytes', 'downloadedBytes', 'speedBytesPerSec', 'downloadPercent', 'convertingPercent', 'resumeChunks', 'supportsRanges', 'etag', 'lastModified', 'title', 'thumbnail', 'ytdlpStreams', 'ytdlpExpectedBytes', 'ytdlpExpectedStreamCount'] as const) {
+          Object.assign(task, { [key]: t[key] })
+        }
+        if (t.status === 'merging' || t.status === 'converting') task.status = t.status
+        task.phase = t.phase === 'trimming' || t.phase === 'validating' || t.phase === 'finalizing'
+          ? t.phase : task.status === 'merging' || task.status === 'converting' ? task.status : 'downloading'
+        task.updatedAtMs = nowMs()
+        updateTaskProgress(task)
+        throttledSendUpdate(this.win, task, attempt)
         this.markDirty(taskId)
       },
-      runtime,
-      saveState: () => { if (this.tasks.has(taskId)) this.markDirty(taskId) },
-      flushSave: () => { if (this.tasks.has(taskId)) this.saveStateImmediate(taskId) },
-      scheduleRetry: (delayMs: number) => this.scheduleRetry(taskId, delayMs),
-      sendStats: (id, addedBytes) => {
-        if (!this.tasks.has(id)) return
-        if (this.countedStats.has(id)) return
-        this.countedStats.add(id)
-        if (this.win && !this.win.isDestroyed()) {
-          this.win.webContents.send(STATS_CHANNEL, { id, addedBytes })
-        }
-      },
-      sendYouTubeOAuthCode: (payload) => {
-        if (this.win && !this.win.isDestroyed()) {
-          this.win.webContents.send(YOUTUBE_OAUTH_CHANNEL, payload)
-        }
+      saveState: () => { if (current()) this.markDirty(taskId) },
+      flushSave: () => { if (current()) this.saveStateImmediate(taskId) },
+      sendYouTubeOAuthCode: payload => {
+        if (current() && this.win && !this.win.isDestroyed()) this.win.webContents.send(YOUTUBE_OAUTH_CHANNEL, payload)
       },
     }
   }
 
-  /**
-   * ── Priority 4: retry scheduling owned by DownloadManager ──────────────
-   * Cancels any pending retry timer for `id` and clears the runtime's
-   * `retryAt` marker. Safe to call even if no retry is pending.
-   */
+  private isCurrent(id: string, attempt: AttemptRuntime): boolean {
+    const task = this.tasks.get(id)
+    return this.attempts.get(id) === attempt && task?.attemptId === attempt.attemptId &&
+      !attempt.stopReason && !attempt.abortController?.signal.aborted && task.status !== 'canceled'
+  }
+
+  private assertCurrent(id: string, attempt: AttemptRuntime): void {
+    if (!this.isCurrent(id, attempt)) throw new Error('Attempt stopped or superseded')
+  }
+
+  /** Cancel task retry eligibility without touching an attempt's resources. */
   private clearRetryTimer(id: string): void {
     const timer = this.retryTimers.get(id)
     if (timer) {
@@ -670,14 +588,7 @@ export class DownloadManager {
     if (runtime) runtime.retryAt = undefined
   }
 
-  /**
-   * Schedules task `id` to become eligible for `schedule()` again after
-   * `delayMs`, without occupying an active concurrency slot in the
-   * meantime. Engines call this (via `EngineContext.scheduleRetry`) instead
-   * of sleeping inline inside `download()` — sleeping inline would keep the
-   * task counted in `this.active` for the full backoff, starving other
-   * queued downloads of a slot for as long as ~60s.
-   */
+  /** Backoff never occupies a download slot; engines return an outcome immediately. */
   private scheduleRetry(id: string, delayMs: number): void {
     if (this.tasks.get(id)?.status !== 'queued') return
     this.clearRetryTimer(id)
@@ -703,7 +614,7 @@ export class DownloadManager {
     const now = nowMs()
     const candidates = Array.from(this.tasks.values())
       .filter(t => {
-        if (t.status !== 'queued' || this.active.has(t.id)) return false
+        if (t.status !== 'queued' || this.active.has(t.id) || this.attempts.has(t.id)) return false
         // Tasks awaiting a retry backoff are not eligible until it elapses
         // (see scheduleRetry) — they must not consume a concurrency slot.
         const retryAt = this.runtime.get(t.id)?.retryAt
@@ -719,118 +630,221 @@ export class DownloadManager {
     }
   }
 
-  private async executeEngine(id: string): Promise<void> {
+  private executeEngine(id: string): Promise<void> {
     const task = this.mustGet(id)
-
-    if (task.status !== 'queued') {
-      this.active.delete(id)
-      this.schedule()
-      return
+    if (task.status !== 'queued' || this.attempts.has(id)) return Promise.resolve()
+    const previousRuntime = this.runtime.get(id)
+    const attemptId = randomUUID()
+    const attempt: AttemptRuntime = {
+      ...this.freshRuntime(), retries: previousRuntime?.retries ?? 0,
+      ignoreCookies: previousRuntime?.ignoreCookies,
+      abortController: new AbortController(), attemptId,
+      directory: path.join(task.directory, '.cortex_temp', task.id, attemptId),
     }
+    this.runtime.set(id, attempt)
+    this.attempts.set(id, attempt)
+    this.active.add(id)
+    task.attemptId = attemptId
+    task.status = 'downloading'
+    task.phase = 'preparing'
+    task.overallProgress = null
+    task.phaseProgress = null
+    task.convertingPercent = undefined
+    task.downloadPercent = undefined
+    task.speedBytesPerSec = null
+    clearPendingTrailing(id)
+    sendUpdate(this.win, task)
+    this.saveStateImmediate(id)
+    // Publish the settlement promise before invoking any engine or async hook.
+    attempt.done = Promise.resolve().then(() => this.runAttempt(task, attempt))
+    return attempt.done
+  }
 
-    log.info(`[DM] Executing engine '${task.engine}' for task ${id}`)
+  private async runAttempt(task: DownloadTask, attempt: AttemptRuntime): Promise<void> {
+    const id = task.id
+    const draft: DownloadTask = structuredClone(task)
+    draft.directory = attempt.directory
+    draft.filePath = path.join(attempt.directory, `${id}.${task.targetFormat}`)
+    draft.ytdlpStreams = undefined
+    const context = this.createContext(id, attempt, draft)
     try {
-      task.status = 'downloading'
-      task.overallProgress = null
-      task.phaseProgress = null
-      task.speedBytesPerSec = null
-      task.updatedAtMs = nowMs()
-      updateTaskProgress(task)
-      sendUpdate(this.win, task)
-      
+      await fs.mkdir(path.dirname(attempt.directory), { recursive: true })
+      this.assertCurrent(id, attempt)
+      // Transfer partial ownership only after the previous attempt has settled.
+      const prior = task.resumeDirectory
+      if (prior && path.dirname(path.resolve(prior)) === path.dirname(path.resolve(attempt.directory))) {
+        await fs.rename(prior, attempt.directory).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error
+        })
+        this.assertCurrent(id, attempt)
+      }
+      await fs.mkdir(attempt.directory, { recursive: true })
+      this.assertCurrent(id, attempt)
+      task.resumeDirectory = attempt.directory
+      this.saveStateImmediate(id)
       const entry = engines.get(task.engine)
-      if (!entry) throw new Error(`[DM] No engine registered for '${task.engine}'`)
-
+      if (!entry) throw new Error(`No engine registered for '${task.engine}'`)
       const engine = entry.create()
       this.engines.set(id, engine)
-
-      
-      const context = this.createContext(id)
-
-      await entry.start(engine, task, context)
-      this.engines.delete(id)
-
-      if (this.tasks.get(id) !== task) return
-
-      if (task.status === 'downloading' && task.engine === 'direct' && isAudioFormat(task.targetFormat)) {
-        const probe = await probeMediaFile(task.filePath, child => { context.runtime.child = child })
-        if (!matchesAudioFormat(task.targetFormat, probe)) {
-          throw new Error(`Direct download is not a valid ${task.targetFormat} audio file`)
-        }
-      }
-
-      
-      
-
-      
-      
-      if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting') {
-        // Flush any trailing throttled IPC update so the renderer receives
-        // the final progress snapshot before the completion event.
-        flushPendingIpc(task.id)
-        task.status = 'completed'
-        task.updatedAtMs = nowMs()
-        log.info(`[DM] Task ${id} completed successfully`)
-      }
-      if (task.status === 'completed') {
-        const size = await fs.stat(task.filePath).then(s => s.size).catch(() => 0)
-        if (size > 0 && !this.countedStats.has(id)) this.createContext(id).sendStats(id, size)
-      }
-
-    } catch (err: unknown) {
-      // ── Priority 5 (crucial): pause()/cancel() race fix ────────────────
-      // pause()/cancel() can run concurrently with the in-flight
-      // `entry.start()` above: they abort the runtime's AbortController and
-      // kill the child process tree, which causes most engines'
-      // `download()` to reject (e.g. DirectEngine explicitly rethrows on
-      // abort). That rejection lands here — but by the time it does,
-      // pause()/cancel() have *already* set `task.status` to 'paused' /
-      // 'canceled'. Unconditionally overwriting it to 'error' would clobber
-      // that legitimate, more recent user-initiated transition with a
-      // misleading "Download aborted" error. Only report a real error if
-      // the task is still in an active state that this failure actually
-      // explains.
-      // Read via a widened alias — TS's control-flow narrowing from the try
-      // block's earlier `if (task.status === ...)` check would otherwise
-      // (incorrectly, since an exception can land here from any point in
-      // the try block, including mid-await) treat some of these branches
-      // as unreachable.
-      const currentStatus: string = task.status
-      const stillActive = currentStatus === 'downloading'
-        || currentStatus === 'merging'
-        || currentStatus === 'converting'
-
-      if (stillActive) {
-        log.error(`[DM] Task ${id} failed:`, err)
-        task.status = 'error'
-        task.errorMessage = err instanceof Error ? err.message : 'Unknown engine error'
+      const result = await entry.start(engine, draft, context)
+      this.assertCurrent(id, attempt)
+      if (result.kind === 'success') {
+        await this.finalize(task, draft, attempt, context, result.candidate)
+      } else if (result.kind === 'retryable-error' && attempt.retries < (task.engine === 'ytdlp' ? 5 : 3)) {
+        attempt.retries++
+        task.status = 'queued'
+        task.errorMessage = result.message
+        this.scheduleRetry(id, result.delayMs)
+      } else if (result.kind === 'paused' || result.kind === 'canceled') {
+        task.status = result.kind
       } else {
-        log.info(
-          `[DM] Task ${id} threw after status changed to '${task.status}' ` +
-          `(pause/cancel race, not a real failure) — ignoring: ` +
-          `${err instanceof Error ? err.message : String(err)}`
-        )
+        task.status = 'error'
+        task.errorMessage = 'message' in result ? result.message : 'Engine failed'
       }
-      this.engines.delete(id)
+    } catch (error) {
+      if (this.isCurrent(id, attempt)) {
+        task.status = 'error'
+        task.errorMessage = error instanceof Error ? error.message : String(error)
+        log.error('[DM] Attempt failed:', error)
+      }
     } finally {
-      this.active.delete(id)
-      if (this.tasks.get(id) === task) {
-        updateTaskProgress(task)
-        this.saveStateImmediate(id)
-        sendUpdate(this.win, task)
+      // Sockets/descriptors have settled in the engine before this point.
+      await killProcessTree(attempt.child)
+      attempt.child = null
+      if (this.attempts.get(id) === attempt) {
+        if (task.status === 'error' && this.isCurrent(id, attempt)) sendNotification('Download Failed', task.errorMessage || task.filename)
+        if (attempt.stopReason === 'paused' && task.status === 'pausing') task.status = 'paused'
+        if (task.status === 'paused' || task.status === 'queued' || task.status === 'error') {
+          if (existsSync(attempt.directory)) task.resumeDirectory = attempt.directory
+          task.resumeChunks = draft.resumeChunks
+          task.etag = draft.etag
+          task.lastModified = draft.lastModified
+          task.supportsRanges = draft.supportsRanges
+          task.downloadedBytes = draft.downloadedBytes
+        }
+        this.attempts.delete(id)
+        this.engines.delete(id)
+        this.active.delete(id)
+        attempt.abortController = null
+        clearPendingTrailing(id)
+        task.speedBytesPerSec = null
+        if (this.tasks.get(id) === task) {
+          updateTaskProgress(task)
+          this.saveStateImmediate(id)
+          this.dirtyIds.delete(id)
+          if (this.dirtyIds.size === 0 && this.writeBehindTimer) {
+            clearInterval(this.writeBehindTimer)
+            this.writeBehindTimer = null
+          }
+          sendUpdate(this.win, task)
+        }
       }
       this.schedule()
     }
   }
 
-  private async removeTaskFragments(task: DownloadTask): Promise<void> {
-    const tempDir = path.join(task.directory, '.cortex_temp')
-    for (const dir of [task.directory, tempDir]) {
-      const files = await fs.readdir(dir).catch(() => [])
-      for (const name of files) {
-        if (!name.startsWith(`${task.id}.`)) continue
-        await fs.unlink(path.join(dir, name)).catch(() => {})
-      }
+  private async finalize(task: DownloadTask, draft: DownloadTask, attempt: AttemptRuntime, ctx: EngineContext, source: string): Promise<void> {
+    const check = () => this.assertCurrent(task.id, attempt)
+    if (path.dirname(path.resolve(source)) !== path.resolve(attempt.directory)) throw new Error('Candidate is not attempt-owned')
+    const phase = (value: 'validating' | 'trimming' | 'converting' | 'finalizing') => {
+      check()
+      draft.phase = value
+      draft.status = value === 'trimming' || value === 'converting' ? 'converting' : draft.status
+      draft.convertingPercent = undefined
+      ctx.sendUpdate(draft)
     }
+    phase('validating')
+    const probe = await probeMediaFile(source, child => { attempt.child = child }, attempt.abortController!.signal)
+    check()
+    const bounds = trimBounds(task)
+    const trimming = Boolean(task.startTime || task.endTime)
+    const duration = Number(probe.format?.duration)
+    let expectedDuration: number | undefined
+    if (trimming) {
+      if (!Number.isFinite(duration) || duration <= bounds.start) throw new Error('Trim start exceeds media duration')
+      expectedDuration = Math.min(bounds.end ?? duration, duration) - bounds.start
+    }
+    let candidate = source
+    if (trimming || !matchesMediaFormat(task.targetFormat, probe)) {
+      phase(trimming ? 'trimming' : 'converting')
+      candidate = path.join(attempt.directory, `candidate.${task.targetFormat}`)
+      const args = ['-i', source]
+      if (trimming) args.push('-ss', String(bounds.start), '-t', String(expectedDuration))
+      args.push(...mediaOutputArgs(task.targetFormat, candidate, probe, trimming))
+      await runMediaProcess(args, draft, ctx, expectedDuration ?? (Number.isFinite(duration) ? duration : undefined))
+      check()
+    }
+    phase('validating')
+    const finalProbe = await probeMediaFile(candidate, child => { attempt.child = child }, attempt.abortController!.signal)
+    check()
+    if (!matchesMediaFormat(task.targetFormat, finalProbe)) throw new Error(`Invalid ${task.targetFormat} container or codec`)
+    const actualDuration = Number(finalProbe.format?.duration ?? finalProbe.streams?.find(s => s.duration)?.duration)
+    if (expectedDuration !== undefined && (!Number.isFinite(actualDuration) || Math.abs(actualDuration - expectedDuration) > Math.max(0.25, Math.min(1, expectedDuration * 0.02)))) throw new Error('Trim duration failed validation')
+    // Decode every media packet: readable headers alone can hide truncated/corrupt payloads.
+    await runMediaProcess(['-xerror', '-i', candidate, '-map', '0:v?', '-map', '0:a?', '-f', 'null', '-'], draft, ctx)
+    check()
+    const size = (await fs.stat(candidate)).size
+    check()
+    phase('finalizing')
+    // Reserve again immediately before promotion; no overwrite of an unrelated file.
+    const target = this.reserveOutputPath(task.directory, task.filename, task.id)
+    check()
+    // A hard-link promotion atomically publishes the validated bytes and refuses
+    // an existing destination (rename can replace it). Candidate stays for rollback.
+    await fs.link(candidate, target)
+    const promoted = [target]
+    try {
+      check()
+      const files = await fs.readdir(attempt.directory)
+      check()
+      for (const name of files) {
+        if (!name.startsWith(`${task.id}.`) || !/\.(vtt|srt)$/i.test(name)) continue
+        check()
+        const subtitle = path.join(task.directory, path.parse(target).name + name.slice(task.id.length))
+        try {
+          await fs.link(path.join(attempt.directory, name), subtitle)
+          promoted.push(subtitle)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        }
+        check()
+      }
+    } catch (error) {
+      for (const file of promoted) await fs.unlink(file).catch(e => log.error('[DM] Promotion rollback failed:', e))
+      throw error
+    }
+    // No await between this guard and the authoritative commit.
+    check()
+    task.filePath = target
+    task.filename = path.basename(target)
+    task.ownedFiles = [...(task.ownedFiles ?? []), ...promoted]
+    task.outputBytes = size
+    task.validatedAttemptId = attempt.attemptId
+    task.status = 'completed'
+    task.phase = 'completed'
+    task.updatedAtMs = nowMs()
+    task.speedBytesPerSec = null
+    task.errorMessage = null
+    task.resumeChunks = undefined
+    task.resumeDirectory = undefined
+    attempt.retries = 0
+    updateTaskProgress(task)
+    this.saveStateImmediate(task.id)
+    clearPendingTrailing(task.id)
+    sendUpdate(this.win, task)
+    if (!this.countedStats.has(task.id)) {
+      this.countedStats.add(task.id)
+      if (this.win && !this.win.isDestroyed()) this.win.webContents.send(STATS_CHANNEL, { id: task.id, addedBytes: size })
+    }
+    sendNotification('Download Complete', `${task.title || task.filename} downloaded successfully.`)
+    await fs.rm(attempt.directory, { recursive: true, force: true }).catch(e => log.warn('[DM] Temp cleanup:', e))
+  }
+
+  private async removeTaskFragments(task: DownloadTask): Promise<void> {
+    if (!/^[\w-]+$/.test(task.id)) return
+    const root = path.resolve(task.directory, '.cortex_temp')
+    const owned = path.resolve(root, task.id)
+    if (path.dirname(owned) !== root) throw new Error('Unsafe task temp directory')
+    await fs.rm(owned, { recursive: true, force: true })
   }
 }

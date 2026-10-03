@@ -53,12 +53,6 @@ export const taskDb = {
       full_payload = excluded.full_payload
   `),
 
-  updateStatusAndProgress: db.prepare(`
-    UPDATE tasks 
-    SET status = @status, progress = @progress, full_payload = @full_payload
-    WHERE id = @id
-  `),
-
   deleteTask: db.prepare(`
     DELETE FROM tasks WHERE id = ?
   `),

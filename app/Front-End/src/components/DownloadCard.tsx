@@ -25,6 +25,10 @@ const ProgressBar: React.FC<{
   const phaseToBarClass: Record<string, string> = {
     downloading: 'downloading',
     starting: 'downloading',
+    preparing: 'downloading',
+    validating: 'converting',
+    finalizing: 'converting',
+    pausing: 'paused',
     merging: 'merging',
     converting: 'converting',
     trimming: 'converting',
