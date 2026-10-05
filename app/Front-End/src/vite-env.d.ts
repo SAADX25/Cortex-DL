@@ -35,6 +35,8 @@ declare global {
 
   type YtdlpFormat = {
     formatId: string
+    vcodec?: string
+    acodec?: string
     ext: string
     resolution: string
     filesize: number | null
@@ -51,6 +53,7 @@ declare global {
     | { kind: 'hls-master'; variants: HlsVariant[] }
     | {
       kind: 'ytdlp'
+      preview?: boolean
       title: string
       thumbnail?: string
       formats: YtdlpFormat[]
@@ -82,6 +85,7 @@ declare global {
   interface Window {
     __cortexMediaDiagnostics?: () => Promise<unknown>
     cortexDl: {
+      analysisDebug: boolean
 
       saveSecureData(key: string, value: string): Promise<boolean>
       getSecureData(key: string): Promise<string>
@@ -92,7 +96,9 @@ declare global {
       onCommentsExtractionStarted: (callback: () => void) => () => void
       onCommentsProgress: (callback: (current: number, total: number) => void) => () => void
 
-      analyzeUrl: (url: string) => Promise<AnalyzeResult>
+      cancelAnalysis: (id: string) => Promise<void>
+      onAnalysisUpdate: (callback: (update: { id: string; stage: string; data: { title?: string; dislikes?: number } }) => void) => () => void
+      analyzeUrl: (url: string, id?: string) => Promise<AnalyzeResult>
 
       listDownloads: () => Promise<DownloadTask[]>
       addDownload: (input: {

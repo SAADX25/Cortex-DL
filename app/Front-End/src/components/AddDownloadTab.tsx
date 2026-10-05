@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import { primaryAnalysis } from '../lib/analysisSession'
+import React, { useState, useMemo, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { translations } from '../translations'
 import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud } from 'lucide-react'
@@ -57,6 +58,7 @@ export type BatchItem = {
  * it) to re-render.
  */
 const AddDownloadTab: React.FC = () => {
+  useEffect(() => () => { primaryAnalysis.cancel(); useUIStore.getState().setAnalyzing(false) }, [])
   const lang = useLang()
   const t = translations[lang]
 

@@ -37,12 +37,25 @@ function parseResolution(value: string | undefined): { width: number; height: nu
   return { width, height }
 }
 
-export async function analyzeUrlForHls(inputUrl: string): Promise<AnalyzeResult> {
+export async function analyzeUrlForHls(inputUrl: string, signal?: AbortSignal): Promise<AnalyzeResult> {
   if (!isLikelyM3u8(inputUrl)) return { kind: 'direct' }
 
-  const res = await fetch(inputUrl, { redirect: 'follow' })
-  if (!res.ok) return { kind: 'unknown' }
-  const text = await res.text()
+  const res = await fetch(inputUrl, { redirect: 'follow', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000) })
+  if (!res.ok) { await res.body?.cancel(); return { kind: 'unknown' } }
+  if (!res.body) return { kind: 'unknown' }
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.length
+      if (size > 4 * 1024 * 1024) throw new Error('HLS manifest exceeds size limit')
+      chunks.push(value)
+    }
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock() }
+  const text = Buffer.concat(chunks).toString('utf8')
 
   const lines = text
     .split(/\r?\n/g)

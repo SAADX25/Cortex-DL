@@ -1,3 +1,5 @@
+import { primaryAnalysis } from '../lib/analysisSession'
+import { useUIStore } from '../stores/useUIStore'
 import React, { useState, useEffect } from 'react'
 import { X, ClipboardPaste } from 'lucide-react'
 
@@ -41,7 +43,12 @@ export const UrlInputBar = React.memo((
       <input
         className="hero-input"
         value={localUrl}
-        onChange={(e) => setLocalUrl(e.target.value)}
+        onChange={(e) => {
+          setLocalUrl(e.target.value)
+          primaryAnalysis.cancel()
+          useUIStore.getState().setAnalyzeResult(null)
+          useUIStore.getState().setAnalyzing(false)
+        }}
         onKeyDown={(e) => { if (e.key === 'Enter' && localUrl.trim() && !analyzing) onAnalyze(localUrl) }}
         placeholder={batchCount >= maxBatchItems ? `Batch full (${maxBatchItems}/${maxBatchItems}). Start download to clear.` : placeholderText}
         dir="auto"
