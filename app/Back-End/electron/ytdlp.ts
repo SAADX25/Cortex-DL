@@ -7,6 +7,7 @@ import { get } from 'node:https'
 import { unlink, rename, stat } from 'node:fs/promises'
 import { getBinaryPath, getBinDirectory } from './paths'
 import { db } from './db'
+import { extractPreview, PREVIEW_FORMAT, type PreviewExtractionOptions } from './previewExtraction'
 
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000 
 const ANALYSIS_CACHE_MAX = 50 
@@ -777,120 +778,19 @@ export async function analyzeWithYtdlp(url: string): Promise<AnalyzeResult> {
   })
 }
 
-export async function getDirectStreamUrl(
-  url: string,
-): Promise<string> {
-  const TIMEOUT_MS = 30_000 
-
-  const ytdlpPath = getBinaryPath('yt-dlp')
-  if (!existsSync(ytdlpPath)) {
-    throw new Error('yt-dlp binary not found. Please ensure it exists in the bin directory.')
-  }
-
-  
-  
-  
-  
-  
-  
-  const formatSelectors = ['22/18', 'b[ext=mp4]', 'best']
-
-  let lastError: string = ''
-
-  for (const formatSelector of formatSelectors) {
-    const args: string[] = [
-      '-f', formatSelector,
-      '-g',                    // print direct URL only
-      '--no-playlist',
-      '--geo-bypass',
-      '--force-ipv4',
-      '--no-warnings',
-      '--socket-timeout', '10',
-      '--no-cache-dir',
-      // Guard: only pass --extractor-args when the value is non-empty.
-      // Passing an empty string causes yt-dlp to throw:
-      //   "wrong --extractor-args formatting; it should be IE_KEY:ARGS, not """
+export async function getDirectStreamUrl(url: string, options: PreviewExtractionOptions = {}): Promise<string> {
+  const binary = getBinaryPath('yt-dlp')
+  if (!existsSync(binary)) throw new Error('yt-dlp binary not found in the bin directory')
+  try {
+    return await extractPreview(binary, [
+      '-f', PREVIEW_FORMAT, '--dump-single-json', '--no-playlist', '--geo-bypass',
+      '--force-ipv4', '--socket-timeout', '10', '--no-cache-dir',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
-      ...getYtdlpCookieArgs(),
-    ]
-
-    args.push(...getJsRuntimeArgs())
-
-    args.push(url)
-
-    const startMs = Date.now()
-    log.info(`[ytdlp] getDirectStreamUrl: trying format "${formatSelector}" for ${url.slice(0, 80)}...`)
-
-    try {
-      const directUrl = await new Promise<string>((resolve, reject) => {
-        const p = spawn(ytdlpPath, args, {
-          windowsHide: true,
-          detached: false,
-          env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-        })
-
-        let stdout = ''
-        let stderr = ''
-
-        p.stdout.on('data', (data) => {
-          stdout += data.toString()
-        })
-
-        p.stderr.on('data', (data) => {
-          stderr += data.toString()
-        })
-
-        p.on('error', (err) => {
-          reject(new Error(`Failed to spawn yt-dlp: ${err.message}`))
-        })
-
-        
-        const timer = setTimeout(() => {
-          try { p.kill() } catch {
-            // The timed-out process may have exited already.
-          }
-          reject(new Error('yt-dlp timed out while extracting stream URL.'))
-        }, TIMEOUT_MS)
-
-        p.on('close', (code) => {
-          clearTimeout(timer)
-          const elapsedMs = Date.now() - startMs
-          log.info(`[ytdlp] getDirectStreamUrl format="${formatSelector}" finished in ${elapsedMs}ms (exit ${code})`)
-
-          if (code !== 0) {
-            log.warn(`[ytdlp] getDirectStreamUrl stderr: ${stderr.trim()}`)
-            reject(new Error(stderr.trim() || `yt-dlp exited with code ${code}`))
-            return
-          }
-
-          
-          
-          
-          const firstUrl = stdout
-            .split('\n')
-            .map((line) => line.trim())
-            .find((line) => line.length > 0 && line.startsWith('http'))
-
-          if (!firstUrl) {
-            reject(new Error('yt-dlp returned no playable URL.'))
-            return
-          }
-
-          resolve(firstUrl)
-        })
-      })
-
-      log.info(`[ytdlp] getDirectStreamUrl: success with format "${formatSelector}" (${directUrl.slice(0, 80)}...)`)
-      return directUrl
-    } catch (err) {
-      if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(err)) {
-        throw new YouTubeAuthRequiredError()
-      }
-      lastError = err instanceof Error ? err.message : String(err)
-      log.warn(`[ytdlp] getDirectStreamUrl: format "${formatSelector}" failed — ${lastError}`)
-      
-    }
+      ...getYtdlpCookieArgs(), ...getJsRuntimeArgs(), url,
+    ], options)
+  } catch (error) {
+    log.error('[ytdlp] Preview extraction failed:', error)
+    if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(error)) throw new YouTubeAuthRequiredError()
+    throw error
   }
-
-  throw new Error(`Failed to extract a playable stream URL: ${lastError}`)
 }

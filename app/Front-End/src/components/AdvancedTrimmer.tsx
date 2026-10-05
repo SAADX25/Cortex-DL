@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Check, Loader, RotateCcw, Scissors } from 'lucide-react'
 import './AdvancedTrimmer.css'
+import { TrimPreview, seekPreview, videoFailure } from './trimPreview'
+import { releaseMediaElement } from './MediaPlayer/mediaSession'
 
 export type TrimRange = {
   startSeconds: number
@@ -83,40 +85,24 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   const [isResolvingStream, setIsResolvingStream] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
 
+  const previewRef = useRef<TrimPreview | null>(null)
+  const requestedSeek = useRef<number>(clamp(parseTimeToSeconds(initialStartTime) ?? 0, 0, safeDuration))
+
   useEffect(() => {
-    let cancelled = false
-
-    setStreamUrl(null)
-    setStreamError(null)
-
-    if (originalUrl) {
-      setIsResolvingStream(true)
-
-      window.cortexDl
-        .getDirectStreamUrl(originalUrl)
-        .then((directUrl) => {
-          if (!cancelled) {
-            setStreamUrl(directUrl)
-            setIsResolvingStream(false)
-          }
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setStreamError(
-              err instanceof Error ? err.message : 'Failed to extract preview stream.',
-            )
-            setIsResolvingStream(false)
-          }
-        })
-    } else if (videoUrl) {
-      setStreamUrl(videoUrl)
-      setIsResolvingStream(false)
-    } else {
-      setIsResolvingStream(false)
-    }
-
+    const session = `trim-${crypto.randomUUID()}`
+    const video = videoRef.current
+    const preview = new TrimPreview(videoUrl, (source, error, loading) => {
+      setStreamUrl(source)
+      setStreamError(error)
+      setIsResolvingStream(loading)
+    })
+    previewRef.current = preview
+    void preview.start(originalUrl ? () => window.cortexDl.getDirectStreamUrl(originalUrl, session) : undefined)
     return () => {
-      cancelled = true
+      preview.dispose()
+      previewRef.current = null
+      releaseMediaElement(video)
+      void window.cortexDl.closeMediaSession(session).catch(error => console.error('[Visual Trim] Session cleanup failed:', error))
     }
   }, [videoUrl, originalUrl])
 
@@ -140,8 +126,8 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   }, [initialEndTime, initialStartTime, safeDuration])
 
   function seekVideo(seconds: number): void {
-    if (!videoRef.current) return
-    videoRef.current.currentTime = clamp(seconds, 0, safeDuration)
+    requestedSeek.current = clamp(seconds, 0, safeDuration)
+    seekPreview(videoRef.current, requestedSeek.current)
   }
 
   function emitChange(nextStart: number, nextEnd: number): void {
@@ -183,35 +169,37 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       </div>
 
       <div className="advanced-trimmer__video-wrap">
-        {isResolvingStream ? (
+        {isResolvingStream && (
           <div className="advanced-trimmer__loading-overlay">
             <Loader size={28} className="advanced-trimmer__spinner" aria-hidden="true" />
             <span>Extracting preview stream…</span>
           </div>
-        ) : (
-          <>
-            {streamError && (
-              <div className="advanced-trimmer__notice advanced-trimmer__notice--warn">
-                <AlertCircle size={15} aria-hidden="true" />
-                <span>
-                  Video preview unavailable — the trim range still works normally.
-                </span>
-              </div>
-            )}
-            <video
-              ref={videoRef}
-              className={`advanced-trimmer__video${streamError ? ' advanced-trimmer__video--hidden' : ''}`}
-              src={streamUrl ?? undefined}
-              controls
-              muted
-              preload="auto"
-              onError={() =>
-                setStreamError('Preview failed to load. The trim range can still be saved.')
-              }
-              onLoadedMetadata={() => setStreamError(null)}
-            />
-          </>
         )}
+        {streamError && (
+          <div className="advanced-trimmer__notice advanced-trimmer__notice--warn" role="status">
+            <AlertCircle size={15} aria-hidden="true" />
+            <span>Video preview unavailable — the trim range still works normally. {streamError}</span>
+          </div>
+        )}
+        <video
+          ref={videoRef}
+          className={`advanced-trimmer__video${streamError || isResolvingStream ? ' advanced-trimmer__video--hidden' : ''}`}
+          src={streamUrl ?? undefined}
+          controls
+          muted
+          preload="metadata"
+          onError={(event) => {
+            if (!streamUrl || event.currentTarget.currentSrc !== streamUrl) return
+            previewRef.current?.fail(videoFailure(event.currentTarget))
+          }}
+          onLoadedMetadata={(event) => {
+            if (event.currentTarget.currentSrc !== streamUrl) return
+            if (Math.abs(event.currentTarget.duration - safeDuration) > 1) {
+              console.warn('[Visual Trim] Preview duration differs from analyzed duration:', event.currentTarget.duration, safeDuration)
+            }
+            seekPreview(event.currentTarget, requestedSeek.current)
+          }}
+        />
       </div>
 
       <div className="advanced-trimmer__timeline">

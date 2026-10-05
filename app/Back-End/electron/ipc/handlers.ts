@@ -350,10 +350,17 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string) => {
+  ipcMain.on('cortexdl:preview-error', (_event, message: unknown) => {
+    if (typeof message === 'string') log.error('[Visual Trim]', message.slice(0, 8000))
+  })
+
+  ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string, previewSession?: string) => {
     try {
       log.info(`[IPC] get-direct-stream-url called for: ${url.slice(0, 80)}...`)
-      const directUrl = await getDirectStreamUrl(url)
+      const directUrl = await getDirectStreamUrl(url, previewSession ? {
+        isClosed: () => isMediaSessionClosed(previewSession),
+        track: stop => trackMediaProcess(previewSession, 'probe', stop),
+      } : {})
       return directUrl
     } catch (err) {
       log.error('[IPC] get-direct-stream-url error:', err)

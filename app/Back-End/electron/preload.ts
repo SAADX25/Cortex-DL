@@ -174,8 +174,11 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getMediaFps(filePath: string, session: string): Promise<number | null> {
     return ipcRenderer.invoke('cortexdl:get-media-fps', filePath, session)
   },
-  getDirectStreamUrl(url: string): Promise<string> {
-    return invokeRendererSafe('cortexdl:get-direct-stream-url', url)
+  getDirectStreamUrl(url: string, previewSession?: string): Promise<string> {
+    return invokeRendererSafe('cortexdl:get-direct-stream-url', url, previewSession)
+  },
+  logPreviewError(message: string): void {
+    ipcRenderer.send('cortexdl:preview-error', message)
   },
   selectCookieFile(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-cookie-file')

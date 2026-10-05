@@ -20,8 +20,8 @@
     "test": "node --test tests/*.test.cjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test --test-name-pattern=\"^(fast Pause|retry backoff|recovery never|active delete|Direct backend progress|unknown-length progress|YouTube video/audio progress|all shared media formats|yt-dlp continuation|Pause All|SQLite progress|resume broadcasts|terminal IPC|yt-dlp repeated|progress preserves|progress replaces)\" tests/coreV2.test.cjs tests/reliability.test.cjs",
-    "test:integration": "node --test tests/coreV2.test.cjs tests/reliability.test.cjs tests/mediaLifecycle.test.cjs"
+    "test:unit": "node --test --test-name-pattern=\"^(Visual Trim validates|Visual Trim suppresses|fast Pause|retry backoff|recovery never|active delete|Direct backend progress|unknown-length progress|YouTube video/audio progress|all shared media formats|yt-dlp continuation|Pause All|SQLite progress|resume broadcasts|terminal IPC|yt-dlp repeated|progress preserves|progress replaces)\" tests/coreV2.test.cjs tests/reliability.test.cjs tests/trimPreview.test.cjs",
+    "test:integration": "node --test tests/coreV2.test.cjs tests/reliability.test.cjs tests/mediaLifecycle.test.cjs tests/trimPreview.test.cjs"
   },
   "dependencies": {
     "axios": "^1.14.0",

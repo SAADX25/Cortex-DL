@@ -134,7 +134,6 @@ const AddDownloadTab: React.FC = () => {
     if (isAudioMode || analyzeResult?.kind !== 'ytdlp' || !analyzeResult.duration) return null
 
     const formatsWithUrls = analyzeResult.formats.filter((format) => Boolean(format.url))
-    if (formatsWithUrls.length === 0) return null
 
     const selectedHeight = selectedQuality.endsWith('p')
       ? Number(selectedQuality.replace('p', ''))
@@ -157,7 +156,7 @@ const AddDownloadTab: React.FC = () => {
     })
 
     return {
-      videoUrl: sorted[0].url ?? '',
+      videoUrl: sorted[0]?.url ?? '',
       duration: analyzeResult.duration,
     }
   }, [analyzeResult, isAudioMode, selectedQuality])
@@ -411,8 +410,9 @@ const AddDownloadTab: React.FC = () => {
                     <div className={`trimmer-collapse${isTrimmerOpen ? ' trimmer-collapse--open' : ''}`}>
                       {isTrimmerOpen && (
                         <AdvancedTrimmer
-                          key={trimmerSource.videoUrl}
+                          key={url}
                           videoUrl={trimmerSource.videoUrl}
+                          originalUrl={url}
                           duration={trimmerSource.duration}
                           initialStartTime={startTime}
                           initialEndTime={endTime}

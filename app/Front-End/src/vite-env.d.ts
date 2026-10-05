@@ -162,7 +162,8 @@ declare global {
       onCloseMediaPlayer: (callback: () => void) => () => void
       fetchThumbnail: (url: string) => Promise<string>
       getMediaFps: (filePath: string, session: string) => Promise<number | null>
-      getDirectStreamUrl: (url: string) => Promise<string>
+      getDirectStreamUrl: (url: string, previewSession?: string) => Promise<string>
+      logPreviewError: (message: string) => void
 
       selectCookieFile: () => Promise<string | null>
       getCookieFile: () => Promise<string | null>
