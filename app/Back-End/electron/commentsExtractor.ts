@@ -5,6 +5,7 @@ import { getBinaryPath } from './paths'
 import { getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from './ytdlp'
 
 export async function extractAndSaveComments(url: string, outputPath: string, onProgress?: (current: number, total: number) => void): Promise<boolean> {
+  const cookieArgs = await getYtdlpCookieArgs()
   return new Promise((resolve) => {
     log.info(`[CommentsExtractor] Starting comment extraction for ${url}`)
     const ytDlpPath = getBinaryPath('yt-dlp')
@@ -17,7 +18,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       '--playlist-items', '0',
       '--verbose',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
-      ...getYtdlpCookieArgs(),
+      ...cookieArgs,
       ...getJsRuntimeArgs(),
       url
     ]

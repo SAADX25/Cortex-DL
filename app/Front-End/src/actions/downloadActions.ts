@@ -1,3 +1,5 @@
+import { primaryAnalysis } from '../lib/analysisSession'
+import { youtubeVideoId, normalizeAnalysisUrl } from '../../../Shared/analysisUrl'
 import { translations } from '../translations'
 import { MAX_BATCH_ITEMS } from '../constants/limits'
 import { isYtdlpUrl, normalizeIpcError, SUBTITLE_EMBED_FORMATS } from '../lib/downloadHelpers'
@@ -47,6 +49,9 @@ export async function onPickFolder(): Promise<string | null> {
 
 async function performAnalysis(urlToAnalyze: string): Promise<void> {
   const ui = useUIStore.getState()
+  if (ui.analyzing) {
+    try { if (normalizeAnalysisUrl(ui.url) === normalizeAnalysisUrl(urlToAnalyze)) return } catch { /* Invalid input follows the normal error path. */ }
+  }
   const form = useFormStore.getState()
 
   ui.setGlobalError(null)
@@ -54,10 +59,35 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
   ui.setAnalyzeResult(null)
   form.setSelectedVariantUrl(null)
   form.setSelectedSubtitleLanguage('')
-  ui.setUrl(urlToAnalyze)
+  try { ui.setUrl(normalizeAnalysisUrl(urlToAnalyze)) } catch { ui.setUrl(urlToAnalyze) }
+  ui.setAnalyzing(true)
+  const requestId = crypto.randomUUID()
+  let detailed = false
+  let dislikes: number | undefined
+  const unsubscribe = window.cortexDl.onAnalysisUpdate(update => {
+    if (update.id !== requestId || !primaryAnalysis.current(generation)) return
+    if (update.stage === 'enrichment') dislikes = update.data.dislikes
+    const state = useUIStore.getState()
+    if (state.analyzeResult?.kind !== 'ytdlp') return
+    if (update.stage === 'preview' && detailed) return
+    state.setAnalyzeResult({ ...state.analyzeResult, ...update.data })
+  })
+  const generation = primaryAnalysis.begin(() => {
+    unsubscribe()
+    void window.cortexDl.cancelAnalysis(requestId).catch(() => {})
+  })
+  const videoId = youtubeVideoId(urlToAnalyze)
+  if (videoId && !['list', 'list_id'].some(key => new URL(urlToAnalyze.trim()).searchParams.has(key))) {
+    ui.setAnalyzeResult({ kind: 'ytdlp', preview: true, title: 'YouTube',
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`, formats: [] })
+  }
 
   try {
-    const result = await window.cortexDl.analyzeUrl(urlToAnalyze.trim())
+    const result = await window.cortexDl.analyzeUrl(normalizeAnalysisUrl(urlToAnalyze), requestId)
+    if (!primaryAnalysis.current(generation)) return
+    detailed = true
+    if (window.cortexDl.analysisDebug) console.debug('[analysis timing] fullFormatsReadyMs=', primaryAnalysis.elapsed())
+    if (result.kind === 'ytdlp' && dislikes !== undefined) result.dislikes = dislikes
 
     if (result.kind === 'playlist') {
       result.items = result.items.map((item: any) => ({ ...item, selected: true }))
@@ -71,9 +101,11 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
       form.setSelectedYtdlpFormatId(null)
     }
   } catch (err) {
+    if (!primaryAnalysis.current(generation)) return
+    ui.setAnalyzeResult(null)
     ui.setGlobalError(normalizeIpcError(err, t().analyze_failed, t().youtube_auth_required))
   } finally {
-    ui.setAnalyzing(false)
+    if (primaryAnalysis.current(generation)) ui.setAnalyzing(false)
   }
 }
 
@@ -84,7 +116,7 @@ export async function onPasteAndAnalyze(): Promise<void> {
     const text = await navigator.clipboard.readText()
     if (text && text.trim().length > 0) {
       ui.setUrl(text)
-      setTimeout(() => { void handleAnalyzeUrlDirectly(text) }, 50)
+      void handleAnalyzeUrlDirectly(text)
     } else {
       ui.setGlobalError(t().analyze_failed)
     }
@@ -111,6 +143,7 @@ export async function handleAnalyzeUrlDirectly(inputUrl: string): Promise<void> 
         },
         onCancel: () => {
           useUIStore.getState().closeModal()
+          parsedUrl.searchParams.delete('list_id')
           parsedUrl.searchParams.delete('list')
           parsedUrl.searchParams.delete('index')
           void performAnalysis(parsedUrl.toString())
@@ -192,7 +225,7 @@ export function onAddToList(): void {
     : undefined
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const knownTitle = analyzeResult?.kind === 'ytdlp' ? analyzeResult.title : undefined
+  const knownTitle = analyzeResult?.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined
   const knownThumb = analyzeResult?.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined
   const item: BatchItem = {
     id,
@@ -337,7 +370,7 @@ export async function onDownloadNow(): Promise<void> {
         ytdlpFormatId: form.selectedYtdlpFormatId || form.selectedQuality || undefined,
         subtitleLanguage: selectedSubtitleTrack?.languageCode,
         subtitleIsAutomatic: selectedSubtitleTrack?.isAutomatic,
-        title: analyzeResult.kind === 'ytdlp' ? analyzeResult.title : undefined,
+        title: analyzeResult.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined,
         thumbnail: analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined,
         username: settings.username || undefined,
         password: settings.password || undefined,

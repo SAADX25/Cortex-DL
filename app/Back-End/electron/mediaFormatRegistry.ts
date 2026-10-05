@@ -53,9 +53,28 @@ export function matchesMediaFormat(format: TargetFormat, probe: MediaProbe): boo
     (!spec.audioCodec || audio.every(s => spec.audioCodec!.includes(s.codec_name ?? '')))
 }
 
+export type MediaConversion = 'direct' | 'remux' | 'audio-encode' | 'video-encode' | 'full-transcode'
+
+export function decideMediaConversion(format: TargetFormat, source?: MediaProbe, trim = false): MediaConversion {
+  const spec = MediaFormatRegistry[format]
+  if (!source || trim || format === 'gif') return spec.videoCodec ? 'full-transcode' : 'audio-encode'
+  if (matchesMediaFormat(format, source)) return 'direct'
+  const video = source.streams?.filter(s => s.codec_type === 'video' && !s.disposition?.attached_pic) ?? []
+  const audio = source.streams?.filter(s => s.codec_type === 'audio') ?? []
+  const audioCompatible = spec.audioCodec ? audio.length > 0 && audio.every(s => spec.audioCodec!.includes(s.codec_name ?? '')) : true
+  if (!spec.videoCodec) return audioCompatible ? 'remux' : 'audio-encode'
+  const videoCompatible = video.length > 0 && video.every(s => spec.videoCodec!.includes(s.codec_name ?? ''))
+  // Video-only files are valid; an absent audio stream needs no encoder.
+  const copyAudio = audio.length === 0 || audioCompatible
+  if (videoCompatible && copyAudio) return 'remux'
+  if (videoCompatible) return 'audio-encode'
+  if (copyAudio) return 'video-encode'
+  return 'full-transcode'
+}
+
 export function mediaOutputArgs(format: TargetFormat, output: string, source?: MediaProbe, trim = false): string[] {
   const spec = MediaFormatRegistry[format]
-  const compatible = source && matchesMediaFormat(format, { ...source, format: { format_name: spec.container.join(',') } })
+  const decision = decideMediaConversion(format, source, trim)
   const mapping: string[] = []
   const subtitleArgs: string[] = []
   if (spec.videoCodec && format !== 'gif') {
@@ -65,10 +84,18 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
       subtitleArgs.push('-c:s', format === 'mkv' ? 'copy' : 'mov_text')
     }
   }
-  if (!trim && compatible && format !== 'gif') {
+  if (decision === 'direct' || decision === 'remux') {
     const muxer = format === 'm4v' ? 'mp4' : format === 'm4a' ? 'ipod' : format === 'mkv' ? 'matroska' : format === 'aac' ? 'adts' : format === 'wma' ? 'asf' : format === 'ogv' ? 'ogg' : format
     return [...mapping, ...(spec.videoCodec === null ? ['-vn'] : []), '-c', 'copy', ...subtitleArgs, '-map_metadata', '0', '-f', muxer, output]
   }
   // Accurate cuts always encode. Container-compatible subtitles are retained.
-  return [...mapping, ...spec.ffmpegArgs, ...subtitleArgs, '-map_metadata', '0', output]
+  const encoding = [...spec.ffmpegArgs]
+  if (!trim && spec.videoCodec && format !== 'gif') {
+    const flag = decision === 'audio-encode' ? '-c:v' : decision === 'video-encode' ? '-c:a' : null
+    if (flag) {
+      const index = encoding.indexOf(flag)
+      if (index >= 0) encoding[index + 1] = 'copy'
+    }
+  }
+  return [...mapping, ...encoding, ...subtitleArgs, '-map_metadata', '0', output]
 }

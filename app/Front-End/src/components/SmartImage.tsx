@@ -6,7 +6,7 @@
  * - Fallback SVG when image fails to load
  * - Resolves the token-protected local media endpoint on its own
  */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { buildMediaUrl, useMediaEndpoint } from '../lib/mediaEndpoint'
 
 const THUMB_FALLBACK_DATA_URI =
@@ -23,7 +23,7 @@ interface SmartImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 
 /**
  * A drop-in <img> replacement that:
- * - Proxies Instagram CDN images through the local thumbnail server
+ * - Falls back to the local proxy only after a remote CDN load fails
  * - Shows a fallback SVG on error
  * - Optionally renders a blurred background copy of the image
  */
@@ -32,35 +32,36 @@ const SmartImage: React.FC<SmartImageProps> = ({
   withBlurBg = false,
   bgClassName = 'dc-thumb-bg',
   alt = '',
+  fetchPriority,
   ...rest
 }) => {
-  const [imgSrc, setImgSrc] = useState<string | undefined>(src)
+  const [resolved, setResolved] = useState<{ source?: string; image?: string }>({ source: src, image: src })
+  const generation = useRef(0)
+  const proxyAttempt = useRef(false)
   const mediaEndpoint = useMediaEndpoint()
 
-  // Proxy Instagram CDN URLs through local thumbnail server
   useEffect(() => {
-    let cancelled = false
-    setImgSrc(src)
+    const reference = generation
+    reference.current++
+    proxyAttempt.current = false
+    setResolved({ source: src, image: src })
+    return () => { reference.current++ }
+  }, [src])
 
-    if (src && /instagram|cdninstagram/i.test(src) && mediaEndpoint) {
-      void (async () => {
-        try {
-          const filePath = await window.cortexDl.fetchThumbnail(src)
-          if (!cancelled && filePath) {
-            setImgSrc(buildMediaUrl(filePath, mediaEndpoint))
-          }
-        } catch {
-          // Silently fall back to original src
-        }
-      })()
+  const finalSrc = (resolved.source === src ? resolved.image : src) || THUMB_FALLBACK_DATA_URI
+  const onImageError = () => {
+    const owned = generation.current
+    if (src && /(?:cdninstagram|instagram|fbcdn)\./i.test(new URL(src, window.location.href).hostname) && mediaEndpoint && !proxyAttempt.current) {
+      proxyAttempt.current = true
+      void window.cortexDl.fetchThumbnail(src).then(file => {
+        if (generation.current === owned) setResolved({ source: src, image: buildMediaUrl(file, mediaEndpoint) })
+      }).catch(() => {
+        if (generation.current === owned) setResolved({ source: src, image: THUMB_FALLBACK_DATA_URI })
+      })
+    } else if (finalSrc !== THUMB_FALLBACK_DATA_URI) {
+      setResolved({ source: src, image: THUMB_FALLBACK_DATA_URI })
     }
-
-    return () => {
-      cancelled = true
-    }
-  }, [src, mediaEndpoint])
-
-  const finalSrc = imgSrc || THUMB_FALLBACK_DATA_URI
+  }
 
   if (withBlurBg) {
     return (
@@ -83,11 +84,9 @@ const SmartImage: React.FC<SmartImageProps> = ({
           alt={alt}
           loading="lazy"
           referrerPolicy="no-referrer"
-          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-            e.currentTarget.onerror = null
-            e.currentTarget.src = THUMB_FALLBACK_DATA_URI
-          }}
+          onError={onImageError}
           {...rest}
+          {...(fetchPriority ? { fetchpriority: fetchPriority } : {})}
         />
       </>
     )
@@ -99,11 +98,9 @@ const SmartImage: React.FC<SmartImageProps> = ({
       alt={alt}
       loading="lazy"
       referrerPolicy="no-referrer"
-      onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-        e.currentTarget.onerror = null
-        e.currentTarget.src = THUMB_FALLBACK_DATA_URI
-      }}
+      onError={onImageError}
       {...rest}
+      {...(fetchPriority ? { fetchpriority: fetchPriority } : {})}
     />
   )
 }

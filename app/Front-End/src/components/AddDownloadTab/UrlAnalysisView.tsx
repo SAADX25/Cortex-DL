@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { primaryAnalysis } from '../../lib/analysisSession'
 import { Language } from '../../translations'
 
 interface UrlAnalysisViewProps {
@@ -26,16 +27,20 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
   selectedSubtitleLanguage,
   setSelectedSubtitleLanguage
 }) => {
+  useEffect(() => {
+    if (analyzeResult?.preview && window.cortexDl.analysisDebug) console.debug('[analysis timing] firstPreviewRenderedMs=', primaryAnalysis.elapsed())
+  }, [analyzeResult?.preview])
   if (!analyzeResult || analyzeResult.kind === 'playlist') return null
 
   return (
     <div className="video-preview-large" style={{ alignItems: 'stretch' }}>
       {analyzeResult.kind === 'ytdlp' && analyzeResult.thumbnail && (
-        <SmartImage src={analyzeResult.thumbnail} alt="thumb" className="preview-thumb-large" />
+        <SmartImage src={analyzeResult.thumbnail} alt="thumb" loading="eager" fetchPriority="high" decoding="async" className="preview-thumb-large"
+          onLoad={() => { if (window.cortexDl.analysisDebug) console.debug('[analysis timing] thumbnailAvailableMs=', primaryAnalysis.elapsed()) }} />
       )}
       <div className="preview-info-large" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div className="preview-title-large" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: '8px' }}>
-          {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : 'HLS Stream'}
+          {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : analyzeResult.kind === 'direct' ? 'Direct media' : 'HLS Stream'}
         </div>
 
         {}

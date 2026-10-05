@@ -49,9 +49,10 @@ export class YoutubeEngine implements IEngine {
     task.totalBytes = null
     task.downloadedBytes = 0
     const profile = this.selectProfile(task)
-    await this.prefetchMetadata(task, context, runtime).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
+    const cookieArgs = runtime.ignoreCookies ? [] : await getYtdlpCookieArgs()
+    if (!task.title || !task.thumbnail) await this.prefetchMetadata(task, context, runtime, cookieArgs).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
     runtime.abortController.signal.throwIfAborted()
-    const args = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
+    const args = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
     const result = await this.runYtdlpAttempt(task, context, runtime, args, profile)
     runtime.abortController.signal.throwIfAborted()
     if (result.exitCode === 0) {
@@ -85,10 +86,10 @@ export class YoutubeEngine implements IEngine {
     return 'default'
   }
 
-  private async prefetchMetadata(task: DownloadTask, context: EngineContext, runtime: TaskRuntime): Promise<void> {
+  private async prefetchMetadata(task: DownloadTask, context: EngineContext, runtime: TaskRuntime, cookieArgs: string[]): Promise<void> {
     const ytDlpPath = getBinaryPath('yt-dlp')
 
-    const selection = this.buildYtdlpArgs(task, this.selectProfile(task), { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
+    const selection = this.buildYtdlpArgs(task, this.selectProfile(task), { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
     const selectorArgs: string[] = []
     for (const flag of ['-f', '-S']) {
       const index = selection.indexOf(flag)
@@ -103,7 +104,7 @@ export class YoutubeEngine implements IEngine {
       '--no-mtime',
       '--geo-bypass',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
-      ...this.buildAuthArgs(task, runtime),
+      ...this.buildAuthArgs(task, runtime, cookieArgs),
       ...getJsRuntimeArgs(),
       task.url,
     ]
@@ -317,11 +318,11 @@ export class YoutubeEngine implements IEngine {
     return { exitCode, detectedFinalPath, stderr: ffmpegState.stderr }
   }
 
-  private buildAuthArgs(task: DownloadTask, runtime: TaskRuntime): string[] {
+  private buildAuthArgs(task: DownloadTask, runtime: TaskRuntime, cookieArgs: string[]): string[] {
     const args: string[] = []
 
     if (!runtime.ignoreCookies) {
-      args.push(...getYtdlpCookieArgs())
+      args.push(...cookieArgs)
     }
 
     
@@ -346,6 +347,7 @@ export class YoutubeEngine implements IEngine {
     profile: Profile,
     opts: { ffmpegDir: string },
     runtime: TaskRuntime,
+    cookieArgs: string[] = [],
   ): string[] {
     const hasSubtitles = task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)
 
@@ -369,7 +371,7 @@ export class YoutubeEngine implements IEngine {
       '-N', '10',
       '--concurrent-fragments', '6',
       '--http-chunk-size', '10.0M',
-      ...this.buildAuthArgs(task, runtime),
+      ...this.buildAuthArgs(task, runtime, cookieArgs),
       ...getJsRuntimeArgs(),
     ]
 

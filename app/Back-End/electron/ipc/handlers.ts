@@ -1,11 +1,17 @@
 import { app, dialog, ipcMain, shell, safeStorage } from 'electron'
-import { existsSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import log from 'electron-log'
 import { spawn } from 'node:child_process'
 import type { DownloadManager } from '../downloadManager'
 import type { StartInput } from '../types'
+import { isDirectMedia } from '../directAnalysis'
+import { randomUUID } from 'node:crypto'
+import { analysisTiming } from '../analysisTiming'
+import { ThumbnailCache } from '../thumbnailCache'
+import { normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
+import { fetchBoundedJson } from '../analysisNetwork'
 import { analyzeUrlForHls } from '../hls'
 import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl } from '../ytdlp'
 import { extractAndSaveComments } from '../commentsExtractor'
@@ -65,7 +71,7 @@ async function getAppHealthCheck(): Promise<AppHealthCheck> {
   ])
   const ytDlpAvailable = !['Not Installed', 'Unknown', 'Error'].includes(ytDlpVersion)
   const ffmpegAvailable = existsSync(ffmpegPath)
-  const cookies = validateCookieFile(cookiePath)
+  const cookies = await validateCookieFile(cookiePath)
   const cookiesReady = cookies.valid || cookies.code === 'missing'
 
   return {
@@ -331,22 +337,61 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:analyze-url', async (_event, url: string) => {
+  const analyses = new Map<string, AbortController>()
+  const analysisOwners = new Map<number, { controllers: Set<AbortController>; stop: () => void }>()
+  ipcMain.handle('cortexdl:cancel-analysis', (event, id: string) => {
+    analyses.get(`${event.sender.id}:${id}`)?.abort()
+  })
+  ipcMain.handle('cortexdl:analyze-url', async (event, input: string, id?: string) => {
+    const start = Date.now()
+    const url = normalizeAnalysisUrl(input)
+    analysisTiming('normalizationMs', start)
+    const controller = new AbortController()
+    const key = `${event.sender.id}:${id ?? randomUUID()}`
+    analyses.get(key)?.abort()
+    analyses.set(key, controller)
+    let owner = analysisOwners.get(event.sender.id)
+    if (!owner) {
+      const controllers = new Set<AbortController>()
+      const stop = () => { for (const active of controllers) active.abort() }
+      owner = { controllers, stop }
+      analysisOwners.set(event.sender.id, owner)
+      event.sender.once('destroyed', stop)
+    }
+    owner.controllers.add(controller)
+    const send = (stage: string, data: unknown) => {
+      if (id && !controller.signal.aborted && !event.sender.isDestroyed()) {
+        event.sender.send('cortexdl:analysis-update', { id, stage, data })
+      }
+    }
+    const videoId = youtubeVideoId(url)
+    analysisTiming('providerDetectionMs', start)
+    const enrichment: Promise<unknown>[] = []
+    if (id && videoId && !['list', 'list_id'].some(key => new URL(url).searchParams.has(key))) {
+      enrichment.push(fetchBoundedJson(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, controller.signal)
+        .then(data => { if (typeof data.title === 'string') send('preview', { title: data.title }) }).catch(() => {}))
+    }
     try {
-      const hlsResult = await analyzeUrlForHls(url)
-      if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') {
-        return hlsResult
+      if (await isDirectMedia(url, controller.signal)) return { kind: 'direct' }
+      const hlsResult = await analyzeUrlForHls(url, controller.signal)
+      if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') return hlsResult
+      const result = await analyzeWithYtdlp(url, controller.signal)
+      analysisTiming('totalAnalysisMs', start)
+      if (id && videoId && result.kind === 'ytdlp') {
+        const base = process.env.RYD_API_URL || 'https://returnyoutubedislikeapi.com/votes?videoId='
+        enrichment.push(fetchBoundedJson(`${base}${videoId}`, controller.signal, 2000)
+          .then(data => { if (typeof data.dislikes === 'number') send('enrichment', { dislikes: data.dislikes }) }).catch(() => {}))
       }
-      
-      const ytdlpResult = await analyzeWithYtdlp(url)
-      if (ytdlpResult.kind !== 'unknown') {
-        return ytdlpResult
-      }
-
-      return hlsResult
-    } catch (err) {
-      log.error('Analysis error:', err)
-      throw err
+      return result.kind === 'unknown' ? hlsResult : result
+    } finally {
+      void Promise.allSettled(enrichment).then(() => {
+        owner.controllers.delete(controller)
+        if (owner.controllers.size === 0 && analysisOwners.get(event.sender.id) === owner) {
+          event.sender.removeListener('destroyed', owner.stop)
+          analysisOwners.delete(event.sender.id)
+        }
+        if (analyses.get(key) === controller) analyses.delete(key)
+      })
     }
   })
 
@@ -386,45 +431,8 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
-  ipcMain.handle('cortexdl:fetch-thumbnail', async (_event, url: string) => {
-    try {
-      if (!url || typeof url !== 'string') throw new Error('Invalid URL')
-      const res = await fetch(url, {
-        headers: {
-          'Referer': 'https://www.instagram.com/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      } as any)
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-
-      const contentType = res.headers.get('content-type') || 'image/jpeg'
-      const arr = await res.arrayBuffer()
-      const buf = Buffer.from(arr)
-
-      const extMap: Record<string, string> = {
-        'image/jpeg': '.jpg', 'image/jpg': '.jpg',
-        'image/png': '.png', 'image/webp': '.webp',
-        'image/gif': '.gif', 'image/avif': '.avif',
-      }
-      const ext = extMap[contentType] || '.jpg'
-
-      const thumbCacheDir = path.join(os.tmpdir(), 'cortexdl-thumbs')
-      if (!existsSync(thumbCacheDir)) mkdirSync(thumbCacheDir, { recursive: true })
-
-      const hash = Buffer.from(url).toString('base64url').slice(0, 32)
-      const filePath = path.join(thumbCacheDir, `${hash}${ext}`)
-
-      if (!existsSync(filePath)) {
-        writeFileSync(filePath, buf)
-      }
-
-      return filePath
-    } catch (err) {
-      log.error('[fetch-thumbnail] failed for', url, err)
-      throw err
-    }
-  })
+  const thumbnails = new ThumbnailCache(path.join(os.tmpdir(), 'cortexdl-thumbs'))
+  ipcMain.handle('cortexdl:fetch-thumbnail', (_event, url: string) => thumbnails.fetch(url))
 
   ipcMain.handle('cortexdl:get-media-port', () => getMediaPort())
 
@@ -484,7 +492,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
         }
       }
 
-      const validation = validateCookieFile(filePath)
+      const validation = await validateCookieFile(filePath)
       if (!validation.valid || !validation.filePath) return validation
 
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('cookieFilePath', validation.filePath)

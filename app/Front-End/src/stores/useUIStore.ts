@@ -1,3 +1,4 @@
+import { primaryAnalysis } from '../lib/analysisSession'
 import { create } from 'zustand'
 import type { BatchItem } from '../components/AddDownloadTab'
 import type { ModalConfig } from '../hooks/types'
@@ -50,7 +51,7 @@ interface UIStoreState {
   setMediaPlayerFile: (file: MediaPlayerFile | null) => void
 }
 
-export const useUIStore = create<UIStoreState>((set) => ({
+export const useUIStore = create<UIStoreState>((set, get) => ({
   
   activeTab: 'add',
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -82,7 +83,12 @@ export const useUIStore = create<UIStoreState>((set) => ({
 
   
   url: '',
-  setUrl: (url) => set({ url }),
+  setUrl: (url) => {
+    if (get().url !== url) {
+      primaryAnalysis.cancel()
+      set({ url, analyzeResult: null, analyzing: false })
+    }
+  },
 
   
   analyzeResult: null,

@@ -19,6 +19,7 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
   })
 }
 contextBridge.exposeInMainWorld('cortexDl', {
+  analysisDebug: process.env.CORTEX_ANALYSIS_DEBUG === '1',
   selectFolder(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-folder')
   },
@@ -49,8 +50,16 @@ contextBridge.exposeInMainWorld('cortexDl', {
     ipcRenderer.on('cortexdl:comments-progress', fn)
     return () => ipcRenderer.off('cortexdl:comments-progress', fn)
   },
-  analyzeUrl(url: string): Promise<AnalyzeResult> {
-    return invokeRendererSafe('cortexdl:analyze-url', url)
+  analyzeUrl(url: string, id?: string): Promise<AnalyzeResult> {
+    return invokeRendererSafe('cortexdl:analyze-url', url, id)
+  },
+  cancelAnalysis(id: string): Promise<void> {
+    return invokeRendererSafe('cortexdl:cancel-analysis', id)
+  },
+  onAnalysisUpdate(callback: (update: { id: string; stage: string; data: { title?: string; dislikes?: number } }) => void) {
+    const listener = (_event: unknown, update: Parameters<typeof callback>[0]) => callback(update)
+    ipcRenderer.on('cortexdl:analysis-update', listener)
+    return () => ipcRenderer.off('cortexdl:analysis-update', listener)
   },
   listDownloads(): Promise<DownloadTask[]> {
     return ipcRenderer.invoke('cortexdl:downloads:list')

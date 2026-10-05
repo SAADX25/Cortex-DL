@@ -97,6 +97,8 @@ export type HlsVariant = {
 
 export type YtdlpFormat = {
   formatId: string
+  vcodec?: string
+  acodec?: string
   ext: string
   resolution: string
   filesize: number | null
@@ -120,6 +122,7 @@ export type AnalyzeResult =
   | { kind: 'hls-master'; variants: HlsVariant[] }
   | {
       kind: 'ytdlp'
+      preview?: boolean
       title: string
       thumbnail?: string
       formats: YtdlpFormat[]
