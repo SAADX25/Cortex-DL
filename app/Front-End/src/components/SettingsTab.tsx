@@ -1,0 +1,459 @@
+import React from 'react'
+import { RefreshCw, AlertTriangle, ShieldAlert, FolderOpen, X, ExternalLink } from 'lucide-react'
+import { translations } from '../translations'
+import type { Translations, Language } from '../translations'
+import { formatBytes } from '../hooks/useDownloadCardVM'
+import { useLang, useSettingsStore } from '../stores/useSettingsStore'
+
+declare const __APP_VERSION__: string
+
+function getCookieStatusText(t: Translations, validation: CookieValidationResult): string {
+  switch (validation.code) {
+    case 'valid': return t.youtube_cookie_valid
+    case 'cleared': return t.youtube_cookie_cleared
+    case 'missing': return t.youtube_cookie_missing
+    case 'not_file': return t.youtube_cookie_not_file
+    case 'invalid_header': return t.youtube_cookie_invalid_header
+    case 'missing_youtube': return t.youtube_cookie_missing_youtube
+    case 'read_error': return t.youtube_cookie_read_error
+    case 'save_error': return t.youtube_cookie_save_error
+    default: return validation.message
+  }
+}
+
+/**
+ * No props: every value/action this tab needs comes straight from
+ * `useSettingsStore`, so changing e.g. `engineVersion` no longer forces
+ * `App` (and therefore every other tab) to re-render — only this component
+ * re-renders, and only when a field it actually reads changes.
+ */
+const SettingsTab: React.FC = () => {
+  const lang = useLang()
+  const t = translations[lang]
+
+  const setLang = useSettingsStore((s) => s.setLang)
+  const totalDownloadedBytes = useSettingsStore((s) => s.totalDownloadedBytes)
+  const onResetStats = useSettingsStore((s) => s.onResetStats)
+  const useInAppPlayer = useSettingsStore((s) => s.useInAppPlayer)
+  const setUseInAppPlayer = useSettingsStore((s) => s.setUseInAppPlayer)
+  const cookieFilePath = useSettingsStore((s) => s.cookieFilePath)
+  const cookieValidation = useSettingsStore((s) => s.cookieValidation)
+  const healthCheck = useSettingsStore((s) => s.healthCheck)
+  const healthChecking = useSettingsStore((s) => s.healthChecking)
+  const onSelectCookieFile = useSettingsStore((s) => s.onSelectCookieFile)
+  const onClearCookieFile = useSettingsStore((s) => s.onClearCookieFile)
+  const refreshHealth = useSettingsStore((s) => s.refreshHealth)
+  const concurrentDownloads = useSettingsStore((s) => s.concurrentDownloads)
+  const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
+  const updateStatus = useSettingsStore((s) => s.updateStatus)
+  const onCheckForUpdates = useSettingsStore((s) => s.onCheckForUpdates)
+  const onRestartAndInstall = useSettingsStore((s) => s.onRestartAndInstall)
+  const engineUpdateStatus = useSettingsStore((s) => s.engineUpdateStatus)
+  const engineVersion = useSettingsStore((s) => s.engineVersion)
+  const onUpdateEngine = useSettingsStore((s) => s.onUpdateEngine)
+  const onUninstall = useSettingsStore((s) => s.onUninstall)
+
+  
+  const cookieFileName = cookieFilePath
+    ? cookieFilePath.split(/[\\/]/).pop() ?? cookieFilePath
+    : null
+
+  const healthRows = healthCheck
+    ? [
+        {
+          label: t.health_ytdlp,
+          ok: healthCheck.ytDlp.available,
+          detail: healthCheck.ytDlp.available ? healthCheck.ytDlp.version : t.health_missing,
+        },
+        {
+          label: t.health_ffmpeg,
+          ok: healthCheck.ffmpeg.available,
+          detail: healthCheck.ffmpeg.available ? t.health_available : t.health_missing,
+        },
+        {
+          label: t.health_js_runtime,
+          ok: healthCheck.jsRuntime.available,
+          detail: healthCheck.jsRuntime.available ? healthCheck.jsRuntime.name : t.health_missing,
+        },
+        {
+          label: t.health_cookies,
+          ok: healthCheck.cookies.valid || healthCheck.cookies.code === 'missing',
+          detail: healthCheck.cookies.code === 'missing' ? t.health_cookie_optional : getCookieStatusText(t, healthCheck.cookies),
+        },
+        {
+          label: t.health_download_directory,
+          ok: healthCheck.downloadDirectory.writable,
+          detail: healthCheck.downloadDirectory.writable ? t.health_writable : t.health_not_writable,
+          title: healthCheck.downloadDirectory.path,
+        },
+      ]
+    : []
+
+  return (
+    <div className="tab-content fade-in centered-layout">
+      <header className="content-header centered-header">
+        <h1 className="gradient-text">{t.settings_title}</h1>
+        <p className="muted">{t.settings_subtitle}</p>
+      </header>
+
+      <section className="minimal-panel" style={{ gap: '3rem' }}>
+
+        {}
+        <div className="settings-hero-stats">
+          <div className="hero-stat-value gradient-text-large">
+            {formatBytes(totalDownloadedBytes)}
+          </div>
+          <div className="hero-stat-label">
+            {t.total_downloaded}
+            <button className="reset-icon-btn" onClick={onResetStats} title={t.reset_stats}>
+              <RefreshCw size={14} />
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h3 className="section-header">{t.settings_general}</h3>
+
+          {}
+          <div className="minimal-row">
+            <div className="row-info">
+              <span className="row-title">{t.language_label}</span>
+            </div>
+            <div className="row-control">
+              <div className="custom-select-wrapper">
+                <select
+                  className="custom-select"
+                  value={lang}
+                  onChange={(e) => setLang(e.target.value as Language)}
+                >
+                  <option value="en" className="bg-[#1e293b] text-white">English</option>
+                  <option value="ar" className="bg-[#1e293b] text-white">العربية</option>
+                </select>
+                <div className="custom-select-icon">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {}
+          <div className="minimal-row">
+            <div className="row-info">
+              <span className="row-title">{t.use_inapp_player}</span>
+              <span className="row-subtitle">{t.use_inapp_player_desc}</span>
+            </div>
+            <div className="row-control">
+              <div
+                className={`toggle-switch ${useInAppPlayer ? 'active' : ''}`}
+                onClick={() => setUseInAppPlayer(!useInAppPlayer)}
+              >
+                <div className="toggle-switch-thumb" />
+              </div>
+            </div>
+          </div>
+
+          {}
+          <div className="minimal-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+              <div className="row-info" style={{ flex: 1 }}>
+                <span className="row-title">{t.youtube_auth_title}</span>
+
+                {}
+                <span className="row-subtitle" style={{ marginTop: '4px', display: 'block' }}>
+                  {t.youtube_auth_desc}
+                </span>
+
+                {}
+                <button
+                  id="get-cookies-extension-btn"
+                  className="btn-ghost-primary"
+                  style={{ marginTop: '10px', fontSize: '0.82rem', padding: '0.4rem 0.9rem', width: 'fit-content' }}
+                  onClick={() =>
+                    window.cortexDl.openExternal(
+                      'https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc?hl=en-US&utm_source=ext_sidebar'
+                    )
+                  }
+                  title={t.youtube_auth_get_extension}
+                >
+                  <ExternalLink size={14} />
+                  {t.youtube_auth_get_extension}
+                </button>
+
+              </div>
+
+              {}
+              <div className="row-control" style={{ flexShrink: 0 }}>
+                <button
+                  className="btn-ghost-primary"
+                  onClick={onSelectCookieFile}
+                  id="select-cookie-file-btn"
+                  title={t.youtube_auth_select_btn}
+                >
+                  <FolderOpen size={16} />
+                  <span>{t.youtube_auth_select_btn}</span>
+                </button>
+              </div>
+            </div>
+
+            {}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: cookieFilePath
+                  ? 'rgba(34, 197, 94, 0.07)'
+                  : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${cookieFilePath ? 'rgba(34, 197, 94, 0.25)' : 'rgba(255,255,255,0.07)'}`,
+                transition: 'all 0.25s ease',
+              }}
+            >
+              {cookieFilePath ? (
+                <>
+                  {}
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: '#22c55e',
+                      flexShrink: 0,
+                      boxShadow: '0 0 6px rgba(34,197,94,0.6)',
+                    }}
+                  />
+                  <span
+                    style={{
+                      flex: 1,
+                      fontSize: '0.82rem',
+                      color: '#94a3b8',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'monospace',
+                      letterSpacing: '0.01em',
+                    }}
+                    title={cookieFilePath}
+                  >
+                    {cookieFileName}
+                  </span>
+                  <button
+                    onClick={onClearCookieFile}
+                    title={t.youtube_auth_clear_btn}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#ef4444',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '2px',
+                      borderRadius: '4px',
+                      opacity: 0.7,
+                      transition: 'opacity 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: '#475569',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: '0.82rem', color: '#475569' }}>
+                    {t.youtube_auth_no_file}
+                  </span>
+                </>
+              )}
+            </div>
+            {cookieValidation && (
+              <span
+                role="status"
+                style={{ fontSize: '0.82rem', color: cookieValidation.valid ? '#22c55e' : '#f87171' }}
+              >
+                {getCookieStatusText(t, cookieValidation)}
+              </span>
+            )}
+
+          </div>
+
+          {}
+          <div className="minimal-row">
+            <div className="row-info">
+              <span className="row-title">{t.concurrent_title}</span>
+              <span className="row-subtitle">{t.concurrent_desc}</span>
+            </div>
+            <div className="row-control">
+              <div className="custom-select-wrapper">
+                <select
+                  className="custom-select"
+                  value={concurrentDownloads}
+                  onChange={(e) => setConcurrentDownloads(Number(e.target.value))}
+                >
+                  <option value={3}>3</option>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                </select>
+                <div className="custom-select-icon">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {}
+          <div className="minimal-row">
+            <div className="row-info">
+              <span className="row-title">{t.check_for_updates}</span>
+              <span className="row-subtitle">
+                {updateStatus?.status === 'checking' && t.checking_updates}
+                {updateStatus?.status === 'available' && t.update_available}
+                {updateStatus?.status === 'progress' && `${t.update_available} ${Math.round(updateStatus.percent || 0)}%`}
+                {updateStatus?.status === 'not-available' && t.update_not_available}
+                {updateStatus?.status === 'error' && t.update_error}
+                {!updateStatus && `${t.settings_current_version}v${__APP_VERSION__}`}
+              </span>
+            </div>
+            <div className="row-control">
+              {updateStatus?.status === 'downloaded' ? (
+                <button className="btn-ghost-success" onClick={onRestartAndInstall}>
+                  {t.update_downloaded}
+                </button>
+              ) : (
+                <button
+                  className="btn-ghost-primary"
+                  onClick={onCheckForUpdates}
+                  disabled={updateStatus?.status === 'checking' || updateStatus?.status === 'available' || updateStatus?.status === 'progress'}
+                >
+                  <RefreshCw size={16} className={updateStatus?.status === 'checking' ? 'spin' : ''} />
+                  <span>{t.check_for_updates}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {}
+          <div className="minimal-row">
+            <div className="row-info">
+              <span className="row-title">Engine (yt-dlp)</span>
+              <span className="row-subtitle">
+                {engineUpdateStatus?.updating && engineUpdateStatus.message}
+                {engineUpdateStatus?.success === true && <span className="text-green-400">{engineUpdateStatus.message}</span>}
+                {engineUpdateStatus?.success === false && <span className="text-red-400">{engineUpdateStatus.message}</span>}
+                {!engineUpdateStatus && engineVersion}
+              </span>
+            </div>
+            <div className="row-control">
+              <button
+                className="btn-ghost-primary"
+                onClick={onUpdateEngine}
+                disabled={engineUpdateStatus?.updating}
+              >
+                <RefreshCw size={16} className={engineUpdateStatus?.updating ? 'spin' : ''} />
+                <span>Update Engine</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+            <div>
+              <h3 className="section-header" style={{ marginBottom: '0.35rem' }}>{t.health_title}</h3>
+              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>{t.health_desc}</p>
+            </div>
+            <button
+              className="btn-ghost-primary"
+              onClick={refreshHealth}
+              disabled={healthChecking}
+            >
+              <RefreshCw size={16} className={healthChecking ? 'spin' : ''} />
+              <span>{healthChecking ? t.health_checking : t.health_refresh}</span>
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gap: '0.55rem', marginTop: '1rem' }}>
+            <div
+              role="status"
+              style={{
+                color: healthCheck?.healthy ? '#22c55e' : '#f59e0b',
+                fontSize: '0.86rem',
+                fontWeight: 600,
+              }}
+            >
+              {healthChecking
+                ? t.health_checking
+                : healthCheck?.healthy
+                  ? t.health_ready
+                  : t.health_attention}
+            </div>
+
+            {healthRows.map((row) => (
+              <div
+                key={row.label}
+                title={'title' in row ? row.title : undefined}
+                className="minimal-row"
+                style={{ padding: '0.65rem 0' }}
+              >
+                <span className="row-title">{row.label}</span>
+                <span
+                  className="row-subtitle"
+                  style={{ color: row.ok ? '#22c55e' : '#f87171', textAlign: 'end' }}
+                >
+                  {row.detail}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h3 className="section-header">{t.settings_about}</h3>
+          <div className="about-minimal">
+            <p className="about-row"><strong>Cortex DL</strong> v{__APP_VERSION__}</p>
+            <p className="about-row">{t.settings_developed_by} SAADX25</p>
+            <p className="about-row muted">{t.settings_powered_by} yt-dlp &amp; FFmpeg</p>
+          </div>
+        </div>
+
+        {}
+        <div className="settings-section danger-zone">
+          <h3 className="section-header danger-text">
+            <AlertTriangle size={18} />
+            {t.settings_danger_zone}
+          </h3>
+          <div className="minimal-row danger-row">
+            <div className="row-info">
+              <span className="row-title">{t.settings_uninstall_title}</span>
+              <span className="row-subtitle">{t.settings_uninstall_desc}</span>
+            </div>
+            <div className="row-control">
+              <button className="btn-danger-outline" onClick={onUninstall}>
+                <ShieldAlert size={16} />
+                <span>{t.settings_uninstall_btn}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  )
+}
+
+export default SettingsTab
