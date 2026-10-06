@@ -15,6 +15,7 @@ import type {
 
 declare global {
   const __APP_VERSION__: string
+  const __BUILD_SHA__: string
 
   type DownloadStatus = SharedDownloadStatus
   type DownloadTask = SharedDownloadTask
@@ -83,9 +84,11 @@ declare global {
     | { success: boolean; canceled?: boolean; error?: string; filePath?: string }
 
   interface Window {
+    __cortexSmokeLifecycle?: (file: string, audioFile?: string, previewUrl?: string) => Promise<boolean>
     __cortexMediaDiagnostics?: () => Promise<unknown>
     cortexDl: {
       analysisDebug: boolean
+      smokeMode: boolean
 
       saveSecureData(key: string, value: string): Promise<boolean>
       getSecureData(key: string): Promise<string>
@@ -155,6 +158,12 @@ declare global {
       updateEngine: () => Promise<{ success: boolean; message: string; version?: string }>
       getEngineVersion: () => Promise<string>
       checkJsRuntime: () => Promise<JsRuntimeStatus>
+      getSetupState: () => Promise<{ status: string; progress: number; message: string }>
+      repairEngines: () => Promise<unknown>
+      openLogs: () => Promise<void>
+      exitApp: () => Promise<void>
+      exportDiagnostics: () => Promise<boolean>
+      getBuildInfo: () => Promise<{ version: string; commit: string; safeMode: boolean }>
       getHealthCheck: () => Promise<AppHealthCheck>
 
       checkForUpdates: () => Promise<void>

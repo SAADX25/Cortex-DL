@@ -2,9 +2,9 @@ import { spawn, spawnSync } from 'node:child_process'
 import type { AnalyzeResult, CookieValidationResult, JsRuntimeStatus, SubtitleTrack } from './types'
 import log from 'electron-log'
 import path from 'node:path'
-import { chmodSync, createWriteStream, existsSync } from 'node:fs'
-import { get } from 'node:https'
-import { unlink, rename, stat } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { downloadEngine, promoteEngine, verifyEngine } from './engineIntegrity'
 import { getBinaryPath, getBinDirectory } from './paths'
 import { db } from './db'
 import { ytdlpCacheArgs } from './ytdlpCache'
@@ -18,9 +18,7 @@ import { extractPreview, PREVIEW_FORMAT, type PreviewExtractionOptions } from '.
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000
 const ANALYSIS_CACHE_MAX = 50
 const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
-const MIN_NODE_VERSION: VersionTuple = [18, 0, 0]
-const MIN_BUN_VERSION: VersionTuple = [1, 2, 11]
-const MAX_BUN_VERSION: VersionTuple = [1, 3, 14]
+const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
 export const YOUTUBE_EXTRACTOR_ARGS = ''
 export const YOUTUBE_AUTH_REQUIRED_CODE = 'YOUTUBE_AUTH_REQUIRED'
 
@@ -93,6 +91,7 @@ const analysisCoordinator = new AnalysisCoordinator<AnalyzeResult>(3, ANALYSIS_C
   return result
 })
 let cachedJsRuntimeSelection: JsRuntimeSelection | null = null
+let runtimeCheckedAt = 0
 let warnedNoSupportedRuntime = false
 
 function parseVersion(text: string): VersionTuple | null {
@@ -118,11 +117,6 @@ function getExistingBinaryPath(name: string): string | null {
 }
 
 function getRuntimeVersion(candidate: JsRuntimeCandidate): VersionTuple | null {
-  // Fast-path: Electron Node is already running in memory — 0ms check!
-  if (candidate.command === process.execPath) {
-    return parseVersion(process.versions.node)
-  }
-
   // If command is a file path, verify existence before calling spawnSync
   if (candidate.command.includes('/') || candidate.command.includes('\\')) {
     if (!existsSync(candidate.command)) return null
@@ -132,10 +126,10 @@ function getRuntimeVersion(candidate: JsRuntimeCandidate): VersionTuple | null {
     const result = spawnSync(candidate.command, ['--version'], {
       windowsHide: true,
       encoding: 'utf8',
-      timeout: 800,
+      timeout: 5000,
       env: candidate.env ?? process.env,
     })
-    if (result.error) return null
+    if (result.error || result.status !== 0) return null
     return parseVersion(`${result.stdout ?? ''}\n${result.stderr ?? ''}`)
   } catch {
     return null
@@ -156,39 +150,16 @@ function trySelectRuntime(candidate: JsRuntimeCandidate): JsRuntimeSelection | n
 }
 
 function selectJsRuntime(): JsRuntimeSelection {
-  if (cachedJsRuntimeSelection) return cachedJsRuntimeSelection
+  if (cachedJsRuntimeSelection && Date.now() - runtimeCheckedAt < 5000) return cachedJsRuntimeSelection
+  runtimeCheckedAt = Date.now()
 
   const electronNodeEnv = { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
   const candidates: JsRuntimeCandidate[] = []
   const bundledDeno = getExistingBinaryPath('deno')
   const bundledNode = getExistingBinaryPath('node')
-  const bundledBun = getExistingBinaryPath('bun')
-
-  // 1. Electron Node (Built-in, 0ms execution, always present, Node >= 22)
-  candidates.push({
-    label: 'Electron Node',
-    spec: `node:${process.execPath}`,
-    command: process.execPath,
-    minVersion: MIN_NODE_VERSION,
-    env: electronNodeEnv,
-  })
-
-  // 2. Bundled runtimes (if present on disk)
-  if (bundledDeno) {
-    candidates.push({ label: 'Deno', spec: `deno:${bundledDeno}`, command: bundledDeno, minVersion: MIN_DENO_VERSION })
-  }
-  if (bundledNode) {
-    candidates.push({ label: 'Node', spec: `node:${bundledNode}`, command: bundledNode, minVersion: MIN_NODE_VERSION })
-  }
-  if (bundledBun) {
-    candidates.push({
-      label: 'Bun',
-      spec: `bun:${bundledBun}`,
-      command: bundledBun,
-      minVersion: MIN_BUN_VERSION,
-      maxVersion: MAX_BUN_VERSION,
-    })
-  }
+  if (bundledDeno) candidates.push({ label: 'Deno', spec: `deno:${bundledDeno}`, command: bundledDeno, minVersion: MIN_DENO_VERSION })
+  if (bundledNode) candidates.push({ label: 'Node', spec: `node:${bundledNode}`, command: bundledNode, minVersion: MIN_NODE_VERSION })
+  candidates.push({ label: 'Node', spec: `node:${process.execPath}`, command: process.execPath, minVersion: MIN_NODE_VERSION, env: electronNodeEnv })
 
   for (const candidate of candidates) {
     const selected = trySelectRuntime(candidate)
@@ -303,176 +274,29 @@ function fetchJson(url: string): Promise<any> {
   return fetchBoundedJson(url, undefined, 8000)
 }
 
-function downloadFile(url: string, destPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const options = {
-      headers: {
-        'User-Agent': 'Cortex-DL-App'
-      }
-    }
-
-    const handleResponse = (response: any) => {
-      if (response.statusCode === 301 || response.statusCode === 302) {
-        if (response.headers.location) {
-          get(response.headers.location, options as any, handleResponse).on('error', reject)
-        } else {
-          reject(new Error('Redirect without location'))
-        }
-        return
-      }
-
-      if (response.statusCode !== 200) {
-        reject(new Error(`HTTP ${response.statusCode}`))
-        return
-      }
-
-      const file = createWriteStream(destPath)
-
-      const totalSize = parseInt(response.headers['content-length'] || '0', 10)
-      let downloaded = 0
-      let lastLogTime = Date.now()
-
-      response.on('data', (chunk: Buffer) => {
-        downloaded += chunk.length
-        const now = Date.now()
-        if (now - lastLogTime > 2000) {
-          const percent = totalSize ? ((downloaded / totalSize) * 100).toFixed(1) : '?'
-          const mb = (downloaded / (1024 * 1024)).toFixed(2)
-          log.info(`[ytdlp updater] Download progress: ${mb}MB (${percent}%)`)
-          lastLogTime = now
-        }
-      })
-
-      response.pipe(file)
-
-      file.on('finish', () => {
-        log.info(`[ytdlp updater] Finished downloading to ${destPath}`)
-        file.close()
-        resolve()
-      })
-      file.on('error', (err: Error) => {
-        log.error(`[ytdlp updater] Failed to write download:`, err)
-        file.close()
-        reject(err)
-      })
-    }
-
-    get(url, options as any, handleResponse).on('error', reject)
-  })
-}
-
+let updateInFlight = false
 export async function updateYtdlp(): Promise<{ success: boolean; message: string; version?: string }> {
-  if (process.platform !== 'win32') {
-    return { success: false, message: 'Auto-update is only available on Windows.' }
-  }
-
+  if (updateInFlight) return { success: false, message: 'Engine update already in progress.' }
+  updateInFlight = true
   const binDir = getBinDirectory()
-  const binaryPath = path.join(binDir, 'yt-dlp.exe')
-  const tempPath = path.join(binDir, 'yt-dlp_new.exe')
-  const oldPath = binaryPath + '.old'
-
-
+  const candidate = path.join(binDir, 'yt-dlp-update.tmp')
   try {
-    if (existsSync(oldPath)) {
-      await unlink(oldPath)
-      log.info(`[ytdlp] Cleaned up old binary: ${oldPath}`)
-    }
-  } catch (cleanupErr) {
-    log.warn(`[ytdlp] Failed to clean up old binary: ${oldPath}`, cleanupErr)
-  }
-
-  log.info(`[ytdlp] Update: binDir=${binDir}, binaryPath=${binaryPath}`)
-
-  try {
-
-    log.info('[ytdlp] Fetching latest release from GitHub...')
-    const releaseUrl = process.env.GITHUB_RELEASE_API || 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'
-    const releaseData = await fetchJson(releaseUrl)
-
-    const latestVersion = releaseData.tag_name || releaseData.name
-    log.info(`[ytdlp] Latest version: ${latestVersion}`)
-
-
-    const asset = releaseData.assets?.find((a: any) =>
-      a.name === 'yt-dlp.exe' || a.name === 'yt-dlp_win.exe'
-    )
-
-    if (!asset || !asset.browser_download_url) {
-      return { success: false, message: 'Could not find Windows executable in release.' }
-    }
-
-    const downloadUrl = asset.browser_download_url
-    log.info(`[ytdlp] Download URL: ${downloadUrl}`)
-
-
-    log.info('[ytdlp] Downloading new binary...')
-    await downloadFile(downloadUrl, tempPath)
-
-
-    if (!existsSync(tempPath)) {
-      return { success: false, message: 'Download failed - temp file not created.' }
-    }
-
-const stats = await stat(tempPath)
-    if (stats.size < 1000000) {
-      await unlink(tempPath).catch(() => {})
-      return { success: false, message: 'Download appears corrupted (file too small).' }
-    }
-
-
-    log.info('[ytdlp] Replacing old binary...')
-    if (existsSync(binaryPath)) {
-      try {
-        await unlink(binaryPath)
-      } catch (err) {
-
-        try {
-          await rename(binaryPath, binaryPath + '.old')
-        } catch (renameErr) {
-          log.error('======================================================')
-          log.error('[yt-dlp UPDATER FATAL ERROR]')
-          log.error('Failed to replace the old binary! It is likely locked.')
-          log.error('Unlink Error:', err)
-          log.error('Rename Error:', renameErr)
-          log.error('Binary Path:', binaryPath)
-          log.error('======================================================')
-          await unlink(tempPath).catch(() => {})
-          return { success: false, message: 'Failed to remove old binary. Make sure no downloads are active.' }
-        }
-      }
-    }
-
-
-    try {
-      await rename(tempPath, binaryPath)
-    } catch (renameFinalErr) {
-      log.error('======================================================')
-      log.error('[yt-dlp UPDATER FATAL ERROR]')
-      log.error('Failed to rename the new temp binary to the final path!')
-      log.error('Rename Error:', renameFinalErr)
-      log.error('From:', tempPath, 'To:', binaryPath)
-      log.error('======================================================')
-      return { success: false, message: 'Failed to rename new binary.' }
-    }
-
-
-    try {
-      chmodSync(binaryPath, 0o755)
-    } catch {
-      // chmod is best effort on platforms without POSIX permissions.
-    }
-
-    log.info(`[ytdlp] Update successful! Version: ${latestVersion}`)
-    return { success: true, message: `Updated successfully to ${latestVersion}!`, version: latestVersion }
-
-  } catch (err) {
-    log.error('[ytdlp] Update error:', err)
-
-    if (existsSync(tempPath)) {
-      await unlink(tempPath).catch(() => {})
-    }
-    return { success: false, message: `Update failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
-  }
+    await mkdir(binDir, { recursive: true })
+    const release = await fetchJson('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest')
+    const asset = release.assets?.find((a: any) => a.name === 'yt-dlp.exe')
+    if (!asset?.digest?.startsWith('sha256:') || !asset.browser_download_url?.startsWith('https://github.com/yt-dlp/yt-dlp/releases/download/')) throw new Error('Verified release asset unavailable')
+    await downloadEngine(asset.browser_download_url, candidate, asset.digest.slice(7))
+    const spec = { name: 'yt-dlp', filename: 'yt-dlp.exe', minimum: '2026.06.09', architecture: 'x64', version: release.tag_name, sha256: asset.digest.slice(7) }
+    const check = await verifyEngine(candidate, spec)
+    if (!check.available) throw new Error(check.message)
+    const final = path.join(binDir, 'yt-dlp.exe')
+    await promoteEngine(candidate, final, spec)
+    await writeFile(final + '.integrity.json', JSON.stringify({ sha256: spec.sha256 }))
+    return { success: true, message: `Updated to ${check.version}`, version: check.version }
+  } catch (error) {
+    log.error('[Engine update]', error)
+    return { success: false, message: 'Engine update failed. Previous working engine was preserved. Open diagnostics for details.' }
+  } finally { await rm(candidate, { force: true }); updateInFlight = false }
 }
 
 export async function checkJsRuntime(): Promise<JsRuntimeStatus> {

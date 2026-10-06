@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
 
+const buildInfo = fs.existsSync(path.join(__dirname, 'build-manifest.json')) ? JSON.parse(fs.readFileSync(path.join(__dirname, 'build-manifest.json'), 'utf8')) : { commit: 'development' }
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'))
 
 
@@ -13,6 +14,7 @@ export default defineConfig(() => {
     root: path.join(__dirname, 'Front-End'),
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
+      __BUILD_SHA__: JSON.stringify(buildInfo.commit),
     },
     build: {
       sourcemap: false,

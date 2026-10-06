@@ -1,0 +1,6 @@
+{
+  "reviewed": false,
+  "sourceArchive": null,
+  "sourceSha256": null,
+  "notes": "Before public distribution supply exact FFmpeg and linked-library sources/build scripts and all bundled engine license texts. Review against engines.lock.json."
+}

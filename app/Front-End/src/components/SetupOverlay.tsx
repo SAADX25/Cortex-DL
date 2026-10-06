@@ -13,8 +13,8 @@ interface SetupOverlayProps {
 
 export default function SetupOverlay({ setupState }: SetupOverlayProps) {
   const { status, progress, message } = setupState
-  const isError = status === 'error'
-  const isDone = status === 'done'
+  const isError = status === 'degraded' || status === 'fatal'
+  const isDone = status === 'ready'
 
   return (
     <div
@@ -134,6 +134,12 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           </AnimatePresence>
         </div>
 
+        {isError && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+          <button onClick={() => void window.cortexDl.repairEngines()}>Retry Setup</button>
+          <button onClick={() => void window.cortexDl.repairEngines()}>Repair Engines</button>
+          <button onClick={() => void window.cortexDl.openLogs()}>Open Log Folder</button>
+          <button onClick={() => void window.cortexDl.exitApp()}>Exit</button>
+        </div>}
         {/* Progress Bar Container */}
         <div style={{ 
           width: '100%', 

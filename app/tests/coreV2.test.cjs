@@ -15,6 +15,7 @@ const mockDb = {
   taskDb: { getAllTasks: { all: () => [...rows.values()] }, upsertTask: { run: row => rows.set(row.id, { ...row }) }, deleteTask: { run: id => rows.delete(id) }, clearCompleted: { run: () => {} } },
 }
 Module._load = function(request, parent, ...rest) {
+  if (request === './paths' || request === '../paths') return { getBinaryPath: name => path.join(process.cwd(), 'engine-baseline', name + '.exe'), getBinDirectory: () => path.join(process.cwd(), 'engine-baseline') }
   if (request === 'electron-log') return { info() {}, warn() {}, error() {} }
   if (request === './db' || request === '../db') return mockDb
   if (request === 'electron') return { app: { isPackaged: false, getPath: () => os.tmpdir() }, Notification: class { static isSupported() { return true } show() { notifications++ } } }
@@ -26,7 +27,7 @@ const { DirectEngine } = require('../Back-End/electron/engines/DirectEngine.ts')
 const { MediaFormatRegistry, matchesMediaFormat } = require('../Back-End/electron/mediaFormatRegistry.ts')
 const { trimBounds } = require('../Back-End/electron/mediaPipeline.ts')
 const { parseDownloadProgress } = require('../Back-End/electron/progressParser.ts')
-const bin = name => path.join(process.cwd(), 'bin', name + (process.platform === 'win32' ? '.exe' : ''))
+const bin = name => path.join(process.cwd(), 'engine-baseline', name + (process.platform === 'win32' ? '.exe' : ''))
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 async function until(fn) { for (let i = 0; i < 1000; i++) { if (fn()) return; await sleep(5) } throw new Error('condition timeout') }

@@ -46,6 +46,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
+  const [safeMode, setSafeMode] = useState(false);
+  useEffect(() => { void window.cortexDl.getBuildInfo?.().then(info => setSafeMode(info.safeMode)); }, []);
   const mediaEndpoint = useMediaEndpoint();
 
   useEffect(() => {
@@ -112,7 +114,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
 
   useEffect(() => {
-    if (!isOpen || mediaType !== 'audio') return;
+    if (!isOpen || mediaType !== 'audio' || safeMode) return;
 
     const audioEl = audioRef.current;
     const canvas = canvasRef.current;
@@ -214,7 +216,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       await releaseAudioGraph(audioCtx, source, analyser);
       markAudioContext(false);
     };
-  }, [isOpen, mediaType, filePath]);
+  }, [safeMode, isOpen, mediaType, filePath]);
 
   const togglePlay = useCallback(() => {
     if (!mediaRef.current || sessionClosedRef.current) return;
@@ -364,7 +366,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
 
 
   useEffect(() => {
-    if (mediaType !== 'video') return;
+    if (mediaType !== 'video' || safeMode) return;
 
     let rafId: number | null = null;
     let isActive = true;
@@ -419,7 +421,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
       stop();
       if (stopAmbilightRef.current === stop) stopAmbilightRef.current = null;
     };
-  }, [isPlaying, mediaType]);
+  }, [safeMode, isPlaying, mediaType]);
 
 
 

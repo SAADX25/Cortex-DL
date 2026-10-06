@@ -1,3 +1,4 @@
+import { markStartup, previousStartupFailed, safeMode, smokeDirectory, gotTheLock, startupProbe } from './bootstrap'
 import log from 'electron-log'
 import * as dotenv from 'dotenv'
 import path from 'node:path'
@@ -9,13 +10,15 @@ dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
-import { app, BrowserWindow, dialog, session, shell } from 'electron'
-import { existsSync, rmSync, createReadStream, promises as fsPromises } from 'node:fs'
+import { app, BrowserWindow, dialog, session, shell, ipcMain } from 'electron'
+import { existsSync, createReadStream, promises as fsPromises } from 'node:fs'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import http from 'node:http'
 import os from 'node:os'
 import { DownloadManager } from './downloadManager'
-import { runSetup } from './setup'
+import { installIpcBoundary } from './ipcSecurity'
+import { runSetup, setupState } from './setup'
+import { openLogs, exportDiagnostics, buildInfo } from './diagnostics'
 
 export let downloads: DownloadManager | null = null
 import { registerIpcHandlers } from './ipc/handlers'
@@ -24,14 +27,7 @@ import { db } from './db'
 import { spawn } from 'node:child_process'
 import { getBinaryPath } from './paths'
 import { MediaRequestRegistry } from './mediaRequestRegistry'
-
-app.commandLine.appendSwitch('ignore-gpu-blocklist')
-app.commandLine.appendSwitch('enable-gpu-rasterization')
-app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization')
-
-process.on('unhandledRejection', (reason) => {
-  log.error('UNHANDLED REJECTION:', reason)
-})
+import { parseMediaRange } from './mediaRange'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -41,18 +37,6 @@ let serviceReadyResolve: () => void
 const serviceReadyPromise = new Promise<void>(resolve => {
   serviceReadyResolve = resolve
 })
-
-function cleanupUpdaterCache() {
-  try {
-    const updaterCacheDir = path.join(app.getPath('userData'), '..', 'cortex-dl-updater')
-    if (existsSync(updaterCacheDir)) {
-      log?.info(`Cleaning up updater cache at: ${updaterCacheDir}`)
-      rmSync(updaterCacheDir, { recursive: true, force: true })
-    }
-  } catch (error) {
-    log?.error('Failed to cleanup updater cache:', error)
-  }
-}
 
 async function loadBackendServices() {
 
@@ -65,6 +49,7 @@ async function loadBackendServices() {
 
   autoUpdater.logger = log
   autoUpdater.autoDownload = false
+  autoUpdater.allowDowngrade = false
 
 
   autoUpdater.on('update-downloaded', async () => {
@@ -88,6 +73,7 @@ async function loadBackendServices() {
   })
 
   autoUpdater.on('checking-for-update', () => {
+    log.info('[Updater] Checking')
     if (win) win.webContents.send('update-status', { status: 'checking' })
   })
 
@@ -118,6 +104,7 @@ async function loadBackendServices() {
   })
 
   autoUpdater.on('error', (err) => {
+    log.error('[Updater]', err)
     if (win) win.webContents.send('update-status', { status: 'error', error: err.message })
   })
 
@@ -137,10 +124,10 @@ async function loadBackendServices() {
 
 
   log.info('Backend services loaded. Running startup checks...')
-  cleanupUpdaterCache()
+
 
   try {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    if (app.isPackaged && !smokeDirectory) autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       log.error('Deferred update check failed:', err)
     })
   } catch (err) {
@@ -158,10 +145,11 @@ let win: BrowserWindow | null = null
 let isQuitting = false
 let shutdownPromise: Promise<void> | null = null
 let shutdownFinished = false
+let windowShownMs: number | null = null
 
 function initTray() {
   const iconPath = VITE_DEV_SERVER_URL
-    ? path.join(process.env.APP_ROOT, 'public', 'CortexDL.ico')
+    ? path.join(process.env.APP_ROOT, 'Front-End', 'public', 'CortexDL.ico')
     : path.join(RENDERER_DIST, 'CortexDL.ico');
 
   createTray(
@@ -190,6 +178,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: smokeDirectory ? ['--cortex-smoke'] : [],
     },
   })
 
@@ -202,6 +191,7 @@ function createWindow() {
 
 
   win.once('ready-to-show', () => {
+    windowShownMs = Math.round(process.uptime() * 1000)
     win?.show()
   })
 
@@ -215,8 +205,16 @@ function createWindow() {
   });
   win.on('closed', () => { win = null });
 
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url !== win?.webContents.getURL()) event.preventDefault()
+  })
+  let crashes = 0
+  win.webContents.on('render-process-gone', (_event, details) => {
+    log.error('[Renderer crash]', { ...buildInfo(), ...details, timestamp: new Date().toISOString() })
+    if (++crashes > 1) void offerSafeMode()
+  })
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
 
@@ -657,16 +655,13 @@ async function handleMediaRequest(
     }
 
     if (rangeHeader) {
-      const match = /bytes=(\d*)-(\d*)/.exec(rangeHeader)
-      const start = match && match[1] ? parseInt(match[1], 10) : 0
-      const requestedEnd = match && match[2] ? parseInt(match[2], 10) : fileSize - 1
-      const clampedEnd = Math.min(requestedEnd, fileSize - 1)
-
-      if (!Number.isFinite(start) || start > clampedEnd || start >= fileSize) {
+      const range = parseMediaRange(rangeHeader, fileSize)
+      if (!range) {
         res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` })
         res.end()
         return
       }
+      const [start, clampedEnd] = range
 
       res.writeHead(206, {
         'Content-Range':  `bytes ${start}-${clampedEnd}/${fileSize}`,
@@ -721,6 +716,8 @@ function startMediaStreamingServer(): void {
         // A failed listen never opened a handle, so calling close() here would
         // itself emit ERR_SERVER_NOT_RUNNING and mask the retry.
         tryListen(nextPort)
+      } else if (attempt === MEDIA_SERVER_PORT_MAX_TRIES) {
+        tryListen(0) // An OS-assigned loopback port avoids conflicts with every preferred port.
       } else {
         log.error(`[MediaServer] All ports ${MEDIA_SERVER_PORT_BASE}–${nextPort} are in use. Media server could not start.`)
       }
@@ -730,6 +727,7 @@ function startMediaStreamingServer(): void {
   })
 
   server.on('listening', () => {
+    MEDIA_SERVER_PORT = (server.address() as import('node:net').AddressInfo).port
     mediaServer = server
     log.info(`[MediaServer] Streaming server ready at http://127.0.0.1:${MEDIA_SERVER_PORT} (token-protected)`)
   })
@@ -757,8 +755,6 @@ async function stopMediaStreamingServer(): Promise<void> {
   })
   log.info('[MediaServer] Streaming server stopped')
 }
-
-const gotTheLock = app.requestSingleInstanceLock()
 
 if (!gotTheLock) {
   app.quit()
@@ -791,6 +787,7 @@ if (!gotTheLock) {
     })().catch(err => {
       log.error('[Shutdown] Cleanup failed:', err)
     }).finally(() => {
+      markStartup('clean-shutdown')
       shutdownFinished = true
       app.quit()
     })
@@ -811,6 +808,7 @@ if (!gotTheLock) {
   })
 
 
+  installIpcBoundary(() => win)
   registerIpcHandlers({
     getWin: () => win,
     getDownloads: () => downloads,
@@ -829,21 +827,57 @@ if (!gotTheLock) {
     createWindow()
     initTray()
 
-    try {
-      if (win) {
-        await runSetup(win)
-      }
-    } catch (err) {
-      log.error('[Backend] Setup failed:', err)
-      // We might want to still attempt loading if it failed, or halt.
-      // We'll proceed so the app doesn't just hang, but downloads will fail later.
+    markStartup('starting')
+    if (previousStartupFailed && !safeMode && !smokeDirectory) void offerSafeMode()
+    // Register before setup, and let late renderer subscribers retrieve current state.
+    ipcMain.handle('cortexdl:setup-state', () => setupState)
+    ipcMain.handle('cortexdl:repair-engines', async () => {
+      if (downloads?.getActiveCount()) return { ...setupState, message: 'Wait for active downloads to finish before repair.' }
+      await initializeRuntime(true); return setupState
+    })
+    ipcMain.handle('cortexdl:open-logs', () => openLogs())
+    ipcMain.handle('cortexdl:exit', () => app.quit())
+    ipcMain.handle('cortexdl:export-diagnostics', async () => win ? exportDiagnostics(win, { engines: await import('./setup').then(m => m.engineHealth()), database: db.pragma('quick_check', { simple: true }), mediaServer: !!mediaServer, runtimeState: setupState.status }) : false)
+    ipcMain.handle('cortexdl:build-info', () => ({ ...buildInfo(), safeMode }))
+    await initializeRuntime()
+    if (smokeDirectory && startupProbe) {
+      await fsPromises.writeFile(path.join(smokeDirectory, 'startup-timing.json'), JSON.stringify({ packaged: app.isPackaged, uiMs: windowShownMs, readyMs: Math.round(process.uptime() * 1000), state: setupState.status, version: app.getVersion(), build: buildInfo() }, null, 2))
+      app.quit()
+    } else if (smokeDirectory) {
+      const { runPackagedSmoke } = await import('./packagedSmoke')
+      try {
+        if (!downloads || !win) throw new Error('Mandatory runtime unavailable')
+        await runPackagedSmoke(win, downloads, smokeDirectory, MEDIA_SERVER_PORT, MEDIA_SERVER_TOKEN, () => mediaRequests.snapshot())
+      } catch (error) {
+        await fsPromises.writeFile(path.join(smokeDirectory, 'failure.txt'), String(error))
+        process.exitCode = 1
+      } finally { app.quit() }
     }
-
-    setTimeout(() => {
-      loadBackendServices().catch((err) => {
-        log.error('[Backend] loadBackendServices failed — downloads will not work:', err)
-        serviceReadyResolve()
-      })
-    }, 100)
-  })
+  }).catch(error => { log.error('[Startup fatal]', error); app.exit(1) })
 }
+
+let initialization: Promise<void> | null = null
+async function initializeRuntime(allowNetwork = false): Promise<void> {
+  if (initialization) return initialization
+  initialization = (async () => {
+    try {
+      if (!win) throw new Error('Window unavailable')
+      await runSetup(win, allowNetwork)
+      if (!downloads) await loadBackendServices()
+      markStartup('ready')
+    } catch (error) {
+      log.error('[Runtime unavailable]', error)
+    }
+  })().finally(() => { initialization = null })
+  return initialization
+}
+async function offerSafeMode(): Promise<void> {
+  if (!win) return
+  const result = await dialog.showMessageBox(win, { type: 'warning', title: 'Crash recovery', message: 'The previous startup did not finish or a renderer/GPU failed repeatedly. You can restart in Safe Mode or open diagnostics.', buttons: ['Continue', 'Restart in Safe Mode', 'Open Logs'], defaultId: 0, cancelId: 0 })
+  if (result.response === 1) { app.relaunch({ args: [...process.argv.slice(1).filter(arg => arg !== '--safe-mode'), '--safe-mode'] }); app.quit() }
+  if (result.response === 2) await openLogs()
+}
+let gpuCrashes = 0
+app.on('child-process-gone', (_event, details) => {
+  if (details.type === 'GPU' && ++gpuCrashes >= 2 && !safeMode) void offerSafeMode()
+})

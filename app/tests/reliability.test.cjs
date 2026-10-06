@@ -15,6 +15,7 @@ const dbMock = {
   taskDb: { getAllTasks: { all: () => [] }, upsertTask: { run: row => { dbMock.lastRow = row } }, deleteTask: { run: () => {} }, clearCompleted: { run: () => {} } },
 }
 Module._load = function (request, parent, ...rest) {
+  if (request === './paths' || request === '../paths') return { getBinaryPath: name => path.join(process.cwd(), 'engine-baseline', name + '.exe'), getBinDirectory: () => path.join(process.cwd(), 'engine-baseline') }
   if (request === 'electron-log') return { info: () => {}, warn: () => {}, error: () => {} }
   if (request === './db' || request === '../db') return dbMock
   if (request === 'electron') return { app: { isPackaged: false, getPath: () => os.tmpdir() }, Notification: { isSupported: () => false } }
@@ -197,9 +198,9 @@ test('terminal IPC state bypasses throttle and cancels stale trailing update', (
   assert.equal(sent.at(-1).status, 'paused')
   assert.equal(sent.length, 2)
 })
-const ffmpegBinary = path.join(process.cwd(), 'bin', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
-const ffprobeBinary = path.join(process.cwd(), 'bin', process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe')
-const ytdlpBinary = path.join(process.cwd(), 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
+const ffmpegBinary = path.join(process.cwd(), 'engine-baseline', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
+const ffprobeBinary = path.join(process.cwd(), 'engine-baseline', process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe')
+const ytdlpBinary = path.join(process.cwd(), 'engine-baseline', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
 function makeAudioFixture(input, output, args) {
   const result = spawnSync(ffmpegBinary, ['-y', '-hide_banner', '-loglevel', 'error', ...args, output], { timeout: 30000 })
   assert.equal(result.status, 0, result.stderr?.toString())

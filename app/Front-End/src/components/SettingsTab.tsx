@@ -68,12 +68,12 @@ const SettingsTab: React.FC = () => {
         {
           label: t.health_ffmpeg,
           ok: healthCheck.ffmpeg.available,
-          detail: healthCheck.ffmpeg.available ? t.health_available : t.health_missing,
+          detail: healthCheck.ffmpeg.available ? healthCheck.ffmpeg.version || t.health_available : t.health_missing,
         },
         {
           label: t.health_js_runtime,
           ok: healthCheck.jsRuntime.available,
-          detail: healthCheck.jsRuntime.available ? healthCheck.jsRuntime.name : t.health_missing,
+          detail: healthCheck.jsRuntime.available ? healthCheck.jsRuntime.name + ' — Supported' : 'No supported yt-dlp JS runtime',
         },
         {
           label: t.health_cookies,
@@ -403,6 +403,14 @@ const SettingsTab: React.FC = () => {
                   : t.health_attention}
             </div>
 
+            <div className="about-row muted">v{__APP_VERSION__} · {__BUILD_SHA__.slice(0, 12)}</div>
+            <div className="about-row muted">ffprobe: {healthCheck?.ffprobe?.version || healthCheck?.ffprobe?.message || 'Unchecked'} · Database: {healthCheck?.database?.healthy ? 'Healthy' : 'Unchecked'}</div>
+            <div className="about-row muted">Media server: {healthCheck?.mediaServer?.healthy ? 'Healthy' : 'Unchecked'} · Update service: {healthCheck?.updateService || 'Unchecked'}</div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button className="btn-ghost-primary" onClick={() => void window.cortexDl.repairEngines().then(refreshHealth)}>Repair Engines</button>
+              <button className="btn-ghost-primary" onClick={() => void window.cortexDl.exportDiagnostics()}>Export Diagnostics</button>
+              <button className="btn-ghost-primary" onClick={() => void window.cortexDl.openLogs()}>Open Logs</button>
+            </div>
             {healthRows.map((row) => (
               <div
                 key={row.label}

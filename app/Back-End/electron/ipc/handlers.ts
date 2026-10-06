@@ -1,5 +1,5 @@
 import { app, dialog, ipcMain, shell, safeStorage } from 'electron'
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import log from 'electron-log'
@@ -20,6 +20,8 @@ import { promises as fsPromises } from 'node:fs'
 import { getBinaryPath } from '../paths'
 import type { AppHealthCheck } from '../types'
 import { checkJsRuntime, validateCookieFile } from '../ytdlp'
+import { engineHealth } from '../setup'
+import { buildInfo } from '../diagnostics'
 
 export interface IpcDependencies {
   getWin: () => Electron.BrowserWindow | null
@@ -50,7 +52,7 @@ async function isDirectoryWritable(directory: string): Promise<boolean> {
   }
 }
 
-async function getAppHealthCheck(): Promise<AppHealthCheck> {
+async function getAppHealthCheck(mediaPort?: number): Promise<AppHealthCheck> {
   let cookiePath: string | null = null
   let downloadDirectory = app.getPath('downloads')
 
@@ -63,6 +65,7 @@ async function getAppHealthCheck(): Promise<AppHealthCheck> {
     log.warn('[health] Failed to read persisted settings:', err)
   }
 
+  const engines = await engineHealth()
   const ffmpegPath = getBinaryPath('ffmpeg')
   const [ytDlpVersion, jsRuntime, directoryWritable] = await Promise.all([
     getYtdlpVersion(),
@@ -70,25 +73,40 @@ async function getAppHealthCheck(): Promise<AppHealthCheck> {
     isDirectoryWritable(downloadDirectory),
   ])
   const ytDlpAvailable = !['Not Installed', 'Unknown', 'Error'].includes(ytDlpVersion)
-  const ffmpegAvailable = existsSync(ffmpegPath)
+  const ffmpegAvailable = engines.find(engine => engine.name === 'ffmpeg')?.available === true
+  const probe = engines.find(engine => engine.name === 'ffprobe')!
+  const database = db.pragma('quick_check', { simple: true }) === 'ok'
+  const mediaServer = await fetch(`http://127.0.0.1:${mediaPort || 3345}/`, { method: 'HEAD', signal: AbortSignal.timeout(2000) }).then(response => response.status === 401, () => false)
+  const updateService = await fetchBoundedJson('https://api.github.com/repos/SAADX25/Cortex-DL/releases/latest', undefined, 3000).then(() => 'reachable' as const, () => 'unavailable' as const)
   const cookies = await validateCookieFile(cookiePath)
   const cookiesReady = cookies.valid || cookies.code === 'missing'
 
   return {
     checkedAt: Date.now(),
-    healthy: ytDlpAvailable && ffmpegAvailable && jsRuntime.available && cookiesReady && directoryWritable,
+    healthy: mediaServer && database && probe.available && ytDlpAvailable && ffmpegAvailable && jsRuntime.available && cookiesReady && directoryWritable,
     ytDlp: { available: ytDlpAvailable, version: ytDlpVersion },
-    ffmpeg: { available: ffmpegAvailable, path: ffmpegPath },
+    ffmpeg: { available: ffmpegAvailable, path: ffmpegPath, version: engines.find(e => e.name === 'ffmpeg')?.version },
+    ffprobe: probe,
+    database: { healthy: database },
+    build: buildInfo(),
+    mediaServer: { healthy: mediaServer },
+    updateService,
     jsRuntime,
     cookies,
     downloadDirectory: { writable: directoryWritable, path: downloadDirectory },
   }
 }
 
+function validateDownloadInput(input: StartInput): void {
+  if (!input || typeof input.url !== 'string' || input.url.length > 16384 || !/^https?:\/\//i.test(input.url)) throw new Error('Invalid download URL')
+  if (typeof input.directory !== 'string' || !path.isAbsolute(input.directory) || input.directory.includes('\0')) throw new Error('Invalid download directory')
+  if (input.filename && (typeof input.filename !== 'string' || (/[/\\]/.test(input.filename) || input.filename.includes('\0')) || input.filename === '..')) throw new Error('Invalid filename')
+}
 export function registerIpcHandlers(deps: IpcDependencies) {
   const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
 
   ipcMain.on('log-message', (_event, level, message) => {
+    if (_event.sender !== getWin()?.webContents || !['info', 'warn', 'error', 'debug'].includes(level) || typeof message !== 'string' || message.length > 8192) return
     if (log && log[level as keyof typeof log]) {
       
       (log as any)[level](`[Renderer] ${message}`)
@@ -109,24 +127,12 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.handle('cortexdl:uninstall-app', () => {
     try {
-      const uninstallerPath = path.join(path.dirname(app.getPath('exe')), 'unins000.exe')
-      const userDataPath = app.getPath('userData')
-
-      log.info('Initiating Self-Destruct...')
-
-      if (existsSync(userDataPath)) {
-        try {
-          rmSync(userDataPath, { recursive: true, force: true })
-          log.info('UserData wiped successfully.')
-        } catch (err) {
-          log.error('Failed to wipe UserData:', err)
-        }
-      }
-
+      const uninstallerPath = path.join(path.dirname(app.getPath('exe')), 'Uninstall Cortex DL.exe')
       if (existsSync(uninstallerPath)) {
         const child = spawn(uninstallerPath, [], {
           detached: true,
-          stdio: 'ignore'
+          stdio: 'ignore',
+          windowsHide: true
         })
         child.unref()
       } else {
@@ -135,7 +141,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       }
 
       log.info('Exiting app...')
-      app.exit(0)
+      app.quit()
     } catch (error) {
       log.error('Uninstall error:', error)
     }
@@ -203,26 +209,29 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   })
 
   ipcMain.handle('cortexdl:health-check', async () => {
-    return getAppHealthCheck()
+    return getAppHealthCheck(getMediaPort())
   })
 
   ipcMain.handle('cortexdl:downloads:list', async () => {
-    await serviceReadyPromise
+    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
     const downloads = getDownloads()
     return downloads?.list() || []
   })
 
   ipcMain.handle('cortexdl:downloads:add', async (_event, input: StartInput) => {
-    await serviceReadyPromise
+    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
     const downloads = getDownloads()
     if (!downloads) throw new Error('Download Manager not initialized')
+    validateDownloadInput(input)
     return downloads.add(input)
   })
 
   ipcMain.handle('cortexdl:downloads:add-batch', async (_event, inputs: StartInput[]) => {
-    await serviceReadyPromise
+    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
     const downloads = getDownloads()
     if (!downloads) throw new Error('Download Manager not initialized')
+    if (!Array.isArray(inputs) || inputs.length > 500) throw new Error('Invalid download batch')
+    inputs.forEach(validateDownloadInput)
     return downloads.addBatch(inputs)
   })
 
@@ -235,12 +244,12 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   ipcMain.handle('cortexdl:downloads:resume-all', async () => getDownloads()?.resumeAll())
 
   ipcMain.handle('cortexdl:set-concurrency', async (_event, value: number) => {
-    await serviceReadyPromise
+    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
     getDownloads()?.setMaxConcurrent(value)
   })
 
   ipcMain.handle('cortexdl:get-concurrency', async () => {
-    await serviceReadyPromise
+    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
     return getDownloads()?.getMaxConcurrent() ?? 3
   })
 
@@ -584,7 +593,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
           }
         }
       } catch (err) {
-        log.error('[handlers] Failed to probe embedded subtitles:', err)
+        if (!isMediaSessionClosed(playerSession)) log.error('[handlers] Failed to probe embedded subtitles:', err)
       }
 
       return subtitles

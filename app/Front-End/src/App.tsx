@@ -42,6 +42,40 @@ function App() {
     return () => dispose()
   }, [])
 
+  useEffect(() => {
+    if (!window.cortexDl.smokeMode) return
+    window.__cortexSmokeLifecycle = async (file: string, audioFile?: string, previewUrl?: string) => {
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+      for (const [source, count, selector] of [[file, 10, 'video'], [audioFile, 20, 'audio']] as const) {
+        if (!source) continue
+        for (let i = 0; i < count; i++) {
+          useUIStore.getState().setMediaPlayerFile({ filePath: source, title: 'Packaged fixture' })
+          for (let n = 0; n < 100; n++) { if ((document.querySelector(selector) as HTMLMediaElement)?.readyState) break; await delay(50) }
+          const media = document.querySelector(selector) as HTMLMediaElement
+          if (!media || media.readyState < 1) throw new Error('Packaged player failed to load')
+          useUIStore.getState().setMediaPlayerFile(null)
+          await delay(100)
+          if (document.querySelector(selector)) throw new Error('Player failed to close')
+        }
+      }
+      if (previewUrl) {
+        const [{ createRoot }, { default: Trimmer }] = await Promise.all([import('react-dom/client'), import('./components/AdvancedTrimmer')])
+        for (let i = 0; i < 20; i++) {
+          const container = document.createElement('div'); document.body.appendChild(container)
+          const root = createRoot(container)
+          try {
+            root.render(<Trimmer videoUrl={previewUrl} duration={1} onConfirm={() => {}} />)
+            for (let n = 0; n < 100; n++) { if (container.querySelector('video')?.readyState) break; await delay(50) }
+            const video = container.querySelector('video')
+            if (!video || video.readyState < 1) throw new Error('Packaged Visual Trim preview failed')
+          } finally { root.unmount(); container.remove() }
+          await delay(50)
+        }
+      }
+      return true
+    }
+    return () => { delete window.__cortexSmokeLifecycle }
+  }, [])
   const lang = useSettingsStore((s) => s.lang)
   const refreshHealth = useSettingsStore((s) => s.refreshHealth)
 
@@ -64,18 +98,19 @@ function App() {
 
   useEffect(() => {
     if (window.cortexDl && window.cortexDl.onSetupProgress) {
+      void window.cortexDl.getSetupState().then(setSetupState)
       return window.cortexDl.onSetupProgress((state) => {
         setSetupState(state)
         // After setup finishes downloading engines, refresh the health check
         // so the UI immediately reflects the newly installed binaries
-        if (state.status === 'done') {
+        if (state.status === 'ready') {
           void refreshHealth()
         }
       })
     }
   }, [refreshHealth])
 
-  if (setupState && setupState.status !== 'done') {
+  if (setupState && setupState.status !== 'ready') {
     return <SetupOverlay setupState={setupState} />
   }
 

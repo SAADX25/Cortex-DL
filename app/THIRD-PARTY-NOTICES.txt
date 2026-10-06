@@ -1,0 +1,25 @@
+Cortex DL's MIT license covers its own source, not third-party executables.
+
+Bundled engine baseline and provenance are recorded in engines/manifest.json.
+
+FFmpeg/ffprobe: BtbN win64 GPL build, GPL-3.0-or-later, statically linked with
+additional libraries. https://ffmpeg.org/legal.html
+Do not publicly redistribute this candidate until the EXACT corresponding
+source for FFmpeg and linked libraries, build scripts, and license texts are
+retained and supplied with the release. Upstream links alone are insufficient.
+The release gate requires a reviewed source-distribution record.
+
+yt-dlp: https://github.com/yt-dlp/yt-dlp (Unlicense source). The Windows
+standalone executable includes third-party software and has additional license
+obligations; preserve its Third-party Licenses notices. Do not label the entire
+Windows executable MIT or Unlicense.
+
+Deno: https://github.com/denoland/deno, MIT; includes V8 (BSD) and Rust crates
+under their respective licenses. Preserve the upstream third-party notices.
+
+Electron: MIT, includes Chromium and Node.js notices. Electron's LICENSE and
+LICENSES.chromium.html accompany the packaged application.
+better-sqlite3: MIT; SQLite is public domain. Its N-API binaries are unpacked.
+Other npm dependencies retain their license files inside app.asar.
+
+This unsigned validation candidate is not authorized for public distribution.

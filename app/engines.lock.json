@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "platform": "win32",
+  "architecture": "x64",
+  "packages": [
+    {
+      "name": "yt-dlp",
+      "version": "2026.08.19",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe",
+      "sha256": "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a",
+      "license": "Unlicense and bundled dependency licenses",
+      "engines": [
+        {
+          "name": "yt-dlp",
+          "filename": "yt-dlp.exe",
+          "minimum": "2026.06.09",
+          "version": "2026.08.19",
+          "architecture": "x64"
+        }
+      ]
+    },
+    {
+      "name": "FFmpeg",
+      "version": "N-127203-ga35c879992",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-05-13-07/ffmpeg-N-127203-ga35c879992-win64-gpl.zip",
+      "sha256": "34517bf39addbcfcdf01236074491e3ba94d6d137801f88803903a87cb76d1aa",
+      "license": "GPL-3.0-or-later; corresponding sources required before distribution",
+      "engines": [
+        {
+          "name": "ffmpeg",
+          "filename": "ffmpeg.exe",
+          "minimum": "6.0.0",
+          "architecture": "x64"
+        },
+        {
+          "name": "ffprobe",
+          "filename": "ffprobe.exe",
+          "minimum": "6.0.0",
+          "architecture": "x64"
+        }
+      ]
+    },
+    {
+      "name": "Deno",
+      "version": "2.9.4",
+      "url": "https://github.com/denoland/deno/releases/download/v2.9.4/deno-x86_64-pc-windows-msvc.zip",
+      "sha256": "68ed08b05c56cf887e9aa509947dc3f468f7e12f47a13e5c1abd51d46d1453ef",
+      "license": "MIT and bundled dependency licenses",
+      "engines": [
+        {
+          "name": "deno",
+          "filename": "deno.exe",
+          "minimum": "2.3.0",
+          "version": "2.9.4",
+          "architecture": "x64"
+        }
+      ]
+    }
+  ],
+  "notices": [
+    {
+      "filename": "DENO-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/denoland/deno/v2.9.4/LICENSE.md",
+      "sha256": "f62497fffecc0852960c8d3e6934b9db86d16396e9b604072e923892cae3a588"
+    },
+    {
+      "filename": "YTDLP-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/2026.08.19/LICENSE",
+      "sha256": "7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c"
+    },
+    {
+      "filename": "YTDLP-LICENSES.txt",
+      "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/2026.08.19/THIRD_PARTY_LICENSES.txt",
+      "sha256": "472aefe951c7db35e1657c1d13fd337140511ed6f2b329205105ad441c5a02b7"
+    }
+  ]
+}

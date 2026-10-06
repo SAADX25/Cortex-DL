@@ -1,0 +1,74 @@
+name: Production validation
+on:
+  pull_request:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run version:verify
+      - run: npm run engines:stage
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run test:integration
+      - run: npm test
+      - if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/verify-release.cjs --release
+      - run: npm run build
+      - run: npm run test:packaged
+      - run: npm run test:installer
+      - run: npm run release:verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-validation
+          path: |
+            app/release/*/*.exe
+            app/release/*/*.blockmap
+            app/release/*/latest.yml
+            app/smoke-results/
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: windows
+    runs-on: windows-latest
+    environment: production-release
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm run release:build
+      - run: npm run test:packaged
+      - run: node scripts/license-gate.cjs
+      - shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          gh release create "v$version" "release/$version/Cortex-DL-Setup-$version.exe" "release/$version/Cortex-DL-Setup-$version.exe.blockmap" "release/$version/latest.yml" --verify-tag --draft --title "Cortex DL v$version"

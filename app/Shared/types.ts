@@ -161,7 +161,12 @@ export type AppHealthCheck = {
   checkedAt: number
   healthy: boolean
   ytDlp: { available: boolean; version: string }
-  ffmpeg: { available: boolean; path: string }
+  ffmpeg: { available: boolean; path: string; version?: string }
+  ffprobe?: { available: boolean; version: string; message: string }
+  database?: { healthy: boolean }
+  mediaServer?: { healthy: boolean }
+  updateService?: 'reachable' | 'unavailable'
+  build?: { version: string; commit: string }
   jsRuntime: JsRuntimeStatus
   cookies: CookieValidationResult
   downloadDirectory: { writable: boolean; path: string }

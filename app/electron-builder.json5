@@ -37,7 +37,7 @@
     "!node_modules/**/.vscode/**",
     "!**/*.log"
   ],
-  "extraResources": [],
+  "extraResources": [{ "from": "engine-baseline", "to": "engines", "filter": ["*.exe", "manifest.json", "*LICENSE*.txt"] }, { "from": "build-manifest.json", "to": "build-manifest.json" }, { "from": "THIRD-PARTY-NOTICES.txt", "to": "THIRD-PARTY-NOTICES.txt" }],
   "mac": {
     "target": [
       "dmg"
@@ -46,6 +46,7 @@
   },
   "win": {
   "icon": "Front-End/public/CortexDL.ico",
+    "signExts": ["!yt-dlp.exe", "!ffmpeg.exe", "!ffprobe.exe", "!deno.exe"],
     "target": [
       {
         "target": "nsis",
@@ -54,18 +55,18 @@
         ]
       }
     ],
-    "artifactName": "${productName} Setup ${version}.${ext}"
+    "artifactName": "Cortex-DL-Setup-${version}.${ext}"
   },
   "nsis": {
   "oneClick": false,
   "perMachine": false,
   "allowToChangeInstallationDirectory": true,
-  "deleteAppDataOnUninstall": true,
+  "deleteAppDataOnUninstall": false,
   "installerIcon": "Front-End/public/CortexDL.ico",
   "uninstallerIcon": "Front-End/public/CortexDL.ico",
     "include": "build/installer.nsh"
   },
-  "npmRebuild": true,
+  "npmRebuild": false,
   "asarUnpack": ["**/*.node"],
   "compression": "maximum",
   "linux": {

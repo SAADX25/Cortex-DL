@@ -1,30 +1,13 @@
 import { app } from 'electron'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
-
 export const isDev = !app.isPackaged
-
-export function getBinaryPath(name: string): string {
-  const binaryName = process.platform === 'win32' ? `${name}.exe` : name
-  if (isDev) {
-    const root = process.env.APP_ROOT || process.cwd()
-    const binPath = path.join(root, 'bin', binaryName)
-    if (existsSync(binPath)) return binPath
-    return path.join(process.cwd(), 'bin', binaryName)
-  }
-  // Production: use dynamically downloaded binaries in userData
-  return path.join(app.getPath('userData'), 'bin', binaryName)
+export function getBaselineDirectory(): string {
+  return app.isPackaged ? path.join(process.resourcesPath, 'engines') : path.join(process.env.APP_ROOT || process.cwd(), 'engine-baseline')
 }
-
-export function getBinDirectory(): string {
-  if (isDev) {
-    const root = process.env.APP_ROOT || process.cwd()
-    const binDir = path.join(root, 'bin')
-    if (existsSync(binDir)) return binDir
-    const cwdBin = path.join(process.cwd(), 'bin')
-    if (existsSync(cwdBin)) return cwdBin
-    return path.join(root, 'bin')
-  }
-  // Production: use dynamically downloaded binaries in userData
-  return path.join(app.getPath('userData'), 'bin')
+export function getBinDirectory(): string { return path.join(app.getPath('userData'), 'bin') }
+export function getBinaryPath(name: string): string {
+  const filename = process.platform === 'win32' ? `${name}.exe` : name
+  const mutable = path.join(getBinDirectory(), filename)
+  return existsSync(mutable) ? mutable : path.join(getBaselineDirectory(), filename)
 }

@@ -53,7 +53,7 @@ test('Visual Trim extraction preserves actual yt-dlp stderr failure', async () =
       {...valid,format_id:'compatible',height:360},
       {...valid,format_id:'incompatible',height:1080,ext:'webm',vcodec:'av01.0.12M.08'},
     ]}))
-    assert.equal(await extractPreview(path.join(process.cwd(),'bin','yt-dlp.exe'),['--load-info-json',info,'--dump-single-json','--skip-download','-f',PREVIEW_FORMAT]),valid.url)
+    assert.equal(await extractPreview(path.join(process.cwd(),'engine-baseline','yt-dlp.exe'),['--load-info-json',info,'--dump-single-json','--skip-download','-f',PREVIEW_FORMAT]),valid.url)
   } finally { await fs.rm(dir,{recursive:true,force:true}) }
 })
 test('Visual Trim Electron renders extracted video, falls back, saves failed range, seeks and releases 25 sessions', {timeout:90000}, async () => {
@@ -61,7 +61,7 @@ test('Visual Trim Electron renders extracted video, falls back, saves failed ran
   let server
   try {
     const fixture=path.join(dir,'video.mp4')
-    const ffmpeg=cp.spawnSync(path.join(process.cwd(),'bin','ffmpeg.exe'),['-y','-loglevel','error','-f','lavfi','-i','testsrc2=size=64x64:rate=20:duration=3','-f','lavfi','-i','sine=duration=3','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',fixture])
+    const ffmpeg=cp.spawnSync(path.join(process.cwd(),'engine-baseline','ffmpeg.exe'),['-y','-loglevel','error','-f','lavfi','-i','testsrc2=size=64x64:rate=20:duration=3','-f','lavfi','-i','sine=duration=3','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',fixture])
     assert.equal(ffmpeg.status,0,String(ffmpeg.stderr))
     const bundle=await require('esbuild').build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import {Simulate} from 'react-dom/test-utils';import Trimmer from './Front-End/src/components/AdvancedTrimmer';import AddTab from './Front-End/src/components/AddDownloadTab';import {useUIStore} from './Front-End/src/stores/useUIStore';import {useFormStore} from './Front-End/src/stores/useFormStore';let root;window.mountAdd=(url)=>{useUIStore.setState({url,analyzeResult:{kind:'ytdlp',title:'fixture',duration:664,formats:[],subtitles:[]}});useFormStore.setState({isAudioMode:false});root=createRoot(document.getElementById('root'));flushSync(()=>root.render(React.createElement(AddTab)))};window.mount=props=>{root=createRoot(document.getElementById('root'));flushSync(()=>root.render(React.createElement(Trimmer,props)))};window.unmount=()=>{flushSync(()=>root.unmount())};window.change=(label,value)=>{const input=document.querySelector('[aria-label="'+label+'"]');input.value=value;flushSync(()=>Simulate.change(input))}`,resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,loader:{'.css':'empty'},format:'iife',define:{'process.env.NODE_ENV':'"development"'}})
     const video=await fs.readFile(fixture)

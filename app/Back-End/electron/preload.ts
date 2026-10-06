@@ -19,6 +19,7 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
   })
 }
 contextBridge.exposeInMainWorld('cortexDl', {
+  smokeMode: process.argv.includes('--cortex-smoke'),
   analysisDebug: process.env.CORTEX_ANALYSIS_DEBUG === '1',
   selectFolder(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-folder')
@@ -118,6 +119,12 @@ contextBridge.exposeInMainWorld('cortexDl', {
   checkJsRuntime(): Promise<JsRuntimeStatus> {
     return ipcRenderer.invoke('cortexdl:check-js-runtime')
   },
+  getSetupState() { return ipcRenderer.invoke('cortexdl:setup-state') },
+  repairEngines() { return ipcRenderer.invoke('cortexdl:repair-engines') },
+  openLogs() { return ipcRenderer.invoke('cortexdl:open-logs') },
+  exitApp() { return ipcRenderer.invoke('cortexdl:exit') },
+  exportDiagnostics() { return ipcRenderer.invoke('cortexdl:export-diagnostics') },
+  getBuildInfo() { return ipcRenderer.invoke('cortexdl:build-info') },
   getHealthCheck(): Promise<AppHealthCheck> {
     return ipcRenderer.invoke('cortexdl:health-check')
   },

@@ -64,3 +64,9 @@ output.json
 # TypeScript build info
 *.tsbuildinfo
 app/scripts/strip-comments.cjs
+app/engine-baseline/
+app/build-manifest.json
+app/*.tmp
+app/smoke-results/
+
+app/installer-validation/

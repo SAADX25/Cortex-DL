@@ -20,7 +20,6 @@ export function useSettingsInit(): void {
   const setUsername = useSettingsStore((s) => s.setUsername)
   const setPassword = useSettingsStore((s) => s.setPassword)
   const setTotalDownloadedBytes = useSettingsStore((s) => s.setTotalDownloadedBytes)
-  const refreshHealth = useSettingsStore((s) => s.refreshHealth)
 
   
   useEffect(() => {
@@ -30,10 +29,6 @@ export function useSettingsInit(): void {
     
   }, [setConcurrentDownloads])
 
-  useEffect(() => {
-    void refreshHealth()
-    
-  }, [refreshHealth])
 
   
   useEffect(() => {

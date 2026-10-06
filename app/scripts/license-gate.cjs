@@ -1,0 +1,7 @@
+const fs = require('node:fs')
+const crypto = require('node:crypto')
+const assert = require('node:assert/strict')
+const record = require('../license-compliance.json')
+assert.equal(record.reviewed, true, 'Third-party binary redistribution review is incomplete')
+assert.ok(record.sourceArchive && record.sourceSha256, 'Exact corresponding source archive is required')
+assert.equal(crypto.createHash('sha256').update(fs.readFileSync(record.sourceArchive)).digest('hex'), record.sourceSha256)
