@@ -27,7 +27,7 @@ function snapshot(dir, result = {}) {
 assert.equal(fs.existsSync(data), false, 'Upgrade fixture requires absent real Cortex DL userData; use a separate Windows user when it exists')
 assert.equal(fs.existsSync(path.join(process.env.APPDATA, 'cortex-dl')), false, 'Installer fixture requires absent current userData; use a separate Windows user when it exists')
 if (process.platform === 'win32') {
-  const registry = spawnSync('powershell.exe', ['-NoProfile', '-Command', "Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match '^Cortex DL(?: |$)' } | Select-Object -ExpandProperty DisplayName"], { windowsHide: true, encoding: 'utf8', timeout: 30000 })
+  const registry = spawnSync('powershell.exe', ['-NoProfile', '-Command', "$ErrorActionPreference = 'Stop'; $key = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'; if (Test-Path -LiteralPath $key) { Get-ChildItem -LiteralPath $key | ForEach-Object { $item = Get-ItemProperty -LiteralPath $_.PSPath; if ($item.DisplayName -match '^Cortex DL(?: |$)') { $item.DisplayName } } }; exit 0"], { windowsHide: true, encoding: 'utf8', timeout: 30000 })
   if (registry.error) throw registry.error
   assert.equal(registry.status, 0, registry.stderr)
   assert.equal(registry.stdout.trim(), '', 'Installer fixture must not replace an existing real Cortex DL installation')
