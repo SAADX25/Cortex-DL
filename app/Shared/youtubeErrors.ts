@@ -1,6 +1,7 @@
 export const YOUTUBE_AUTH_REQUIRED_CODE = 'YOUTUBE_AUTH_REQUIRED'
 export const YOUTUBE_RATE_LIMITED_CODE = 'YOUTUBE_RATE_LIMITED'
 export const YOUTUBE_SUBTITLE_RATE_LIMITED_CODE = 'YOUTUBE_SUBTITLE_RATE_LIMITED'
+export const YOUTUBE_SUBTITLE_UNAVAILABLE_CODE = 'YOUTUBE_SUBTITLE_UNAVAILABLE'
 
 export function getErrorText(value: unknown): string {
   if (typeof value === 'string') return value
@@ -18,7 +19,8 @@ export function getErrorText(value: unknown): string {
 
 export function youtubeErrorCode(value: unknown): string | null {
   const text = getErrorText(value)
-  // A 429 can include generic sign-in advice. It must never trigger a cookies retry.
+  if (/YOUTUBE_SUBTITLE_UNAVAILABLE/i.test(text)) return YOUTUBE_SUBTITLE_UNAVAILABLE_CODE
+  // A 429 can include generic sign-in advice. It is not a video authentication failure.
   if (/YOUTUBE_SUBTITLE_RATE_LIMITED/i.test(text)) return YOUTUBE_SUBTITLE_RATE_LIMITED_CODE
   if (/YOUTUBE_RATE_LIMITED|HTTP (?:Error )?429|too many requests|rate[-_\s]?limit(?:ed|ing)?|requests?[^\r\n]{0,40}limit exceeded|temporarily blocked[^\r\n]{0,40}(?:request|traffic|youtube)/i.test(text)) {
     return /Unable to download (?:video )?subtitles?|subtitles?[^\r\n]*HTTP (?:Error )?429/i.test(text)

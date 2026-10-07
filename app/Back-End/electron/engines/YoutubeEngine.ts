@@ -20,6 +20,7 @@ import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
 import { getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
 import { isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode } from '../../../Shared/youtubeErrors'
+import { prepareYouTubeSubtitle, embedYouTubeSubtitle } from '../youtubeSubtitles'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -52,15 +53,31 @@ export class YoutubeEngine implements IEngine {
     const configuredCookies = runtime.ignoreCookies ? [] : await getYtdlpCookieArgs()
     const publicFirst = isYouTubeUrl(task.url)
     const cookieArgs = publicFirst ? [] : configuredCookies
+    let subtitle: string | undefined
+    if (publicFirst && task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
+      try {
+        subtitle = await prepareYouTubeSubtitle(task, configuredCookies, runtime.abortController.signal, cookies => {
+          const subtitleArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookies)
+          subtitleArgs.splice(subtitleArgs.indexOf('--embed-subs'), 1)
+          subtitleArgs.splice(subtitleArgs.length - 1, 0, '--skip-download', '--no-progress', '--ignore-no-formats-error', '--sub-format', 'vtt')
+          return this.runYtdlpAttempt(task, context, runtime, subtitleArgs, profile)
+        })
+      } catch (error) {
+        runtime.abortController.signal.throwIfAborted()
+        return { kind: 'fatal-error', message: error instanceof Error ? error.message : 'Subtitle download failed' }
+      }
+    }
+    // The selected captions have their own validated file; media extraction stays public.
+    const mediaTask = subtitle ? { ...task, subtitleLanguage: undefined } : task
     if (!task.title || !task.thumbnail) await this.prefetchMetadata(task, context, runtime, cookieArgs).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
     runtime.abortController.signal.throwIfAborted()
-    const args = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
+    const args = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
     let result = await this.runYtdlpAttempt(task, context, runtime, args, profile)
     let authenticated = false
     runtime.abortController.signal.throwIfAborted()
     if (publicFirst && result.exitCode !== 0 && configuredCookies.length && isYouTubeAuthRequiredError(result.stderr)) {
       authenticated = true
-      const authenticatedArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, configuredCookies)
+      const authenticatedArgs = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, configuredCookies)
       result = await this.runYtdlpAttempt(task, context, runtime, authenticatedArgs, profile)
     }
     runtime.abortController.signal.throwIfAborted()
@@ -68,14 +85,14 @@ export class YoutubeEngine implements IEngine {
     // formats once, preserving the quality cap and requested subtitles.
     if (publicFirst && !authenticated && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
       && !youtubeErrorCode(result.stderr) && !/Unable to download (?:video )?subtitles?/i.test(result.stderr)) {
-      const hlsArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, [], true)
+      const hlsArgs = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, [], true)
       result = await this.runYtdlpAttempt(task, context, runtime, hlsArgs, profile)
     }
     runtime.abortController.signal.throwIfAborted()
     if (result.exitCode === 0) {
       const candidate = await findTaskMediaFile(task, result.detectedFinalPath)
       runtime.abortController.signal.throwIfAborted()
-      if (candidate) return { kind: 'success', candidate }
+      if (candidate) return { kind: 'success', candidate: subtitle ? await embedYouTubeSubtitle(task, context, candidate, subtitle) : candidate }
       return { kind: 'fatal-error', message: 'yt-dlp produced no final media file' }
     }
     const youtubeFailure = publicFirst ? youtubeErrorCode(result.stderr) : null

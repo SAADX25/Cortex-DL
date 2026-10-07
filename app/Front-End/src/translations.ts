@@ -149,6 +149,7 @@ export interface Translations {
   youtube_auth_required: string;
   youtube_rate_limited: string;
   youtube_subtitle_rate_limited: string;
+  youtube_subtitle_unavailable: string;
   youtube_cookie_valid: string;
   youtube_cookie_cleared: string;
   youtube_cookie_missing: string;
@@ -316,7 +317,7 @@ export const translations: Record<Language, Translations> = {
     use_inapp_player: "مشغل وسائط مدمج",
     use_inapp_player_desc: "تشغيل الفيديو والصوت داخل التطبيق بدلاً من المشغل الافتراضي",
     youtube_auth_title: "ملفات Cookies",
-    youtube_auth_desc: "الكوكيز اختيارية للمحتوى الذي يتطلب تسجيل الدخول. يبدأ البرنامج تحليل وتنزيل الفيديوهات العامة بدونها للحفاظ على الدقات المتاحة، ويستخدم ملفك عند الحاجة لتسجيل الدخول فقط. صدّر ملف cookies.txt من YouTube ثم اختره هنا.",
+    youtube_auth_desc: "يبدأ تنزيل الفيديوهات العامة بدون كوكيز للحفاظ على الجودة. عند الحاجة لتسجيل الدخول أو رفض تنزيل الترجمة، يمكن للبرنامج تجربة ملفك للطلب المطلوب فقط؛ استخدامه للترجمة لا يخفض دقة الفيديو. صدّر ملف cookies.txt من YouTube ثم اختره هنا.",
     youtube_auth_get_extension: "تحميل الإضافة",
     youtube_auth_select_btn: "اختر ملف cookies.txt",
     youtube_auth_no_file: "لم يتم اختيار ملف بعد",
@@ -328,8 +329,9 @@ export const translations: Record<Language, Translations> = {
     speed_auto: "تلقائي",
     youtube_auth_required: "يتطلب YouTube تسجيل الدخول أو التحقق من CAPTCHA. اختر ملف cookies.txt صالحاً لـ YouTube من الإعدادات ثم حاول مجدداً.",
     youtube_rate_limited: "قيّد YouTube الطلبات مؤقتاً (429). انتظر ثم أعد المحاولة؛ هذا الخطأ لا يعني أن ملف الكوكيز مطلوب.",
-    youtube_subtitle_rate_limited: "قيّد YouTube تنزيل الترجمة مؤقتاً (429). انتظر ثم أعد المحاولة، أو اختر بدون ترجمة لتنزيل الفيديو وحده. إضافة كوكيز ليست حلاً مضموناً لهذا الخطأ.",
-    youtube_cookie_valid: "ملف Cookies صالح ويحتوي على بيانات YouTube.",
+    youtube_subtitle_rate_limited: "رفض YouTube طلب الترجمة (429). لم تُحمّل الترجمة المطلوبة، ولن يُعتمد الفيديو على أنه مكتمل بدونها. يُجرّب ملف كوكيز صالح، إن توفر، للترجمة وحدها. انتظر قبل إعادة المحاولة أو حدّث ملف جلسة YouTube من الإعدادات.",
+    youtube_subtitle_unavailable: "لم يوفر YouTube ملفاً صالحاً للترجمة المختارة، أو فشل تضمينها في الفيديو. أعد تحليل الرابط واختر ترجمة متاحة ثم حاول مجدداً.",
+    youtube_cookie_valid: "صيغة الملف صحيحة ويحتوي بيانات YouTube. يتحقق الموقع من صلاحية جلسة الدخول عند استخدامها.",
     youtube_cookie_cleared: "تمت إزالة ملف Cookies.",
     youtube_cookie_missing: "ملف Cookies غير موجود.",
     youtube_cookie_not_file: "المسار المحدد ليس ملفاً.",
@@ -492,7 +494,7 @@ export const translations: Record<Language, Translations> = {
     use_inapp_player: "In-App Media Player",
     use_inapp_player_desc: "Play videos and audio inside the app instead of system default",
     youtube_auth_title: "YouTube Cookies",
-    youtube_auth_desc: "Cookies are optional for content that requires sign-in. Public videos are analyzed and downloaded without cookies first to preserve available resolutions. Your file is used only when sign-in is needed. Export a YouTube cookies.txt file and select it here.",
+    youtube_auth_desc: "Public videos start without cookies to preserve quality. When sign-in is required or subtitle access fails, your file can be tried for that request alone. Using it for subtitles does not lower video resolution. Export a YouTube cookies.txt file and select it here.",
     youtube_auth_get_extension: "Get Extension",
     youtube_auth_select_btn: "Select cookies.txt File",
     youtube_auth_no_file: "No file selected",
@@ -504,8 +506,9 @@ export const translations: Record<Language, Translations> = {
     speed_auto: "Auto",
     youtube_auth_required: "YouTube requires sign-in or CAPTCHA verification. Select a valid YouTube cookies.txt file in Settings and try again.",
     youtube_rate_limited: "YouTube temporarily rate-limited requests (429). Wait before trying again; this error does not mean a cookies file is required.",
-    youtube_subtitle_rate_limited: "YouTube temporarily rate-limited subtitle downloads (429). Wait before trying again, or select no subtitles to download only the video. Adding cookies is not a guaranteed fix for this error.",
-    youtube_cookie_valid: "The cookies file is valid and contains YouTube data.",
+    youtube_subtitle_rate_limited: "YouTube rejected the subtitle request (429). The requested captions were not downloaded, so the video will not be marked complete without them. A valid configured cookies file is tried for subtitles alone when available. Wait before retrying or refresh your YouTube session file in Settings.",
+    youtube_subtitle_unavailable: "YouTube did not provide a valid file for the selected captions, or embedding failed. Analyze the link again, select available subtitles and retry.",
+    youtube_cookie_valid: "The file format is valid and contains YouTube cookies. YouTube verifies whether the sign-in session is still active when used.",
     youtube_cookie_cleared: "The cookies file was removed.",
     youtube_cookie_missing: "The cookies file does not exist.",
     youtube_cookie_not_file: "The selected path is not a file.",

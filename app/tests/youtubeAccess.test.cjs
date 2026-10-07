@@ -6,6 +6,7 @@ const os = require('node:os')
 const originalLoad = Module._load
 const cookies = ['--cookies', 'synthetic-cookies.txt']
 const calls = []
+let subtitlePlan
 let extract = async () => info(1080)
 function info(height) {
   return JSON.stringify({ title: 'Fixture', formats: [{ format_id: String(height), height, vcodec: 'avc1', acodec: 'none' }],
@@ -27,6 +28,9 @@ Module._load = function(request, parent, ...rest) {
     extractPreview: async (_binary, args) => { calls.push(args); return extract(args) },
     extractPreviewStreams: async (_binary, args) => { calls.push(args); return extract(args) } }
   if (request === '../mediaFiles' && parent.filename.endsWith('YoutubeEngine.ts')) return { findTaskMediaFile: async () => 'fixture.mp4' }
+  if (request === '../youtubeSubtitles' && parent.filename.endsWith('YoutubeEngine.ts')) return {
+    prepareYouTubeSubtitle: (...args) => subtitlePlan(...args), embedYouTubeSubtitle: async () => 'fixture.subtitled.mkv',
+  }
   return originalLoad.call(this, request, parent, ...rest)
 }
 const { youtubeErrorCode, isYouTubeAuthRequiredError, isYouTubeUrl } = require('../Shared/youtubeErrors.ts')
@@ -124,11 +128,11 @@ test('YouTube cookie fallback stops after authentication fails and honors cancel
 function task() {
   return { id: 'fixture', url: 'https://youtu.be/abcdefghijk', directory: os.tmpdir(), filename: 'fixture.mp4',
     filePath: 'fixture.mp4', title: 'Fixture', thumbnail: 'https://fixture.invalid/thumb', targetFormat: 'mp4',
-    status: 'downloading', subtitleLanguage: 'ar', subtitleIsAutomatic: true, ytdlpFormatId: '1080p' }
+    status: 'downloading', ytdlpFormatId: '1080p' }
 }
 function context() { return { runtime: { abortController: null, child: null, retries: 0 }, sendUpdate(){}, saveState(){} } }
 
-test('YouTube download keeps selected quality and subtitles without sending cookies on public success', async () => {
+test('YouTube download keeps selected quality without sending cookies on public success', async () => {
   const engine = new YoutubeEngine(), seen = []
   engine.runYtdlpAttempt = async (_task, _context, _runtime, args) => {
     seen.push(args); return { exitCode: 0, detectedFinalPath: 'fixture.mp4', stderr: '' }
@@ -137,8 +141,6 @@ test('YouTube download keeps selected quality and subtitles without sending cook
   assert.equal(seen.length, 1)
   assert.equal(seen[0].includes('--cookies'), false)
   assert.match(seen[0][seen[0].indexOf('-f') + 1], /height<=1080/)
-  assert.equal(seen[0].includes('--write-auto-subs'), true)
-  assert.equal(seen[0].includes('--embed-subs'), true)
 })
 
 test('YouTube download retries real authentication once, while subtitle 429 stops without cookies', async () => {
@@ -158,7 +160,8 @@ test('YouTube download retries real authentication once, while subtitle 429 stop
 test('Arabic and English errors distinguish subtitle throttling, request throttling and sign-in', () => {
   for (const messages of Object.values(translations)) {
     for (const [code, message] of [['YOUTUBE_AUTH_REQUIRED', messages.youtube_auth_required],
-      ['YOUTUBE_RATE_LIMITED', messages.youtube_rate_limited], ['YOUTUBE_SUBTITLE_RATE_LIMITED', messages.youtube_subtitle_rate_limited]]) {
+      ['YOUTUBE_RATE_LIMITED', messages.youtube_rate_limited], ['YOUTUBE_SUBTITLE_RATE_LIMITED', messages.youtube_subtitle_rate_limited],
+      ['YOUTUBE_SUBTITLE_UNAVAILABLE', messages.youtube_subtitle_unavailable]]) {
       assert.equal(youtubeErrorMessage(code, messages), message)
       assert.equal(normalizeIpcError(new Error(`Error invoking remote method 'analyze': Error: ${code}`), 'fallback', messages), message)
     }
@@ -167,7 +170,7 @@ test('Arabic and English errors distinguish subtitle throttling, request throttl
   }
 })
 
-test('YouTube media 403 tries public HLS once with the same quality and subtitles', async () => {
+test('YouTube media 403 tries public HLS once with the same quality', async () => {
   const engine = new YoutubeEngine(), seen = []
   engine.runYtdlpAttempt = async (_task, _context, _runtime, args) => {
     seen.push(args)
@@ -179,9 +182,45 @@ test('YouTube media 403 tries public HLS once with the same quality and subtitle
   const selector = seen[1][seen[1].indexOf('-f') + 1]
   assert.equal(selector, 'bestvideo[protocol^=m3u8][height<=1080]+bestaudio[protocol^=m3u8]/best[protocol^=m3u8][height<=1080]')
   assert.equal(seen[1].includes('--cookies'), false)
-  assert.equal(seen[1].includes('--write-auto-subs'), true)
-  assert.equal(seen[1].includes('--embed-subs'), true)
-  assert.equal(seen[1][seen[1].indexOf('--sub-langs') + 1], 'ar')
+})
+
+test('YouTube extracts subtitles separately then keeps media and HLS public before embedding', async () => {
+  const engine = new YoutubeEngine(), seen = []
+  subtitlePlan = async (_task, configured, signal, run) => {
+    signal.throwIfAborted()
+    assert.deepEqual(configured, cookies)
+    const result = await run(cookies)
+    assert.equal(result.exitCode, 0)
+    return 'fixture.ar.vtt'
+  }
+  engine.runYtdlpAttempt = async (_task, _context, _runtime, args) => {
+    seen.push(args)
+    return { exitCode: seen.length === 2 ? 1 : 0, detectedFinalPath: 'fixture.mp4',
+      stderr: seen.length === 2 ? 'unable to download video data: HTTP Error 403: Forbidden' : '' }
+  }
+  const result = await engine.download({ ...task(), subtitleLanguage: 'ar', subtitleIsAutomatic: true }, context())
+  assert.deepEqual(result, { kind: 'success', candidate: 'fixture.subtitled.mkv' })
+  assert.equal(seen.length, 3)
+  assert.equal(seen[0].includes('--skip-download'), true)
+  assert.equal(seen[0].includes('--no-progress'), true, 'caption bytes must not count as video progress')
+  assert.equal(seen[0].includes('--cookies'), true)
+  assert.equal(seen[0].includes('--write-auto-subs'), true)
+  assert.equal(seen[0].includes('--embed-subs'), false)
+  assert.equal(seen[0][seen[0].indexOf('--sub-format') + 1], 'vtt')
+  for (const args of seen.slice(1)) {
+    assert.equal(args.includes('--cookies'), false)
+    assert.equal(args.includes('--write-auto-subs'), false)
+    assert.equal(args.includes('--embed-subs'), false)
+    assert.match(args[args.indexOf('-f') + 1], /height<=1080/)
+  }
+})
+
+test('YouTube never downloads or approves video alone when the selected subtitle fails', async () => {
+  const engine = new YoutubeEngine()
+  subtitlePlan = async () => { throw new Error('YOUTUBE_SUBTITLE_RATE_LIMITED') }
+  engine.runYtdlpAttempt = async () => { throw new Error('Media must not run') }
+  assert.deepEqual(await engine.download({ ...task(), subtitleLanguage: 'ar' }, context()),
+    { kind: 'fatal-error', message: 'YOUTUBE_SUBTITLE_RATE_LIMITED' })
 })
 
 test('YouTube HLS fallback is bounded, skips subtitle errors and honors cancellation', async () => {

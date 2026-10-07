@@ -79,9 +79,9 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
   const subtitleArgs: string[] = []
   if (spec.videoCodec && format !== 'gif') {
     mapping.push('-map', '0:v:0', '-map', '0:a?')
-    if (source?.streams?.some(s => s.codec_type === 'subtitle') && ['mp4', 'mov', 'm4v', 'mkv'].includes(format)) {
+    if (source?.streams?.some(s => s.codec_type === 'subtitle') && ['mp4', 'mov', 'm4v', 'mkv', 'webm'].includes(format)) {
       mapping.push('-map', '0:s?')
-      subtitleArgs.push('-c:s', format === 'mkv' ? 'copy' : 'mov_text')
+      subtitleArgs.push('-c:s', format === 'mkv' ? 'copy' : format === 'webm' ? 'webvtt' : 'mov_text')
     }
   }
   if (decision === 'direct' || decision === 'remux') {

@@ -466,6 +466,24 @@ test('MP4 remux retains embedded subtitles and metadata through the shared regis
   })
 }))
 
+test('manager refuses Completed when a requested YouTube subtitle stream is missing', async () => sandbox(async dir => {
+  const { YoutubeEngine } = require('../Back-End/electron/engines/YoutubeEngine.ts')
+  const source = path.join(dir, 'source.mp4'); fixture(source, true, 1)
+  const original = YoutubeEngine.prototype.download
+  YoutubeEngine.prototype.download = async draft => {
+    const candidate = path.join(draft.directory, 'source.mp4')
+    await fs.copyFile(source, candidate)
+    return { kind: 'success', candidate }
+  }
+  const t = item(dir, { engine: 'ytdlp', subtitleLanguage: 'ar' }), manager = managerFor(t)
+  try {
+    await manager.executeEngine(t.id)
+    assert.equal(t.status, 'error')
+    assert.equal(t.errorMessage, 'YOUTUBE_SUBTITLE_UNAVAILABLE')
+    assert.equal(await fs.stat(t.filePath).then(() => true).catch(() => false), false)
+  } finally { YoutubeEngine.prototype.download = original; manager.flushPendingSave() }
+}))
+
 
 test('decodable headers cannot certify a corrupt media payload', async () => sandbox(async dir => {
   const source=path.join(dir,'source.wav');fixture(source,false,2)

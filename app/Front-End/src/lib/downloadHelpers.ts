@@ -1,4 +1,4 @@
-import { getErrorText, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_RATE_LIMITED_CODE, YOUTUBE_SUBTITLE_RATE_LIMITED_CODE } from '../../../Shared/youtubeErrors'
+import { getErrorText, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_RATE_LIMITED_CODE, YOUTUBE_SUBTITLE_RATE_LIMITED_CODE, YOUTUBE_SUBTITLE_UNAVAILABLE_CODE } from '../../../Shared/youtubeErrors'
 import type { Translations } from '../translations'
 
 export function isYtdlpUrl(url: string): boolean {
@@ -26,13 +26,14 @@ export function isYtdlpUrl(url: string): boolean {
 
 export const SUBTITLE_EMBED_FORMATS = new Set<TargetFormat>(['mp4', 'mkv', 'webm'])
 
-type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_subtitle_rate_limited'>
+type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_subtitle_rate_limited' | 'youtube_subtitle_unavailable'>
 
 export function youtubeErrorMessage(error: unknown, messages: YouTubeMessages): string | null {
   switch (youtubeErrorCode(error)) {
     case YOUTUBE_AUTH_REQUIRED_CODE: return messages.youtube_auth_required
     case YOUTUBE_RATE_LIMITED_CODE: return messages.youtube_rate_limited
     case YOUTUBE_SUBTITLE_RATE_LIMITED_CODE: return messages.youtube_subtitle_rate_limited
+    case YOUTUBE_SUBTITLE_UNAVAILABLE_CODE: return messages.youtube_subtitle_unavailable
     default: return null
   }
 }

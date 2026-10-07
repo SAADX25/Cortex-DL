@@ -803,6 +803,8 @@ export class DownloadManager {
     const finalProbe = await probeMediaFile(candidate, child => { attempt.child = child }, attempt.abortController!.signal)
     check()
     if (!matchesMediaFormat(task.targetFormat, finalProbe)) throw new Error(`Invalid ${task.targetFormat} container or codec`)
+    if (task.engine === 'ytdlp' && task.subtitleLanguage && ['mp4', 'mkv', 'webm'].includes(task.targetFormat)
+      && !finalProbe.streams?.some(stream => stream.codec_type === 'subtitle')) throw new Error('YOUTUBE_SUBTITLE_UNAVAILABLE')
     const actualDuration = Number(finalProbe.format?.duration ?? finalProbe.streams?.find(s => s.duration)?.duration)
     if (expectedDuration !== undefined && (!Number.isFinite(actualDuration) || Math.abs(actualDuration - expectedDuration) > Math.max(0.25, Math.min(1, expectedDuration * 0.02)))) throw new Error('Trim duration failed validation')
     await validateMediaOutput(candidate, draft, ctx, Number.isFinite(actualDuration) && actualDuration > 0 ? actualDuration : undefined)
