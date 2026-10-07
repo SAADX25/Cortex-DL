@@ -19,7 +19,7 @@ import {
 import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
 import { getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
-import { isYouTubeAuthRequiredError, YOUTUBE_AUTH_REQUIRED_CODE } from '../ytdlp'
+import { isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode } from '../../../Shared/youtubeErrors'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -49,11 +49,28 @@ export class YoutubeEngine implements IEngine {
     task.totalBytes = null
     task.downloadedBytes = 0
     const profile = this.selectProfile(task)
-    const cookieArgs = runtime.ignoreCookies ? [] : await getYtdlpCookieArgs()
+    const configuredCookies = runtime.ignoreCookies ? [] : await getYtdlpCookieArgs()
+    const publicFirst = isYouTubeUrl(task.url)
+    const cookieArgs = publicFirst ? [] : configuredCookies
     if (!task.title || !task.thumbnail) await this.prefetchMetadata(task, context, runtime, cookieArgs).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
     runtime.abortController.signal.throwIfAborted()
     const args = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
-    const result = await this.runYtdlpAttempt(task, context, runtime, args, profile)
+    let result = await this.runYtdlpAttempt(task, context, runtime, args, profile)
+    let authenticated = false
+    runtime.abortController.signal.throwIfAborted()
+    if (publicFirst && result.exitCode !== 0 && configuredCookies.length && isYouTubeAuthRequiredError(result.stderr)) {
+      authenticated = true
+      const authenticatedArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, configuredCookies)
+      result = await this.runYtdlpAttempt(task, context, runtime, authenticatedArgs, profile)
+    }
+    runtime.abortController.signal.throwIfAborted()
+    // Some public HTTPS formats are listed but denied by YouTube. Try its HLS
+    // formats once, preserving the quality cap and requested subtitles.
+    if (publicFirst && !authenticated && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
+      && !youtubeErrorCode(result.stderr) && !/Unable to download (?:video )?subtitles?/i.test(result.stderr)) {
+      const hlsArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, [], true)
+      result = await this.runYtdlpAttempt(task, context, runtime, hlsArgs, profile)
+    }
     runtime.abortController.signal.throwIfAborted()
     if (result.exitCode === 0) {
       const candidate = await findTaskMediaFile(task, result.detectedFinalPath)
@@ -61,10 +78,8 @@ export class YoutubeEngine implements IEngine {
       if (candidate) return { kind: 'success', candidate }
       return { kind: 'fatal-error', message: 'yt-dlp produced no final media file' }
     }
-    if (isYouTubeAuthRequiredError(result.stderr)) {
-      if (!runtime.ignoreCookies && args.includes('--cookies')) runtime.ignoreCookies = true
-      else return { kind: 'fatal-error', message: YOUTUBE_AUTH_REQUIRED_CODE }
-    }
+    const youtubeFailure = publicFirst ? youtubeErrorCode(result.stderr) : null
+    if (youtubeFailure) return { kind: 'fatal-error', message: youtubeFailure }
     return { kind: 'retryable-error', message: this.buildErrorMessage(result.stderr), delayMs: Math.min(3000 * 2 ** runtime.retries, 60000) }
   }
 
@@ -348,6 +363,7 @@ export class YoutubeEngine implements IEngine {
     opts: { ffmpegDir: string },
     runtime: TaskRuntime,
     cookieArgs: string[] = [],
+    preferHls = false,
   ): string[] {
     const hasSubtitles = task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)
 
@@ -394,11 +410,12 @@ export class YoutubeEngine implements IEngine {
     }
 
     const heightConstraint = this.parseHeightFromFormatId(task.ytdlpFormatId)
+    const protocolFilter = preferHls ? '[protocol^=m3u8]' : ''
 
     switch (profile) {
       case 'proAudio': {
         const audioFmt = AUDIO_SPECS[task.targetFormat as keyof typeof AUDIO_SPECS].ytDlpFormat
-        ytArgs.push('-x', '--audio-format', audioFmt, '-f', 'bestaudio/best')
+        ytArgs.push('-x', '--audio-format', audioFmt, '-f', `bestaudio${protocolFilter}/best${protocolFilter}`)
         if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
         log.info(`[YoutubeEngine] ProAudio profile applied: format=${audioFmt}, multi-threaded=true, metadata=embedded`)
         break
@@ -407,7 +424,7 @@ export class YoutubeEngine implements IEngine {
         const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
         ytArgs.push(
           '-f',
-          `bestvideo${heightFilter}+bestaudio/best${heightFilter}`,
+          `bestvideo${protocolFilter}${heightFilter}+bestaudio${protocolFilter}/best${protocolFilter}${heightFilter}`,
           '-S', 'res,fps,vcodec:h264,acodec:aac'
         )
         if (heightConstraint) {
@@ -420,7 +437,7 @@ export class YoutubeEngine implements IEngine {
       default: {
         if (VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
           const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
-          ytArgs.push('-f', `bestvideo${heightFilter}+bestaudio/best${heightFilter}`, '-S', 'res,fps')
+          ytArgs.push('-f', `bestvideo${protocolFilter}${heightFilter}+bestaudio${protocolFilter}/best${protocolFilter}${heightFilter}`, '-S', 'res,fps')
           if (heightConstraint) {
             log.info(`[YoutubeEngine] Quality constraint applied (default): height<=${heightConstraint}`)
           }

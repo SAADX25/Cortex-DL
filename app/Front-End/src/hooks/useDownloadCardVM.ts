@@ -4,6 +4,7 @@ import type { Language } from '../translations'
 import { translations } from '../translations'
 import { getProgressView } from '../../../Shared/progressModel'
 import type { DownloadPhase } from '../../../Shared/types'
+import { youtubeErrorMessage } from '../lib/downloadHelpers'
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '-'
@@ -206,7 +207,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       sizeLabel,
       speedLabel,
       etaLabel,
-      errorMessage: task.errorMessage === 'YOUTUBE_AUTH_REQUIRED' ? t.youtube_auth_required : task.errorMessage ?? null,
+      errorMessage: youtubeErrorMessage(task.errorMessage, t) ?? task.errorMessage ?? null,
       showPause,
       showResume,
       showCancel,

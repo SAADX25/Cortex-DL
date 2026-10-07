@@ -80,7 +80,7 @@ cd app
 npm run build
 ```
 
-The current installer is `app/release/2.1.6/Cortex-DL-Setup-2.1.6.exe`. The `.blockmap` and `latest.yml` files beside it describe the update artifact. Each production build clears obsolete Electron chunks before packaging.
+The current installer is `app/release/2.1.7/Cortex-DL-Setup-2.1.7.exe`. The `.blockmap` and `latest.yml` files beside it describe the update artifact. Each production build clears obsolete Electron chunks before packaging.
 
 Release validation is defined in `.github/workflows/validation.yml`. Tagged builds publish the exact installer that passed validation. Public release checks verify versions, artifact hashes, shipped notices and package contents. Builds containing engine binaries also require the source archive review in `app/license-compliance.json`; the current installer downloads engines separately.
 

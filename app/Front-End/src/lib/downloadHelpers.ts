@@ -1,3 +1,6 @@
+import { getErrorText, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_RATE_LIMITED_CODE, YOUTUBE_SUBTITLE_RATE_LIMITED_CODE } from '../../../Shared/youtubeErrors'
+import type { Translations } from '../translations'
+
 export function isYtdlpUrl(url: string): boolean {
   const lowUrl = url.toLowerCase()
   if (
@@ -21,20 +24,23 @@ export function isYtdlpUrl(url: string): boolean {
   return true
 }
 
-const YOUTUBE_AUTH_ERROR_PATTERN =
-  /YOUTUBE_AUTH_REQUIRED|sign in to confirm|not a bot|use --cookies-from-browser or --cookies|LOGIN_REQUIRED|age[- ]restricted|HTTP Error 429|too many requests|rate[-_\s]?limit/i
-
 export const SUBTITLE_EMBED_FORMATS = new Set<TargetFormat>(['mp4', 'mkv', 'webm'])
 
-export function normalizeIpcError(error: unknown, fallback: string, youtubeAuthMessage: string): string {
-  const rawMessage =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : ''
+type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_subtitle_rate_limited'>
 
-  if (YOUTUBE_AUTH_ERROR_PATTERN.test(rawMessage)) return youtubeAuthMessage
+export function youtubeErrorMessage(error: unknown, messages: YouTubeMessages): string | null {
+  switch (youtubeErrorCode(error)) {
+    case YOUTUBE_AUTH_REQUIRED_CODE: return messages.youtube_auth_required
+    case YOUTUBE_RATE_LIMITED_CODE: return messages.youtube_rate_limited
+    case YOUTUBE_SUBTITLE_RATE_LIMITED_CODE: return messages.youtube_subtitle_rate_limited
+    default: return null
+  }
+}
+
+export function normalizeIpcError(error: unknown, fallback: string, messages: YouTubeMessages): string {
+  const rawMessage = getErrorText(error)
+  const youtubeMessage = youtubeErrorMessage(error, messages)
+  if (youtubeMessage) return youtubeMessage
 
   const cleaned = rawMessage
     .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*/i, '')

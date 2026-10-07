@@ -42,7 +42,7 @@ export async function onPickFolder(): Promise<string | null> {
     if (picked) ui.setDirectory(picked)
     return picked ?? null
   } catch (err) {
-    ui.setGlobalError(normalizeIpcError(err, t().folder_pick_failed, t().youtube_auth_required))
+    ui.setGlobalError(normalizeIpcError(err, t().folder_pick_failed, t()))
     return null
   }
 }
@@ -98,7 +98,7 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
   } catch (err) {
     if (!primaryAnalysis.current(generation)) return
     ui.setAnalyzeResult(null)
-    ui.setGlobalError(normalizeIpcError(err, t().analyze_failed, t().youtube_auth_required))
+    ui.setGlobalError(normalizeIpcError(err, t().analyze_failed, t()))
   } finally {
     if (primaryAnalysis.current(generation)) ui.setAnalyzing(false)
   }
@@ -288,7 +288,7 @@ export async function onStartBatchDownload(): Promise<void> {
     resetInputState()
     ui.setActiveTab('downloads')
   } catch (err) {
-    const msg = normalizeIpcError(err, t().download_start_failed, t().youtube_auth_required)
+    const msg = normalizeIpcError(err, t().download_start_failed, t())
     ui.showToast(`❌ ${msg}`)
     ui.setBatchItems((prev) => prev.map((b) => ({ ...b, status: 'error', errorMessage: msg })))
   }
@@ -380,7 +380,7 @@ export async function onDownloadNow(): Promise<void> {
     ui.setActiveTab('downloads')
   } catch (err) {
     console.error('Download Now failed:', err)
-    ui.setGlobalError(normalizeIpcError(err, t().download_start_failed, t().youtube_auth_required))
+    ui.setGlobalError(normalizeIpcError(err, t().download_start_failed, t()))
   }
 }
 
@@ -403,7 +403,7 @@ export function onDelete(id: string, deleteFile: boolean): void {
         useDownloadStore.getState().removeTask(id)
         useUIStore.getState().closeModal()
       } catch (err) {
-        useUIStore.getState().setGlobalError(normalizeIpcError(err, translated.delete_failed, translated.youtube_auth_required))
+        useUIStore.getState().setGlobalError(normalizeIpcError(err, translated.delete_failed, translated))
         useUIStore.getState().closeModal()
       }
     },
@@ -419,7 +419,7 @@ export async function onOpenFile(filePath: string, title?: string): Promise<void
       await window.cortexDl.openFile(filePath)
     }
   } catch (err) {
-    ui.setGlobalError(normalizeIpcError(err, t().open_file_failed, t().youtube_auth_required))
+    ui.setGlobalError(normalizeIpcError(err, t().open_file_failed, t()))
   }
 }
 
@@ -427,7 +427,7 @@ export async function onOpenFolder(filePath: string): Promise<void> {
   try {
     await window.cortexDl.openFolder(filePath)
   } catch (err) {
-    useUIStore.getState().setGlobalError(normalizeIpcError(err, t().open_folder_failed, t().youtube_auth_required))
+    useUIStore.getState().setGlobalError(normalizeIpcError(err, t().open_folder_failed, t()))
   }
 }
 

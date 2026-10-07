@@ -14,55 +14,22 @@ import { AnalysisCoordinator } from './analysisCoordinator'
 import { extractAnalysis } from './analysisProcess'
 import { fetchBoundedJson } from './analysisNetwork'
 import { extractPreview, extractPreviewStreams, PREVIEW_FORMAT, TRIM_PREVIEW_FORMAT, type PreviewStreams, type PreviewExtractionOptions } from './previewExtraction'
+import { withYouTubeCookieFallback } from './youtubeAccess'
+import { getErrorText, isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE } from '../../Shared/youtubeErrors'
+export { isYouTubeAuthRequiredError, YOUTUBE_AUTH_REQUIRED_CODE } from '../../Shared/youtubeErrors'
 
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000
 const ANALYSIS_CACHE_MAX = 50
 const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
 const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
 export const YOUTUBE_EXTRACTOR_ARGS = ''
-export const YOUTUBE_AUTH_REQUIRED_CODE = 'YOUTUBE_AUTH_REQUIRED'
-
-const YOUTUBE_AUTH_ERROR_PATTERNS = [
-  /sign in to confirm/i,
-  /not a bot/i,
-  /use --cookies-from-browser or --cookies/i,
-  /login_required/i,
-  /age[- ]restricted/i,
-  /http error 429/i,
-  /too many requests/i,
-  /rate[-_\s]?limit(?:ed|ing)?/i,
-  /request(?:s)?[^\r\n]{0,40}limit exceeded/i,
-  /temporarily blocked[^\r\n]{0,40}(?:request|traffic|youtube)/i,
-]
-
-function getErrorText(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (value instanceof Error) {
-    const cause = 'cause' in value ? getErrorText(value.cause) : ''
-    return [value.name, value.message, value.stack, cause].filter(Boolean).join('\n')
-  }
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    return ['code', 'message', 'stderr', 'stdout']
-      .map((key) => record[key])
-      .filter((item): item is string => typeof item === 'string')
-      .join('\n')
-  }
-  return String(value ?? '')
-}
-
-export function isYouTubeAuthRequiredError(value: unknown): boolean {
-  const text = getErrorText(value)
-  return text.includes(YOUTUBE_AUTH_REQUIRED_CODE)
-    || YOUTUBE_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(text))
-}
 
 export class YouTubeAuthRequiredError extends Error {
   readonly code = YOUTUBE_AUTH_REQUIRED_CODE
 
   constructor() {
     super(
-      `${YOUTUBE_AUTH_REQUIRED_CODE}: YouTube requires sign-in, CAPTCHA verification, or has rate-limited this request. ` +
+      `${YOUTUBE_AUTH_REQUIRED_CODE}: YouTube requires sign-in or CAPTCHA verification. ` +
       'Select a valid YouTube cookies.txt file in Settings and try again.',
     )
     this.name = 'YouTubeAuthRequiredError'
@@ -304,11 +271,6 @@ export async function checkJsRuntime(): Promise<JsRuntimeStatus> {
   return { available: selected.available, name: selected.name }
 }
 
-function isYouTubeUrl(url: string): boolean {
-  const low = url.toLowerCase()
-  return low.includes('youtube.com') || low.includes('youtu.be')
-}
-
 export function getJsRuntimeArgs(): string[] {
   return selectJsRuntime().args
 }
@@ -317,7 +279,9 @@ export async function analyzeWithYtdlp(url: string, signal?: AbortSignal): Promi
   signal?.throwIfAborted()
   const cookies = await getYtdlpCookieArgs()
   const scope = cookies[1] ? cookieArgsCache.fingerprint(cookies[1]) : 'public'
-  return analysisCoordinator.run(url, (normalized, owned) => extractFullAnalysis(normalized, owned, cookies), signal, scope)
+  return analysisCoordinator.run(url, (normalized, owned) => withYouTubeCookieFallback(
+    normalized, cookies, owned, selectedCookies => extractFullAnalysis(normalized, owned, selectedCookies),
+  ), signal, scope)
 }
 
 async function extractFullAnalysis(url: string, signal: AbortSignal, cookies: string[]): Promise<AnalyzeResult> {
@@ -331,7 +295,6 @@ async function extractFullAnalysis(url: string, signal: AbortSignal, cookies: st
     isPlaylist ? '--yes-playlist' : '--no-playlist',
     '--geo-bypass',
     '--no-warnings',
-    '--ignore-errors',
     '--socket-timeout', '10',
     ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
     ...cookies,
@@ -351,6 +314,7 @@ async function extractFullAnalysis(url: string, signal: AbortSignal, cookies: st
   try {
     stdout = await extractAnalysis(ytdlpPath, args, signal)
   } catch (error) {
+    if (isYouTubeUrl(url) && youtubeErrorCode(error) && !isYouTubeAuthRequiredError(error)) throw new Error(youtubeErrorCode(error)!)
     if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(error)) throw new YouTubeAuthRequiredError()
     if (!signal.aborted && /Unsupported URL|no suitable extractor/i.test(getErrorText(error))) return { kind: 'unknown' }
     throw error
@@ -467,15 +431,16 @@ export async function getTrimPreviewStreams(url: string, options: PreviewExtract
   const binary = getBinaryPath('yt-dlp')
   if (!existsSync(binary)) throw new Error('yt-dlp binary not found in the bin directory')
   try {
-    return await extractPreviewStreams(binary, [
+    return await withYouTubeCookieFallback(url, await getYtdlpCookieArgs(), undefined, cookies => extractPreviewStreams(binary, [
       '-f', TRIM_PREVIEW_FORMAT, '--dump-single-json', '--no-playlist', '--geo-bypass', ...ytdlpCacheArgs(),
       '--socket-timeout', '10',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
-      ...await getYtdlpCookieArgs(), ...getJsRuntimeArgs(), url,
-    ], options)
+      ...cookies, ...getJsRuntimeArgs(), url,
+    ], options))
   } catch (error) {
     if (error instanceof Error && error.message === 'Preview extraction cancelled') return null
     log.error('[ytdlp] Trim preview extraction failed:', error)
+    if (isYouTubeUrl(url) && youtubeErrorCode(error) && !isYouTubeAuthRequiredError(error)) throw new Error(youtubeErrorCode(error)!)
     if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(error)) throw new YouTubeAuthRequiredError()
     throw error
   }
@@ -485,14 +450,15 @@ export async function getDirectStreamUrl(url: string, options: PreviewExtraction
   const binary = getBinaryPath('yt-dlp')
   if (!existsSync(binary)) throw new Error('yt-dlp binary not found in the bin directory')
   try {
-    return await extractPreview(binary, [
+    return await withYouTubeCookieFallback(url, await getYtdlpCookieArgs(), undefined, cookies => extractPreview(binary, [
       '-f', PREVIEW_FORMAT, '--dump-single-json', '--no-playlist', '--geo-bypass', ...ytdlpCacheArgs(),
       '--force-ipv4', '--socket-timeout', '10',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
-      ...await getYtdlpCookieArgs(), ...getJsRuntimeArgs(), url,
-    ], options)
+      ...cookies, ...getJsRuntimeArgs(), url,
+    ], options))
   } catch (error) {
     log.error('[ytdlp] Preview extraction failed:', error)
+    if (isYouTubeUrl(url) && youtubeErrorCode(error) && !isYouTubeAuthRequiredError(error)) throw new Error(youtubeErrorCode(error)!)
     if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(error)) throw new YouTubeAuthRequiredError()
     throw error
   }
