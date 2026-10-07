@@ -14,6 +14,8 @@ import { useCommentsStore, initCommentsStore } from './stores/useCommentsStore'
 import { useSettingsInit } from './hooks/useSettingsInit'
 import { useDownloadInit } from './hooks/useDownloadInit'
 import React from 'react'
+import { createRoot } from 'react-dom/client'
+import Trimmer from './components/AdvancedTrimmer'
 
 /**
  * Tab pane wrapper — all tabs stay mounted to avoid first-visit jank.
@@ -46,7 +48,6 @@ function App() {
     if (!window.cortexDl.smokeMode) return
     window.__cortexSmokeLifecycle = async (file: string, audioFile?: string, previewUrl?: string) => {
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-      const { createRoot } = await import('react-dom/client')
       const overlay = document.createElement('div'); document.body.appendChild(overlay)
       const overlayRoot = createRoot(overlay)
       try {
@@ -74,7 +75,6 @@ function App() {
         }
       }
       if (previewUrl) {
-        const [{ createRoot }, { default: Trimmer }] = await Promise.all([import('react-dom/client'), import('./components/AdvancedTrimmer')])
         for (let i = 0; i < 20; i++) {
           const container = document.createElement('div'); document.body.appendChild(container)
           const root = createRoot(container)
@@ -83,12 +83,10 @@ function App() {
             for (let n = 0; n < 100; n++) { if (container.querySelector('video')?.readyState) break; await delay(50) }
             const video = container.querySelector('video')
             if (!video || video.readyState < 1) throw new Error('Packaged Visual Trim preview failed')
-            const mute = container.querySelector('[aria-label="Mute preview"]') as HTMLButtonElement | null
-            if (!mute || video.muted) throw new Error('Visual Trim sound control missing')
-            mute.click(); await delay(50)
+            if (!video.controls || video.muted) throw new Error('Visual Trim native sound control missing')
+            video.muted = true; await delay(50)
             if (!video.muted) throw new Error('Visual Trim mute failed')
-            const unmute = container.querySelector('[aria-label="Unmute preview"]') as HTMLButtonElement | null
-            unmute?.click(); await delay(50)
+            video.muted = false; await delay(50)
             if (video.muted) throw new Error('Visual Trim unmute failed')
           } finally { root.unmount(); container.remove() }
           await delay(50)
@@ -120,8 +118,10 @@ function App() {
 
   useEffect(() => {
     if (window.cortexDl && window.cortexDl.onSetupProgress) {
-      void window.cortexDl.getSetupState().then(setSetupState)
-      return window.cortexDl.onSetupProgress((state) => {
+      let disposed = false
+      let receivedProgress = false
+      const unsubscribe = window.cortexDl.onSetupProgress((state) => {
+        receivedProgress = true
         setSetupState(state)
         // After setup finishes downloading engines, refresh the health check
         // so the UI immediately reflects the newly installed binaries
@@ -129,6 +129,11 @@ function App() {
           void refreshHealth()
         }
       })
+      // A late snapshot must not replace a newer ready/progress event.
+      void window.cortexDl.getSetupState().then(state => {
+        if (!disposed && !receivedProgress) setSetupState(state)
+      }).catch(error => console.error('[Setup] State request failed:', error))
+      return () => { disposed = true; unsubscribe() }
     }
   }, [refreshHealth])
 

@@ -117,22 +117,11 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
             WebkitTextFillColor: 'transparent'
           }}
         >
-          {isError ? 'Setup Failed' : isDone ? 'Ready to Go' : 'Initializing Engines'}
+          {isError ? 'Setup Failed' : isDone ? 'Ready to Go' : status === 'checking' ? 'Checking Local Engines' : 'Preparing Engines'}
         </motion.h2>
 
         <div role="status" aria-live="polite" style={{ minHeight: '24px', marginBottom: '32px', display: 'flex', alignItems: 'center' }}>
-          <AnimatePresence mode="wait">
-            <motion.p
-              key={message}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.2 }}
-              style={{ color: '#a1a1aa', fontSize: '0.95rem', margin: 0 }}
-            >
-              {message}
-            </motion.p>
-          </AnimatePresence>
+          <p style={{ color: '#cbd5e1', fontSize: '0.95rem', margin: 0 }}>{message}</p>
         </div>
 
         {isError && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>

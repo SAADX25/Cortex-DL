@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Check, Loader, RotateCcw, Scissors, Volume2, VolumeX } from 'lucide-react'
+import { AlertCircle, Check, Loader, RotateCcw, Scissors } from 'lucide-react'
 import './AdvancedTrimmer.css'
 import { TrimPreview, seekPreview, videoFailure } from './trimPreview'
 import { releaseMediaElement } from './MediaPlayer/mediaSession'
+import { syncTrimAudio } from './trimAudio'
 
 export type TrimRange = {
   startSeconds: number
@@ -70,6 +71,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   onConfirm,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [audioError, setAudioError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
   const [volume, setVolume] = useState(1)
   const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0
@@ -93,20 +97,53 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   useEffect(() => {
     const session = `trim-${crypto.randomUUID()}`
     const video = videoRef.current
+    const audio = audioRef.current
+    let disposed = false
+    let extractedVideo = ''
+    setAudioError(null)
     const preview = new TrimPreview(videoUrl, (source, error, loading) => {
+      if (source !== extractedVideo) {
+        releaseMediaElement(audio)
+        setAudioUrl(null)
+      }
       setStreamUrl(source)
       setStreamError(error)
       setIsResolvingStream(loading)
     })
     previewRef.current = preview
-    void preview.start(originalUrl ? () => window.cortexDl.getDirectStreamUrl(originalUrl, session) : undefined)
+    void preview.start(originalUrl ? async () => {
+      // The old bridge remains usable during a frontend-only development reload.
+      if (!window.cortexDl.getTrimPreviewStreams) return window.cortexDl.getDirectStreamUrl(originalUrl, session)
+      const streams = await window.cortexDl.getTrimPreviewStreams(originalUrl, session)
+      if (!streams) throw new Error('Preview extraction cancelled')
+      if (!disposed) {
+        extractedVideo = streams.videoUrl
+        setAudioUrl(streams.audioUrl ?? null)
+      }
+      return streams.videoUrl
+    } : undefined)
     return () => {
+      disposed = true
       preview.dispose()
       previewRef.current = null
       releaseMediaElement(video)
+      releaseMediaElement(audio)
       void window.cortexDl.closeMediaSession(session).catch(error => console.error('[Visual Trim] Session cleanup failed:', error))
     }
   }, [videoUrl, originalUrl])
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = muted
+      audioRef.current.volume = volume
+    }
+  }, [muted, volume, audioUrl])
+
+  function syncAudio(play = false): void {
+    void syncTrimAudio(videoRef.current, audioRef.current, play).catch(() => {
+      setAudioError('Preview audio could not play. Pause and play again, or reanalyze the source.')
+    })
+  }
 
   const currentRange = useMemo(
     () => buildRange(startSeconds, endSeconds),
@@ -130,6 +167,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   function seekVideo(seconds: number): void {
     requestedSeek.current = clamp(seconds, 0, safeDuration)
     seekPreview(videoRef.current, requestedSeek.current)
+    seekPreview(audioRef.current, requestedSeek.current)
   }
 
   function emitChange(nextStart: number, nextEnd: number): void {
@@ -177,10 +215,10 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             <span>Extracting preview stream…</span>
           </div>
         )}
-        {streamError && (
+        {(streamError || audioError) && (
           <div className="advanced-trimmer__notice advanced-trimmer__notice--warn" role="status">
             <AlertCircle size={15} aria-hidden="true" />
-            <span>Video preview unavailable — the trim range still works normally. {streamError}</span>
+            <span>{streamError ? `Video preview unavailable — the trim range still works normally. ${streamError}` : audioError}</span>
           </div>
         )}
         <video
@@ -190,6 +228,15 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           controls
           muted={muted}
           preload="metadata"
+          onPlay={() => syncAudio(true)}
+          onPlaying={() => syncAudio(true)}
+          onPause={() => syncAudio()}
+          onEnded={() => syncAudio()}
+          onWaiting={() => syncAudio()}
+          onSeeking={() => syncAudio()}
+          onSeeked={() => syncAudio(true)}
+          onRateChange={() => syncAudio(!videoRef.current?.paused)}
+          onTimeUpdate={() => syncAudio(!videoRef.current?.paused)}
           onVolumeChange={(event) => {
             setMuted(event.currentTarget.muted)
             setVolume(event.currentTarget.volume)
@@ -206,38 +253,15 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             seekPreview(event.currentTarget, requestedSeek.current)
           }}
         />
-      </div>
-
-      <div className="advanced-trimmer__audio-controls">
-        <button
-          type="button"
-          className="advanced-trimmer__ghost-btn"
-          aria-label={muted || volume === 0 ? 'Unmute preview' : 'Mute preview'}
-          aria-pressed={muted || volume === 0}
-          onClick={() => {
-            const video = videoRef.current
-            if (!video) return
-            const nextMuted = !(video.muted || video.volume === 0)
-            if (!nextMuted && video.volume === 0) video.volume = 1
-            video.muted = nextMuted
-            setMuted(nextMuted)
-            setVolume(video.volume)
-          }}
-        >
-          {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-          Preview sound
-        </button>
-        <input
-          type="range" min={0} max={1} step={0.05}
-          aria-label="Preview volume" value={muted ? 0 : volume}
-          onChange={(event) => {
-            const next = Number(event.currentTarget.value)
-            if (videoRef.current) {
-              videoRef.current.volume = next
-              videoRef.current.muted = next === 0
-            }
-            setVolume(next)
-            setMuted(next === 0)
+        <audio
+          ref={audioRef}
+          data-trim-audio
+          src={audioUrl ?? undefined}
+          preload="metadata"
+          hidden
+          onLoadedMetadata={() => syncAudio(!videoRef.current?.paused)}
+          onError={() => {
+            if (audioUrl) setAudioError('Preview audio is unavailable or its link expired. Reanalyze the source.')
           }}
         />
       </div>
@@ -270,10 +294,12 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       </div>
 
       <div className="advanced-trimmer__footer">
-        <button className="advanced-trimmer__ghost-btn" type="button" onClick={handleReset}>
-          <RotateCcw size={15} aria-hidden="true" />
-          Reset
-        </button>
+        <div className="advanced-trimmer__footer-main">
+          <button className="advanced-trimmer__ghost-btn" type="button" onClick={handleReset}>
+            <RotateCcw size={15} aria-hidden="true" />
+            Reset
+          </button>
+        </div>
         <button className="advanced-trimmer__save-btn" type="button" onClick={() => onConfirm(currentRange)}>
           <Check size={16} aria-hidden="true" />
           Save Trim

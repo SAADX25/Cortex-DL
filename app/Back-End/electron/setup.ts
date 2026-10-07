@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import log from 'electron-log'
 import { getBaselineDirectory, getBinDirectory, getBinaryPath } from './paths'
-import { verifyEngine, promoteEngine, downloadEngine, extractEngineZip, type EngineSpec, type EngineHealth } from './engineIntegrity'
+import { verifyEngine, promoteEngine, downloadEngine, extractEngineZip, sha256, type EngineSpec, type EngineHealth } from './engineIntegrity'
 import lock from '../../engines.lock.json'
 export interface SetupState {
   status: 'checking' | 'ready' | 'repairing' | 'degraded' | 'fatal'
@@ -26,17 +26,18 @@ export async function engineHealth(onProgress?: (name: string, completed: number
     try { receipt = JSON.parse(await fs.promises.readFile(`${file}.integrity.json`, 'utf8')) } catch { /* legacy engine: measure execution */ }
     return verifyEngine(file, { ...spec, version: undefined, sha256: receipt.sha256 })
   }
-  if (!onProgress) return Promise.all(specs.map(check))
-  const result: EngineHealth[] = []
-  for (const spec of specs) {
-    onProgress(spec.name, result.length)
-    result.push(await check(spec))
-    onProgress(spec.name, result.length)
-  }
-  return result
+  let completed = 0
+  const remaining = new Set(specs.map(spec => spec.name))
+  onProgress?.(specs[0]?.name ?? 'engines', 0)
+  return Promise.all(specs.map(async spec => {
+    const result = await check(spec)
+    remaining.delete(spec.name)
+    onProgress?.(remaining.values().next().value ?? spec.name, ++completed)
+    return result
+  }))
 }
 let pending: Promise<void> | null = null
-export function runSetup(win: BrowserWindow, allowNetwork = false): Promise<void> {
+export function runSetup(win: BrowserWindow, allowNetwork = true): Promise<void> {
   if (pending) return pending
   pending = setup(win, allowNetwork).finally(() => { pending = null })
   return pending
@@ -56,42 +57,53 @@ async function setup(win: BrowserWindow, allowNetwork: boolean): Promise<void> {
       if (!fs.existsSync(file) && fs.existsSync(`${file}.previous`)) await fs.promises.rename(`${file}.previous`, file)
     }
     const health = await engineHealth((name, completed) => send({ status: 'checking', progress: completed / specs.length * 40, message: `Verifying ${name}…` }))
-    for (let i = 0; i < specs.length; i++) {
-      const spec = specs[i]
-      if (health[i].available) continue
-      component = spec.name
-      const progress = 40 + i / specs.length * 45
-      send({ status: 'repairing', progress, message: `${health[i].message}. Restoring bundled ${spec.name}…` })
+    for (let i = 0; i < lock.packages.length; i++) {
+      const pkg = lock.packages[i]
+      const missing = pkg.engines.filter(spec => !health.find(engine => engine.name === spec.name)?.available)
+      if (!missing.length) continue
+      component = pkg.name
+      const progress = 40 + i / lock.packages.length * 45
       const baseline = getBaselineDirectory()
-      let bundled: EngineSpec | undefined
-      try { bundled = JSON.parse(await fs.promises.readFile(path.join(baseline, 'manifest.json'), 'utf8')).engines.find((engine: EngineSpec) => engine.name === spec.name) } catch { /* repair can retrieve pinned package */ }
-      const candidate = path.join(bin, `${spec.filename}.tmp`)
-      const check = bundled?.sha256 ? await verifyEngine(path.join(baseline, spec.filename), bundled) : null
-      if (check?.available && bundled) await fs.promises.copyFile(path.join(baseline, spec.filename), candidate)
-      else {
-        if (!allowNetwork) throw new Error('Verified bundled engine is unavailable; explicit repair required')
-        const pkg = lock.packages.find(pkg => pkg.engines.some(engine => engine.name === spec.name))!
-        const stage = await fs.promises.mkdtemp(path.join(bin, 'repair-'))
-        try {
-          const archive = path.join(stage, 'package.download')
-          await downloadEngine(pkg.url, archive, pkg.sha256, undefined, (received, total) => {
-            const mb = (received / 1024 / 1024).toFixed(1)
-            send({ status: 'repairing', progress: progress + (total ? received / total : 0) * 35 / specs.length, message: `Downloading ${spec.name}: ${mb} MB${total ? ` / ${(total / 1024 / 1024).toFixed(1)} MB` : ''}…` })
-          })
-          send({ status: 'repairing', progress: progress + 35 / specs.length, message: `Extracting and verifying ${spec.name}…` })
-          if (pkg.url.endsWith('.zip')) await extractEngineZip(archive, stage, pkg.engines.map(e => e.filename))
-          else await fs.promises.copyFile(archive, path.join(stage, spec.filename))
-          await fs.promises.copyFile(path.join(stage, spec.filename), candidate)
-          const { sha256 } = await import('./engineIntegrity')
-          bundled = { ...spec, sha256: await sha256(candidate) }
-        } finally { await fs.promises.rm(stage, { recursive: true, force: true }) }
-      }
+      const stage = await fs.promises.mkdtemp(path.join(bin, 'repair-'))
       try {
-        await promoteEngine(candidate, path.join(bin, spec.filename), bundled!)
-        await fs.promises.writeFile(path.join(bin, `${spec.filename}.integrity.json`), JSON.stringify({ sha256: bundled!.sha256 }))
-      }
-      finally { await fs.promises.rm(candidate, { force: true }) }
-      log.info('[Engines] Repaired', spec.name)
+        // Development can reuse the local verified baseline; installers contain no engines.
+        let bundled: EngineSpec[] = []
+        try { bundled = JSON.parse(await fs.promises.readFile(path.join(baseline, 'manifest.json'), 'utf8')).engines } catch { /* first run downloads pinned packages */ }
+        const needsDownload: EngineSpec[] = []
+        for (const spec of missing) {
+          const entry = bundled.find(engine => engine.name === spec.name)
+          if (entry?.sha256 && (await verifyEngine(path.join(baseline, spec.filename), entry)).available) {
+            await fs.promises.copyFile(path.join(baseline, spec.filename), path.join(stage, spec.filename))
+          } else needsDownload.push(spec)
+        }
+        if (needsDownload.length) {
+          if (!allowNetwork) throw new Error('Engine download requires an internet connection')
+          const archive = path.join(stage, 'package.download')
+          let startedAt = Date.now()
+          log.info('[Engines] Download started', pkg.name)
+          await downloadEngine(pkg.url, archive, pkg.sha256, undefined, (received, total) => {
+            if (received === 0) startedAt = Date.now()
+            const mb = (received / 1024 / 1024).toFixed(1)
+            const elapsed = (Date.now() - startedAt) / 1000
+            const rate = elapsed >= 1 ? received / elapsed : 0
+            const speed = rate > 0 ? ` · ${rate >= 1024 * 1024 ? `${(rate / 1024 / 1024).toFixed(1)} MB/s` : `${(rate / 1024).toFixed(0)} KB/s`}` : ''
+            const seconds = total && rate > 0 ? Math.ceil(Math.max(0, total - received) / rate) : null
+            const eta = seconds !== null ? ` · ${Math.floor(seconds / 60)}m ${seconds % 60}s remaining` : ''
+            send({ status: 'repairing', progress: progress + (total ? received / total : 0) * 35 / lock.packages.length, message: `Downloading ${pkg.name}: ${mb} MB${total ? ` / ${(total / 1024 / 1024).toFixed(1)} MB` : ''}${speed}${eta}…` })
+          })
+          log.info('[Engines] Download completed', pkg.name, { elapsedMs: Date.now() - startedAt, bytes: (await fs.promises.stat(archive)).size })
+          send({ status: 'repairing', progress: progress + 35 / lock.packages.length, message: `Extracting and verifying ${pkg.name}…` })
+          if (pkg.url.endsWith('.zip')) await extractEngineZip(archive, stage, pkg.engines.map(e => e.filename))
+          else await fs.promises.copyFile(archive, path.join(stage, pkg.engines[0].filename))
+        }
+        for (const spec of missing) {
+          const candidate = path.join(stage, spec.filename)
+          const entry = { ...spec, sha256: await sha256(candidate) }
+          await promoteEngine(candidate, path.join(bin, spec.filename), entry)
+          await fs.promises.writeFile(path.join(bin, `${spec.filename}.integrity.json`), JSON.stringify({ sha256: entry.sha256 }))
+          log.info('[Engines] Installed', spec.name)
+        }
+      } finally { await fs.promises.rm(stage, { recursive: true, force: true }) }
     }
     send({ status: 'checking', progress: 90, message: 'Completing engine verification…' })
     const result = health.every(e => e.available) ? health : await engineHealth()
@@ -102,7 +114,7 @@ async function setup(win: BrowserWindow, allowNetwork: boolean): Promise<void> {
     log.error('[Setup]', component, error)
     const code = (error as NodeJS.ErrnoException).code || (error as { cause?: NodeJS.ErrnoException }).cause?.code
     const http = /HTTP (\d{3})/.exec(String(error))
-    const reason = http ? `Network download failed (HTTP ${http[1]}). Retry later.` : code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' ? 'Network unavailable. Check your connection and retry.' : code === 'ENOSPC' ? 'Disk is full.' : code === 'EACCES' || code === 'EPERM' ? 'Folder is not writable or security software blocked access.' : 'The bundled engine is missing, damaged, or cannot launch.'
+    const reason = http ? `Network download failed (HTTP ${http[1]}). Retry later.` : code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' ? 'Network unavailable. Check your connection and retry.' : code === 'ENOSPC' ? 'Disk is full.' : code === 'EACCES' || code === 'EPERM' ? 'Folder is not writable or security software blocked access.' : 'Engine installation failed. Check your internet connection and retry.'
     send({ status: 'degraded', progress: 0, message: `${component}: ${reason} Retry repair or open diagnostics.` })
     throw error
   }

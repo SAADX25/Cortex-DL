@@ -407,18 +407,20 @@ export class YoutubeEngine implements IEngine {
         const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
         ytArgs.push(
           '-f',
-          `bestvideo${heightFilter}[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo${heightFilter}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${heightFilter}+bestaudio/best`
+          `bestvideo${heightFilter}+bestaudio/best${heightFilter}`,
+          '-S', 'res,fps,vcodec:h264,acodec:aac'
         )
         if (heightConstraint) {
           log.info(`[YoutubeEngine] Quality constraint applied: height<=${heightConstraint}`)
         }
-        ytArgs.push('--merge-output-format', 'mp4')
+        // Preserve the best source codecs; the registry handles final MP4 conversion.
+        ytArgs.push('--merge-output-format', 'mkv')
         break
       }
       default: {
         if (VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
           const heightFilter = heightConstraint ? `[height<=${heightConstraint}]` : ''
-          ytArgs.push('-f', `bestvideo${heightFilter}[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo${heightFilter}+bestaudio/best`, '-S', 'res,fps')
+          ytArgs.push('-f', `bestvideo${heightFilter}+bestaudio/best${heightFilter}`, '-S', 'res,fps')
           if (heightConstraint) {
             log.info(`[YoutubeEngine] Quality constraint applied (default): height<=${heightConstraint}`)
           }

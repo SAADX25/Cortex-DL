@@ -47,8 +47,19 @@
 
 !macro customUnInstall
   ${ifNot} ${isUpdated}
-    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also remove Cortex DL history, settings and engines? Downloaded media will be preserved." IDNO preserveData
+    ${ifNot} ${isDeleteAppData}
+      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also remove all Cortex DL data, including download history, settings, cache and engines? Downloaded videos and music will be preserved." /SD IDNO IDNO preserveData
+    ${endIf}
+    ; Electron stores current data under the package name, not productName.
+    ; Keep legacy data cleanup for users of earlier versions as well.
+    ${if} $installMode == "all"
+      SetShellVarContext current
+    ${endIf}
+    RMDir /r "$APPDATA\cortex-dl"
     RMDir /r "$APPDATA\Cortex DL"
+    ${if} $installMode == "all"
+      SetShellVarContext all
+    ${endIf}
     preserveData:
   ${endIf}
 !macroend

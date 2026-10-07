@@ -5,6 +5,7 @@ import { translations } from '../translations'
 import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
+import { getTrimPreviewSource } from './trimSource'
 import UrlInputBar from './UrlInputBar'
 import SmartImage from './SmartImage'
 import { YouTubeMusicIcon } from './icons/YouTubeMusicIcon'
@@ -134,33 +135,7 @@ const AddDownloadTab: React.FC = () => {
 
   const trimmerSource = useMemo(() => {
     if (isAudioMode || analyzeResult?.kind !== 'ytdlp' || !analyzeResult.duration) return null
-
-    const formatsWithUrls = analyzeResult.formats.filter((format) => Boolean(format.url))
-
-    const selectedHeight = selectedQuality.endsWith('p')
-      ? Number(selectedQuality.replace('p', ''))
-      : null
-
-    const candidates = selectedHeight
-      ? formatsWithUrls.filter((format) => format.height === selectedHeight)
-      : formatsWithUrls
-
-    const sorted = [...(candidates.length > 0 ? candidates : formatsWithUrls)].sort((a, b) => {
-      const aMuxed = a.description.includes('(Muxed)') ? 1 : 0
-      const bMuxed = b.description.includes('(Muxed)') ? 1 : 0
-      if (aMuxed !== bMuxed) return bMuxed - aMuxed
-
-      const aMp4 = a.ext === 'mp4' ? 1 : 0
-      const bMp4 = b.ext === 'mp4' ? 1 : 0
-      if (aMp4 !== bMp4) return bMp4 - aMp4
-
-      return (b.height ?? 0) - (a.height ?? 0)
-    })
-
-    return {
-      videoUrl: sorted[0]?.url ?? '',
-      duration: analyzeResult.duration,
-    }
+    return getTrimPreviewSource(analyzeResult.formats, selectedQuality, analyzeResult.duration)
   }, [analyzeResult, isAudioMode, selectedQuality])
 
   const applyTrimRange = (range: TrimRange) => {

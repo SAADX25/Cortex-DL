@@ -181,7 +181,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     
     const phaseEmoji = phase === 'merging' ? '⚙️' : phase === 'trimming' ? '✂️' : phase === 'converting' ? '🔄' : ''
     const phaseBadge = isPostProcessing
-      ? `${phaseEmoji} ${convPct !== null ? `${phaseLabels[phase]} ${convPct}%` : phaseLabels[phase]}`
+      ? `${phaseEmoji} ${convPct !== null ? `${phaseLabels[phase]} ${Math.round(convPct)}%` : phaseLabels[phase]}`
       : ''
     const finalPhaseLabel = isPostProcessing ? phaseBadge : phaseLabels[phase]
 

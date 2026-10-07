@@ -17,7 +17,7 @@ import http from 'node:http'
 import os from 'node:os'
 import { DownloadManager } from './downloadManager'
 import { installIpcBoundary } from './ipcSecurity'
-import { runSetup, setupState } from './setup'
+import { runSetup, setupState, engineHealth } from './setup'
 import { openLogs, exportDiagnostics, buildInfo } from './diagnostics'
 
 export let downloads: DownloadManager | null = null
@@ -181,6 +181,13 @@ function createWindow() {
       additionalArguments: smokeDirectory ? ['--cortex-smoke'] : [],
     },
   })
+
+  // History is local data and must be available before engine checks/downloads.
+  if (!downloads) {
+    downloads = new DownloadManager()
+    void downloads.cleanupSettledFragments()
+  }
+  downloads.attachWindow(win)
 
 
   try {
@@ -575,6 +582,12 @@ async function handleMediaRequest(
       return
     }
 
+    if (urlObj.pathname === '/health') {
+      res.writeHead(204)
+      res.end()
+      return
+    }
+
     const playerSession = urlObj.searchParams.get('session')
     if ((playerSession && !/^[a-zA-Z0-9-]{1,80}$/.test(playerSession)) || mediaRequests.isClosed(playerSession)) {
       res.writeHead(410)
@@ -837,7 +850,7 @@ if (!gotTheLock) {
     })
     ipcMain.handle('cortexdl:open-logs', () => openLogs())
     ipcMain.handle('cortexdl:exit', () => app.quit())
-    ipcMain.handle('cortexdl:export-diagnostics', async () => win ? exportDiagnostics(win, { engines: await import('./setup').then(m => m.engineHealth()), database: db.pragma('quick_check', { simple: true }), mediaServer: !!mediaServer, runtimeState: setupState.status }) : false)
+    ipcMain.handle('cortexdl:export-diagnostics', async () => win ? exportDiagnostics(win, { engines: await engineHealth(), database: db.pragma('quick_check', { simple: true }), mediaServer: !!mediaServer, runtimeState: setupState.status }) : false)
     ipcMain.handle('cortexdl:build-info', () => ({ ...buildInfo(), safeMode }))
     await initializeRuntime()
     if (smokeDirectory && startupProbe) {
@@ -857,13 +870,13 @@ if (!gotTheLock) {
 }
 
 let initialization: Promise<void> | null = null
-async function initializeRuntime(allowNetwork = false): Promise<void> {
+async function initializeRuntime(allowNetwork = true): Promise<void> {
   if (initialization) return initialization
   initialization = (async () => {
     try {
       if (!win) throw new Error('Window unavailable')
       await runSetup(win, allowNetwork)
-      if (!downloads) await loadBackendServices()
+      if (!autoUpdater) await loadBackendServices()
       markStartup('ready')
     } catch (error) {
       log.error('[Runtime unavailable]', error)

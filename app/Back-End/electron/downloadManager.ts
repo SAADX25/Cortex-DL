@@ -11,8 +11,8 @@ import type {
 } from './types'
 import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
-import { mediaOutputArgs, matchesMediaFormat } from './mediaFormatRegistry'
-import { runMediaProcess, trimBounds } from './mediaPipeline'
+import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion } from './mediaFormatRegistry'
+import { runMediaProcess, trimBounds, validateMediaOutput } from './mediaPipeline'
 import { probeMediaFile } from './mediaFiles'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
@@ -441,7 +441,7 @@ export class DownloadManager {
     }
     task.resumeChunks = undefined
     task.resumeDirectory = undefined
-    await this.removeTaskFragments(task)
+    await this.removeTaskFragments(task).catch(e => log.warn('[DM] Temp cleanup:', e))
     this.saveStateImmediate(id)
     sendUpdate(this.win, task)
     this.schedule()
@@ -475,12 +475,23 @@ export class DownloadManager {
       .map(t => t.id)
 
     for (const id of completedIds) {
+      const task = this.tasks.get(id)
+      await this.attempts.get(id)?.done
+      if (task) await this.removeTaskFragments(task).catch(e => log.warn('[DM] Temp cleanup:', e))
       this.tasks.delete(id)
       this.runtime.delete(id)
       this.countedStats.delete(id)
       this.dirtyIds.delete(id)
     }
     try { taskDb.clearCompleted.run() } catch { log.error('DB clearCompleted failed') }
+  }
+
+  /** Retry cleanup after shutdown interrupted a completed/canceled task's cleanup. */
+  async cleanupSettledFragments(): Promise<void> {
+    for (const task of this.tasks.values()) {
+      if (task.status !== 'completed' && task.status !== 'canceled') continue
+      await this.removeTaskFragments(task).catch(e => log.warn('[DM] Temp cleanup:', e))
+    }
   }
 
   async pauseAll(): Promise<void> {
@@ -711,6 +722,11 @@ export class DownloadManager {
       // Sockets/descriptors have settled in the engine before this point.
       await killProcessTree(attempt.child)
       attempt.child = null
+      if (task.status === 'completed' || task.status === 'canceled') {
+        task.resumeDirectory = undefined
+        task.resumeChunks = undefined
+        await this.removeTaskFragments(task).catch(e => log.warn('[DM] Temp cleanup:', e))
+      }
       if (this.attempts.get(id) === attempt) {
         if (task.status === 'error' && this.isCurrent(id, attempt)) sendNotification('Download Failed', task.errorMessage || task.filename)
         if (attempt.stopReason === 'paused' && task.status === 'pausing') task.status = 'paused'
@@ -746,10 +762,10 @@ export class DownloadManager {
   private async finalize(task: DownloadTask, draft: DownloadTask, attempt: AttemptRuntime, ctx: EngineContext, source: string): Promise<void> {
     const check = () => this.assertCurrent(task.id, attempt)
     if (path.dirname(path.resolve(source)) !== path.resolve(attempt.directory)) throw new Error('Candidate is not attempt-owned')
-    const phase = (value: 'validating' | 'trimming' | 'converting' | 'finalizing') => {
+    const phase = (value: 'validating' | 'trimming' | 'converting' | 'merging' | 'finalizing') => {
       check()
       draft.phase = value
-      draft.status = value === 'trimming' || value === 'converting' ? 'converting' : draft.status
+      draft.status = value === 'merging' ? 'merging' : value === 'trimming' || value === 'converting' ? 'converting' : draft.status
       draft.convertingPercent = undefined
       ctx.sendUpdate(draft)
     }
@@ -766,7 +782,9 @@ export class DownloadManager {
     }
     let candidate = source
     if (trimming || !matchesMediaFormat(task.targetFormat, probe)) {
-      phase(trimming ? 'trimming' : 'converting')
+      const conversion = decideMediaConversion(task.targetFormat, probe, trimming)
+      log.info(`[Finalize] ${task.id}: ${conversion} to ${task.targetFormat}`)
+      phase(trimming ? 'trimming' : conversion === 'remux' ? 'merging' : 'converting')
       candidate = path.join(attempt.directory, `candidate.${task.targetFormat}`)
       const args = ['-i', source]
       if (trimming) args.push('-ss', String(bounds.start), '-t', String(expectedDuration))
@@ -780,8 +798,7 @@ export class DownloadManager {
     if (!matchesMediaFormat(task.targetFormat, finalProbe)) throw new Error(`Invalid ${task.targetFormat} container or codec`)
     const actualDuration = Number(finalProbe.format?.duration ?? finalProbe.streams?.find(s => s.duration)?.duration)
     if (expectedDuration !== undefined && (!Number.isFinite(actualDuration) || Math.abs(actualDuration - expectedDuration) > Math.max(0.25, Math.min(1, expectedDuration * 0.02)))) throw new Error('Trim duration failed validation')
-    // Decode every media packet: readable headers alone can hide truncated/corrupt payloads.
-    await runMediaProcess(['-xerror', '-i', candidate, '-map', '0:v?', '-map', '0:a?', '-f', 'null', '-'], draft, ctx)
+    await validateMediaOutput(candidate, draft, ctx, Number.isFinite(actualDuration) && actualDuration > 0 ? actualDuration : undefined)
     check()
     const size = (await fs.stat(candidate)).size
     check()
@@ -837,14 +854,27 @@ export class DownloadManager {
       if (this.win && !this.win.isDestroyed()) this.win.webContents.send(STATS_CHANNEL, { id: task.id, addedBytes: size })
     }
     sendNotification('Download Complete', `${task.title || task.filename} downloaded successfully.`)
-    await fs.rm(attempt.directory, { recursive: true, force: true }).catch(e => log.warn('[DM] Temp cleanup:', e))
   }
 
   private async removeTaskFragments(task: DownloadTask): Promise<void> {
-    if (!/^[\w-]+$/.test(task.id)) return
+    if (!path.isAbsolute(task.directory) || !/^[\w-]+$/.test(task.id)) return
     const root = path.resolve(task.directory, '.cortex_temp')
     const owned = path.resolve(root, task.id)
     if (path.dirname(owned) !== root) throw new Error('Unsafe task temp directory')
-    await fs.rm(owned, { recursive: true, force: true })
+    // Never follow a replaced temp root/junction into another directory.
+    const rootStat = await fs.lstat(root).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (!rootStat) return
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Unsafe temp root')
+    const realRoot = await fs.realpath(root)
+    const realDirectory = await fs.realpath(task.directory)
+    if (path.relative(realDirectory, realRoot) !== '.cortex_temp') throw new Error('Unsafe temp root')
+    await fs.rm(owned, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    // Only remove the shared parent when empty; paused/active tasks keep it.
+    await fs.rmdir(root).catch((error: NodeJS.ErrnoException) => {
+      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code || '')) throw error
+    })
   }
 }

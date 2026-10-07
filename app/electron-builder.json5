@@ -37,7 +37,7 @@
     "!node_modules/**/.vscode/**",
     "!**/*.log"
   ],
-  "extraResources": [{ "from": "engine-baseline", "to": "engines", "filter": ["*.exe", "manifest.json", "*LICENSE*.txt"] }, { "from": "build-manifest.json", "to": "build-manifest.json" }, { "from": "THIRD-PARTY-NOTICES.txt", "to": "THIRD-PARTY-NOTICES.txt" }],
+  "extraResources": [{ "from": "build-manifest.json", "to": "build-manifest.json" }, { "from": "THIRD-PARTY-NOTICES.txt", "to": "THIRD-PARTY-NOTICES.txt" }],
   "mac": {
     "target": [
       "dmg"

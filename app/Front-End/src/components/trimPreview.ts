@@ -66,7 +66,7 @@ export class TrimPreview {
   dispose(): void { this.disposed = true }
 }
 
-export function seekPreview(video: HTMLVideoElement | null, seconds: number): boolean {
+export function seekPreview(video: HTMLMediaElement | null, seconds: number): boolean {
   if (!video || video.readyState < 1) return false
   try {
     video.currentTime = Number.isFinite(video.duration) ? Math.min(seconds, video.duration) : seconds

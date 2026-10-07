@@ -129,6 +129,35 @@ test('yt-dlp continuation flags preserve partial files', () => {
   assert.ok(!args.includes('--no-check-certificate'))
   assert.ok(args.some(arg => arg.includes('%(info.format_id)s') && arg.includes('%(progress.filename)s')))
 })
+
+test('yt-dlp continuation quality selects 4K over lower AVC and respects resolution caps', async t => {
+  const binary = path.join(process.cwd(), 'engine-baseline', 'yt-dlp.exe')
+  if (!existsSync(binary)) return t.skip('Bundled yt-dlp is unavailable')
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-quality-'))
+  try {
+    const infoPath = path.join(dir, 'info.json')
+    const video = (id, height, vcodec, ext) => ({ format_id: id, height, width: height * 16 / 9, fps: 30, vcodec, acodec: 'none', ext, url: `https://fixture.invalid/${id}` })
+    const formats = [video('avc-1080', 1080, 'avc1.640028', 'mp4'), video('vp9-2160', 2160, 'vp9', 'webm'),
+      { format_id: 'audio', vcodec: 'none', acodec: 'mp4a.40.2', ext: 'm4a', abr: 128, url: 'https://fixture.invalid/audio' }]
+    const select = async (profile, quality, available) => {
+      await fs.writeFile(infoPath, JSON.stringify({ id: 'fixture', title: 'Quality fixture', extractor: 'generic', webpage_url: 'https://fixture.invalid/video', formats: available }))
+      const args = new YoutubeEngine().buildYtdlpArgs(task({ targetFormat: profile === 'bestVideo' ? 'mp4' : 'mkv', ytdlpFormatId: quality }), profile, { ffmpegDir: '.' }, runtime(), ['--cookies', 'configured-cookies.txt'])
+      assert.equal(args[args.indexOf('--cookies') + 1], 'configured-cookies.txt')
+      const result = spawnSync(binary, ['--ignore-config', '--simulate', '--no-check-formats', '--load-info-json', infoPath, '--dump-single-json', '-f', args[args.indexOf('-f') + 1], '-S', args[args.indexOf('-S') + 1]], { encoding: 'utf8', timeout: 15000 })
+      assert.equal(result.status, 0, result.stderr)
+      return JSON.parse(result.stdout).format_id
+    }
+    for (const profile of ['bestVideo', 'default']) {
+      assert.equal(await select(profile, undefined, formats), 'vp9-2160+audio')
+      assert.equal(await select(profile, '1080p', formats), 'avc-1080+audio')
+      const progressive = [720, 2160].map(height => ({ ...video(`combined-${height}`, height, 'avc1', 'mp4'), acodec: 'mp4a.40.2' }))
+      assert.equal(await select(profile, '1080p', progressive), 'combined-720')
+    }
+    // Compatibility is a tie-breaker; it must never replace a higher resolution.
+    const tiedFormats = [...formats, video('vp9-1080', 1080, 'vp9', 'webm')]
+    assert.equal(await select('bestVideo', '1080p', tiedFormats), 'avc-1080+audio')
+  } finally { await fs.rm(dir, { recursive: true, force: true }) }
+})
 test('Pause All pauses queued and active phases; retry timers cannot resurrect canceled/deleted tasks', async () => {
   const manager = new DownloadManager()
   manager.schedule = () => {}
@@ -324,6 +353,18 @@ test('progress preserves validating/finalizing phases after a compatible yt-dlp 
     assert.equal(t.overallProgress,null)
     assert.equal(getProgressView(t).isIndeterminate,true)
   }
+})
+
+test('progress shows measured validation progress without completing early', () => {
+  const t=task({status:'merging',phase:'validating',convertingPercent:42,downloadPercent:100})
+  updateTaskProgress(t)
+  assert.equal(t.phaseProgress,42)
+  assert.equal(getProgressView(t).isIndeterminate,false)
+  t.convertingPercent=100;updateTaskProgress(t)
+  assert.equal(t.overallProgress,99)
+  assert.notEqual(t.status,'completed')
+  t.phase='finalizing';updateTaskProgress(t)
+  assert.equal(t.phaseProgress,null)
 })
 
 

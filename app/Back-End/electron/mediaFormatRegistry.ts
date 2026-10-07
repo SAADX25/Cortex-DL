@@ -25,7 +25,7 @@ export type MediaProbe = {
 
 type VideoSpec = { containers: string[]; video: string[]; audio?: string[]; args: string[] }
 const VIDEO_SPECS: Record<VideoFormat, VideoSpec> = {
-  mp4: { containers: ['mov', 'mp4'], video: ['h264', 'hevc', 'mpeg4', 'av1'], audio: ['aac', 'mp3', 'alac'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', '-f', 'mp4'] },
+  mp4: { containers: ['mov', 'mp4'], video: ['h264', 'hevc', 'mpeg4', 'av1', 'vp9'], audio: ['aac', 'mp3', 'alac'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', '-f', 'mp4'] },
   m4v: { containers: ['mov', 'mp4'], video: ['h264', 'hevc', 'mpeg4'], audio: ['aac', 'alac'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'mp4'] },
   mov: { containers: ['mov'], video: ['h264', 'hevc', 'mpeg4', 'prores', 'mjpeg'], audio: ['aac', 'alac', 'pcm_s16le'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'mov'] },
   mkv: { containers: ['matroska'], video: ['h264', 'hevc', 'vp8', 'vp9', 'av1', 'mpeg4', 'theora', 'mjpeg', 'prores'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'matroska'] },
@@ -90,6 +90,7 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
   }
   // Accurate cuts always encode. Container-compatible subtitles are retained.
   const encoding = [...spec.ffmpegArgs]
+  if (encoding.includes('libx264')) encoding.push('-preset', 'veryfast')
   if (!trim && spec.videoCodec && format !== 'gif') {
     const flag = decision === 'audio-encode' ? '-c:v' : decision === 'video-encode' ? '-c:a' : null
     if (flag) {

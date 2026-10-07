@@ -12,7 +12,7 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
   if (/^cortexdl:downloads:(pause|resume|cancel|delete)$/.test(channel) && (typeof first !== 'string' || !/^[\w-]{1,128}$/.test(first))) throw new Error('Invalid task ID')
   if (channel === 'cortexdl:downloads:delete' && typeof args[1] !== 'boolean') throw new Error('Invalid delete flag')
   if (['cortexdl:secure-save', 'cortexdl:secure-get'].includes(channel) && args.some(arg => typeof arg !== 'string' || arg.length > 65536)) throw new Error('Invalid secure data')
-  if (['cortexdl:analyze-url', 'cortexdl:open-external', 'cortexdl:get-direct-stream-url', 'cortexdl:download-comments', 'cortexdl:fetch-thumbnail'].includes(channel)) {
+  if (['cortexdl:analyze-url', 'cortexdl:open-external', 'cortexdl:get-direct-stream-url', 'cortexdl:get-trim-preview-streams', 'cortexdl:download-comments', 'cortexdl:fetch-thumbnail'].includes(channel)) {
     if (typeof first !== 'string' || first.length > 16384) throw new Error('Invalid URL')
     const url = new URL(first)
     if (!['http:', 'https:'].includes(url.protocol)) throw new Error('URL must be HTTP or HTTPS')

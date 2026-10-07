@@ -1,7 +1,6 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const AdmZip = require('adm-zip')
 const root = path.resolve(__dirname, '..')
 const npm = process.env.npm_execpath || path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js')
 // npm.cmd requires a shell on Windows; this is fixed literal code with no user input.
@@ -16,7 +15,6 @@ for (const dir of new Set(dirs)) {
     if (fs.statSync(full).isFile()) notices.push(fs.readFileSync(full, 'utf8'))
   }
 }
-const archive = new AdmZip(path.join(root, 'engine-baseline/FFmpeg.download'))
-notices.push('\n=== FFmpeg BtbN GPL baseline ===\n' + archive.getEntries().find(e => e.entryName.endsWith('/LICENSE.txt')).getData().toString('utf8'))
-for (const file of ['DENO-LICENSE.txt', 'YTDLP-LICENSE.txt', 'YTDLP-LICENSES.txt']) notices.push('\n=== ' + file + ' ===\n' + fs.readFileSync(path.join(root, 'engine-baseline', file), 'utf8'))
-fs.writeFileSync(path.join(root, 'engine-baseline/THIRD-PARTY-LICENSES.txt'), notices.join('\n'))
+notices.push('\n=== Engines downloaded separately on first run ===\n')
+for (const pkg of require('../engines.lock.json').packages) notices.push(`${pkg.name} ${pkg.version}: ${pkg.license}\n${pkg.url}\n`)
+fs.writeFileSync(path.join(root, 'THIRD-PARTY-NOTICES.txt'), notices.join('\n'))

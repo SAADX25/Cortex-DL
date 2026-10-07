@@ -178,6 +178,7 @@ declare global {
       fetchThumbnail: (url: string) => Promise<string>
       getMediaFps: (filePath: string, session: string) => Promise<number | null>
       getDirectStreamUrl: (url: string, previewSession?: string) => Promise<string>
+      getTrimPreviewStreams: (url: string, previewSession: string) => Promise<{ videoUrl: string; audioUrl?: string } | null>
       logPreviewError: (message: string) => void
 
       selectCookieFile: () => Promise<string | null>

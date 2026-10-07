@@ -36,6 +36,8 @@ async function main() {
     assert.equal(yaml.sha512, info.sha512)
     assert.ok(fs.statSync(`${file}.blockmap`).size > 0)
     const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'win-unpacked/resources/build-manifest.json')))
+    assert.equal(manifest.engineDelivery, 'download-on-first-run')
+    assert.equal(fs.existsSync(path.join(dir, 'win-unpacked/resources/engines')), false, 'Installer must not bundle engines')
     assert.equal(manifest.version, pkg.version)
     assert.equal(manifest.commit, git('rev-parse', 'HEAD'))
     assert.equal(manifest.dirty, false, 'Candidate is not publishable until committed and rebuilt')

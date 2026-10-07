@@ -13,7 +13,7 @@ import { CookieValidationCache } from './cookieValidation'
 import { AnalysisCoordinator } from './analysisCoordinator'
 import { extractAnalysis } from './analysisProcess'
 import { fetchBoundedJson } from './analysisNetwork'
-import { extractPreview, PREVIEW_FORMAT, type PreviewExtractionOptions } from './previewExtraction'
+import { extractPreview, extractPreviewStreams, PREVIEW_FORMAT, TRIM_PREVIEW_FORMAT, type PreviewStreams, type PreviewExtractionOptions } from './previewExtraction'
 
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000
 const ANALYSIS_CACHE_MAX = 50
@@ -462,6 +462,24 @@ async function extractFullAnalysis(url: string, signal: AbortSignal, cookies: st
 
 }
 
+
+export async function getTrimPreviewStreams(url: string, options: PreviewExtractionOptions = {}): Promise<PreviewStreams | null> {
+  const binary = getBinaryPath('yt-dlp')
+  if (!existsSync(binary)) throw new Error('yt-dlp binary not found in the bin directory')
+  try {
+    return await extractPreviewStreams(binary, [
+      '-f', TRIM_PREVIEW_FORMAT, '--dump-single-json', '--no-playlist', '--geo-bypass', ...ytdlpCacheArgs(),
+      '--socket-timeout', '10',
+      ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
+      ...await getYtdlpCookieArgs(), ...getJsRuntimeArgs(), url,
+    ], options)
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Preview extraction cancelled') return null
+    log.error('[ytdlp] Trim preview extraction failed:', error)
+    if (isYouTubeUrl(url) && isYouTubeAuthRequiredError(error)) throw new YouTubeAuthRequiredError()
+    throw error
+  }
+}
 
 export async function getDirectStreamUrl(url: string, options: PreviewExtractionOptions = {}): Promise<string> {
   const binary = getBinaryPath('yt-dlp')

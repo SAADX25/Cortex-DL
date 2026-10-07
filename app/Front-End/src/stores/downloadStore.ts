@@ -165,6 +165,8 @@ export function initDownloadStore(): () => void {
   ipcInitialized = true
 
   const { upsertTask } = useDownloadStore.getState()
+  let disposed = false
+  let pendingRefresh: Promise<void> | null = null
 
   
   
@@ -173,11 +175,28 @@ export function initDownloadStore(): () => void {
   })
 
   
-  window.cortexDl.listDownloads().then((initial) => {
-    for (const t of initial as DownloadTask[]) upsertTask(t)
+  const refreshHistory = (): Promise<void> => {
+    if (pendingRefresh) return pendingRefresh
+    pendingRefresh = window.cortexDl.listDownloads().then((initial) => {
+      if (!disposed) for (const t of initial as DownloadTask[]) upsertTask(t)
+    }).catch(error => {
+      if (!disposed) console.error('[Downloads] Failed to load history:', error)
+    }).finally(() => { pendingRefresh = null })
+    return pendingRefresh
+  }
+  const disposeSetup = window.cortexDl.onSetupProgress(state => {
+    if (state.status === 'ready') {
+      // Retry even if ready arrives while a failed initial request is settling.
+      void (pendingRefresh ?? Promise.resolve()).then(() => {
+        if (!disposed) return refreshHistory()
+      })
+    }
   })
+  void refreshHistory()
 
   return () => {
+    disposed = true
+    disposeSetup()
     disposeIPC()
     ipcInitialized = false
   }

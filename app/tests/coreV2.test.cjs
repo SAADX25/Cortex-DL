@@ -210,6 +210,55 @@ test('corrupt media never becomes Completed; deleting respects final ownership a
   }
 }))
 
+test('successful download removes its entire temp tree while preserving another paused download', async () => sandbox(async dir => {
+  const source = path.join(dir, 'source.mp4'); fixture(source, true)
+  const paused = path.join(dir, '.cortex_temp', 'paused-task', 'attempt', 'partial.part')
+  await fs.mkdir(path.dirname(paused), { recursive: true }); await fs.writeFile(paused, 'resume me')
+  const t = item(dir)
+  await withCandidate(t, source, async manager => {
+    await manager.executeEngine(t.id)
+    assert.equal(t.status, 'completed', t.errorMessage)
+    assert.equal(await fs.stat(path.join(dir, '.cortex_temp', t.id)).then(() => true, () => false), false)
+    assert.equal(await fs.readFile(paused, 'utf8'), 'resume me')
+    assert.ok((await fs.stat(t.filePath)).size > 0)
+    await manager.removeTaskFragments(item(dir, { id: 'paused-task' }))
+    assert.equal(await fs.stat(path.join(dir, '.cortex_temp')).then(() => true, () => false), false)
+    assert.ok((await fs.stat(t.filePath)).size > 0)
+  })
+}))
+
+test('startup cleans completed and canceled leftovers, preserving paused/error partials and final files', async () => sandbox(async dir => {
+  const final = path.join(dir, 'completed.mp4'); await fs.writeFile(final, 'final output')
+  for (const status of ['completed', 'canceled', 'paused', 'error']) {
+    const partial = path.join(dir, '.cortex_temp', status, 'old-attempt', 'partial.part')
+    await fs.mkdir(path.dirname(partial), { recursive: true }); await fs.writeFile(partial, status)
+    const t = item(dir, { id: status, status, filePath: final, validatedAttemptId: 'validated' })
+    rows.set(t.id, { full_payload: JSON.stringify(t) })
+  }
+  const manager = new DownloadManager()
+  await manager.cleanupSettledFragments()
+  for (const status of ['completed', 'canceled', 'paused', 'error']) {
+    assert.equal(await fs.stat(path.join(dir, '.cortex_temp', status)).then(() => true, () => false), ['paused', 'error'].includes(status))
+  }
+  assert.equal(await fs.readFile(final, 'utf8'), 'final output')
+  assert.equal(manager.list().length, 4)
+  manager.flushPendingSave()
+}))
+
+test('temp cleanup rejects traversal and a redirected temp root', async () => sandbox(async dir => {
+  const manager = managerFor(item(dir))
+  const sentinel = path.join(dir, 'keep'); await fs.writeFile(sentinel, 'keep')
+  await manager.removeTaskFragments(item(dir, { id: '../' }))
+  await manager.removeTaskFragments(item('', { id: 'core-test' }))
+  assert.equal(await fs.readFile(sentinel, 'utf8'), 'keep')
+  const outside = path.join(dir, 'unrelated'); await fs.mkdir(outside)
+  const saved = path.join(outside, 'core-test', 'data'); await fs.mkdir(path.dirname(saved)); await fs.writeFile(saved, 'keep')
+  await fs.symlink(outside, path.join(dir, '.cortex_temp'), process.platform === 'win32' ? 'junction' : 'dir')
+  await assert.rejects(manager.removeTaskFragments(item(dir)), /Unsafe temp root/)
+  assert.equal(await fs.readFile(saved, 'utf8'), 'keep')
+  manager.flushPendingSave()
+}))
+
 test('retry backoff releases concurrency slot and uses fresh attempt; deletion cannot resurrect it', async () => sandbox(async dir => {
   const original=DirectEngine.prototype.download
   DirectEngine.prototype.download=async()=>({kind:'retryable-error',message:'retry',delayMs:10000})
@@ -429,6 +478,26 @@ test('decodable headers cannot certify a corrupt media payload', async () => san
     assert.equal(t.status,'error')
     assert.match(t.errorMessage,/FFmpeg/)
     assert.equal(await fs.stat(t.filePath).then(()=>true).catch(()=>false),false)
+  })
+}))
+
+test('modern YouTube VP9 video keeps identical packets when finalized as MP4', async () => sandbox(async dir => {
+  const source=path.join(dir,'source.webm')
+  const created=cp.spawnSync(bin('ffmpeg'),['-y','-hide_banner','-loglevel','error','-f','lavfi','-i','testsrc2=size=64x64:rate=20:duration=6','-f','lavfi','-i','sine=duration=6','-c:v','libvpx-vp9','-deadline','realtime','-cpu-used','5','-threads','2','-c:a','libopus',source],{timeout:30000})
+  assert.equal(created.status,0,created.stderr?.toString())
+  const t=item(dir)
+  await withCandidate(t,source,async manager=>{
+    await manager.executeEngine(t.id)
+    assert.equal(t.status,'completed',t.errorMessage)
+    const probe=await media.probeMediaFile(t.filePath)
+    assert.equal(probe.streams.find(s=>s.codec_type==='video').codec_name,'vp9')
+    assert.equal(probe.streams.find(s=>s.codec_type==='audio').codec_name,'aac')
+    const packetHashes=file=>{
+      const result=cp.spawnSync(bin('ffprobe'),['-v','error','-select_streams','v:0','-show_packets','-show_data_hash','sha256','-show_entries','packet=data_hash','-of','json',file],{encoding:'utf8',timeout:15000})
+      assert.equal(result.status,0,result.stderr)
+      return JSON.parse(result.stdout).packets.map(packet=>packet.data_hash)
+    }
+    assert.deepEqual(packetHashes(t.filePath),packetHashes(source),'video data is copied without re-encoding')
   })
 }))
 

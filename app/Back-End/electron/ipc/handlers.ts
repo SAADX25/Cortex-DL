@@ -13,7 +13,7 @@ import { ThumbnailCache } from '../thumbnailCache'
 import { normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
 import { fetchBoundedJson } from '../analysisNetwork'
 import { analyzeUrlForHls } from '../hls'
-import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl } from '../ytdlp'
+import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
 import { extractAndSaveComments } from '../commentsExtractor'
 import { db } from '../db'
 import { promises as fsPromises } from 'node:fs'
@@ -52,7 +52,7 @@ async function isDirectoryWritable(directory: string): Promise<boolean> {
   }
 }
 
-async function getAppHealthCheck(mediaPort?: number): Promise<AppHealthCheck> {
+async function getAppHealthCheck(mediaPort: number, mediaToken: string): Promise<AppHealthCheck> {
   let cookiePath: string | null = null
   let downloadDirectory = app.getPath('downloads')
 
@@ -76,7 +76,7 @@ async function getAppHealthCheck(mediaPort?: number): Promise<AppHealthCheck> {
   const ffmpegAvailable = engines.find(engine => engine.name === 'ffmpeg')?.available === true
   const probe = engines.find(engine => engine.name === 'ffprobe')!
   const database = db.pragma('quick_check', { simple: true }) === 'ok'
-  const mediaServer = await fetch(`http://127.0.0.1:${mediaPort || 3345}/`, { method: 'HEAD', signal: AbortSignal.timeout(2000) }).then(response => response.status === 401, () => false)
+  const mediaServer = await fetch(`http://127.0.0.1:${mediaPort}/health?token=${encodeURIComponent(mediaToken)}`, { method: 'HEAD', signal: AbortSignal.timeout(2000) }).then(response => response.status === 204, () => false)
   const updateService = await fetchBoundedJson('https://api.github.com/repos/SAADX25/Cortex-DL/releases/latest', undefined, 3000).then(() => 'reachable' as const, () => 'unavailable' as const)
   const cookies = await validateCookieFile(cookiePath)
   const cookiesReady = cookies.valid || cookies.code === 'missing'
@@ -104,6 +104,18 @@ function validateDownloadInput(input: StartInput): void {
 }
 export function registerIpcHandlers(deps: IpcDependencies) {
   const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
+
+  const waitForEngines = async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000)
+        timer.unref()
+      })])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
 
   ipcMain.on('log-message', (_event, level, message) => {
     if (_event.sender !== getWin()?.webContents || !['info', 'warn', 'error', 'debug'].includes(level) || typeof message !== 'string' || message.length > 8192) return
@@ -209,17 +221,17 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   })
 
   ipcMain.handle('cortexdl:health-check', async () => {
-    return getAppHealthCheck(getMediaPort())
+    return getAppHealthCheck(getMediaPort(), getMediaToken())
   })
 
   ipcMain.handle('cortexdl:downloads:list', async () => {
-    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
     const downloads = getDownloads()
-    return downloads?.list() || []
+    if (!downloads) throw new Error('Download history not initialized')
+    return downloads.list()
   })
 
   ipcMain.handle('cortexdl:downloads:add', async (_event, input: StartInput) => {
-    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
+    await waitForEngines()
     const downloads = getDownloads()
     if (!downloads) throw new Error('Download Manager not initialized')
     validateDownloadInput(input)
@@ -227,7 +239,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   })
 
   ipcMain.handle('cortexdl:downloads:add-batch', async (_event, inputs: StartInput[]) => {
-    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
+    await waitForEngines()
     const downloads = getDownloads()
     if (!downloads) throw new Error('Download Manager not initialized')
     if (!Array.isArray(inputs) || inputs.length > 500) throw new Error('Invalid download batch')
@@ -406,6 +418,14 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.on('cortexdl:preview-error', (_event, message: unknown) => {
     if (typeof message === 'string') log.error('[Visual Trim]', message.slice(0, 8000))
+  })
+
+  ipcMain.handle('cortexdl:get-trim-preview-streams', async (_event, url: string, previewSession: string) => {
+    if (typeof previewSession !== 'string' || !/^trim-[\w-]{1,128}$/.test(previewSession)) throw new Error('Invalid trim session')
+    return getTrimPreviewStreams(url, {
+      isClosed: () => isMediaSessionClosed(previewSession),
+      track: stop => trackMediaProcess(previewSession, 'probe', stop),
+    })
   })
 
   ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string, previewSession?: string) => {

@@ -54,14 +54,21 @@ export async function verifyEngine(file: string, spec: EngineSpec): Promise<Engi
   }
 }
 
-/** HTTPS only, deadline covers headers and body, bounded redirect chain and bytes. */
+/** HTTPS only, bounded headers, idle time, overall duration, redirects and bytes. */
 export async function downloadEngine(url: string, destination: string, expectedHash?: string, signal?: AbortSignal, onProgress?: (received: number, total: number | null) => void): Promise<void> {
   const tmp = `${destination}.${randomUUID()}.tmp`
   for (let attempt = 0; attempt < 3; attempt++) {
     const controller = new AbortController()
     const abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true })
     if (signal?.aborted) abort()
-    const timer = setTimeout(abort, 180_000)
+    // Large FFmpeg packages can take several minutes on a healthy slow link.
+    // Abort stalled transfers, rather than restarting an active download at 3 minutes.
+    const timer = setTimeout(abort, 30 * 60_000)
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    const touch = () => {
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(abort, 60_000)
+    }
     try {
       let response: Response | undefined
       let next = url
@@ -82,12 +89,15 @@ export async function downloadEngine(url: string, destination: string, expectedH
       const total = Number.isFinite(length) && length > 0 ? length : null
       let size = 0, reportedAt = 0
       onProgress?.(0, total)
+      touch()
       const bound = new Transform({ transform(chunk, _enc, cb) {
+        touch()
         size += chunk.length
         if (Date.now() - reportedAt >= 100) { onProgress?.(size, total); reportedAt = Date.now() }
         cb(size > maximum ? new Error('Engine download exceeds size limit') : null, chunk)
       } })
       await pipeline(Readable.fromWeb(response.body as unknown as import('node:stream/web').ReadableStream), bound, fs.createWriteStream(tmp, { flags: 'wx' }), { signal: controller.signal })
+      clearTimeout(idleTimer)
       onProgress?.(size, total)
       if (expectedHash && await sha256(tmp) !== expectedHash) throw new Error('Engine download checksum mismatch')
       await fs.promises.rename(tmp, destination)
@@ -95,7 +105,7 @@ export async function downloadEngine(url: string, destination: string, expectedH
     } catch (error) {
       await fs.promises.rm(tmp, { force: true })
       if (signal?.aborted || attempt === 2) throw error
-    } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort) }
+    } finally { clearTimeout(timer); clearTimeout(idleTimer); signal?.removeEventListener('abort', abort) }
     await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt))
   }
 }

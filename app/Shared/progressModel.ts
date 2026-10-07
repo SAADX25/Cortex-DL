@@ -9,10 +9,10 @@ export function updateTaskProgress(task: DownloadTask): void {
   if (active && ['paused', 'queued', 'error', 'canceled', 'completed', 'pausing'].includes(phase)) phase = 'preparing'
   if (task.status === 'merging' && !['validating', 'finalizing'].includes(phase)) phase = 'merging'
   if (task.status === 'converting' && !['trimming', 'validating', 'finalizing'].includes(phase)) phase = 'converting'
-  const processing = ['merging', 'converting', 'trimming'].includes(phase)
+  const processing = ['merging', 'converting', 'trimming', 'validating'].includes(phase)
   const download = finitePercent(task.downloadPercent ?? (task.totalBytes && task.totalBytes > 0 ? task.downloadedBytes / task.totalBytes * 100 : null))
   task.phase = phase
-  task.phaseProgress = task.status === 'completed' ? 100 : ['validating', 'finalizing', 'preparing'].includes(phase) ? null : processing ? finitePercent(task.convertingPercent) : download
+  task.phaseProgress = task.status === 'completed' ? 100 : ['finalizing', 'preparing'].includes(phase) ? null : processing ? finitePercent(task.convertingPercent) : download
   // Later phases have no meaningful total-work denominator. Show actual phase progress.
   task.overallProgress = task.status === 'completed' ? 100 : task.phaseProgress === null ? null : Math.min(99, task.phaseProgress)
   task.etaSeconds = phase === 'downloading' && task.totalBytes && task.speedBytesPerSec && task.speedBytesPerSec > 0

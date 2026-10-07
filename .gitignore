@@ -18,11 +18,6 @@ dist-ssr/
 build/
 release/
 bin/
-!app/bin/
-app/bin/*.exe
-app/bin/*.zip
-app/bin/*.tmp
-app/bin/*-extract-tmp/
 
 # Editor directories and files
 .vscode/*
@@ -53,6 +48,7 @@ app/bin/*-extract-tmp/
 *.ytdl
 
 # Debug & temp outputs
+.cortex_temp/
 formats_*.txt
 test_*.txt
 lint.txt

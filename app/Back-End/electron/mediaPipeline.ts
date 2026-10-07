@@ -3,6 +3,7 @@ import type { DownloadTask, EngineContext } from './types'
 import { getBinaryPath } from './paths'
 import { killProcessTree } from './utils'
 import { flushLines } from './progressParser'
+import { availableParallelism } from 'node:os'
 
 export function trimBounds(task: Pick<DownloadTask, 'startTime' | 'endTime'>): { start: number; end?: number } {
   const parse = (value: string) => {
@@ -23,7 +24,11 @@ export function trimBounds(task: Pick<DownloadTask, 'startTime' | 'endTime'>): {
 export async function runMediaProcess(args: string[], task: DownloadTask, ctx: EngineContext, duration?: number): Promise<void> {
   const signal = ctx.runtime.abortController?.signal
   signal?.throwIfAborted()
-  const proc = spawn(getBinaryPath('ffmpeg'), ['-y', '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', '2', '-progress', 'pipe:1', ...args], { windowsHide: true, detached: process.platform !== 'win32' })
+  // Input options limit decoding; output options must also limit the encoder.
+  const budget = Math.max(2, Math.min(4, Math.floor(availableParallelism() / 2)))
+  const decoderThreads = String(Math.max(1, Math.floor(budget / 3)))
+  const encoderThreads = String(Math.max(1, budget - Number(decoderThreads)))
+  const proc = spawn(getBinaryPath('ffmpeg'), ['-y', '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', decoderThreads, '-filter_threads', '1', '-filter_complex_threads', '1', '-progress', 'pipe:1', ...args.slice(0, -1), '-threads', encoderThreads, args[args.length - 1]], { windowsHide: true, detached: process.platform !== 'win32' })
   ctx.runtime.child = proc
   let teardown: Promise<void> | undefined
   const terminate = () => { teardown ??= killProcessTree(proc) }
@@ -69,5 +74,18 @@ export async function runMediaProcess(args: string[], task: DownloadTask, ctx: E
     proc.stdout.removeAllListeners()
     proc.stderr.removeAllListeners()
     if (ctx.runtime.child === proc) ctx.runtime.child = null
+  }
+}
+
+/** Read every packet, then decode short boundary samples rather than every frame.
+ * This detects container/read failures and sampled decode errors, not arbitrary
+ * corruption in every interior frame. Keep publication gated on all checks.
+ */
+export async function validateMediaOutput(file: string, task: DownloadTask, ctx: EngineContext, duration?: number): Promise<void> {
+  await runMediaProcess(['-xerror', '-i', file, '-map', '0:v?', '-map', '0:a?', '-c', 'copy', '-f', 'null', '-'], task, ctx, duration)
+  const offsets = [0]
+  if (duration && Number.isFinite(duration) && duration > 4) offsets.push(duration - 2)
+  for (const offset of offsets) {
+    await runMediaProcess(['-xerror', ...(offset ? ['-ss', String(offset)] : []), '-i', file, '-t', '2', '-map', '0:v?', '-map', '0:a?', '-f', 'null', '-'], task, ctx)
   }
 }

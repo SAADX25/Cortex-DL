@@ -8,7 +8,7 @@ const buildInfo = fs.existsSync(path.join(__dirname, 'build-manifest.json')) ? J
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'))
 
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
 
   return {
     root: path.join(__dirname, 'Front-End'),
@@ -28,6 +28,8 @@ export default defineConfig(() => {
           vite: {
             build: {
               outDir: path.join(__dirname, 'dist-electron'),
+              // Clear stale chunks for packaging; preserve preload during dev watch rebuilds.
+              emptyOutDir: command === 'build',
               rollupOptions: {
                 external: ['better-sqlite3']
               }
@@ -39,6 +41,8 @@ export default defineConfig(() => {
           vite: {
             build: {
               outDir: path.join(__dirname, 'dist-electron'),
+              // Main and preload share this directory; retain the freshly built main chunks.
+              emptyOutDir: false,
               rollupOptions: {
                 external: ['better-sqlite3']
               }

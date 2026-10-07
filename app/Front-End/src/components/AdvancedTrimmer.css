@@ -20,6 +20,14 @@
   gap: 12px;
 }
 
+.advanced-trimmer__footer-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+}
+
 .advanced-trimmer__title {
   display: inline-flex;
   align-items: center;
@@ -73,19 +81,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.advanced-trimmer__audio-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.advanced-trimmer__audio-controls input {
-  flex: 1;
-  min-width: 100px;
-  accent-color: #38bdf8;
 }
 
 .advanced-trimmer__thumb-strip {
@@ -345,6 +340,11 @@
 
   .advanced-trimmer__header,
   .advanced-trimmer__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .advanced-trimmer__footer-main {
     align-items: stretch;
     flex-direction: column;
   }

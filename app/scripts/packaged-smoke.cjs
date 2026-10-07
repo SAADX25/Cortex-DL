@@ -4,10 +4,10 @@ const { spawn } = require('node:child_process')
 const assert = require('node:assert/strict')
 const root = path.resolve(__dirname, '..')
 const version = require('../package.json').version
-async function run(exe, directory) {
+async function run(exe, directory, offline = false) {
   await new Promise((resolve, reject) => {
     const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
-    const child = spawn(exe, ['--packaged-smoke', '--smoke-offline', `--smoke-dir=${directory}`], { windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(exe, ['--packaged-smoke', ...(offline ? ['--smoke-offline'] : []), `--smoke-dir=${directory}`], { windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
     child.stdout.on('data', chunk => { output = (output + chunk.toString()).slice(-65536) })
     child.stderr.on('data', chunk => { output = (output + chunk.toString()).slice(-65536) })
@@ -26,13 +26,15 @@ async function main() {
   const started = Date.now()
   await run(exe, directory)
   const firstMs = Date.now() - started
-  // Simulate quarantine/corruption of just one override; restart must repair it offline.
+  // Engines are downloaded separately; repairing a corrupt executable needs network.
   await fs.mkdir(path.join(directory, 'bin'), { recursive: true })
   await fs.writeFile(path.join(directory, 'bin', 'ffmpeg.exe'), 'corrupt fixture')
   const restart = Date.now(); await run(exe, directory)
   const result = JSON.parse(await fs.readFile(path.join(directory, 'second-run.json')))
   assert.equal(result.restored, true)
   assert.ok((await fs.stat(path.join(directory, 'bin/ffmpeg.exe'))).size > 100000, 'Broken override must be repaired')
+  // Once provisioned, healthy engines must work without network.
+  await run(exe, directory, true)
   console.log(JSON.stringify({ directory, firstRunMs: firstMs, restartMs: Date.now() - restart, ...result }, null, 2))
 }
 fs.mkdir(path.join(root, 'smoke-results'), { recursive: true }).then(main).catch(error => { console.error(error); process.exitCode = 1 })
