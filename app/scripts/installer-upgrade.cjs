@@ -6,6 +6,9 @@ const crypto = require('node:crypto')
 const { spawnSync } = require('node:child_process')
 const root = path.resolve(__dirname, '..')
 const version = require('../package.json').version
+const candidate = path.join(root, `release/${version}/Cortex-DL-Setup-${version}.exe`)
+const legacy = path.join(root, 'release/2.1.0/Cortex DL Setup 2.1.0.exe')
+const previous = fs.existsSync(legacy) ? '2.1.0' : version
 const install = path.join(root, 'installer-validation', 'Cortex spaces العربية')
 const data = path.join(process.env.APPDATA, 'Cortex DL')
 function launch(exe, args, env = process.env) {
@@ -22,6 +25,13 @@ function snapshot(dir, result = {}) {
   return result
 }
 assert.equal(fs.existsSync(data), false, 'Upgrade fixture requires absent real Cortex DL userData; use a separate Windows user when it exists')
+assert.equal(fs.existsSync(path.join(process.env.APPDATA, 'cortex-dl')), false, 'Installer fixture requires absent current userData; use a separate Windows user when it exists')
+if (process.platform === 'win32') {
+  const registry = spawnSync('powershell.exe', ['-NoProfile', '-Command', "Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match '^Cortex DL(?: |$)' } | Select-Object -ExpandProperty DisplayName"], { windowsHide: true, encoding: 'utf8', timeout: 30000 })
+  if (registry.error) throw registry.error
+  assert.equal(registry.status, 0, registry.stderr)
+  assert.equal(registry.stdout.trim(), '', 'Installer fixture must not replace an existing real Cortex DL installation')
+}
 fs.mkdirSync(data, { recursive: true })
 fs.mkdirSync(path.join(data, 'bin'))
 fs.writeFileSync(path.join(data, 'bin', 'engine-state.fixture'), 'preserved engine state')
@@ -39,19 +49,19 @@ db.close();
 let success = false
 try {
   const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
-  launch(path.join(root, 'release/2.1.0/Cortex DL Setup 2.1.0.exe'), ['/S', `/D=${install}`], env)
+  launch(previous === '2.1.0' ? legacy : candidate, ['/S', `/D=${install}`], env)
   fs.mkdirSync(path.join(data, 'bin'), { recursive: true })
   fs.writeFileSync(path.join(data, 'bin', 'engine-state.fixture'), 'preserved engine state')
   launch(path.join(install, 'Cortex DL.exe'), [fixture], { ...process.env, ELECTRON_RUN_AS_NODE: '1' })
   const before = snapshot(data)
-  launch(path.join(root, `release/${version}/Cortex-DL-Setup-${version}.exe`), ['/S', `/D=${install}`], env)
-  assert.deepEqual(snapshot(data), before, `2.1.0 → ${version} must preserve history/settings/cookies/credential bytes and engine state`)
+  launch(candidate, ['/S', `/D=${install}`], env)
+  assert.deepEqual(snapshot(data), before, `${previous} → ${version} must preserve history/settings/cookies/credential bytes and engine state`)
   assert.equal(fs.existsSync(data + '.upgrade-2.1.5-backup'), false)
   const check = path.join(root, 'installer-validation', 'check-upgrade.cjs')
   fs.writeFileSync(check, `const Database=require(${JSON.stringify(path.join(install, 'resources/app.asar/node_modules/better-sqlite3'))});const db=new Database(${JSON.stringify(path.join(data, 'tasks.sqlite'))});if(db.prepare('SELECT count(*) AS n FROM tasks').get().n!==1||db.pragma('quick_check',{simple:true})!=='ok')process.exit(1);db.close();`)
   launch(path.join(install, 'Cortex DL.exe'), [check], { ...process.env, ELECTRON_RUN_AS_NODE: '1' })
   success = true
-  console.log(`Real NSIS 2.1.0 → ${version} upgrade passed; legacy database readable under Electron 44; all fixture data hashes preserved`)
+  console.log(`Real NSIS ${previous} → ${version} installation passed; fixture database readable under Electron; all fixture data hashes preserved`)
 } finally {
   // Only delete this script's fixture, and only after proving successful preservation.
   if (success && path.resolve(data) === path.resolve(path.join(process.env.APPDATA, 'Cortex DL'))) fs.rmSync(data, { recursive: true })

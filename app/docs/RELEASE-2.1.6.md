@@ -2,6 +2,7 @@
 
 - New URL analysis resets the previous video's quality selection. Best Auto shows the highest available resolution; a quality selected while analysis is running remains selected.
 - Windows installer upgrade validation follows the package version instead of a hardcoded 2.1.5 path.
+- The historical 2.1.0 installer currently returns HTTP 404. When unavailable, CI tests current installation/reinstallation and reports it explicitly. Other network errors remain failures. Installer tests refuse to replace an existing real installation or profile.
 - Release validation inspects the actual packaged ASAR and resources for redistributed engine binaries and verifies shipped third-party notices. Bundled engines still require the corresponding-source review; this installer downloads engines separately on first launch.
 - GitHub publishes the installer, blockmap and update manifest from the successful Windows validation job rather than rebuilding an untested installer in the release job.
 
