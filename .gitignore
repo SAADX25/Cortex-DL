@@ -15,7 +15,6 @@ node_modules
 dist/
 dist-electron/
 dist-ssr/
-build/
 release/
 bin/
 
@@ -53,9 +52,6 @@ formats_*.txt
 test_*.txt
 lint.txt
 output.json
-
-# Legacy
-*.cs
 
 # TypeScript build info
 *.tsbuildinfo

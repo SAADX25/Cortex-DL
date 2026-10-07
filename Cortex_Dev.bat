@@ -2,12 +2,8 @@
 setlocal DisableDelayedExpansion
 title Cortex DL - Development
 
-for %%D in ("%~dp0app" "%~dp0Cortex DL\app" "G:\Cortex DL\app" "G:\Cortex DL\Cortex DL\app") do (
-    if exist "%%~D\package.json" (
-        set "APP_DIR=%%~fD"
-        goto :start_app
-    )
-)
+set "APP_DIR=%~dp0app"
+if exist "%APP_DIR%\package.json" goto :start_app
 echo [Cortex DL] Could not locate app\package.json.
 pause
 exit /b 1

@@ -29,7 +29,7 @@ npm ci
 npm run dev
 ```
 
-You can also use `Cortex_Dev.bat` in the project root after installing dependencies. The `app` folder contains the npm package; run npm commands there.
+You can also use `Cortex_Dev.bat` in the project root after installing dependencies. Root shortcuts are available: `npm run setup`, `npm run dev`, `npm run check` and `npm run build`. The `app` folder contains the application package and its dependency lockfile.
 
 The development startup stages verified engines in `app/engine-baseline`. Keep that directory for offline development and media integration tests. Its downloaded archives are reused by the staging script.
 
@@ -51,6 +51,8 @@ app/
 
 Generated build output, downloaded engines, dependencies and test results are ignored by Git. The repository root contains branding, contributor documents and the development launcher.
 
+See [the development guide](app/docs/development.md) for extension points and [Contributing](CONTRIBUTING.md) for the complete setup and validation workflow.
+
 ## Validation
 
 Run from `app`:
@@ -62,6 +64,8 @@ npm run test:unit
 npm run test:integration
 npm test
 ```
+
+From the repository root, `npm run check` runs TypeScript, ESLint and the full regression suite together.
 
 Tests that run real media tools require `npm run engines:stage` first. Packaged and installer validation require a fresh Windows build:
 
@@ -103,11 +107,15 @@ Uninstalling offers a choice to keep or delete application data. Full removal in
 ## Cleaning generated files
 
 ```powershell
-cd app
+npm run clean:preview
 npm run clean
+# Optional: also remove unpacked Windows builds
+npm run clean:packaged
 ```
 
-This removes `dist-electron`, `Front-End/dist`, temporary experiment data, and generated smoke/installer validation folders. It preserves source, tests, installed dependencies, verified development engines and release installers. Run it after test/development processes have stopped. The next development run or build recreates its output.
+Run these commands from the repository root. Standard cleanup removes `dist-electron`, `Front-End/dist`, generated smoke/installer validation folders, retired local `app/bin`, and generated metadata/configuration output. It preserves source (including `app/build` installer source), tests, installed dependencies, verified development engines, release installers, `.env` and `.cortex_temp` experiments/partial downloads. The cleaner refuses symbolic links and junctions before deleting files. Run it after test/development processes have stopped. The next development run or build recreates required output.
+
+`clean:packaged` also removes `app/release/<version>/win-unpacked`. Build again before packaged tests or release artifact verification. Installer `.exe`, `.blockmap` and `latest.yml` files are retained.
 
 ## Troubleshooting and implementation notes
 

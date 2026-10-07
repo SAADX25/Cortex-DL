@@ -7,7 +7,7 @@ module.exports = {
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
   ],
-  ignorePatterns: ['dist', 'dist-electron', 'Front-End/dist', 'release', 'bin', '.eslintrc.cjs'],
+  ignorePatterns: ['dist', 'dist-electron', 'Front-End/dist', 'release', 'bin', 'engine-baseline', 'smoke-results', 'installer-validation', '.cortex_temp', '.eslintrc.cjs'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 'latest',

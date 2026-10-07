@@ -1,1 +1,20 @@
-{}
+{
+  "name": "cortex-dl-development",
+  "private": true,
+  "description": "Development commands for the Cortex DL app",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "setup": "npm --prefix app ci",
+    "dev": "npm --prefix app run dev",
+    "build": "npm --prefix app run build",
+    "typecheck": "npm --prefix app run typecheck",
+    "lint": "npm --prefix app run lint",
+    "test": "npm --prefix app test",
+    "check": "npm --prefix app run check",
+    "clean": "npm --prefix app run clean",
+    "clean:preview": "npm --prefix app run clean -- --dry-run",
+    "clean:packaged": "npm --prefix app run clean -- --packaged"
+  }
+}
