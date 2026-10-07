@@ -5,6 +5,8 @@
 - The historical 2.1.0 installer currently returns HTTP 404. When unavailable, CI tests current installation/reinstallation and reports it explicitly. Other network errors remain failures. Installer tests refuse to replace an existing real installation or profile.
 - Release validation inspects the actual packaged ASAR and resources for redistributed engine binaries and verifies shipped third-party notices. Bundled engines still require the corresponding-source review; this installer downloads engines separately on first launch.
 - GitHub publishes the installer, blockmap and update manifest from the successful Windows validation job rather than rebuilding an untested installer in the release job.
+- Generated third-party notices are built from installed dependencies and shipped as a verified resource; they no longer modify the committed tree during CI.
+- Download phase changes bypass progress throttling, so even very fast trimming remains visible and cannot be replaced by a stale queued update.
 
 Local validation: TypeScript, ESLint, release version checks, 87 regression tests and 17 targeted quality/production/release tests passed. Production dependency audit reported zero known vulnerabilities. Final installer and remote workflow results are recorded with the published release.
 

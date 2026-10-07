@@ -227,6 +227,36 @@ test('terminal IPC state bypasses throttle and cancels stale trailing update', (
   assert.equal(sent.at(-1).status, 'paused')
   assert.equal(sent.length, 2)
 })
+test('IPC phase changes remain visible within one throttle window and retire stale progress', async () => {
+  const manager = new DownloadManager()
+  const item = task({ id: 'fast-phase', attemptId: 'attempt', phase: 'downloading' })
+  const attempt = { ...runtime(), attemptId: 'attempt', abortController: new AbortController() }
+  manager.tasks.set(item.id, item)
+  manager.runtime.set(item.id, attempt)
+  manager.attempts.set(item.id, attempt)
+  const sent = []
+  manager.attachWindow({ isDestroyed: () => false, webContents: { send: (_channel, value) => sent.push({ ...value }) } })
+  const draft = { ...item }
+  const ctx = manager.createContext(item.id, attempt, draft)
+  const clock = Date.now
+  const now = clock()
+  attempt.lastIpcAtMs = now
+  Date.now = () => now
+  try {
+    ctx.sendUpdate(draft)
+    draft.status = 'converting'; draft.phase = 'trimming'; ctx.sendUpdate(draft)
+    draft.convertingPercent = 20; ctx.sendUpdate(draft)
+    draft.phase = 'validating'; ctx.sendUpdate(draft)
+    draft.phase = 'finalizing'; ctx.sendUpdate(draft)
+    assert.deepEqual(sent.map(value => value.phase), ['trimming', 'validating', 'finalizing'])
+    Date.now = clock
+    await new Promise(resolve => setTimeout(resolve, 140))
+    assert.equal(sent.length, 3, 'queued progress must not overwrite a newer phase')
+    attempt.stopReason = 'canceled'
+    draft.phase = 'trimming'; ctx.sendUpdate(draft)
+    assert.equal(sent.length, 3, 'stopped attempts must remain ignored')
+  } finally { Date.now = clock; manager.flushPendingSave() }
+})
 const ffmpegBinary = path.join(process.cwd(), 'engine-baseline', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
 const ffprobeBinary = path.join(process.cwd(), 'engine-baseline', process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe')
 const ytdlpBinary = path.join(process.cwd(), 'engine-baseline', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')

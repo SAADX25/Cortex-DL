@@ -558,6 +558,7 @@ export class DownloadManager {
       sendUpdate: t => {
         if (!current() || t !== draft) return
         const task = this.mustGet(taskId)
+        const previousPhase = task.phase
         // Engines work on isolated drafts. Only this projection can reach authoritative state.
         for (const key of ['totalBytes', 'downloadedBytes', 'speedBytesPerSec', 'downloadPercent', 'convertingPercent', 'resumeChunks', 'supportsRanges', 'etag', 'lastModified', 'title', 'thumbnail', 'ytdlpStreams', 'ytdlpExpectedBytes', 'ytdlpExpectedStreamCount'] as const) {
           Object.assign(task, { [key]: t[key] })
@@ -567,7 +568,13 @@ export class DownloadManager {
           ? t.phase : task.status === 'merging' || task.status === 'converting' ? task.status : 'downloading'
         task.updatedAtMs = nowMs()
         updateTaskProgress(task)
-        throttledSendUpdate(this.win, task, attempt)
+        if (task.phase !== previousPhase) {
+          clearPendingTrailing(task.id)
+          attempt.lastIpcAtMs = nowMs()
+          sendUpdate(this.win, task)
+        } else {
+          throttledSendUpdate(this.win, task, attempt)
+        }
         this.markDirty(taskId)
       },
       saveState: () => { if (current()) this.markDirty(taskId) },
