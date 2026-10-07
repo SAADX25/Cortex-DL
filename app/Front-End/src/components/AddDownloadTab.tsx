@@ -344,7 +344,10 @@ const AddDownloadTab: React.FC = () => {
                           setTargetResolution(null)
                         }}
                       >
-                        <option value="">{t.quality_best || 'Best Auto'}</option>
+                        <option value="">
+                          {t.quality_best || 'Best Auto'}
+                          {availableVideoQualities?.[0] ? ` (${availableVideoQualities[0].height}p)` : ''}
+                        </option>
                         {availableVideoQualities && availableVideoQualities.length > 0 ? (
                           availableVideoQualities.map((q) => (
                             <option key={`${q.height}p`} value={`${q.height}p`}>

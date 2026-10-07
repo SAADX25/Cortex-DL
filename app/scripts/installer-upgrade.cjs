@@ -5,6 +5,7 @@ const assert = require('node:assert/strict')
 const crypto = require('node:crypto')
 const { spawnSync } = require('node:child_process')
 const root = path.resolve(__dirname, '..')
+const version = require('../package.json').version
 const install = path.join(root, 'installer-validation', 'Cortex spaces العربية')
 const data = path.join(process.env.APPDATA, 'Cortex DL')
 function launch(exe, args, env = process.env) {
@@ -43,14 +44,14 @@ try {
   fs.writeFileSync(path.join(data, 'bin', 'engine-state.fixture'), 'preserved engine state')
   launch(path.join(install, 'Cortex DL.exe'), [fixture], { ...process.env, ELECTRON_RUN_AS_NODE: '1' })
   const before = snapshot(data)
-  launch(path.join(root, 'release/2.1.5/Cortex-DL-Setup-2.1.5.exe'), ['/S', `/D=${install}`], env)
-  assert.deepEqual(snapshot(data), before, '2.1.0 → 2.1.5 must preserve history/settings/cookies/credential bytes and engine state')
+  launch(path.join(root, `release/${version}/Cortex-DL-Setup-${version}.exe`), ['/S', `/D=${install}`], env)
+  assert.deepEqual(snapshot(data), before, `2.1.0 → ${version} must preserve history/settings/cookies/credential bytes and engine state`)
   assert.equal(fs.existsSync(data + '.upgrade-2.1.5-backup'), false)
   const check = path.join(root, 'installer-validation', 'check-upgrade.cjs')
   fs.writeFileSync(check, `const Database=require(${JSON.stringify(path.join(install, 'resources/app.asar/node_modules/better-sqlite3'))});const db=new Database(${JSON.stringify(path.join(data, 'tasks.sqlite'))});if(db.prepare('SELECT count(*) AS n FROM tasks').get().n!==1||db.pragma('quick_check',{simple:true})!=='ok')process.exit(1);db.close();`)
   launch(path.join(install, 'Cortex DL.exe'), [check], { ...process.env, ELECTRON_RUN_AS_NODE: '1' })
   success = true
-  console.log('Real NSIS 2.1.0 → 2.1.5 upgrade passed; legacy database readable under Electron 44; all fixture data hashes preserved')
+  console.log(`Real NSIS 2.1.0 → ${version} upgrade passed; legacy database readable under Electron 44; all fixture data hashes preserved`)
 } finally {
   // Only delete this script's fixture, and only after proving successful preservation.
   if (success && path.resolve(data) === path.resolve(path.join(process.env.APPDATA, 'Cortex DL'))) fs.rmSync(data, { recursive: true })

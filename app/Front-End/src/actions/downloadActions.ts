@@ -57,8 +57,7 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
   ui.setGlobalError(null)
   ui.setAnalyzing(true)
   ui.setAnalyzeResult(null)
-  form.setSelectedVariantUrl(null)
-  form.setSelectedSubtitleLanguage('')
+  form.resetForNewUrl()
   try { ui.setUrl(normalizeAnalysisUrl(urlToAnalyze)) } catch { ui.setUrl(urlToAnalyze) }
   ui.setAnalyzing(true)
   const requestId = crypto.randomUUID()
@@ -96,10 +95,6 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
     useUIStore.getState().setAnalyzeResult(result)
     if (result.kind === 'hls-media') form.setSelectedVariantUrl(result.url)
     if (result.kind === 'hls-master') form.setSelectedVariantUrl(result.variants[0]?.url ?? null)
-    if (result.kind === 'ytdlp') {
-      form.setTargetResolution(null)
-      form.setSelectedYtdlpFormatId(null)
-    }
   } catch (err) {
     if (!primaryAnalysis.current(generation)) return
     ui.setAnalyzeResult(null)

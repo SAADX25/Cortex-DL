@@ -94,6 +94,7 @@ export const useFormStore = create<FormStoreState>((set) => ({
     set({
       selectedVariantUrl: null,
       targetResolution: null,
+      selectedQuality: '',
       selectedYtdlpFormatId: null,
       selectedSubtitleLanguage: '',
     }),

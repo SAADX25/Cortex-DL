@@ -22,7 +22,7 @@ async function sandbox(fn) {
 }
 test('production hardening release version rejects mismatched tags', () => {
   const { verifyVersion } = require('../scripts/verify-release.cjs')
-  verifyVersion('v2.1.5')
+  verifyVersion(`v${require('../package.json').version}`)
   assert.throws(() => verifyVersion('v2.1.0'), /Tag must equal/)
 })
 test('production hardening IPC rejects malformed paths, URLs and destructive flags', () => {
@@ -107,6 +107,7 @@ test('production hardening installer fixture initializes a pristine workspace', 
   const script = path.join(dir, 'app/scripts/installer-upgrade.cjs')
   await fs.mkdir(path.dirname(script), { recursive: true })
   await fs.copyFile(path.join(process.cwd(), 'scripts/installer-upgrade.cjs'), script)
+  await fs.copyFile(path.join(process.cwd(), 'package.json'), path.join(dir, 'app/package.json'))
   const stub = path.join(dir, 'stub.cjs')
   await fs.writeFile(stub, `require('node:child_process').spawnSync = () => ({status:0,stdout:'',stderr:''})`)
   const result = require('node:child_process').spawnSync(process.execPath, ['--require', stub, script], { env: { ...process.env, APPDATA: path.join(dir, 'profile') }, encoding: 'utf8' })
