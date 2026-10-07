@@ -178,6 +178,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Desktop/CI hosts may cover the window while smoke tests inspect animations.
+      backgroundThrottling: !smokeDirectory,
       additionalArguments: smokeDirectory ? ['--cortex-smoke'] : [],
     },
   })

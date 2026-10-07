@@ -7,6 +7,7 @@
 - GitHub publishes the installer, blockmap and update manifest from the successful Windows validation job rather than rebuilding an untested installer in the release job.
 - Generated third-party notices are built from installed dependencies and shipped as a verified resource; they no longer modify the committed tree during CI.
 - Download phase changes bypass progress throttling, so even very fast trimming remains visible and cannot be replaced by a stale queued update.
+- Smoke mode disables background animation/timer throttling so desktop window occlusion cannot falsely report a stalled setup animation. Normal application throttling is preserved.
 
 Local validation: TypeScript, ESLint, release version checks, 87 regression tests and 17 targeted quality/production/release tests passed. Production dependency audit reported zero known vulnerabilities. Final installer and remote workflow results are recorded with the published release.
 
