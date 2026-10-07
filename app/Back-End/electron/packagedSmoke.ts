@@ -9,6 +9,7 @@ import { engineHealth } from './setup'
 import { buildInfo } from './diagnostics'
 import { getBinaryPath } from './paths'
 import { isDirectMedia } from './directAnalysis'
+import { extractEngineZip } from './engineIntegrity'
 import type { DownloadManager } from './downloadManager'
 
 const wait = async (condition: () => boolean) => {
@@ -32,6 +33,16 @@ export async function runPackagedSmoke(win: BrowserWindow, downloads: DownloadMa
   if (second) assert.ok(downloads.list().some(task => task.title === 'Packaged fixture'), 'Task must survive restart')
   const unpacked = path.join(process.resourcesPath, 'app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-x64.node')
   assert.ok((await fs.stat(unpacked)).size > 0, 'Native N-API module must be unpacked')
+  const { default: AdmZip } = await import('adm-zip')
+  const archive = new AdmZip()
+  archive.addFile('bundle/fixture.exe', Buffer.alloc(1024 * 1024, 42))
+  const extraction = await fs.mkdtemp(path.join(directory, 'zip-worker-'))
+  try {
+    const zip = path.join(extraction, 'fixture.zip')
+    archive.writeZip(zip)
+    await extractEngineZip(zip, extraction, ['fixture.exe'])
+    assert.equal((await fs.stat(path.join(extraction, 'fixture.exe'))).size, 1024 * 1024)
+  } finally { await fs.rm(extraction, { recursive: true, force: true }) }
   const fixture = path.join(directory, 'fixture.mp4')
   await new Promise<void>((resolve, reject) => execFile(getBinaryPath('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=128x72:rate=10:duration=1', '-f', 'lavfi', '-i', 'sine=duration=1', '-c:v', 'libx264', '-c:a', 'aac', fixture], { windowsHide: true, timeout: 20000 }, err => err ? reject(err) : resolve()))
   const audio = path.join(directory, 'fixture.wav')
@@ -66,6 +77,6 @@ export async function runPackagedSmoke(win: BrowserWindow, downloads: DownloadMa
     assert.equal(renderer.version, true, 'Renderer About version mismatch')
     assert.ok(renderer.lifecycle)
     await wait(() => { const resource = stats(); return resource.streams === 0 && resource.ffmpegProcesses === 0 && resource.probeProcesses === 0 })
-    await fs.writeFile(path.join(directory, second ? 'second-run.json' : 'first-run.json'), JSON.stringify({ runtimeReadyAt: Date.now() - process.uptime() * 1000, smokeDurationMs: Date.now() - started, build, engines, electron: process.versions.electron, abi: process.versions.modules, napi: process.versions.napi, restored: second, checks: ['boot', 'preload', 'version', 'sqlite WAL', 'native unpacked', 'engines', 'direct analysis', 'direct download', 'ffmpeg fixture', 'media token', 'range', 'video x10', 'audio x20', 'Visual Trim x20'], stats: stats() }, null, 2))
+    await fs.writeFile(path.join(directory, second ? 'second-run.json' : 'first-run.json'), JSON.stringify({ runtimeReadyAt: Date.now() - process.uptime() * 1000, smokeDurationMs: Date.now() - started, build, engines, electron: process.versions.electron, abi: process.versions.modules, napi: process.versions.napi, restored: second, checks: ['boot', 'ZIP worker', 'setup animation', 'setup progress', 'trim sound', 'preload', 'version', 'sqlite WAL', 'native unpacked', 'engines', 'direct analysis', 'direct download', 'ffmpeg fixture', 'media token', 'range', 'video x10', 'audio x20', 'Visual Trim x20'], stats: stats() }, null, 2))
   } finally { await new Promise<void>(resolve => server.close(() => resolve())) }
 }

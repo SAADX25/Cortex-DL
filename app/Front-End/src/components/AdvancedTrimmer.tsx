@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Check, Loader, RotateCcw, Scissors } from 'lucide-react'
+import { AlertCircle, Check, Loader, RotateCcw, Scissors, Volume2, VolumeX } from 'lucide-react'
 import './AdvancedTrimmer.css'
 import { TrimPreview, seekPreview, videoFailure } from './trimPreview'
 import { releaseMediaElement } from './MediaPlayer/mediaSession'
@@ -70,6 +70,8 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   onConfirm,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [muted, setMuted] = useState(false)
+  const [volume, setVolume] = useState(1)
   const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0
   const [startSeconds, setStartSeconds] = useState(() => {
     const parsed = parseTimeToSeconds(initialStartTime)
@@ -186,8 +188,12 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           className={`advanced-trimmer__video${streamError || isResolvingStream ? ' advanced-trimmer__video--hidden' : ''}`}
           src={streamUrl ?? undefined}
           controls
-          muted
+          muted={muted}
           preload="metadata"
+          onVolumeChange={(event) => {
+            setMuted(event.currentTarget.muted)
+            setVolume(event.currentTarget.volume)
+          }}
           onError={(event) => {
             if (!streamUrl || event.currentTarget.currentSrc !== streamUrl) return
             previewRef.current?.fail(videoFailure(event.currentTarget))
@@ -198,6 +204,40 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
               console.warn('[Visual Trim] Preview duration differs from analyzed duration:', event.currentTarget.duration, safeDuration)
             }
             seekPreview(event.currentTarget, requestedSeek.current)
+          }}
+        />
+      </div>
+
+      <div className="advanced-trimmer__audio-controls">
+        <button
+          type="button"
+          className="advanced-trimmer__ghost-btn"
+          aria-label={muted || volume === 0 ? 'Unmute preview' : 'Mute preview'}
+          aria-pressed={muted || volume === 0}
+          onClick={() => {
+            const video = videoRef.current
+            if (!video) return
+            const nextMuted = !(video.muted || video.volume === 0)
+            if (!nextMuted && video.volume === 0) video.volume = 1
+            video.muted = nextMuted
+            setMuted(nextMuted)
+            setVolume(video.volume)
+          }}
+        >
+          {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          Preview sound
+        </button>
+        <input
+          type="range" min={0} max={1} step={0.05}
+          aria-label="Preview volume" value={muted ? 0 : volume}
+          onChange={(event) => {
+            const next = Number(event.currentTarget.value)
+            if (videoRef.current) {
+              videoRef.current.volume = next
+              videoRef.current.muted = next === 0
+            }
+            setVolume(next)
+            setMuted(next === 0)
           }}
         />
       </div>

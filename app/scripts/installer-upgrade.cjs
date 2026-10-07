@@ -25,6 +25,7 @@ fs.mkdirSync(data, { recursive: true })
 fs.mkdirSync(path.join(data, 'bin'))
 fs.writeFileSync(path.join(data, 'bin', 'engine-state.fixture'), 'preserved engine state')
 const fixture = path.join(root, 'installer-validation', 'seed-legacy.cjs')
+fs.mkdirSync(path.dirname(fixture), { recursive: true })
 fs.writeFileSync(fixture, `
 const Database=require(${JSON.stringify(path.join(install, 'resources/app.asar/node_modules/better-sqlite3'))});
 const db=new Database(${JSON.stringify(path.join(data, 'tasks.sqlite'))}); db.pragma('journal_mode = WAL');

@@ -46,6 +46,21 @@ function App() {
     if (!window.cortexDl.smokeMode) return
     window.__cortexSmokeLifecycle = async (file: string, audioFile?: string, previewUrl?: string) => {
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+      const { createRoot } = await import('react-dom/client')
+      const overlay = document.createElement('div'); document.body.appendChild(overlay)
+      const overlayRoot = createRoot(overlay)
+      try {
+        overlayRoot.render(<SetupOverlay setupState={{ status: 'checking', progress: 25, message: 'Verifying fixture…' }} />)
+        await delay(200)
+        const spinner = overlay.querySelector('[data-setup-spinner]')
+        if (!spinner) throw new Error('Engine setup spinner missing')
+        const before = getComputedStyle(spinner).transform
+        await delay(250)
+        if (getComputedStyle(spinner).transform === before) throw new Error('Engine setup animation stalled')
+        overlayRoot.render(<SetupOverlay setupState={{ status: 'repairing', progress: 60, message: 'Downloading fixture: 1 MB / 2 MB…' }} />)
+        await delay(100)
+        if (overlay.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow') !== '60') throw new Error('Engine setup progress stalled')
+      } finally { overlayRoot.unmount(); overlay.remove() }
       for (const [source, count, selector] of [[file, 10, 'video'], [audioFile, 20, 'audio']] as const) {
         if (!source) continue
         for (let i = 0; i < count; i++) {
@@ -68,6 +83,13 @@ function App() {
             for (let n = 0; n < 100; n++) { if (container.querySelector('video')?.readyState) break; await delay(50) }
             const video = container.querySelector('video')
             if (!video || video.readyState < 1) throw new Error('Packaged Visual Trim preview failed')
+            const mute = container.querySelector('[aria-label="Mute preview"]') as HTMLButtonElement | null
+            if (!mute || video.muted) throw new Error('Visual Trim sound control missing')
+            mute.click(); await delay(50)
+            if (!video.muted) throw new Error('Visual Trim mute failed')
+            const unmute = container.querySelector('[aria-label="Unmute preview"]') as HTMLButtonElement | null
+            unmute?.click(); await delay(50)
+            if (video.muted) throw new Error('Visual Trim unmute failed')
           } finally { root.unmount(); container.remove() }
           await delay(50)
         }

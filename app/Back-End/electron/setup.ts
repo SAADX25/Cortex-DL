@@ -12,10 +12,10 @@ export interface SetupState {
 }
 export let setupState: SetupState = { status: 'checking', progress: 0, message: 'Checking engines…' }
 const specs: EngineSpec[] = lock.packages.flatMap(pkg => pkg.engines)
-export async function engineHealth(): Promise<EngineHealth[]> {
+export async function engineHealth(onProgress?: (name: string, completed: number) => void): Promise<EngineHealth[]> {
   let bundled: EngineSpec[] = []
   try { bundled = JSON.parse(await fs.promises.readFile(path.join(getBaselineDirectory(), 'manifest.json'), 'utf8')).engines } catch { /* report unavailable below */ }
-  return Promise.all(specs.map(async spec => {
+  const check = async (spec: EngineSpec): Promise<EngineHealth> => {
     const file = getBinaryPath(spec.name)
     if (path.dirname(file) === getBaselineDirectory()) {
       const entry = bundled.find(e => e.name === spec.name)
@@ -25,7 +25,15 @@ export async function engineHealth(): Promise<EngineHealth[]> {
     let receipt: { sha256?: string } = {}
     try { receipt = JSON.parse(await fs.promises.readFile(`${file}.integrity.json`, 'utf8')) } catch { /* legacy engine: measure execution */ }
     return verifyEngine(file, { ...spec, version: undefined, sha256: receipt.sha256 })
-  }))
+  }
+  if (!onProgress) return Promise.all(specs.map(check))
+  const result: EngineHealth[] = []
+  for (const spec of specs) {
+    onProgress(spec.name, result.length)
+    result.push(await check(spec))
+    onProgress(spec.name, result.length)
+  }
+  return result
 }
 let pending: Promise<void> | null = null
 export function runSetup(win: BrowserWindow, allowNetwork = false): Promise<void> {
@@ -47,12 +55,13 @@ async function setup(win: BrowserWindow, allowNetwork: boolean): Promise<void> {
       const file = path.join(bin, spec.filename)
       if (!fs.existsSync(file) && fs.existsSync(`${file}.previous`)) await fs.promises.rename(`${file}.previous`, file)
     }
-    const health = await engineHealth()
+    const health = await engineHealth((name, completed) => send({ status: 'checking', progress: completed / specs.length * 40, message: `Verifying ${name}…` }))
     for (let i = 0; i < specs.length; i++) {
       const spec = specs[i]
       if (health[i].available) continue
       component = spec.name
-      send({ status: 'repairing', progress: Math.round(i / specs.length * 100), message: `${health[i].message}. Restoring bundled ${spec.name}…` })
+      const progress = 40 + i / specs.length * 45
+      send({ status: 'repairing', progress, message: `${health[i].message}. Restoring bundled ${spec.name}…` })
       const baseline = getBaselineDirectory()
       let bundled: EngineSpec | undefined
       try { bundled = JSON.parse(await fs.promises.readFile(path.join(baseline, 'manifest.json'), 'utf8')).engines.find((engine: EngineSpec) => engine.name === spec.name) } catch { /* repair can retrieve pinned package */ }
@@ -65,7 +74,11 @@ async function setup(win: BrowserWindow, allowNetwork: boolean): Promise<void> {
         const stage = await fs.promises.mkdtemp(path.join(bin, 'repair-'))
         try {
           const archive = path.join(stage, 'package.download')
-          await downloadEngine(pkg.url, archive, pkg.sha256)
+          await downloadEngine(pkg.url, archive, pkg.sha256, undefined, (received, total) => {
+            const mb = (received / 1024 / 1024).toFixed(1)
+            send({ status: 'repairing', progress: progress + (total ? received / total : 0) * 35 / specs.length, message: `Downloading ${spec.name}: ${mb} MB${total ? ` / ${(total / 1024 / 1024).toFixed(1)} MB` : ''}…` })
+          })
+          send({ status: 'repairing', progress: progress + 35 / specs.length, message: `Extracting and verifying ${spec.name}…` })
           if (pkg.url.endsWith('.zip')) await extractEngineZip(archive, stage, pkg.engines.map(e => e.filename))
           else await fs.promises.copyFile(archive, path.join(stage, spec.filename))
           await fs.promises.copyFile(path.join(stage, spec.filename), candidate)
@@ -80,6 +93,7 @@ async function setup(win: BrowserWindow, allowNetwork: boolean): Promise<void> {
       finally { await fs.promises.rm(candidate, { force: true }) }
       log.info('[Engines] Repaired', spec.name)
     }
+    send({ status: 'checking', progress: 90, message: 'Completing engine verification…' })
     const result = health.every(e => e.available) ? health : await engineHealth()
     if (result.some(engine => !engine.available)) throw new Error('Post-repair verification failed')
     log.info('[Engines] Healthy', result)

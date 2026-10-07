@@ -75,6 +75,19 @@
   gap: 10px;
 }
 
+.advanced-trimmer__audio-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.advanced-trimmer__audio-controls input {
+  flex: 1;
+  min-width: 100px;
+  accent-color: #38bdf8;
+}
+
 .advanced-trimmer__thumb-strip {
   display: grid;
   grid-auto-flow: column;

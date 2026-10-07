@@ -4,6 +4,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { Worker } from 'node:worker_threads'
+import { createRequire } from 'node:module'
 
 export type EngineSpec = { name: string; filename: string; minimum: string; architecture: string; sha256?: string; version?: string }
 export type EngineHealth = { name: string; available: boolean; version: string; message: string }
@@ -53,7 +55,7 @@ export async function verifyEngine(file: string, spec: EngineSpec): Promise<Engi
 }
 
 /** HTTPS only, deadline covers headers and body, bounded redirect chain and bytes. */
-export async function downloadEngine(url: string, destination: string, expectedHash?: string, signal?: AbortSignal): Promise<void> {
+export async function downloadEngine(url: string, destination: string, expectedHash?: string, signal?: AbortSignal, onProgress?: (received: number, total: number | null) => void): Promise<void> {
   const tmp = `${destination}.${randomUUID()}.tmp`
   for (let attempt = 0; attempt < 3; attempt++) {
     const controller = new AbortController()
@@ -76,9 +78,17 @@ export async function downloadEngine(url: string, destination: string, expectedH
       if (!response?.ok || !response.body) throw new Error(`Engine download HTTP ${response?.status}`)
       const maximum = 350 * 1024 * 1024
       if (Number(response.headers.get('content-length')) > maximum) { await response.body.cancel(); throw new Error('Engine download is too large') }
-      let size = 0
-      const bound = new Transform({ transform(chunk, _enc, cb) { size += chunk.length; cb(size > maximum ? new Error('Engine download exceeds size limit') : null, chunk) } })
+      const length = Number(response.headers.get('content-length'))
+      const total = Number.isFinite(length) && length > 0 ? length : null
+      let size = 0, reportedAt = 0
+      onProgress?.(0, total)
+      const bound = new Transform({ transform(chunk, _enc, cb) {
+        size += chunk.length
+        if (Date.now() - reportedAt >= 100) { onProgress?.(size, total); reportedAt = Date.now() }
+        cb(size > maximum ? new Error('Engine download exceeds size limit') : null, chunk)
+      } })
       await pipeline(Readable.fromWeb(response.body as unknown as import('node:stream/web').ReadableStream), bound, fs.createWriteStream(tmp, { flags: 'wx' }), { signal: controller.signal })
+      onProgress?.(size, total)
       if (expectedHash && await sha256(tmp) !== expectedHash) throw new Error('Engine download checksum mismatch')
       await fs.promises.rename(tmp, destination)
       return
@@ -112,23 +122,37 @@ export async function promoteEngine(candidate: string, final: string, spec: Engi
 
 /** Extract only allowlisted regular files, never archive paths, links, or directories. */
 export async function extractEngineZip(zip: string, destination: string, filenames: string[]): Promise<void> {
-  const { default: AdmZip } = await import('adm-zip')
   if ((await fs.promises.stat(zip)).size > 350 * 1024 * 1024) throw new Error('Archive is too large')
-  const archive = new AdmZip(zip)
-  const entries = archive.getEntries()
-  if (entries.length > 5000) throw new Error('Archive contains too many entries')
-  let expanded = 0
-  const found = new Set<string>()
-  for (const entry of entries) {
-    const parts = entry.entryName.replace(/\\/g, '/').split('/')
-    if (parts.includes('..') || path.isAbsolute(entry.entryName) || /^[A-Za-z]:/.test(entry.entryName) || entry.entryName.includes('\0')) throw new Error('Unsafe archive path')
-    expanded += entry.header.size
-    if (expanded > 1024 * 1024 * 1024) throw new Error('Archive expands beyond size limit')
-    const name = parts[parts.length - 1]
-    if (!filenames.includes(name)) continue
-    if (entry.isDirectory || ((entry.header.attr >>> 16) & 0xf000) === 0xa000 || found.has(name) || entry.header.size > 350 * 1024 * 1024) throw new Error('Invalid engine archive entry')
-    found.add(name)
-    await fs.promises.writeFile(path.join(destination, name), entry.getData(), { flag: 'wx' })
-  }
-  if (found.size !== filenames.length) throw new Error('Required executable missing from archive')
+  // adm-zip reads/inflates synchronously. Keep it off Electron's main event loop.
+  const require = createRequire(path.join(process.env.APP_ROOT || process.cwd(), 'package.json'))
+  await new Promise<void>((resolve, reject) => {
+    const worker = new Worker(String.raw`
+      const { parentPort, workerData } = require('node:worker_threads');
+      const fs = require('node:fs'); const path = require('node:path');
+      const AdmZip = require(workerData.zipModule);
+      (async () => {
+        const entries = new AdmZip(workerData.zip).getEntries();
+        if (entries.length > 5000) throw new Error('Archive contains too many entries');
+        let expanded = 0; const found = new Set();
+        for (const entry of entries) {
+          const parts = entry.entryName.replace(/\\/g, '/').split('/');
+          if (parts.includes('..') || path.isAbsolute(entry.entryName) || /^[A-Za-z]:/.test(entry.entryName) || entry.entryName.includes('\0')) throw new Error('Unsafe archive path');
+          expanded += entry.header.size;
+          if (expanded > 1024 * 1024 * 1024) throw new Error('Archive expands beyond size limit');
+          const name = parts[parts.length - 1];
+          if (!workerData.filenames.includes(name)) continue;
+          if (entry.isDirectory || ((entry.header.attr >>> 16) & 0xf000) === 0xa000 || found.has(name) || entry.header.size > 350 * 1024 * 1024) throw new Error('Invalid engine archive entry');
+          found.add(name);
+          await fs.promises.writeFile(path.join(workerData.destination, name), entry.getData(), { flag: 'wx' });
+        }
+        if (found.size !== workerData.filenames.length) throw new Error('Required executable missing from archive');
+        parentPort.postMessage('done');
+      })().catch(error => { throw error });
+    `, { eval: true, workerData: { zip, destination, filenames, zipModule: require.resolve('adm-zip') } })
+    const timer = setTimeout(() => { void worker.terminate().then(() => reject(new Error('Engine archive extraction timed out'))) }, 120_000)
+    let completed = false
+    worker.once('message', () => { completed = true; clearTimeout(timer); resolve() })
+    worker.once('error', error => { clearTimeout(timer); reject(error) })
+    worker.once('exit', code => { clearTimeout(timer); if (!completed) reject(new Error(`Engine archive worker exited before completion (${code})`)) })
+  })
 }

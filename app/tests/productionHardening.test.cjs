@@ -72,6 +72,48 @@ test('production hardening bundled hashes reject modification', () => sandbox(as
   assert.equal((await verifyEngine(file, { ...spec, sha256: '0'.repeat(64) })).available, false)
   assert.equal((await sha256(file)).length, 64)
 }))
+
+test('production hardening ZIP extraction keeps the event loop responsive', () => sandbox(async dir => {
+  const Zip = require('adm-zip')
+  const archive = new Zip(); archive.addFile('bundle/ffmpeg.exe', Buffer.alloc(64 * 1024 * 1024, 42))
+  const file = path.join(dir, 'engine.zip'); archive.writeZip(file)
+  let ticks = 0
+  const heartbeat = setInterval(() => ticks++, 5)
+  try { await extractEngineZip(file, dir, ['ffmpeg.exe']) } finally { clearInterval(heartbeat) }
+  assert.ok(ticks >= 2, `Main event loop stalled during extraction (${ticks} heartbeats)`)
+  assert.equal((await fs.stat(path.join(dir, 'ffmpeg.exe'))).size, 64 * 1024 * 1024)
+}))
+
+test('production hardening engine download reports bytes with and without Content-Length', () => sandbox(async dir => {
+  const fetch = globalThis.fetch
+  try {
+    for (const known of [true, false]) {
+      globalThis.fetch = async () => new Response(new ReadableStream({
+        async start(controller) {
+          controller.enqueue(new Uint8Array(1024)); await new Promise(resolve => setTimeout(resolve, 120))
+          controller.enqueue(new Uint8Array(1024)); controller.close()
+        },
+      }), { headers: known ? { 'Content-Length': '2048' } : {} })
+      const reports = []
+      await downloadEngine('https://fixture.invalid/engine', path.join(dir, `engine-${known}`), undefined, undefined, (...args) => reports.push(args))
+      assert.deepEqual(reports[0], [0, known ? 2048 : null])
+      assert.deepEqual(reports.at(-1), [2048, known ? 2048 : null])
+      assert.ok(reports.some(([bytes]) => bytes === 1024))
+    }
+  } finally { globalThis.fetch = fetch }
+}))
+
+test('production hardening installer fixture initializes a pristine workspace', () => sandbox(async dir => {
+  const script = path.join(dir, 'app/scripts/installer-upgrade.cjs')
+  await fs.mkdir(path.dirname(script), { recursive: true })
+  await fs.copyFile(path.join(process.cwd(), 'scripts/installer-upgrade.cjs'), script)
+  const stub = path.join(dir, 'stub.cjs')
+  await fs.writeFile(stub, `require('node:child_process').spawnSync = () => ({status:0,stdout:'',stderr:''})`)
+  const result = require('node:child_process').spawnSync(process.execPath, ['--require', stub, script], { env: { ...process.env, APPDATA: path.join(dir, 'profile') }, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.ok((await fs.stat(path.join(dir, 'app/installer-validation/seed-legacy.cjs'))).isFile())
+  assert.equal(await fs.access(path.join(dir, 'profile/Cortex DL')).then(() => true, () => false), false)
+}))
 test('production hardening media ranges support suffixes and reject malformed or overflowing requests', () => {
   assert.deepEqual(parseMediaRange('bytes=-64', 100), [36, 99])
   assert.deepEqual(parseMediaRange('bytes=5-', 100), [5, 99])

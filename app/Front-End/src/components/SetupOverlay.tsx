@@ -96,9 +96,10 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
                 </motion.div>
               ) : (
                 <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <Loader2 size={32} color="var(--accent-primary)" className="spin-animation" style={{ animation: 'spin 2s linear infinite' }} />
+                  <Loader2 data-setup-spinner size={32} color="var(--accent-primary)" style={{ animation: 'cortex-setup-spin 1s linear infinite', willChange: 'transform' }} />
                   <style>{`
-                    @keyframes spin { 100% { transform: rotate(360deg); } }
+                    @keyframes cortex-setup-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                    @keyframes cortex-setup-scan { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
                   `}</style>
                 </motion.div>
               )}
@@ -119,7 +120,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           {isError ? 'Setup Failed' : isDone ? 'Ready to Go' : 'Initializing Engines'}
         </motion.h2>
 
-        <div style={{ height: '24px', marginBottom: '32px', display: 'flex', alignItems: 'center' }}>
+        <div role="status" aria-live="polite" style={{ minHeight: '24px', marginBottom: '32px', display: 'flex', alignItems: 'center' }}>
           <AnimatePresence mode="wait">
             <motion.p
               key={message}
@@ -148,7 +149,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           borderRadius: '99px',
           overflow: 'hidden',
           position: 'relative'
-        }}>
+        }} role="progressbar" aria-label="Engine setup" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}>
           {/* Progress Fill */}
           <motion.div
             initial={{ width: 0 }}
@@ -166,6 +167,11 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
                 : '0 0 12px rgba(56,189,248,0.6)'
             }}
           />
+          {!isDone && !isError && <div style={{
+            position: 'absolute', inset: 0, width: '25%',
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent)',
+            animation: 'cortex-setup-scan 1.4s linear infinite', willChange: 'transform'
+          }} />}
         </div>
 
         {/* Percentage Text */}
