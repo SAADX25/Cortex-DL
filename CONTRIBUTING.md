@@ -58,3 +58,7 @@ npm run clean
 ## Pull requests
 
 Use a focused branch and describe the behavior that changes, the reason and the validation performed. Keep generated output, credentials and downloaded media out of commits. Include screenshots for visible UI changes. Follow the existing pull request template and [code of conduct](CODE_OF_CONDUCT.md).
+
+---
+
+[README](README.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [MIT License](LICENSE)

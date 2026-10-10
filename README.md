@@ -3,9 +3,23 @@
 
 # Cortex DL
 
-A Windows desktop video and audio downloader built with Electron, React, TypeScript, yt-dlp, FFmpeg and SQLite.
+A modern, high-performance Windows desktop video and audio downloader built with Electron, React, TypeScript, yt-dlp, FFmpeg, and SQLite.
 
-[Releases](https://github.com/SAADX25/Cortex-DL/releases) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT License](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue?style=flat-square)](https://github.com/SAADX25/Cortex-DL/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6?style=flat-square&logo=windows)](https://github.com/SAADX25/Cortex-DL/releases)
+[![Tests](https://img.shields.io/badge/tests-134%20passed-success?style=flat-square)](#validation)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Node](https://img.shields.io/badge/node-24.x-339933?style=flat-square&logo=node.js)](https://nodejs.org)
+[![Electron](https://img.shields.io/badge/electron-44.x-47848F?style=flat-square&logo=electron)](https://www.electronjs.org)
+[![React](https://img.shields.io/badge/react-18.x-61DAFB?style=flat-square&logo=react)](https://react.dev)
+
+---
+
+| 📖 [README](README.md) | 🤝 [Code of Conduct](CODE_OF_CONDUCT.md) | 👥 [Contributing](CONTRIBUTING.md) | ⚖️ [MIT License](LICENSE) | 🛡️ [Security](SECURITY.md) | 🚀 [Releases](https://github.com/SAADX25/Cortex-DL/releases) |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+
+---
+
 </div>
 
 ## Features
@@ -36,17 +50,75 @@ The development startup stages verified engines in `app/engine-baseline`. Keep t
 ## Project layout
 
 ```text
-app/
-  Back-End/electron/   Electron, SQLite, IPC, download engines and media services
-  Front-End/src/       React UI, stores, hooks and translations
-  Front-End/public/    Application icon
-  Shared/             Shared types and progress models
-  build/              NSIS installer source
-  docs/               Architecture and feature documentation
-  scripts/            Build, engine staging and validation tools
-  tests/              Regression tests and reusable fixtures
-  package.json        Dependencies and npm commands
-  engines.lock.json   Pinned engine versions, downloads and checksums
+Cortex-DL/
+├── .github/                       # GitHub CI/CD workflows, issue templates & automation
+│   ├── workflows/
+│   │   └── validation.yml         # Automated Windows validation, test suite & release pipeline
+│   └── ISSUE_TEMPLATE/            # Standardized bug report and feature request templates
+├── assets/                        # Repository assets and application branding
+│   └── logo.png                   # Official high-resolution project logo
+├── app/                           # Core desktop application workspace
+│   ├── Back-End/                  # Electron main process & native backend subsystems
+│   │   └── electron/
+│   │       ├── engines/           # Specialized download, processing & streaming engines
+│   │       │   ├── YoutubeEngine.ts    # yt-dlp wrapper, format resolver & quality selection
+│   │       │   ├── DirectEngine.ts     # Multi-chunk HTTP/HTTPS range downloader
+│   │       │   └── MediaProcessor.ts   # FFmpeg audio/video muxing, trimming & transcoding
+│   │       ├── ipc/               # Strongly-typed IPC handlers & security validation
+│   │       │   └── handlers.ts         # Renderer-to-Main IPC invocation endpoints
+│   │       ├── downloadManager.ts # Core queue orchestrator, attempt lifecycle & state machine
+│   │       ├── db.ts              # SQLite database layer (tasks, history & user settings)
+│   │       ├── engineIntegrity.ts # Engine hashing, SHA-256 verification & binary security
+│   │       ├── engineReceipts.ts  # Authoritative startup receipts & instant-migration cache
+│   │       ├── engineReadiness.ts # Non-blocking background verification & readiness tracking
+│   │       ├── youtubeSubtitles.ts# Subtitle extraction, VTT parsing & soft-sub embedding
+│   │       ├── diagnostics.ts     # Health checks, log redaction & diagnostic bundles
+│   │       ├── entrypoint.ts      # Early Electron bootstrap & startup benchmark probe
+│   │       ├── main.ts            # Electron app lifecycle, window manager & tray integration
+│   │       └── preload.ts         # Secure context bridge exposing sanitized APIs to renderer
+│   ├── Front-End/                 # Modern React 18 user interface (Vite + Custom CSS)
+│   │   ├── public/                # Static assets & application Windows icon (CortexDL.ico)
+│   │   └── src/
+│   │       ├── components/        # UI components (DownloadList, SettingsTab, SetupOverlay, MediaPlayer)
+│   │       ├── stores/            # Zustand state management (downloadStore, useSettingsStore)
+│   │       ├── hooks/             # Custom React hooks (useDownloadCardVM, useSettingsInit)
+│   │       ├── actions/           # User action dispatchers & download event handlers
+│   │       ├── translations.ts    # Comprehensive bilingual localization (Arabic & English)
+│   │       ├── App.tsx            # Main application layout, sidebar navigation & modals
+│   │       └── main.tsx           # React DOM initialization & theme mounting
+│   ├── Shared/                    # Shared TypeScript models, contracts & progress schemas
+│   │   ├── types.ts               # Unified TypeScript interfaces between Main and Renderer
+│   │   ├── progressModel.ts       # Byte-accurate multi-engine progress calculation
+│   │   ├── analysisUrl.ts         # URL detection, protocol sanitization & playlist parsing
+│   │   └── youtubeErrors.ts       # Structured error classification & user-friendly messages
+│   ├── build/                     # NSIS Windows installer assets & upgrade scripts
+│   │   └── installer.nsh          # Custom NSIS script for zero-data-loss upgrade migrations
+│   ├── docs/                      # Architectural specifications & release documentation
+│   │   ├── downloader-core-v2.md  # State machine, attempt ownership & lifecycle guide
+│   │   ├── startup-architecture.md# Instant startup benchmark & receipt verification specs
+│   │   ├── analysis-performance.md# URL analysis optimizations & caching mechanisms
+│   │   └── development.md         # Developer guide, module map & extension points
+│   ├── scripts/                   # Production build, validation & maintenance utilities
+│   │   ├── build-manifest.cjs     # Injects git commit, engine hashes & build timestamps
+│   │   ├── verify-release.cjs     # Automated release gate verifying tags, versions & hashes
+│   │   ├── stage-engines.cjs      # Development engine provisioning & local baseline cache
+│   │   └── clean.cjs              # Safe output cleaner preserving configs & partial downloads
+│   ├── tests/                     # Automated test suites (Unit, Integration & Packaged smoke)
+│   │   ├── coreV2.test.cjs        # Download manager lifecycle, retry backoff & pause/resume tests
+│   │   ├── engineReceipts.test.cjs# Instant startup receipt validation & migration tests
+│   │   ├── cleanup.test.cjs       # Artifact cleanup & junction traversal protection tests
+│   │   └── productionHardening.test.cjs # Release gate, IPC security & argument sanitization
+│   ├── electron-builder.json5     # NSIS installer packaging & auto-update specifications
+│   ├── engines.lock.json          # Cryptographically pinned engine hashes (yt-dlp, FFmpeg, Deno)
+│   ├── package.json               # Desktop application dependencies & script definitions (v2.2.0)
+│   └── vite.config.ts             # Vite configuration with embedded Electron compilation
+├── Cortex_Dev.bat                 # One-click Windows development launcher script
+├── CODE_OF_CONDUCT.md             # Community standards, expected behavior & enforcement
+├── CONTRIBUTING.md                # Development guidelines, setup & pull request procedures
+├── LICENSE                        # MIT Open-Source License
+├── package.json                   # Root monorepo proxy scripts (setup, dev, check, build)
+├── README.md                      # Comprehensive project documentation & user manual
+└── SECURITY.md                    # Security policy, supported versions & vulnerability reporting
 ```
 
 Generated build output, downloaded engines, dependencies and test results are ignored by Git. The repository root contains branding, contributor documents and the development launcher.
@@ -124,7 +196,9 @@ Use **Settings → Health Check** or **Repair Engines** for missing or damaged t
 Feature and architecture documentation:
 
 - [Downloader lifecycle, ownership and recovery](app/docs/downloader-core-v2.md)
-- [URL analysis performance](app/docs/analysis-performance.md)
-- [Media processing](app/docs/media-processing-performance.md)
-- [Visual Trim preview](app/docs/visual-trim-preview.md)
+- [Startup architecture and instant engine receipts](app/docs/startup-architecture.md)
+- [URL analysis performance & optimizations](app/docs/analysis-performance.md)
+- [Media processing & FFmpeg pipeline](app/docs/media-processing-performance.md)
+- [Visual Trim preview & media playback](app/docs/visual-trim-preview.md)
 - [Media player diagnostics](app/docs/media-player-diagnostics.md)
+- [Developer guide & module map](app/docs/development.md)
