@@ -10,9 +10,10 @@ export function registerLocalSubtitleIpc(getWin: () => BrowserWindow | null): vo
   const get = () => service ??= new LocalSubtitleService(new SubtitleAssets(path.join(app.getPath('userData'), 'local-subtitles')))
   ipcMain.handle('cortexdl:subtitles:state', () => get().state)
   ipcMain.handle('cortexdl:subtitles:readiness', () => get().assets.readiness())
-  ipcMain.handle('cortexdl:subtitles:install', (_event, speech: SpeechModel, translation: TranslationModel | null) => get().install(speech, translation))
+  ipcMain.handle('cortexdl:subtitles:install', (_event, speech: SpeechModel, translation: TranslationModel | null, compute?: 'auto' | 'cpu') => get().install(speech, translation, compute))
   ipcMain.handle('cortexdl:subtitles:start', (_event, request: SubtitleRequest) => get().start(request))
   ipcMain.handle('cortexdl:subtitles:cancel', (_event, id: string) => get().cancel(id))
+  ipcMain.handle('cortexdl:subtitles:clear', (_event, id: string) => get().clear(id))
   ipcMain.handle('cortexdl:subtitles:select', async () => {
     const win = getWin(); if (!win || get().busy) return null
     const result = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Video and audio', extensions: ['mp4', 'mkv', 'webm', 'mov', 'avi', 'm4v', 'ogv', 'mp3', 'wav', 'm4a', 'aac', 'opus', 'flac', 'ogg', 'wma'] }] })

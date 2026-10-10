@@ -6,9 +6,10 @@ import path from 'node:path'
 export class SubtitleProcesses {
   private children = new Map<ChildProcessWithoutNullStreams, Promise<void>>()
   constructor(readonly signal: AbortSignal) {}
-  spawn(binary: string, args: string[], onOutput?: (output: string) => void): { child: ChildProcessWithoutNullStreams; settled: Promise<void> } {
+  spawn(binary: string, args: string[], onOutput?: (output: string) => void, libraryDirectory?: string): { child: ChildProcessWithoutNullStreams; settled: Promise<void> } {
     this.signal.throwIfAborted()
-    const child = spawn(binary, args, { windowsHide: true, cwd: path.dirname(binary), detached: process.platform !== 'win32', stdio: 'pipe' })
+    const child = spawn(binary, args, { windowsHide: true, cwd: path.dirname(binary), detached: process.platform !== 'win32', stdio: 'pipe',
+      env: libraryDirectory ? { ...process.env, PATH: libraryDirectory + path.delimiter + (process.env.PATH ?? '') } : process.env })
     child.stdin.end()
     const abort = () => { void killProcessTree(child) }
     this.signal.addEventListener('abort', abort, { once: true })
@@ -29,7 +30,7 @@ export class SubtitleProcesses {
     this.children.set(child, settled)
     return { child, settled }
   }
-  async run(binary: string, args: string[], onOutput?: (output: string) => void): Promise<void> { await this.spawn(binary, args, onOutput).settled }
+  async run(binary: string, args: string[], onOutput?: (output: string) => void, libraryDirectory?: string): Promise<void> { await this.spawn(binary, args, onOutput, libraryDirectory).settled }
   async stop(): Promise<void> {
     const owned = [...this.children]
     await Promise.all(owned.map(([child]) => killProcessTree(child)))

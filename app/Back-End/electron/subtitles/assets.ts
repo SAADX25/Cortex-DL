@@ -5,6 +5,8 @@ import os from 'node:os'
 import AdmZip from 'adm-zip'
 import { SUBTITLE_ASSETS, type SubtitleAsset } from './manifest'
 import type { SpeechModel, TranslationModel, SubtitleReadiness } from '../../../Shared/localSubtitles'
+import { detectNvidiaGpu } from './gpu'
+import { SubtitleProcesses } from './process'
 
 type Receipt = { id: string; sha256: string; executable?: string; files: { name: string; size: number; mtimeMs: number }[] }
 export async function sha256(file: string): Promise<string> {
@@ -32,23 +34,39 @@ export class SubtitleAssets {
     } catch { return null }
   }
   async readiness(): Promise<SubtitleReadiness> {
-    const keys = ['whisper', 'vad', 'accurate', 'fast', 'llama', 'standard', 'quality']
+    const keys = ['whisper', 'vad', 'accurate', 'fast', 'llama', 'standard', 'quality', 'whisperGpu', 'cudaLibraries', 'llamaGpu', 'accurateGpu']
     const found = Object.fromEntries(await Promise.all(keys.map(async key => [key, !!await this.locate(key)])))
+    const gpu = await detectNvidiaGpu()
+    const cpuName = os.cpus()[0]?.model.replace(/\s+/g, ' ').trim()
     return { speech: { accurate: found.whisper && found.vad && found.accurate, fast: found.whisper && found.vad && found.fast },
-      translation: { standard: found.llama && found.standard, quality: found.llama && found.quality }, ramGB: os.totalmem() / 1073741824 }
+      translation: { standard: found.llama && found.standard, quality: found.llama && found.quality }, ramGB: os.totalmem() / 1073741824,
+      cpu: cpuName ? { name: cpuName } : undefined,
+      gpu: gpu ? { name: gpu.name, memoryMB: gpu.memoryMB, speech: { accurate: found.whisperGpu && found.cudaLibraries && found.accurateGpu, fast: found.whisperGpu && found.cudaLibraries && found.fast }, translation: found.llamaGpu } : undefined }
   }
-  async install(speech: SpeechModel, translation: TranslationModel | null, signal: AbortSignal, progress: (percent: number, name: string) => void): Promise<void> {
+  async install(speech: SpeechModel, translation: TranslationModel | null, signal: AbortSignal, progress: (percent: number, name: string) => void, compute: 'auto' | 'cpu' = 'auto'): Promise<void> {
     if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('LOCAL_SUBTITLES_WINDOWS_X64')
     await fs.mkdir(this.root, { recursive: true })
-    const selected = ['whisper', 'vad', speech, ...(translation ? ['llama', translation] : [])]
+    const gpu = compute === 'auto' ? await detectNvidiaGpu(signal) : null
+    const selected = ['whisper', 'vad', speech, ...(translation ? ['llama', translation] : []),
+      ...(gpu ? ['whisperGpu', 'cudaLibraries', ...(speech === 'accurate' ? ['accurateGpu'] : []), ...(translation ? ['llamaGpu'] : [])] : [])]
     const missing: SubtitleAsset[] = []
     for (const key of selected) { signal.throwIfAborted(); if (!await this.locate(key)) missing.push(SUBTITLE_ASSETS[key]) }
     const total = missing.reduce((n, a) => n + a.bytes, 0)
     // Archives are tiny compared with model weights; reserve space for extraction too.
     const space = await fs.statfs(this.root)
-    if (Number(space.bavail) * Number(space.bsize) < total + 100 * 1024 * 1024) throw new Error('LOCAL_SUBTITLES_DISK_SPACE')
+    const extraction = missing.reduce((n, a) => n + (a.archive ? a.expandedLimit ?? 200 * 1024 * 1024 : 0), 0)
+    if (Number(space.bavail) * Number(space.bsize) < total + extraction + 100 * 1024 * 1024) throw new Error('LOCAL_SUBTITLES_DISK_SPACE')
     let done = 0
     for (const asset of missing) {
+      if (asset === SUBTITLE_ASSETS.accurateGpu && await this.locate('accurate') && await this.locate('whisper')) {
+        progress(Math.min(99, done / total * 100), 'optimizing-gpu-model')
+        const model = (await this.locate('accurate'))!, executable = (await this.locate('whisper'))!
+        if (await sha256(model) !== SUBTITLE_ASSETS.accurate.sha256) throw new Error('Model checksum verification failed')
+        const processes = new SubtitleProcesses(signal)
+        try {
+          await processes.run(path.join(path.dirname(executable), 'whisper-quantize.exe'), [model, path.join(this.root, `${asset.id}.download.part`), 'q5_0'])
+        } finally { await processes.stop() }
+      }
       await this.installAsset(asset, signal, bytes => progress(Math.min(99, (done + bytes) / total * 100), asset.id))
       done += asset.bytes
     }
@@ -100,7 +118,7 @@ export class SubtitleAssets {
           if (!target.startsWith(stage + path.sep) || ((entry.header.attr >>> 16) & 0xF000) === 0xA000) throw new Error('Unsafe engine archive')
           if (entry.isDirectory) continue
           expanded += entry.header.size
-          if (expanded > 200 * 1024 * 1024) throw new Error('Engine archive exceeds size limit')
+          if (expanded > (asset.expandedLimit ?? 200 * 1024 * 1024)) throw new Error('Engine archive exceeds size limit')
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, entry.getData(), { flag: 'wx' })
           names.push(path.join(asset.file, relative))

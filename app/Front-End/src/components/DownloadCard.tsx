@@ -6,6 +6,7 @@ import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
 import { useLang } from '../stores/useSettingsStore'
 import { translations } from '../translations'
 import SmartImage from './SmartImage'
+import DownloadSubtitleMerge from './DownloadSubtitleMerge'
 import { AUDIO_FORMATS } from '../../../Shared/types'
 import './DownloadCard.css'
 
@@ -190,6 +191,9 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
               <button className="dc-btn dc-play" onClick={vm.onPlay} title={t.btn_play} aria-label={t.btn_play}>
                 <Play size={15} />{lang === 'ar' ? 'تشغيل' : 'Play'}
               </button>
+            )}
+            {vm.showPlay && /\.(mp4|mkv|webm|mov|avi|m4v|ogv)$/i.test(vm.filePath) && (
+              <DownloadSubtitleMerge id={id} filePath={vm.filePath} title={vm.title} onOpenFile={onOpenFile} onOpenFolder={onOpenFolder} />
             )}
             {vm.showOpenFolder && (
               <button className="dc-btn-icon ghost-warning" onClick={vm.onOpenFolder} title={t.btn_folder} aria-label={t.btn_folder}>

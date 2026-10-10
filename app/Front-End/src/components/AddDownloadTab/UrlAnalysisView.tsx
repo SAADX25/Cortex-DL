@@ -1,9 +1,6 @@
 import React, { useEffect } from 'react'
 import { primaryAnalysis } from '../../lib/analysisSession'
 import { Language } from '../../translations'
-import { YouTubeStatus } from './YouTubeStatus'
-import { Captions } from 'lucide-react'
-import { openSubtitleStudio } from '../../stores/useSubtitleStudioStore'
 
 interface UrlAnalysisViewProps {
   analyzeResult: any
@@ -13,9 +10,6 @@ interface UrlAnalysisViewProps {
   setCommentsSuccessPath: (val: string | null) => void
   setIsCommentsDownloading: (val: boolean) => void
   showToast: (msg: string) => void
-  isAudioMode: boolean
-  selectedSubtitleLanguage: string
-  setSelectedSubtitleLanguage: (val: string) => void
 }
 
 const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
@@ -25,10 +19,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
   SmartImage,
   setCommentsSuccessPath,
   setIsCommentsDownloading,
-  showToast,
-  isAudioMode,
-  selectedSubtitleLanguage,
-  setSelectedSubtitleLanguage
+  showToast
 }) => {
   useEffect(() => {
     if (analyzeResult?.preview && window.cortexDl.analysisDebug) console.debug('[analysis timing] firstPreviewRenderedMs=', primaryAnalysis.elapsed())
@@ -114,41 +105,10 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
                   <span>{lang === 'ar' ? 'تحميل التعليقات' : 'Save Comments'}</span>
                 </div>
               )}
-              {!isAudioMode && analyzeResult.subtitles?.length > 0 && (
-                <label
-                  className="metadata-badge subtitle-language-control"
-                  title={lang === 'ar'
-                    ? '\u0633\u064a\u062a\u0645 \u062f\u0645\u062c \u0627\u0644\u062a\u0631\u062c\u0645\u0629 \u0627\u0644\u0645\u062e\u062a\u0627\u0631\u0629 \u062f\u0627\u062e\u0644 \u0645\u0644\u0641 \u0627\u0644\u0641\u064a\u062f\u064a\u0648'
-                    : 'The selected subtitles will be embedded in the video file'}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20" />
-                  </svg>
-                  <select
-                    value={selectedSubtitleLanguage}
-                    onChange={(event) => setSelectedSubtitleLanguage(event.target.value)}
-                    aria-label={lang === 'ar' ? '\u0627\u062e\u062a\u064a\u0627\u0631 \u0644\u063a\u0629 \u0627\u0644\u062a\u0631\u062c\u0645\u0629' : 'Select subtitle language'}
-                  >
-                    <option value="">{lang === 'ar' ? '\u0628\u062f\u0648\u0646 \u062a\u0631\u062c\u0645\u0629' : 'Subtitles off'}</option>
-                    {analyzeResult.subtitles.map((track: any) => (
-                      <option key={track.languageCode} value={track.languageCode}>
-                        {track.name}{track.name !== track.languageCode ? ' (' + track.languageCode + ')' : ''}
-                        {track.isAutomatic ? (lang === 'ar' ? ' - \u062a\u0644\u0642\u0627\u0626\u064a\u0629' : ' - Auto') : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <button className="youtube-refresh-button speech-subtitles-button" type="button" title={lang === 'ar' ? 'إنشاء ترجمة من الصوت' : 'Generate subtitles from speech'} onClick={() => openSubtitleStudio(url)}>
-                <Captions size={19} />
-                <span>{lang === 'ar' ? 'ترجمة من الصوت' : 'Speech subtitles'}</span>
-              </button>
             </div>
           </div>
         )}
 
-        <YouTubeStatus url={url} lang={lang} />
         {analyzeResult.kind === 'ytdlp' && (url.includes('youtube.com') || url.includes('youtu.be')) && analyzeResult.comments && analyzeResult.comments.length > 0 && (
           <div className="preview-comments custom-scrollbar">
             <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>

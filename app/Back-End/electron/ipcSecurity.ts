@@ -4,12 +4,19 @@ import { validateSubtitleRequest } from '../../Shared/localSubtitles'
 
 export function validateIpcArguments(channel: string, args: unknown[]): void {
   const first = args[0]
+  if (channel.startsWith('cortexdl:subtitle-files:')) {
+    if (typeof first !== 'string' || !/^[\w-]{1,128}$/.test(first)) throw new Error('Invalid download ID')
+    if (channel.endsWith(':merge')) {
+      if (args.length !== 3 || typeof args[1] !== 'string' || args[1].length > 255 || /[/\\\0]/.test(args[1]) || !/\.(srt|vtt)$/i.test(args[1]) || !['mp4', 'mkv'].includes(String(args[2]))) throw new Error('Invalid subtitle merge')
+    } else if (args.length !== 1) throw new Error('Invalid subtitle operation')
+  }
   if (channel === 'cortexdl:subtitles:start') validateSubtitleRequest(first)
-  if (channel === 'cortexdl:subtitles:install' && (!['accurate', 'fast'].includes(String(first)) || args[1] !== null && !['standard', 'quality'].includes(String(args[1])))) throw new Error('Invalid subtitle models')
+  if (channel === 'cortexdl:subtitles:clear' && (typeof first !== 'string' || !/^[\w-]{0,128}$/.test(first) || args.length !== 1)) throw new Error('Invalid subtitle session ID')
+  if (channel === 'cortexdl:subtitles:install' && (!['accurate', 'fast'].includes(String(first)) || args[1] !== null && !['standard', 'quality'].includes(String(args[1])) || args[2] !== undefined && !['auto', 'cpu'].includes(String(args[2])))) throw new Error('Invalid subtitle models')
   if (['cortexdl:subtitles:cancel', 'cortexdl:subtitles:export', 'cortexdl:subtitles:embed'].includes(channel) && (typeof first !== 'string' || !/^[\w-]{1,128}$/.test(first))) throw new Error('Invalid subtitle operation ID')
   if (channel === 'cortexdl:subtitles:embed' && (!Array.isArray(args[1]) || args[1].length > 50000)) throw new Error('Invalid subtitle embedding')
   if (channel === 'cortexdl:subtitles:export' && (!Array.isArray(args[1]) || args[1].length > 50000 || !['srt', 'vtt'].includes(String(args[2])))) throw new Error('Invalid subtitle export')
-  if (channel === 'cortexdl:analyze-url' && args[2] !== undefined && !['formats', 'captions'].includes(String(args[2]))) throw new Error('Invalid analysis mode')
+  if (channel === 'cortexdl:analyze-url' && args.length > 2) throw new Error('Invalid analysis arguments')
   const paths = ['open-folder', 'open-file', 'get-media-fps', 'get-subtitles']
   if (paths.some(name => channel === `cortexdl:${name}`)) {
     if (typeof first !== 'string' || first.length > 32767 || first.includes('\0') || !path.isAbsolute(first)) throw new Error('Invalid file path')

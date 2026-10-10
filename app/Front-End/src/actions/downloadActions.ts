@@ -2,7 +2,7 @@ import { primaryAnalysis } from '../lib/analysisSession'
 import { youtubeVideoId, normalizeAnalysisUrl } from '../../../Shared/analysisUrl'
 import { translations } from '../translations'
 import { MAX_BATCH_ITEMS } from '../constants/limits'
-import { isYtdlpUrl, normalizeIpcError, SUBTITLE_EMBED_FORMATS } from '../lib/downloadHelpers'
+import { isYtdlpUrl, normalizeIpcError } from '../lib/downloadHelpers'
 import { useUIStore } from '../stores/useUIStore'
 import { useFormStore } from '../stores/useFormStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
@@ -31,7 +31,6 @@ function resetInputState(): void {
   form.setSelectedVariantUrl(null)
   form.setStartTime('')
   form.setEndTime('')
-  form.setSelectedSubtitleLanguage('')
 }
 
 export async function onPickFolder(): Promise<string | null> {
@@ -169,7 +168,7 @@ export function onAddToList(): void {
   const ui = useUIStore.getState()
   const form = useFormStore.getState()
   const { analyzeResult, batchItems, url } = ui
-  const { targetFormat, selectedYtdlpFormatId, selectedQuality, selectedSubtitleLanguage } = form
+  const { targetFormat, selectedYtdlpFormatId, selectedQuality } = form
 
   if (analyzeResult?.kind === 'playlist') {
     const selectedItems = analyzeResult.items.filter((item: any) => item.selected)
@@ -210,16 +209,6 @@ export function onAddToList(): void {
     return
   }
 
-  if (selectedSubtitleLanguage && !SUBTITLE_EMBED_FORMATS.has(targetFormat)) {
-    ui.showToast('Subtitles can be embedded only in MP4, MKV, or WEBM videos.')
-    return
-  }
-
-  const selectedSubtitleTrack = analyzeResult?.kind === 'ytdlp' && selectedSubtitleLanguage
-    ? analyzeResult.subtitles?.find((track) => track.languageCode === selectedSubtitleLanguage)
-    : undefined
-  if (selectedSubtitleLanguage && !selectedSubtitleTrack) { ui.showToast(t().youtube_subtitle_unavailable); return }
-
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const knownTitle = analyzeResult?.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined
   const knownThumb = analyzeResult?.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined
@@ -231,8 +220,6 @@ export function onAddToList(): void {
     loading: !knownTitle,
     format: targetFormat,
     quality: selectedYtdlpFormatId || selectedQuality || null,
-    subtitleLanguage: selectedSubtitleTrack?.languageCode,
-    subtitleIsAutomatic: selectedSubtitleTrack?.isAutomatic,
   }
 
   ui.setBatchItems((prev) => [...prev, item])
@@ -269,8 +256,6 @@ export async function onStartBatchDownload(): Promise<void> {
         engine,
         targetFormat: item.format,
         ytdlpFormatId: item.quality ? String(item.quality).replace('raw:', '') : undefined,
-        subtitleLanguage: item.subtitleLanguage,
-        subtitleIsAutomatic: item.subtitleIsAutomatic,
         title: item.title || undefined,
         thumbnail: item.thumbnail || undefined,
         username: settings.username || undefined,
@@ -301,11 +286,6 @@ export async function onDownloadNow(): Promise<void> {
   const settings = useSettingsStore.getState()
   const { analyzeResult } = ui
   if (!analyzeResult) return
-
-  if (form.selectedSubtitleLanguage && !SUBTITLE_EMBED_FORMATS.has(form.targetFormat)) {
-    ui.showToast('Subtitles can be embedded only in MP4, MKV, or WEBM videos.')
-    return
-  }
 
   let resolvedDirectory = ui.directory
   if (!resolvedDirectory) {
@@ -352,11 +332,6 @@ export async function onDownloadNow(): Promise<void> {
       if (analyzeResult.kind === 'hls-media') downloadUrl = analyzeResult.url
       else if (analyzeResult.kind === 'hls-master' && form.selectedVariantUrl) downloadUrl = form.selectedVariantUrl
 
-      const selectedSubtitleTrack = analyzeResult.kind === 'ytdlp' && form.selectedSubtitleLanguage
-        ? analyzeResult.subtitles?.find((track) => track.languageCode === form.selectedSubtitleLanguage)
-        : undefined
-      if (form.selectedSubtitleLanguage && !selectedSubtitleTrack) throw new Error('YOUTUBE_SUBTITLE_UNAVAILABLE')
-
       await window.cortexDl.addDownload({
         url: downloadUrl,
         directory: resolvedDirectory!,
@@ -365,8 +340,6 @@ export async function onDownloadNow(): Promise<void> {
         engine,
         targetFormat: form.targetFormat,
         ytdlpFormatId: form.selectedYtdlpFormatId || form.selectedQuality || undefined,
-        subtitleLanguage: selectedSubtitleTrack?.languageCode,
-        subtitleIsAutomatic: selectedSubtitleTrack?.isAutomatic,
         title: analyzeResult.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined,
         thumbnail: analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined,
         username: settings.username || undefined,

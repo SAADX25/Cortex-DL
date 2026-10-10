@@ -31,6 +31,9 @@ test('production hardening IPC rejects malformed paths, URLs and destructive fla
   assert.throws(() => validateIpcArguments('cortexdl:open-external', ['file:///C:/private']))
   assert.throws(() => validateIpcArguments('cortexdl:set-concurrency', [Infinity]))
   assert.throws(() => validateIpcArguments('cortexdl:downloads:delete', ['task', 'yes']))
+  for (const args of [[null], ['../private'], ['session', 'file.srt'], ['x'.repeat(129)]]) assert.throws(() => validateIpcArguments('cortexdl:subtitles:clear', args))
+  validateIpcArguments('cortexdl:subtitles:clear', [''])
+  validateIpcArguments('cortexdl:subtitles:clear', ['session-123'])
   validateIpcArguments('cortexdl:set-concurrency', [3])
   for (const extension of ['mp4', 'mkv', 'avi', 'mov', 'webm', 'ogv', 'm4v', 'gif', 'mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'opus', 'wma']) {
     validateIpcArguments('cortexdl:open-file', [path.resolve(`fixture.${extension}`)])

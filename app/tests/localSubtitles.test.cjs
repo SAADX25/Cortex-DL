@@ -7,11 +7,12 @@ const os = require('node:os')
 const http = require('node:http')
 const { createHash } = require('node:crypto')
 const { SUBTITLE_LANGUAGES, validateSubtitleRequest } = require('../Shared/localSubtitles.ts')
-const { parseWhisperDocument, serializeSubtitles, validateCues } = require('../Shared/subtitleCues.ts')
+const { parseWhisperDocument, parseSpeechRecognition, hasSpokenText, serializeSubtitles, validateCues } = require('../Shared/subtitleCues.ts')
 const { translationPrompt, validateTranslation } = require('../Back-End/electron/subtitles/translator.ts')
 const { SubtitleAssets } = require('../Back-End/electron/subtitles/assets.ts')
 const { SUBTITLE_ASSETS } = require('../Back-End/electron/subtitles/manifest.ts')
 const { SubtitleProcesses } = require('../Back-End/electron/subtitles/process.ts')
+const { parseNvidiaDevices, translationGpuLayers, selectVulkanDevice } = require('../Back-End/electron/subtitles/gpu.ts')
 const cue = (id, start, end, text = 'Hello & welcome <friend>') => ({ id, start, end, text, original: text, review: false })
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
 async function sandbox(run) {
@@ -49,6 +50,17 @@ test('local subtitle exports round milliseconds, escape markup, and reject overl
   for (const invalid of [[cue(1, -1, 2)], [cue(1, 1, 1)], [cue(1, 0, 2), cue(2, 1, 4)], [cue(1, 0, 20)],
     [cue(1, 0, 2), cue(1, 3, 4)], [cue(1, 0, 2, '')], [cue(1, 0, 2, '00:00 --> invalid')]]) assert.throws(() => validateCues(invalid, 10), /Invalid/)
 })
+test('recognition distinguishes music events from multilingual speech without hiding malformed output', () => {
+  for (const text of ['♪', '♫ ♪', '[Music]', '(instrumental music)', '[Applause] ♪', 'موسيقى', '...']) assert.equal(hasSpokenText(text), false, text)
+  for (const text of ['♪ Hello world ♪', 'مرحبًا بك', '你好', '123', '[a real sentence]']) assert.equal(hasSpokenText(text), true, text)
+  const segment = (text, from = 70, to = 570) => ({ text, offsets: { from, to } })
+  assert.equal(parseSpeechRecognition({ transcription: [segment('♪')] }, 11), null)
+  assert.equal(parseSpeechRecognition({ transcription: [] }, 11), null)
+  const parsed = parseSpeechRecognition({ transcription: [segment('[Music]'), segment('كلام واضح', 3200, 5400)] }, 11)
+  assert.deepEqual(parsed.cues.map(c => [c.id, c.start, c.end, c.text]), [[1, 3.2, 5.4, 'كلام واضح']])
+  assert.throws(() => parseSpeechRecognition({ transcription: [segment('♪', -1)] }, 11), /timing/)
+  assert.throws(() => parseSpeechRecognition({}, 11), /Invalid speech/)
+})
 test('local translation uses the model template and refuses empty or truncated-looking output', () => {
   const prompt = translationPrompt('Hello, how are you?', 'en', 'ar')
   assert.match(prompt, /English \(en\) to Arabic \(ar\)/)
@@ -61,12 +73,26 @@ test('local subtitle schema allows only supported languages and known model choi
   const request = { source: 'https://youtu.be/fixture', sourceLanguage: 'auto', targetLanguage: 'ar', speechModel: 'accurate', translationModel: 'standard' }
   validateSubtitleRequest(request)
   assert.ok(SUBTITLE_LANGUAGES.ar)
-  for (const change of [{ source: '' }, { source: 'path\0.exe' }, { targetLanguage: '../ar' }, { speechModel: 'untrusted' }, { translationModel: 'cloud' }]) assert.throws(() => validateSubtitleRequest({ ...request, ...change }), /Invalid/)
+  validateSubtitleRequest({ ...request, recognitionMode: 'music' })
+  validateSubtitleRequest({ ...request, compute: 'cpu' })
+  for (const change of [{ source: '' }, { source: 'path\0.exe' }, { targetLanguage: '../ar' }, { speechModel: 'untrusted' }, { translationModel: 'cloud' }, { recognitionMode: 'unknown' }, { compute: 'untrusted' }]) assert.throws(() => validateSubtitleRequest({ ...request, ...change }), /Invalid/)
   for (const asset of Object.values(SUBTITLE_ASSETS)) {
     assert.match(asset.sha256, /^[a-f0-9]{64}$/)
     assert.ok(asset.bytes > 0)
     assert.ok(asset.url.startsWith('https://'))
   }
+})
+test('GPU selection rejects unsupported devices and reserves memory for partial translation offload', () => {
+  const devices = parseNvidiaDevices('0, NVIDIA GeForce GTX 1050 Ti, 4096, 3000, 6.1\n1, NVIDIA GeForce GTX 1080, 8192, 6000, 6.1')
+  assert.equal(devices[0].index, 1)
+  for (const row of ['bad', '0, Intel GPU, 4096, 3000, 6.1', '0, NVIDIA GPU, 1024, 900, 6.1', '0, NVIDIA GPU, 4096, 5000, 6.1', '0, NVIDIA GPU, 4096, 3000, 10.0']) assert.deepEqual(parseNvidiaDevices(row), [])
+  assert.equal(translationGpuLayers('standard', 500), 0)
+  assert.equal(translationGpuLayers('standard', 3000), 31)
+  assert.equal(translationGpuLayers('quality', 3000), 15)
+  assert.equal(translationGpuLayers('standard', 12000), 34)
+  const list = 'Vulkan0: Intel(R) UHD Graphics 630 (8192 MiB)\nVulkan1: NVIDIA GeForce GTX 1050 Ti (4096 MiB)'
+  assert.equal(selectVulkanDevice(list, 'NVIDIA GeForce GTX 1050 Ti'), 'Vulkan1')
+  assert.equal(selectVulkanDevice(list, 'NVIDIA missing'), null)
 })
 test('local model installation resumes verified ranges and invalidates changed files', () => sandbox(async dir => {
   const bytes = Buffer.from('deterministic local model fixture'), seen = []

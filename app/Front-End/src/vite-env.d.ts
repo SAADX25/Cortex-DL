@@ -103,8 +103,6 @@ declare global {
       cancelAnalysis: (id: string) => Promise<void>
       onAnalysisUpdate: (callback: (update: { id: string; stage: string; data: { title?: string; dislikes?: number } }) => void) => () => void
       analyzeUrl: (url: string, id?: string) => Promise<AnalyzeResult>
-      refreshFormats: (url: string, id: string) => Promise<AnalyzeResult>
-      refreshCaptions: (url: string, id: string) => Promise<import('../../Shared/types').CaptionDiscovery>
 
       listDownloads: () => Promise<DownloadTask[]>
       addDownload: (input: {
@@ -185,12 +183,16 @@ declare global {
       logPreviewError: (message: string) => void
 
       getSubtitles: (filePath: string, session: string) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>
+      listDownloadSubtitleFiles: (id: string) => Promise<import('../../Shared/downloadSubtitles').DownloadSubtitleFile[]>
+      mergeDownloadSubtitle: (id: string, fileName: string, format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat) => Promise<string | null>
+      cancelDownloadSubtitleMerge: (id: string) => Promise<void>
       getLocalSubtitleState: () => Promise<import('../../Shared/localSubtitles').SubtitleState>
       getLocalSubtitleReadiness: () => Promise<import('../../Shared/localSubtitles').SubtitleReadiness>
       selectSubtitleMedia: () => Promise<string | null>
-      installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null) => Promise<string>
+      installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null, compute?: 'auto' | 'cpu') => Promise<string>
       startLocalSubtitles: (request: import('../../Shared/localSubtitles').SubtitleRequest) => Promise<string>
       cancelLocalSubtitles: (id: string) => Promise<void>
+      clearLocalSubtitles: (id: string) => Promise<import('../../Shared/localSubtitles').SubtitleState>
       exportLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[], format: 'srt' | 'vtt') => Promise<string | null>
       embedLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[]) => Promise<string | null>
 

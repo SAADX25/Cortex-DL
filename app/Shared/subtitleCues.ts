@@ -33,6 +33,20 @@ export function parseWhisperDocument(value: unknown, duration: number): { langua
   validateCues(cues, duration)
   return { language: doc.result?.language ?? '', cues }
 }
+/** Non-verbal events are not words to translate. Mixed lyrics and music symbols remain valid. */
+export function hasSpokenText(text: string): boolean {
+  const words = text.replace(/\[[^\]]*\]|\([^)]*\)/gu, match =>
+    /^(?:\[|\()\s*(?:music|instrumental(?: music)?|silence|applause|laughter|laughing|singing|inaudible|no speech|background music|موسيقى|تصفيق|ضحك)\s*(?:\]|\))$/iu.test(match) ? '' : match)
+  return /[\p{L}\p{N}]/u.test(words) && !/^\s*(?:music|instrumental|silence|applause|موسيقى)\s*$/iu.test(words)
+}
+/** A valid engine response with no words can be retried; malformed output must still fail. */
+export function parseSpeechRecognition(value: unknown, duration: number): ReturnType<typeof parseWhisperDocument> | null {
+  const doc = value as { transcription?: { text?: string }[] }
+  if (Array.isArray(doc?.transcription) && doc.transcription.every(segment => typeof segment.text === 'string' && !cleanText(segment.text))) return null
+  const parsed = parseWhisperDocument(value, duration)
+  parsed.cues = parsed.cues.filter(cue => hasSpokenText(cue.text)).map((cue, i) => ({ ...cue, id: i + 1 }))
+  return parsed.cues.length ? parsed : null
+}
 export function subtitleTimestamp(seconds: number, srt = false): string {
   const ms = Math.round(seconds * 1000)
   return `${Math.floor(ms / 3600000).toString().padStart(2, '0')}:${Math.floor(ms / 60000 % 60).toString().padStart(2, '0')}:${Math.floor(ms / 1000 % 60).toString().padStart(2, '0')}${srt ? ',' : '.'}${(ms % 1000).toString().padStart(3, '0')}`

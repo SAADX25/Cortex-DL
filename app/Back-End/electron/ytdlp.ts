@@ -1,6 +1,5 @@
 import type { AnalyzeResult, JsRuntimeStatus } from './types'
-import type { CaptionDiscovery } from '../../Shared/types'
-import { discoverCaptions, captionFailure } from './captionDiscovery'
+import { discoverCaptions } from './captionDiscovery'
 import { diagnosticCategories, youtubeDiagnostic } from './youtubeDiagnostics'
 import log from 'electron-log'
 import path from 'node:path'
@@ -93,7 +92,7 @@ export async function checkJsRuntime(): Promise<JsRuntimeStatus> {
 }
 export function getJsRuntimeArgs(): string[] { return runtimeSelection.args }
 
-export async function analyzeWithYtdlp(url: string, signal?: AbortSignal, refresh = false): Promise<AnalyzeResult> {
+export async function analyzeWithYtdlp(url: string, signal?: AbortSignal): Promise<AnalyzeResult> {
   signal?.throwIfAborted()
   await prepareYtdlp()
   signal?.throwIfAborted()
@@ -102,7 +101,6 @@ export async function analyzeWithYtdlp(url: string, signal?: AbortSignal, refres
   const cooldown = analysisCooldown.get(cooldownKey)
   if (cooldown && cooldown.until > Date.now()) throw new Error(cooldown.code)
   analysisCooldown.delete(cooldownKey)
-  if (refresh) analysisCoordinator.invalidate(url, scope)
   try { return await analysisCoordinator.run(url, (normalized, owned) => extractFullAnalysis(normalized, owned), signal, scope) } catch (error) {
     signal?.throwIfAborted()
     const code = youtubeErrorCode(error)
@@ -112,23 +110,6 @@ export async function analyzeWithYtdlp(url: string, signal?: AbortSignal, refres
     }
     throw error
   }
-}
-
-const captionCoordinator = new AnalysisCoordinator<CaptionDiscovery>(2, 60_000, 50)
-export async function refreshYouTubeCaptions(url: string, signal: AbortSignal): Promise<CaptionDiscovery> {
-  if (!isYouTubeUrl(url)) throw new Error('Caption refresh requires a YouTube URL')
-  await prepareYtdlp()
-  return captionCoordinator.run(url, async (normalized, owned) => {
-    try {
-      let warnings = ''
-      const output = await extractAnalysis(getBinaryPath('yt-dlp'), [
-        '--ignore-config', '--dump-single-json', '--skip-download', '--ignore-no-formats-error', '--no-playlist',
-        '--socket-timeout', '10', '--retries', '0', '--extractor-retries', '0',
-        ...ytdlpCacheArgs(), ...getJsRuntimeArgs(), normalized,
-      ], owned, undefined, undefined, stderr => { warnings = stderr })
-      return discoverCaptions(JSON.parse(output), warnings)
-    } catch (error) { owned.throwIfAborted(); return captionFailure(error) }
-  }, signal, 'public')
 }
 
 async function extractFullAnalysis(url: string, signal: AbortSignal): Promise<AnalyzeResult> {

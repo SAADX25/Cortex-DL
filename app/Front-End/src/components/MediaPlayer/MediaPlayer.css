@@ -587,6 +587,18 @@
   position: relative;
 }
 
+.subtitle-menu-wrapper{position:relative}
+.control-btn.subtitle-trigger{gap:7px;padding:9px 11px;border-radius:10px;border:1px solid rgba(148,163,184,.2);background:rgba(15,23,42,.6);opacity:1}
+.control-btn.subtitle-trigger:hover{transform:none;background:#203448;border-color:#3883a8}
+.control-btn.subtitle-trigger.active{background:#153349;border-color:#276180;color:#7dd3fc}
+.subtitle-current{font-size:12px;font-weight:600;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subtitle-menu{position:absolute;bottom:calc(100% + 14px);right:0;width:250px;max-width:calc(100vw - 50px);max-height:min(320px,50vh);overflow-y:auto;border:1px solid #314359;border-radius:14px;background:#101a2b;padding:7px;box-shadow:0 14px 40px #0009;z-index:55;color:#dce7f5}
+.subtitle-menu-title{display:flex;align-items:center;gap:9px;padding:9px 10px 12px;border-bottom:1px solid #29384d;margin-bottom:5px;color:#8eabc8;font-size:12px;font-weight:600}
+.subtitle-option{display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:start;width:100%;background:transparent;border:0;border-radius:8px;color:#d1dfef;padding:11px 10px;cursor:pointer;font:inherit;font-size:13px}
+.subtitle-option>span{min-width:0;overflow-wrap:anywhere}.subtitle-option svg{flex-shrink:0}.subtitle-option small{display:block;color:#8eabc8;font-size:11px;margin-top:4px}.subtitle-option[aria-checked=true]{background:#16354b;color:#7dd3fc}.subtitle-option:hover{background:#223449}.subtitle-option:focus-visible,.subtitle-trigger:focus-visible{outline:2px solid #38bdf8;outline-offset:-2px}
+@media(max-width:650px){.player-footer{padding:16px;width:94%;box-sizing:border-box}.controls-left,.controls-right{gap:7px}.volume-slider{display:none}.time-display{font-size:12px}.subtitle-current{max-width:65px}.control-btn.subtitle-trigger{padding:8px;gap:4px}}
+@media(max-width:420px){.subtitle-current{display:none}.controls-left,.controls-right{gap:3px}.player-footer .control-btn{padding:7px}.player-footer .play-btn{padding:9px}}
+
 .speed-menu {
   position: absolute;
   bottom: 50px;

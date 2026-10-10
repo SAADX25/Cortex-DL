@@ -15,7 +15,7 @@ export function validateTranslation(value: unknown, source: string): string {
   if (!text || text.length > Math.max(1000, source.length * 12) || /<\|?|```|-->|\[_/.test(text)) throw new Error('Translation output needs review; original transcript retained')
   return text
 }
-export async function startTranslator(binary: string, model: string, processes: SubtitleProcesses): Promise<(text: string, source: string, target: SubtitleLanguage) => Promise<string>> {
+export async function startTranslator(binary: string, model: string, processes: SubtitleProcesses, gpu?: { layers: number; device: string }): Promise<(text: string, source: string, target: SubtitleLanguage) => Promise<string>> {
   const port = await new Promise<number>((resolve, reject) => {
     const server = net.createServer(); server.once('error', reject)
     server.listen(0, '127.0.0.1', () => { const port = (server.address() as net.AddressInfo).port; server.close(() => resolve(port)) })
@@ -23,7 +23,8 @@ export async function startTranslator(binary: string, model: string, processes: 
   const token = randomUUID(), origin = `http://127.0.0.1:${port}`
   let stopped = false
   const run = processes.spawn(binary, ['-m', model, '--host', '127.0.0.1', '--port', String(port), '--api-key', token,
-    '--ctx-size', '4096', '--parallel', '1', '--threads', String(Math.max(1, Math.min(8, os.availableParallelism() - 2))), '-ngl', '0'])
+    '--ctx-size', '4096', '--parallel', '1', '--threads', String(Math.max(1, Math.min(8, os.availableParallelism() - 2))),
+    '-ngl', String(gpu?.layers ?? 0), ...(gpu ? ['--device', gpu.device] : [])])
   void run.settled.then(() => { stopped = true }, () => { stopped = true })
   const deadline = Date.now() + 180000
   for (;;) {

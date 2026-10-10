@@ -10,15 +10,16 @@ import { getJsRuntimeArgs, checkJsRuntime } from '../ytdlp'
 import { probeMediaFile } from '../mediaFiles'
 import { SubtitleAssets } from './assets'
 import { SubtitleProcesses } from './process'
-import { parseWhisperDocument, serializeSubtitles, validateCues } from '../../../Shared/subtitleCues'
+import { parseSpeechRecognition, serializeSubtitles, validateCues } from '../../../Shared/subtitleCues'
 import { startTranslator } from './translator'
 import { youtubeErrorCode } from '../../../Shared/youtubeErrors'
 import { validateSubtitleMedia, subtitleLanguageTag } from '../mediaFormatRegistry'
+import { detectNvidiaGpu, selectVulkanDevice, translationGpuLayers } from './gpu'
 
 export class LocalSubtitleService {
   state: SubtitleState = { id: '', stage: 'idle', progress: null }
   private operation: { controller: AbortController; settled: Promise<void> } | null = null
-  private speechCache: { key: string; language: string; cues: SubtitleCue[]; duration: number; name: string } | null = null
+  private speechCache: { key: string; language: string; cues: SubtitleCue[]; duration: number; name: string; acceleration: NonNullable<SubtitleState['acceleration']> } | null = null
   constructor(readonly assets: SubtitleAssets) {}
   get busy(): boolean { return !!this.operation }
   private begin(stage: SubtitleState['stage'], work: (signal: AbortSignal) => Promise<void>): string {
@@ -31,10 +32,10 @@ export class LocalSubtitleService {
     this.operation = { controller, settled }
     return id
   }
-  install(speech: SpeechModel, translation: TranslationModel | null): string {
-    if (!['accurate', 'fast'].includes(speech) || translation !== null && !['standard', 'quality'].includes(translation)) throw new Error('Invalid local subtitle model')
+  install(speech: SpeechModel, translation: TranslationModel | null, compute: 'auto' | 'cpu' = 'auto'): string {
+    if (!['accurate', 'fast'].includes(speech) || translation !== null && !['standard', 'quality'].includes(translation) || !['auto', 'cpu'].includes(compute)) throw new Error('Invalid local subtitle model')
     return this.begin('installing', async signal => {
-      await this.assets.install(speech, translation, signal, (progress, detail) => { this.state = { ...this.state, progress, detail } })
+      await this.assets.install(speech, translation, signal, (progress, detail) => { this.state = { ...this.state, progress, detail } }, compute)
       signal.throwIfAborted(); this.state = { ...this.state, stage: 'idle', progress: null, detail: 'installed' }
     })
   }
@@ -45,7 +46,17 @@ export class LocalSubtitleService {
   async cancel(id: string): Promise<void> {
     if (this.operation && this.state.id === id) { this.operation.controller.abort(); await this.operation.settled }
   }
-  async dispose(): Promise<void> { if (this.operation) await this.cancel(this.state.id) }
+  clear(id: string): SubtitleState {
+    if (this.busy) throw new Error('LOCAL_SUBTITLES_BUSY')
+    if (id !== this.state.id) throw new Error('Subtitle session has changed')
+    this.speechCache = null
+    this.state = { id: '', stage: 'idle', progress: null }
+    return this.state
+  }
+  async dispose(): Promise<void> {
+    if (this.operation) await this.cancel(this.state.id)
+    this.clear(this.state.id)
+  }
   private async generate(request: SubtitleRequest, signal: AbortSignal): Promise<void> {
     const ready = await this.assets.readiness()
     const translate = request.targetLanguage !== 'original' && request.targetLanguage !== request.sourceLanguage
@@ -53,15 +64,19 @@ export class LocalSubtitleService {
     if (translate && request.translationModel === 'quality' && ready.ramGB < 24) throw new Error('LOCAL_SUBTITLES_MEMORY')
     await ensureEnginesReady(['ffmpeg', 'ffprobe'])
     signal.throwIfAborted()
+    const gpu = request.compute !== 'cpu' ? await detectNvidiaGpu(signal) : null
+    const speechBackend = gpu && gpu.freeMB >= 2048 && ready.gpu?.speech[request.speechModel] ? 'gpu' : 'cpu'
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-subtitles-'))
     const processes = new SubtitleProcesses(signal)
+    this.state = { ...this.state, acceleration: { speech: 'cpu', translation: 'cpu', device: gpu?.name } }
     let input = request.source.trim(), localFile: string | undefined
+    const recognitionMode = request.recognitionMode ?? 'speech'
     let cacheKey: string
     try {
       if (/^https?:\/\//i.test(input)) {
         const url = new URL(input)
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid media URL')
-        cacheKey = JSON.stringify([input, request.sourceLanguage, request.speechModel])
+        cacheKey = JSON.stringify([input, request.sourceLanguage, request.speechModel, recognitionMode, request.compute ?? 'auto', speechBackend])
         if (this.speechCache?.key !== cacheKey) {
           await ensureEnginesReady(['yt-dlp', 'deno']); await checkJsRuntime(); signal.throwIfAborted()
           await processes.run(getBinaryPath('yt-dlp'), ['--ignore-config', '--no-playlist', '--no-progress', '--retries', '0', '--extractor-retries', '0', '--socket-timeout', '20',
@@ -72,7 +87,7 @@ export class LocalSubtitleService {
         if (!path.isAbsolute(input) || !/\.(mp4|mkv|webm|mov|avi|m4v|ogv|mp3|wav|m4a|aac|opus|flac|ogg|wma)$/i.test(input)) throw new Error('Select a supported local media file')
         const stat = await fs.lstat(input)
         if (!stat.isFile() || stat.isSymbolicLink() || !stat.size) throw new Error('Media file is not readable')
-        localFile = input; cacheKey = JSON.stringify([input, stat.size, stat.mtimeMs, request.sourceLanguage, request.speechModel])
+        localFile = input; cacheKey = JSON.stringify([input, stat.size, stat.mtimeMs, request.sourceLanguage, request.speechModel, recognitionMode, request.compute ?? 'auto', speechBackend])
       }
       if (this.speechCache?.key !== cacheKey) {
         const probe = await probeMediaFile(input, undefined, signal)
@@ -86,25 +101,77 @@ export class LocalSubtitleService {
         this.state = { ...this.state, stage: 'transcribing', progress: null }
         const output = path.join(directory, 'speech')
         const executable = (await this.assets.locate('whisper'))!, model = (await this.assets.locate(request.speechModel))!, vad = (await this.assets.locate('vad'))!
-        await processes.run(executable, ['-m', model, '-f', wav, '-l', request.sourceLanguage, '-ojf', '-of', output, '-sow', '-ml', '84', '-bs', '5',
-          '--vad', '--vad-model', vad, '--vad-speech-pad-ms', '120', '--vad-min-silence-duration-ms', '300', '-pp', '-t', String(Math.max(1, Math.min(8, os.availableParallelism() - 2)))], text => {
-          const match = /progress\s*=\s*(\d+)%/.exec(text)
-          if (match) this.state = { ...this.state, progress: Math.min(99, Number(match[1])) }
-        })
-        signal.throwIfAborted()
-        const recognized = parseWhisperDocument(JSON.parse(await fs.readFile(output + '.json', 'utf8')), duration)
+        const gpuExecutable = gpu && gpu.freeMB >= 2048 ? await this.assets.locate('whisperGpu') : null
+        const gpuLibraries = gpuExecutable ? await this.assets.locate('cudaLibraries') : null
+        const gpuModel = gpuLibraries ? await this.assets.locate(request.speechModel === 'accurate' ? 'accurateGpu' : 'fast') : null
+        let useGpu = !!(gpuExecutable && gpuLibraries && gpuModel)
+        const recognize = async (useVad: boolean): Promise<ReturnType<typeof parseSpeechRecognition>> => {
+          signal.throwIfAborted()
+          this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'cpu', compact: useGpu && request.speechModel === 'accurate' } }
+          let backendOutput = '', gpuConfirmed = false
+          try {
+          await processes.run(useGpu ? gpuExecutable! : executable, ['-m', useGpu ? gpuModel! : model, '-f', wav, '-l', request.sourceLanguage, '-ojf', '-of', output, '-sow', '-ml', '84', '-bs', '5',
+            ...(useGpu ? ['--device', String(gpu!.index)] : []),
+            ...(useVad ? ['--vad', '--vad-model', vad, '--vad-speech-pad-ms', '120', '--vad-min-silence-duration-ms', '300'] : []),
+            '-pp', '-t', String(Math.max(1, Math.min(8, os.availableParallelism() - 2)))], text => {
+            backendOutput = (backendOutput + text).slice(-12000)
+            if (useGpu && /CUDA\d*\s+total size|CUDA\d*\s+model buffer/i.test(backendOutput)) {
+              gpuConfirmed = true; this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'gpu' } }
+            }
+            if (/no GPU found/.test(text)) this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'cpu', compact: false }, detail: 'gpu-fallback' }
+            const match = /progress\s*=\s*(\d+)%/.exec(text)
+            if (match) this.state = { ...this.state, progress: Math.min(99, Number(match[1])) }
+          }, useGpu ? path.dirname(gpuLibraries!) : undefined)
+          } catch (error) {
+            signal.throwIfAborted()
+            if (!useGpu) throw error
+            useGpu = false; this.state = { ...this.state, progress: null, detail: 'gpu-fallback' }
+            return recognize(useVad)
+          }
+          if (useGpu && !gpuConfirmed) {
+            this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'cpu', compact: true }, detail: 'gpu-fallback' }
+          }
+          signal.throwIfAborted()
+          return parseSpeechRecognition(JSON.parse(await fs.readFile(output + '.json', 'utf8')), duration)
+        }
+        let recognized = await recognize(recognitionMode === 'speech')
+        if (!recognized && recognitionMode === 'speech') {
+          this.state = { ...this.state, progress: null, detail: 'retrying-full-audio' }
+          recognized = await recognize(false)
+        }
+        if (!recognized) throw new Error('LOCAL_SUBTITLES_NO_SPEECH')
+        this.state = { ...this.state, detail: undefined }
         const language = request.sourceLanguage === 'auto' ? recognized.language : request.sourceLanguage
-        this.speechCache = { key: cacheKey, language, cues: recognized.cues, duration, name: localFile ? path.parse(localFile).name : 'Video subtitles' }
+        this.speechCache = { key: cacheKey, language, cues: recognized.cues, duration, name: localFile ? path.parse(localFile).name : 'Video subtitles', acceleration: { ...this.state.acceleration! } }
       }
       signal.throwIfAborted()
       const speech = this.speechCache!
+      this.state = { ...this.state, acceleration: { ...speech.acceleration, translation: 'cpu' } }
       const document: SubtitleDocument = { id: this.state.id, name: speech.name, sourceLanguage: speech.language, targetLanguage: speech.language, duration: speech.duration,
         cues: speech.cues.map(cue => ({ ...cue })), localFile }
       this.state = { ...this.state, document }
       if (request.targetLanguage !== 'original' && request.targetLanguage !== speech.language) {
         if (!isSubtitleLanguage(speech.language)) throw new Error('Select the spoken language; automatic language detection could not identify a supported translation language')
         this.state = { ...this.state, stage: 'translating', progress: null }
-        const translator = await startTranslator((await this.assets.locate('llama'))!, (await this.assets.locate(request.translationModel))!, processes)
+        const translationModel = (await this.assets.locate(request.translationModel))!
+        const translationGpu = request.compute !== 'cpu' ? await detectNvidiaGpu(signal) : null
+        const gpuTranslator = translationGpu ? await this.assets.locate('llamaGpu') : null
+        let translator: Awaited<ReturnType<typeof startTranslator>> | undefined
+        if (gpuTranslator && translationGpu) {
+          try {
+            let output = ''
+            await processes.run(gpuTranslator, ['--list-devices'], text => { output += text })
+            const device = selectVulkanDevice(output, translationGpu.name), layers = translationGpuLayers(request.translationModel, translationGpu.freeMB)
+            if (device && layers) {
+              translator = await startTranslator(gpuTranslator, translationModel, processes, { device, layers })
+              this.state = { ...this.state, acceleration: { ...this.state.acceleration!, translation: 'gpu' } }
+            }
+          } catch {
+            signal.throwIfAborted(); await processes.stop()
+            this.state = { ...this.state, detail: 'gpu-fallback' }
+          }
+        }
+        translator ??= await startTranslator((await this.assets.locate('llama'))!, translationModel, processes)
         // Commit a translated document only after every cue succeeds. Source captions survive failures.
         const translated: SubtitleCue[] = []
         const memo = new Map<string, string>()
@@ -133,7 +200,8 @@ export class LocalSubtitleService {
     const temp = path.join(path.dirname(file), `.cortex-subtitles-${randomUUID()}.tmp`)
     try { await fs.writeFile(temp, content, { flag: 'wx' }); await fs.rename(temp, file) }
     finally { await fs.rm(temp, { force: true }) }
-    this.state = { ...this.state, document: { ...document, cues: cues.map(c => ({ ...c })) } }
+    // A save already in progress must not restore a session cleared while writing.
+    if (this.state.document?.id === id) this.state = { ...this.state, document: { ...document, cues: cues.map(c => ({ ...c })) } }
   }
   embedDocument(id: string, cues: SubtitleCue[], file: string): string {
     if (this.busy || this.state.document?.id !== id || !this.state.document.localFile) throw new Error('Subtitle video is not ready')

@@ -19,6 +19,9 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
   })
 }
 contextBridge.exposeInMainWorld('cortexDl', {
+  listDownloadSubtitleFiles: (id: string) => invokeRendererSafe<import('../../Shared/downloadSubtitles').DownloadSubtitleFile[]>('cortexdl:subtitle-files:list', id),
+  mergeDownloadSubtitle: (id: string, fileName: string, format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat) => invokeRendererSafe<string | null>('cortexdl:subtitle-files:merge', id, fileName, format),
+  cancelDownloadSubtitleMerge: (id: string) => invokeRendererSafe<void>('cortexdl:subtitle-files:cancel', id),
   reportFirstUiRender(): void { ipcRenderer.send('cortexdl:first-ui-render') },
   smokeMode: process.argv.includes('--cortex-smoke'),
   analysisDebug: process.env.CORTEX_ANALYSIS_DEBUG === '1',
@@ -54,12 +57,6 @@ contextBridge.exposeInMainWorld('cortexDl', {
   },
   analyzeUrl(url: string, id?: string): Promise<AnalyzeResult> {
     return invokeRendererSafe('cortexdl:analyze-url', url, id)
-  },
-  refreshFormats(url: string, id: string): Promise<AnalyzeResult> {
-    return invokeRendererSafe('cortexdl:analyze-url', url, id, 'formats')
-  },
-  refreshCaptions(url: string, id: string): Promise<import('../../Shared/types').CaptionDiscovery> {
-    return invokeRendererSafe('cortexdl:analyze-url', url, id, 'captions')
   },
   cancelAnalysis(id: string): Promise<void> {
     return invokeRendererSafe('cortexdl:cancel-analysis', id)
@@ -207,9 +204,10 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getLocalSubtitleState: () => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleState>('cortexdl:subtitles:state'),
   getLocalSubtitleReadiness: () => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleReadiness>('cortexdl:subtitles:readiness'),
   selectSubtitleMedia: () => invokeRendererSafe<string | null>('cortexdl:subtitles:select'),
-  installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null) => invokeRendererSafe<string>('cortexdl:subtitles:install', speech, translation),
+  installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null, compute?: 'auto' | 'cpu') => invokeRendererSafe<string>('cortexdl:subtitles:install', speech, translation, compute),
   startLocalSubtitles: (request: import('../../Shared/localSubtitles').SubtitleRequest) => invokeRendererSafe<string>('cortexdl:subtitles:start', request),
   cancelLocalSubtitles: (id: string) => invokeRendererSafe<void>('cortexdl:subtitles:cancel', id),
+  clearLocalSubtitles: (id: string) => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleState>('cortexdl:subtitles:clear', id),
   exportLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[], format: 'srt' | 'vtt') => invokeRendererSafe<string | null>('cortexdl:subtitles:export', id, cues, format),
   embedLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[]) => invokeRendererSafe<string | null>('cortexdl:subtitles:embed', id, cues),
 })

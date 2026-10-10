@@ -44,8 +44,6 @@ export type BatchItem = {
   format: any
   loading?: boolean
   quality?: string | null
-  subtitleLanguage?: string
-  subtitleIsAutomatic?: boolean
   status?: BatchItemStatus
   errorMessage?: string
 }
@@ -85,8 +83,6 @@ const AddDownloadTab: React.FC = () => {
   const setIsAudioMode = useFormStore((s) => s.setIsAudioMode)
   const selectedQuality = useFormStore((s) => s.selectedQuality)
   const setSelectedQuality = useFormStore((s) => s.setSelectedQuality)
-  const selectedSubtitleLanguage = useFormStore((s) => s.selectedSubtitleLanguage)
-  const setSelectedSubtitleLanguage = useFormStore((s) => s.setSelectedSubtitleLanguage)
   const selectedVariantUrl = useFormStore((s) => s.selectedVariantUrl)
   const setSelectedVariantUrl = useFormStore((s) => s.setSelectedVariantUrl)
   const startTime = useFormStore((s) => s.startTime)
@@ -221,7 +217,6 @@ const AddDownloadTab: React.FC = () => {
                 onClick={() => {
                   setIsAudioMode(true)
                   setTargetFormat('mp3')
-                  setSelectedSubtitleLanguage('')
                   setSelectedQuality('')
                   setSelectedYtdlpFormatId(null)
                   setTargetResolution(null)
@@ -289,9 +284,6 @@ const AddDownloadTab: React.FC = () => {
                   setCommentsSuccessPath={setCommentsSuccessPath}
                   setIsCommentsDownloading={setIsCommentsDownloading}
                   showToast={showToast}
-                  isAudioMode={isAudioMode}
-                  selectedSubtitleLanguage={selectedSubtitleLanguage}
-                  setSelectedSubtitleLanguage={setSelectedSubtitleLanguage}
                 />
               )}
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture, Palette, Subtitles } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture, Palette } from 'lucide-react';
+import { SubtitleMenu } from './SubtitleMenu';
 import type { PlayerSubtitleTrack } from '../../../../Shared/types';
 
 interface PlayerControlsProps {
@@ -15,6 +16,7 @@ interface PlayerControlsProps {
   subtitles?: PlayerSubtitleTrack[];
   activeSubtitle?: number;
   onSubtitleChange?: (index: number) => void;
+  onSubtitleMenuChange?: (open: boolean) => void;
   togglePlay: () => void;
   onSeek: (time: number) => void;
   onVolumeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -35,7 +37,7 @@ function formatTime(seconds: number): string {
 }
 
 export function PlayerControls({
-  mediaRef, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, mediaType, isFullscreen, subtitles, activeSubtitle, onSubtitleChange,
+  mediaRef, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, mediaType, isFullscreen, subtitles, activeSubtitle, onSubtitleChange, onSubtitleMenuChange,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP, currentTheme, onToggleTheme
 }: PlayerControlsProps) {
   const progressRef = useRef<HTMLInputElement>(null);
@@ -131,27 +133,7 @@ export function PlayerControls({
           </div>
 
           {mediaType === 'video' && subtitles && subtitles.length > 0 && onSubtitleChange && (
-            <div className="settings-wrapper">
-              <button 
-                className={`control-btn ${activeSubtitle !== -1 ? 'active' : ''}`} 
-                onClick={() => {
-                  if (activeSubtitle !== -1) {
-                    onSubtitleChange(-1);
-                  } else {
-                    onSubtitleChange(0);
-                  }
-                }} 
-                title="Subtitles / CC"
-              >
-                <Subtitles size={20} />
-              </button>
-                <select aria-label="Subtitle language" value={activeSubtitle ?? -1}
-                  onChange={event => onSubtitleChange(Number(event.target.value))}
-                  style={{ background: '#172237', color: '#fff', maxWidth: '150px', borderRadius: '6px' }}>
-                  <option value={-1}>Subtitles off</option>
-                  {subtitles.map((track, index) => <option key={index} value={index}>{track.label}</option>)}
-                </select>
-            </div>
+            <SubtitleMenu tracks={subtitles} active={activeSubtitle ?? -1} onChange={onSubtitleChange} onOpenChange={onSubtitleMenuChange} />
           )}
 
           {mediaType === 'audio' && onToggleTheme && (

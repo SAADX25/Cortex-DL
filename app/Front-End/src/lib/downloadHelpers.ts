@@ -24,7 +24,6 @@ export function isYtdlpUrl(url: string): boolean {
   return true
 }
 
-export const SUBTITLE_EMBED_FORMATS = new Set<TargetFormat>(['mp4', 'mkv', 'webm'])
 
 type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_subtitle_rate_limited' | 'youtube_subtitle_unavailable' | 'youtube_formats_restricted' | 'youtube_po_token_required' | 'youtube_network_error'>
 

@@ -13,7 +13,7 @@ import { ThumbnailCache } from '../thumbnailCache'
 import { normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
 import { fetchBoundedJson } from '../analysisNetwork'
 import { analyzeUrlForHls } from '../hls'
-import { analyzeWithYtdlp, refreshYouTubeCaptions, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
+import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
 import { extractAndSaveComments } from '../commentsExtractor'
 import { db } from '../db'
 import { promises as fsPromises } from 'node:fs'
@@ -23,6 +23,7 @@ import { checkJsRuntime } from '../ytdlp'
 import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
 import { engineHealth } from '../setup'
 import { buildInfo } from '../diagnostics'
+import { registerDownloadSubtitleIpc } from '../subtitles/downloadMergeIpc'
 
 export interface IpcDependencies {
   getWin: () => Electron.BrowserWindow | null
@@ -101,6 +102,7 @@ function validateDownloadInput(input: StartInput): void {
   if (input.filename && (typeof input.filename !== 'string' || (/[/\\]/.test(input.filename) || input.filename.includes('\0')) || input.filename === '..')) throw new Error('Invalid filename')
 }
 export function registerIpcHandlers(deps: IpcDependencies) {
+  registerDownloadSubtitleIpc(deps)
   const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
 
   const waitForEngines = async () => {
@@ -362,7 +364,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   ipcMain.handle('cortexdl:cancel-analysis', (event, id: string) => {
     analyses.get(`${event.sender.id}:${id}`)?.abort()
   })
-  ipcMain.handle('cortexdl:analyze-url', async (event, input: string, id?: string, mode?: 'formats' | 'captions') => {
+  ipcMain.handle('cortexdl:analyze-url', async (event, input: string, id?: string) => {
     const start = Date.now()
     const url = normalizeAnalysisUrl(input)
     analysisTiming('normalizationMs', start)
@@ -387,18 +389,17 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     const videoId = youtubeVideoId(url)
     analysisTiming('providerDetectionMs', start)
     const enrichment: Promise<unknown>[] = []
-    if (!mode && id && videoId && !['list', 'list_id'].some(key => new URL(url).searchParams.has(key))) {
+    if (id && videoId && !['list', 'list_id'].some(key => new URL(url).searchParams.has(key))) {
       enrichment.push(fetchBoundedJson(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, controller.signal)
         .then(data => { if (typeof data.title === 'string') send('preview', { title: data.title }) }).catch(() => {}))
     }
     try {
-      if (mode === 'captions') return await refreshYouTubeCaptions(url, controller.signal)
       if (await isDirectMedia(url, controller.signal)) return { kind: 'direct' }
       const hlsResult = await analyzeUrlForHls(url, controller.signal)
       if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') return hlsResult
-      const result = await analyzeWithYtdlp(url, controller.signal, mode === 'formats')
+      const result = await analyzeWithYtdlp(url, controller.signal)
       analysisTiming('totalAnalysisMs', start)
-      if (!mode && id && videoId && result.kind === 'ytdlp') {
+      if (id && videoId && result.kind === 'ytdlp') {
         const base = process.env.RYD_API_URL || 'https://returnyoutubedislikeapi.com/votes?videoId='
         enrichment.push(fetchBoundedJson(`${base}${videoId}`, controller.signal, 2000)
           .then(data => { if (typeof data.dislikes === 'number') send('enrichment', { dislikes: data.dislikes }) }).catch(() => {}))

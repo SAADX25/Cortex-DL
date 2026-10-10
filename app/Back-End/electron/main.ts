@@ -20,6 +20,7 @@ import { installIpcBoundary } from './ipcSecurity'
 import { checkCachedEngines, reportEngineFailure, stopSetup, runSetup, setupState, engineHealth } from './setup'
 import { openLogs, exportDiagnostics, buildInfo } from './diagnostics'
 import { registerLocalSubtitleIpc, stopLocalSubtitles } from './subtitles/ipc'
+import { stopDownloadSubtitleMerges } from './subtitles/downloadMergeIpc'
 
 export let downloads: DownloadManager | null = null
 import { registerIpcHandlers } from './ipc/handlers'
@@ -822,6 +823,7 @@ if (!gotTheLock) {
     if (shutdownPromise) return
     shutdownPromise = (async () => {
       await stopLocalSubtitles()
+      await stopDownloadSubtitleMerges()
       await engineReceipts.stop()
       await stopSetup()
       await stopMediaStreamingServer()

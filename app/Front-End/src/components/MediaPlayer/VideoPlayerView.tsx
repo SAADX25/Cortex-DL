@@ -45,6 +45,7 @@ export function VideoPlayerView({
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
 }: VideoViewProps) {
   const [isBuffering, setIsBuffering] = React.useState(true);
+  const [subtitleMenuOpen, setSubtitleMenuOpen] = React.useState(false);
   const [showMediaInfo, setShowMediaInfo] = React.useState(false);
   const [hasError, setHasError] = React.useState(false);
   const [subtitles, setSubtitles] = React.useState<(import('../../../../Shared/types').PlayerSubtitleTrack & { previewUrl?: string })[]>([]);
@@ -182,8 +183,8 @@ export function VideoPlayerView({
       <div
         className="player-footer"
         style={{
-          opacity: showControls ? 1 : 0,
-          pointerEvents: showControls ? 'auto' : 'none',
+          opacity: showControls || subtitleMenuOpen ? 1 : 0,
+          pointerEvents: showControls || subtitleMenuOpen ? 'auto' : 'none',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -200,6 +201,7 @@ export function VideoPlayerView({
           subtitles={subtitles}
           activeSubtitle={activeSubtitle}
           onSubtitleChange={setActiveSubtitle}
+          onSubtitleMenuChange={setSubtitleMenuOpen}
           togglePlay={togglePlay} 
           onSeek={onSeek}
           onVolumeChange={onVolumeChange} 

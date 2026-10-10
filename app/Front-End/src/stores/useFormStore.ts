@@ -5,7 +5,7 @@ import { useUIStore } from './useUIStore'
 /**
  * "Add Download" form slice — everything the AddDownloadTab form reads/writes
  * while the user is configuring a download (trim range, format, quality,
- * subtitles, speed limit, destination sub-folder, etc).
+ * speed limit, destination sub-folder, etc).
  *
  * Split out of the old `useAppController` god hook so leaf components (the
  * format picker, the quality picker, the trimmer toggle, ...) can subscribe
@@ -33,8 +33,6 @@ interface FormStoreState {
   selectedYtdlpFormatId: string | null
   setSelectedYtdlpFormatId: (v: string | null) => void
 
-  selectedSubtitleLanguage: string
-  setSelectedSubtitleLanguage: (v: string) => void
 
   /**
    * Currently write-only (reserved for a future resolution-based picker) —
@@ -75,9 +73,6 @@ export const useFormStore = create<FormStoreState>((set) => ({
   selectedYtdlpFormatId: null,
   setSelectedYtdlpFormatId: (v) => set({ selectedYtdlpFormatId: v }),
 
-  selectedSubtitleLanguage: '',
-  setSelectedSubtitleLanguage: (v) => set({ selectedSubtitleLanguage: v }),
-
   targetResolution: null,
   setTargetResolution: (v) => set({ targetResolution: v }),
 
@@ -96,7 +91,6 @@ export const useFormStore = create<FormStoreState>((set) => ({
       targetResolution: null,
       selectedQuality: '',
       selectedYtdlpFormatId: null,
-      selectedSubtitleLanguage: '',
     }),
 }))
 

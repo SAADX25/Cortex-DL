@@ -38,7 +38,7 @@ Module._load = function(request, parent, ...rest) {
   return originalLoad.call(this, request, parent, ...rest)
 }
 const { youtubeErrorCode, isYouTubeAuthRequiredError, isYouTubeUrl } = require('../Shared/youtubeErrors.ts')
-const { analyzeWithYtdlp, refreshYouTubeCaptions, getDirectStreamUrl, getTrimPreviewStreams } = require('../Back-End/electron/ytdlp.ts')
+const { analyzeWithYtdlp, getDirectStreamUrl, getTrimPreviewStreams } = require('../Back-End/electron/ytdlp.ts')
 const { YoutubeEngine } = require('../Back-End/electron/engines/YoutubeEngine.ts')
 const { normalizeIpcError, youtubeErrorMessage } = require('../Front-End/src/lib/downloadHelpers.ts')
 const { translations } = require('../Front-End/src/translations.ts')
@@ -79,39 +79,6 @@ test('YouTube first analysis initializes Deno and retains warnings with no clien
   assert.equal(calls[0].includes('--no-warnings'), false)
   assert.equal(calls[0].includes('--ignore-config'), true)
   assert.equal(calls[0].includes('--extractor-args'), false)
-})
-
-test('YouTube independent caption failures preserve cached public formats and bound 429 refreshes', async () => {
-  calls.length = 0
-  const url = 'https://youtu.be/captionfix1'
-  extract = async () => info(1080)
-  const original = await analyzeWithYtdlp(url)
-  extract = async args => {
-    assert.equal(args.includes('--skip-download'), true)
-    assert.equal(args.includes('--ignore-no-formats-error'), true)
-    throw new Error('Unable to download subtitles: HTTP Error 429')
-  }
-  const captions = await refreshYouTubeCaptions(url, new AbortController().signal)
-  assert.equal(captions.state, 'rate-limited')
-  assert.equal(calls.length, 2)
-  assert.deepEqual(await refreshYouTubeCaptions(url, new AbortController().signal), captions)
-  assert.equal(calls.length, 2, 'cooldown prevents extra extractor requests')
-  const cached = await analyzeWithYtdlp(url)
-  assert.deepEqual(cached.subtitles, original.subtitles)
-  assert.equal(cached.formats[0].height, 1080)
-})
-
-test('YouTube caption sign-in requirements remain restricted without account retries',async()=>{
- calls.length=0;extract=async()=>{throw new Error('LOGIN_REQUIRED')};
- const result=await refreshYouTubeCaptions('https://youtu.be/authsubsfix',new AbortController().signal);
- assert.equal(result.state,'restricted');assert.equal(calls.length,1);assert.ok(!calls[0].includes('--cookies'));
-})
-
-test('YouTube caption authentication warnings make only one public request',async()=>{
- calls.length=0;fixtureWarnings='ERROR: LOGIN_REQUIRED';
- try{extract=async()=>JSON.stringify({subtitles:{},automatic_captions:{}});
- const result=await refreshYouTubeCaptions('https://youtu.be/subsreject1',new AbortController().signal);
- assert.equal(result.state,'restricted');assert.equal(calls.length,1);}finally{fixtureWarnings='';}
 })
 
 test('YouTube caption discovery retains manual preference and distinguishes missing from blocked', () => {

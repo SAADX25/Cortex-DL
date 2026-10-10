@@ -37,12 +37,23 @@ test('a quality chosen during analysis remains selected when full formats arrive
   assert.equal(useFormStore.getState().selectedYtdlpFormatId, '1080p')
 })
 
-test('a missing requested caption cannot silently start a video without subtitles', async () => {
-  prepare(async () => structuredClone(result))
+test('ordinary video downloads and batch items do not request online captions', async () => {
+  prepare(async () => ({ ...structuredClone(result), subtitles: [{ languageCode: 'ar', isAutomatic: true }] }))
   await handleAnalyzeUrlDirectly('https://youtube.com/watch?v=abcdefghijk')
-  useFormStore.setState({ targetFormat: 'mp4', selectedSubtitleLanguage: 'missing' })
-  let started = false
-  window.cortexDl.addDownload = async () => { started = true }
+  useFormStore.setState({ targetFormat: 'mp4' })
+  let input
+  window.cortexDl.addDownload = async value => { input = value }
   await onDownloadNow()
-  assert.equal(started, false)
+  assert.equal(Object.hasOwn(input, 'subtitleLanguage'), false)
+  assert.equal(Object.hasOwn(input, 'subtitleIsAutomatic'), false)
+  await handleAnalyzeUrlDirectly('https://youtube.com/watch?v=abcdefghijk')
+  const { onAddToList, onStartBatchDownload } = require('../Front-End/src/actions/downloadActions.ts')
+  onAddToList()
+  const item = useUIStore.getState().batchItems[0]
+  assert.equal(Object.hasOwn(item, 'subtitleLanguage'), false)
+  let batch
+  window.cortexDl.addBatchDownloads = async values => { batch = values; return [] }
+  await onStartBatchDownload()
+  assert.equal(Object.hasOwn(batch[0], 'subtitleLanguage'), false)
+  assert.equal(Object.hasOwn(batch[0], 'subtitleIsAutomatic'), false)
 })
