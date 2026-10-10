@@ -115,6 +115,12 @@ export type SubtitleTrack = {
   isAutomatic: boolean
 }
 
+export type CaptionDiscovery = {
+  state: 'available' | 'none-confirmed' | 'restricted' | 'rate-limited' | 'unknown' | 'loading'
+  subtitles: SubtitleTrack[]
+  errorCode?: string
+}
+
 export type AnalyzeResult =
   | { kind: 'unknown' }
   | { kind: 'direct' }
@@ -131,6 +137,8 @@ export type AnalyzeResult =
       dislikes?: number
       duration?: number
       subtitles?: SubtitleTrack[]
+      captionDiscovery?: CaptionDiscovery
+      qualityStatus?: 'restricted' | 'limited' | 'available'
       comments?: { author: string; text: string; likeCount: number }[]
     }
   | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
@@ -141,6 +149,8 @@ export type CookieValidationCode =
   | 'missing'
   | 'not_file'
   | 'invalid_header'
+  | 'invalid_rows'
+  | 'expired'
   | 'missing_youtube'
   | 'read_error'
   | 'save_error'

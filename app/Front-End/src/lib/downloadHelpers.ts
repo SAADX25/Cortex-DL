@@ -26,7 +26,7 @@ export function isYtdlpUrl(url: string): boolean {
 
 export const SUBTITLE_EMBED_FORMATS = new Set<TargetFormat>(['mp4', 'mkv', 'webm'])
 
-type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_subtitle_rate_limited' | 'youtube_subtitle_unavailable'>
+type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_subtitle_rate_limited' | 'youtube_subtitle_unavailable' | 'youtube_formats_restricted' | 'youtube_po_token_required' | 'youtube_network_error'>
 
 export function youtubeErrorMessage(error: unknown, messages: YouTubeMessages): string | null {
   switch (youtubeErrorCode(error)) {
@@ -34,6 +34,9 @@ export function youtubeErrorMessage(error: unknown, messages: YouTubeMessages): 
     case YOUTUBE_RATE_LIMITED_CODE: return messages.youtube_rate_limited
     case YOUTUBE_SUBTITLE_RATE_LIMITED_CODE: return messages.youtube_subtitle_rate_limited
     case YOUTUBE_SUBTITLE_UNAVAILABLE_CODE: return messages.youtube_subtitle_unavailable
+    case 'YOUTUBE_FORMATS_RESTRICTED': return messages.youtube_formats_restricted
+    case 'YOUTUBE_PO_TOKEN_REQUIRED': return messages.youtube_po_token_required
+    case 'YOUTUBE_NETWORK_ERROR': return messages.youtube_network_error
     default: return null
   }
 }

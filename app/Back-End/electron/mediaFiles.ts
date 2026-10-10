@@ -45,7 +45,7 @@ export async function probeMediaFile(
   signal?.throwIfAborted()
   if (!stat.isFile() || stat.size <= 0) throw new Error('Media output is empty')
   const child = spawn(getBinaryPath('ffprobe'), [
-    '-v', 'error', '-show_entries', 'format=format_name,duration:stream=codec_type,codec_name,duration:stream_disposition=attached_pic',
+    '-v', 'error', '-show_entries', 'format=format_name,duration:stream=codec_type,codec_name,duration,width,height,avg_frame_rate,r_frame_rate:stream_tags=language,title,handler_name:stream_disposition=attached_pic',
     '-of', 'json', filePath,
   ], { windowsHide: true, detached: false })
   child.on('error', error => engineExecutionFailed('ffprobe', error))

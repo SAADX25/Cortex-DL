@@ -49,6 +49,7 @@ export function VideoPlayerView({
   const [activeSubtitle, setActiveSubtitle] = React.useState<number>(-1);
 
   React.useEffect(() => {
+    setSubtitles([]); setActiveSubtitle(-1);
     if (filePath && window.cortexDl?.getSubtitles) {
       let cancelled = false;
       window.cortexDl.getSubtitles(filePath, sessionId).then(subs => {
@@ -67,14 +68,17 @@ export function VideoPlayerView({
   
   React.useEffect(() => {
     if (!videoRef.current) return;
-    const tracks = videoRef.current.textTracks;
-    for (let i = 0; i < tracks.length; i++) {
-      if (i === activeSubtitle) {
-        tracks[i].mode = 'showing';
-      } else {
-        tracks[i].mode = 'hidden';
+    const video = videoRef.current;
+    const apply = () => {
+      const tracks = video.textTracks;
+      for (let i = 0; i < tracks.length; i++) {
+        tracks[i].mode = i === activeSubtitle ? 'showing' : 'disabled';
       }
-    }
+    };
+    apply();
+    const elements = Array.from(video.querySelectorAll('track'));
+    elements.forEach(track => track.addEventListener('load', apply));
+    return () => elements.forEach(track => track.removeEventListener('load', apply));
   }, [activeSubtitle, subtitles, videoRef]);
 
   return (
@@ -106,7 +110,7 @@ export function VideoPlayerView({
             {subtitles.map((sub, i) => {
               const srcUrl = sub.isEmbedded
                 ? buildMediaUrl(filePath, mediaEndpoint, { session: sessionId, subtitle: 'true', streamIndex: sub.streamIndex })
-                : buildMediaUrl(sub.filePath, mediaEndpoint, { session: sessionId })
+                : buildMediaUrl(sub.filePath, mediaEndpoint, { session: sessionId, ...(sub.filePath?.endsWith('.srt') ? { subtitle: 'true', streamIndex: 0 } : {}) })
 
               if (!srcUrl) return null
 

@@ -3,6 +3,7 @@ import path from 'node:path'
 
 export function validateIpcArguments(channel: string, args: unknown[]): void {
   const first = args[0]
+  if (channel === 'cortexdl:analyze-url' && args[2] !== undefined && !['formats', 'captions'].includes(String(args[2]))) throw new Error('Invalid analysis mode')
   const paths = ['open-folder', 'open-file', 'get-media-fps', 'get-subtitles', 'set-cookie-file']
   if (paths.some(name => channel === `cortexdl:${name}`) && !(channel.endsWith('set-cookie-file') && first === null)) {
     if (typeof first !== 'string' || first.length > 32767 || first.includes('\0') || !path.isAbsolute(first)) throw new Error('Invalid file path')

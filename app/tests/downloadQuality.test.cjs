@@ -36,3 +36,13 @@ test('a quality chosen during analysis remains selected when full formats arrive
   assert.equal(useFormStore.getState().selectedQuality, '1080p')
   assert.equal(useFormStore.getState().selectedYtdlpFormatId, '1080p')
 })
+
+test('a missing requested caption cannot silently start a video without subtitles', async () => {
+  prepare(async () => structuredClone(result))
+  await handleAnalyzeUrlDirectly('https://youtube.com/watch?v=abcdefghijk')
+  useFormStore.setState({ targetFormat: 'mp4', selectedSubtitleLanguage: 'missing' })
+  let started = false
+  window.cortexDl.addDownload = async () => { started = true }
+  await onDownloadNow()
+  assert.equal(started, false)
+})

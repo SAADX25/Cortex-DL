@@ -63,6 +63,8 @@ declare global {
       dislikes?: number
       duration?: number
       subtitles?: SharedSubtitleTrack[]
+      captionDiscovery?: import('../../Shared/types').CaptionDiscovery
+      qualityStatus?: 'restricted' | 'limited' | 'available'
       comments?: { author: string; text: string; likeCount: number }[]
     }
     | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
@@ -103,6 +105,8 @@ declare global {
       cancelAnalysis: (id: string) => Promise<void>
       onAnalysisUpdate: (callback: (update: { id: string; stage: string; data: { title?: string; dislikes?: number } }) => void) => () => void
       analyzeUrl: (url: string, id?: string) => Promise<AnalyzeResult>
+      refreshFormats: (url: string, id: string) => Promise<AnalyzeResult>
+      refreshCaptions: (url: string, id: string) => Promise<import('../../Shared/types').CaptionDiscovery>
 
       listDownloads: () => Promise<DownloadTask[]>
       addDownload: (input: {

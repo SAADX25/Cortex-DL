@@ -4,12 +4,14 @@ import { promises as fsPromises } from 'node:fs'
 import log from 'electron-log'
 import { getBinaryPath } from './paths'
 import { checkJsRuntime, getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from './ytdlp'
+import { withCookieSession } from './cookieSession'
+import { isYouTubeUrl } from '../../Shared/youtubeErrors'
 
 export async function extractAndSaveComments(url: string, outputPath: string, onProgress?: (current: number, total: number) => void): Promise<boolean> {
   await ensureEnginesReady(['yt-dlp', 'deno'])
   await checkJsRuntime()
-  const cookieArgs = await getYtdlpCookieArgs()
-  return new Promise((resolve) => {
+  const cookieArgs = isYouTubeUrl(url) ? await getYtdlpCookieArgs() : []
+  return withCookieSession(cookieArgs, undefined, session => new Promise<boolean>((resolve) => {
     log.info(`[CommentsExtractor] Starting comment extraction for ${url}`)
     const ytDlpPath = getBinaryPath('yt-dlp')
 
@@ -19,9 +21,9 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       '--write-comments',
       '--skip-download',
       '--playlist-items', '0',
-      '--verbose',
+      '--ignore-config',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
-      ...cookieArgs,
+      ...session,
       ...getJsRuntimeArgs(),
       url
     ]
@@ -38,7 +40,6 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
 
     proc.stderr.on('data', (chunk) => {
       const text = chunk.toString()
-      console.log('[YTDLP RAW]:', text.trim())
 
 
       if (text.includes('Downloading 1 format(s)') || text.includes('[download] Destination:')) {
@@ -130,5 +131,5 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       log.error(`[CommentsExtractor] Spawn error:`, err)
       resolve(false)
     })
-  })
+  }))
 }

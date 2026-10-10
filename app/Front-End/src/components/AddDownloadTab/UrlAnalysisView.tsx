@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { primaryAnalysis } from '../../lib/analysisSession'
 import { Language } from '../../translations'
+import { YouTubeStatus } from './YouTubeStatus'
 
 interface UrlAnalysisViewProps {
   analyzeResult: any
@@ -127,7 +128,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
                     onChange={(event) => setSelectedSubtitleLanguage(event.target.value)}
                     aria-label={lang === 'ar' ? '\u0627\u062e\u062a\u064a\u0627\u0631 \u0644\u063a\u0629 \u0627\u0644\u062a\u0631\u062c\u0645\u0629' : 'Select subtitle language'}
                   >
-                    <option value="">{lang === 'ar' ? '\u0628\u062f\u0648\u0646 \u062a\u0631\u062c\u0645\u0629' : 'No subtitles'}</option>
+                    <option value="">{lang === 'ar' ? '\u0628\u062f\u0648\u0646 \u062a\u0631\u062c\u0645\u0629' : 'Subtitles off'}</option>
                     {analyzeResult.subtitles.map((track: any) => (
                       <option key={track.languageCode} value={track.languageCode}>
                         {track.name}{track.name !== track.languageCode ? ' (' + track.languageCode + ')' : ''}
@@ -141,7 +142,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
           </div>
         )}
 
-        {}
+        <YouTubeStatus url={url} lang={lang} />
         {analyzeResult.kind === 'ytdlp' && (url.includes('youtube.com') || url.includes('youtu.be')) && analyzeResult.comments && analyzeResult.comments.length > 0 && (
           <div className="preview-comments custom-scrollbar">
             <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>

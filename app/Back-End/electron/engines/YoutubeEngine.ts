@@ -7,7 +7,7 @@ import log from 'electron-log'
 import type { DownloadTask, EngineContext, TaskRuntime, VideoFormat, EngineResult } from '../types'
 import { VIDEO_FORMATS } from '../types'
 import { AUDIO_SPECS, isAudioFormat } from '../audioFormats'
-import { findTaskMediaFile } from '../mediaFiles'
+import { findTaskMediaFile, probeMediaFile } from '../mediaFiles'
 import { getBinaryPath } from '../paths'
 import { nowMs, killProcessTree } from '../utils'
 import {
@@ -15,13 +15,15 @@ import {
   parseFfmpegProgress,
   parseStateTransition,
   flushLines,
-  logRawProgressChunk,
 } from '../progressParser'
 import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
 import { checkJsRuntime, getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
 import { isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode } from '../../../Shared/youtubeErrors'
 import { prepareYouTubeSubtitle, embedYouTubeSubtitle } from '../youtubeSubtitles'
+import { withCookieSession } from '../cookieSession'
+import { diagnosticCategories, youtubeDiagnostic } from '../youtubeDiagnostics'
+import { findCompletedYouTubeMedia, rememberCompletedYouTubeMedia } from '../youtubeMediaCache'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -53,25 +55,43 @@ export class YoutubeEngine implements IEngine {
     task.totalBytes = null
     task.downloadedBytes = 0
     const profile = this.selectProfile(task)
-    const configuredCookies = runtime.ignoreCookies ? [] : await getYtdlpCookieArgs()
     const publicFirst = isYouTubeUrl(task.url)
+    const configuredCookies = runtime.ignoreCookies || !publicFirst ? [] : await getYtdlpCookieArgs()
     const cookieArgs = publicFirst ? [] : configuredCookies
     let subtitle: string | undefined
-    if (publicFirst && task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
-      try {
-        subtitle = await prepareYouTubeSubtitle(task, configuredCookies, runtime.abortController.signal, cookies => {
+    const prepareSubtitle = async () => {
+      if (publicFirst && task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
+        subtitle = await prepareYouTubeSubtitle(task, configuredCookies, runtime.abortController!.signal, cookies => {
           const subtitleArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookies)
           subtitleArgs.splice(subtitleArgs.indexOf('--embed-subs'), 1)
+          // Caption discovery must not depend on the selected video format existing.
+          const selector = subtitleArgs.indexOf('-f')
+          if (selector >= 0) subtitleArgs.splice(selector, 2)
           subtitleArgs.splice(subtitleArgs.length - 1, 0, '--skip-download', '--no-progress', '--ignore-no-formats-error', '--sub-format', 'vtt')
           return this.runYtdlpAttempt(task, context, runtime, subtitleArgs, profile)
         })
+      }
+    }
+    const finishWithSubtitles = async (candidate: string): Promise<EngineResult> => {
+      try {
+        await prepareSubtitle()
+        return { kind: 'success', candidate: subtitle ? await embedYouTubeSubtitle(task, context, candidate, subtitle) : candidate }
       } catch (error) {
-        runtime.abortController.signal.throwIfAborted()
+        runtime.abortController!.signal.throwIfAborted()
         return { kind: 'fatal-error', message: error instanceof Error ? error.message : 'Subtitle download failed' }
       }
     }
-    // The selected captions have their own validated file; media extraction stays public.
-    const mediaTask = subtitle ? { ...task, subtitleLanguage: undefined } : task
+    // Resume a subtitle-only failure from a fully downloaded, attempt-owned file.
+    if (publicFirst && task.subtitleLanguage) {
+      const cached = await findCompletedYouTubeMedia(task)
+      if (cached) {
+        try {
+          const probe = await probeMediaFile(cached, child => { runtime.child = child }, runtime.abortController.signal)
+          if (probe.streams?.some(stream => stream.codec_type === 'video')) return finishWithSubtitles(cached)
+        } catch { runtime.abortController.signal.throwIfAborted() }
+      }
+    }
+    const mediaTask = publicFirst && task.subtitleLanguage ? { ...task, subtitleLanguage: undefined } : task
     if (!task.title || !task.thumbnail) await this.prefetchMetadata(task, context, runtime, cookieArgs).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
     runtime.abortController.signal.throwIfAborted()
     const args = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
@@ -81,7 +101,11 @@ export class YoutubeEngine implements IEngine {
     if (publicFirst && result.exitCode !== 0 && configuredCookies.length && isYouTubeAuthRequiredError(result.stderr)) {
       authenticated = true
       const authenticatedArgs = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, configuredCookies)
-      result = await this.runYtdlpAttempt(task, context, runtime, authenticatedArgs, profile)
+      result = await withCookieSession(configuredCookies, runtime.abortController.signal, session => {
+        const index = authenticatedArgs.indexOf('--cookies')
+        authenticatedArgs.splice(index, 2, ...session)
+        return this.runYtdlpAttempt(task, context, runtime, authenticatedArgs, profile)
+      })
     }
     runtime.abortController.signal.throwIfAborted()
     // Some public HTTPS formats are listed but denied by YouTube. Try its HLS
@@ -95,11 +119,15 @@ export class YoutubeEngine implements IEngine {
     if (result.exitCode === 0) {
       const candidate = await findTaskMediaFile(task, result.detectedFinalPath)
       runtime.abortController.signal.throwIfAborted()
-      if (candidate) return { kind: 'success', candidate: subtitle ? await embedYouTubeSubtitle(task, context, candidate, subtitle) : candidate }
+      if (candidate) {
+        if (publicFirst && task.subtitleLanguage) await rememberCompletedYouTubeMedia(task, candidate)
+        return finishWithSubtitles(candidate)
+      }
       return { kind: 'fatal-error', message: 'yt-dlp produced no final media file' }
     }
     const youtubeFailure = publicFirst ? youtubeErrorCode(result.stderr) : null
     if (youtubeFailure) return { kind: 'fatal-error', message: youtubeFailure }
+    if (publicFirst && /HTTP (?:Error )?403/i.test(result.stderr)) return { kind: 'fatal-error', message: 'YOUTUBE_FORMATS_RESTRICTED' }
     return { kind: 'retryable-error', message: this.buildErrorMessage(result.stderr), delayMs: Math.min(3000 * 2 ** runtime.retries, 60000) }
   }
 
@@ -134,7 +162,7 @@ export class YoutubeEngine implements IEngine {
     const metaArgs = [
       '--dump-json',
       ...selectorArgs,
-      '--no-warnings',
+      '--ignore-config',
       '--no-playlist',
       '--no-mtime',
       '--geo-bypass',
@@ -268,7 +296,7 @@ export class YoutubeEngine implements IEngine {
       if (runtime.abortController?.signal.aborted) return
       lastActivity = nowMs()
       const chunk = data.toString()
-      logRawProgressChunk(task.id, 'yt-dlp:stderr', chunk)
+      // Extractor output can contain signed URLs; retain categories only.
 
       ffmpegState.stderr += chunk
       if (ffmpegState.stderr.length > MAX_STDERR_BYTES) {
@@ -283,7 +311,7 @@ export class YoutubeEngine implements IEngine {
 
 
         if (/subtitle|sub|embed|caption|WARNING|ERROR/i.test(line)) {
-          log.info(`[YoutubeEngine:sub] ${line.trim()}`)
+          youtubeDiagnostic('extractor', { categories: diagnosticCategories(line) })
         }
 
         const ffmpegChanged = parseFfmpegProgress(line, task, ffmpegState)
@@ -308,7 +336,7 @@ export class YoutubeEngine implements IEngine {
       if (runtime.abortController?.signal.aborted) return
       lastActivity = nowMs()
       const chunk = data.toString()
-      logRawProgressChunk(task.id, 'yt-dlp:stdout', chunk)
+      // Parse progress without logging signed extractor URLs.
 
       let lines: string[]
       ;[lines, stdoutBuf] = flushLines(stdoutBuf, chunk)
@@ -373,7 +401,7 @@ export class YoutubeEngine implements IEngine {
 
   private parseHeightFromFormatId(formatId: string | undefined | null): number | null {
     if (!formatId) return null
-    const match = /^(\d{3,4})p$/i.exec(formatId.trim())
+    const match = /^(\d{2,5})p$/i.exec(formatId.trim())
     if (!match) return null
     const height = parseInt(match[1], 10)
     return isNaN(height) ? null : height
@@ -396,7 +424,8 @@ export class YoutubeEngine implements IEngine {
       '--no-playlist',
       '--geo-bypass',
 
-      ...(hasSubtitles ? [] : ['--no-warnings']),
+      '--ignore-config',
+      '--retries', '0', '--extractor-retries', '0', '--fragment-retries', '1',
       '--continue',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
       '--throttled-rate', YOUTUBE_THROTTLED_RATE,

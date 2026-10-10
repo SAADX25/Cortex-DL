@@ -34,8 +34,17 @@ export class CookieValidationCache {
         const first = (contents.split(/\r?\n/, 1)[0] ?? '').replace(/^\uFEFF/, '').trim()
         if (!['# Netscape HTTP Cookie File', '# HTTP Cookie File'].includes(first)) {
           validation = result('invalid_header', 'The file is not a Netscape cookies.txt export.')
-        } else if (!/(?:^|\.)youtube\.com/i.test(contents)) validation = result('missing_youtube', 'The cookies file does not contain YouTube cookies.')
-        else validation = result('valid', 'YouTube cookies file is valid.')
+        } else {
+          const rows = contents.split(/\r?\n/).slice(1).filter(line => line.trim() && (!line.startsWith('#') || line.startsWith('#HttpOnly_')))
+            .map(line => line.replace(/^#HttpOnly_/, '').split('\t'))
+          const wellFormed = rows.every(row => row.length === 7 && /^(TRUE|FALSE)$/.test(row[1]) && row[2].startsWith('/')
+            && /^(TRUE|FALSE)$/.test(row[3]) && /^\d+$/.test(row[4]) && !!row[5])
+          const youtube = rows.filter(row => /^(?:\.)?(?:[\w-]+\.)*youtube\.com$/i.test(row[0]))
+          if (!wellFormed) validation = result('invalid_rows', 'The cookies export contains invalid Netscape rows.')
+          else if (!youtube.length) validation = result('missing_youtube', 'The cookies file does not contain YouTube cookies.')
+          else if (!youtube.some(row => row[4] === '0' || Number(row[4]) > Date.now() / 1000)) validation = result('expired', 'The exported YouTube cookies have expired. Export a fresh session.')
+          else validation = result('valid', 'Netscape export accepted. YouTube sign-in has not been verified; the session may be expired or unusable.')
+        }
       }
       this.entries.delete(file)
       this.entries.set(file, { identity, result: validation })
