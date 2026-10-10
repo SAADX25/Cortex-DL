@@ -1,3 +1,4 @@
+import { engineExecutionFailed } from './engineReadiness'
 import { spawn } from 'node:child_process'
 import { killProcessTree } from './utils'
 import { StringDecoder } from 'node:string_decoder'
@@ -11,6 +12,7 @@ export function extractAnalysis(binary: string, args: string[], signal: AbortSig
     const start = Date.now()
     const child = spawn(binary, args, { windowsHide: true, detached: process.platform !== 'win32',
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
+    child.on('error', error => engineExecutionFailed('yt-dlp', error))
     child.once('spawn', () => analysisTiming('ytdlpStartupMs', start))
     let output = ''
     const decoder = new StringDecoder('utf8')

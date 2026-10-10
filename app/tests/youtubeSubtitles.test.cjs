@@ -9,6 +9,7 @@ const Module = require('node:module')
 const originalLoad = Module._load
 const bin = name => path.resolve('engine-baseline', name + '.exe')
 Module._load = function(request, parent, ...rest) {
+  if (request === './engineReadiness' || request === '../engineReadiness') return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
   if (request === 'electron-log') return { info(){}, warn(){}, error(){} }
   if (request === 'electron') return { app: { isPackaged: false, getPath: () => os.tmpdir() } }
   if (request === './paths' || request === '../paths') return { getBinaryPath: bin, getBinDirectory: () => path.resolve('engine-baseline') }

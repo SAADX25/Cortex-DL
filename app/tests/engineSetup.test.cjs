@@ -10,17 +10,25 @@ const originalLoad = Module._load
 const lock = require('../engines.lock.json')
 let root, downloads, offline
 const digest = async file => crypto.createHash('sha256').update(await fs.readFile(file)).digest('hex')
+const { EngineReceipts } = require('../Back-End/electron/engineReceipts.ts')
+const fixtureVerify = async (file, spec) => ({ name: spec.name, available: await fs.readFile(file, 'utf8').then(data => data === 'engine:' + spec.name, () => false), version: spec.version || 'fixture', message: 'fixture' })
+const fixtureCache = new EngineReceipts(async name => {
+  const spec = lock.packages.flatMap(pkg => pkg.engines).find(spec => spec.name === name)
+  const file = path.join(root, 'bin', spec.filename)
+  return { file, receipt: file + '.integrity.json', identity: JSON.stringify(lock), spec }
+}, fixtureVerify)
 Module._load = function(request, parent, ...rest) {
+  if (request === './engineReadiness' && parent.filename.endsWith('setup.ts')) return { engineReceipts: fixtureCache, engineNames: lock.packages.flatMap(pkg => pkg.engines.map(spec => spec.name)) }
   if (request === 'electron') return {}
   if (request === 'electron-log') return { info() {}, error() {} }
-  if (request === './paths' && parent.filename.endsWith('setup.ts')) return {
+  if (request === './paths' && (parent.filename.endsWith('setup.ts') || parent.filename.endsWith('engineReadiness.ts'))) return {
     getBaselineDirectory: () => path.join(root, 'absent-baseline'),
     getBinDirectory: () => path.join(root, 'bin'),
     getBinaryPath: name => path.join(root, 'bin', `${name}.exe`),
   }
   if (request === './engineIntegrity' && parent.filename.endsWith('setup.ts')) return {
     sha256: digest,
-    verifyEngine: async (file, spec) => ({ name: spec.name, available: await fs.readFile(file, 'utf8').then(data => data === `engine:${spec.name}`, () => false), version: spec.version || 'fixture', message: 'fixture' }),
+    verifyEngine: fixtureVerify,
     downloadEngine: async (url, destination, hash, _signal, progress) => {
       if (offline) throw Object.assign(new Error('offline'), { code: 'ENOTFOUND' })
       const pkg = lock.packages.find(pkg => pkg.url === url)
@@ -64,7 +72,7 @@ test('engine setup downloads on first launch, shares FFmpeg package and reuses i
 test('engine setup cleans failed downloads and can retry first-run provisioning', () => sandbox(async () => {
   offline = true
   await assert.rejects(setup.runSetup(win), /offline/)
-  assert.equal(setup.setupState.status, 'degraded')
+  assert.equal(setup.setupState.status, 'repair-required')
   assert.deepEqual(await fs.readdir(path.join(root, 'bin')), [])
   offline = false
   await setup.runSetup(win)

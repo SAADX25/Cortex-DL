@@ -1,3 +1,4 @@
+import { ensureEnginesReady, engineExecutionFailed } from './engineReadiness'
 import { promises as fs } from 'node:fs'
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -38,6 +39,8 @@ export async function probeMediaFile(
   signal?: AbortSignal,
 ): Promise<MediaProbe> {
   signal?.throwIfAborted()
+  await ensureEnginesReady(['ffprobe'])
+  signal?.throwIfAborted()
   const stat = await fs.stat(filePath)
   signal?.throwIfAborted()
   if (!stat.isFile() || stat.size <= 0) throw new Error('Media output is empty')
@@ -45,6 +48,7 @@ export async function probeMediaFile(
     '-v', 'error', '-show_entries', 'format=format_name,duration:stream=codec_type,codec_name,duration:stream_disposition=attached_pic',
     '-of', 'json', filePath,
   ], { windowsHide: true, detached: false })
+  child.on('error', error => engineExecutionFailed('ffprobe', error))
   track?.(child)
   const onAbort = () => { child.kill() }
   signal?.addEventListener('abort', onAbort, { once: true })

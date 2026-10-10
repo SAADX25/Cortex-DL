@@ -15,6 +15,10 @@
     "check": "npm --prefix app run check",
     "clean": "npm --prefix app run clean",
     "clean:preview": "npm --prefix app run clean -- --dry-run",
-    "clean:packaged": "npm --prefix app run clean -- --packaged"
+    "clean:packaged": "npm --prefix app run clean -- --packaged",
+    "test:unit": "npm --prefix app run test:unit",
+    "test:integration": "npm --prefix app run test:integration",
+    "test:packaged": "npm --prefix app run test:packaged",
+    "benchmark:startup": "npm --prefix app run benchmark:startup"
   }
 }

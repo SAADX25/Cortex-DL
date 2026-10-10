@@ -24,13 +24,18 @@ export default defineConfig(({ command }) => {
       react(),
       electron({
         main: {
-          entry: path.join(__dirname, 'Back-End', 'electron', 'main.ts'),
+          onstart({ startup }) {
+            const directory = process.env.CORTEX_STARTUP_PROBE_DIR
+            void startup(directory ? ['.', '--startup-probe', '--smoke-offline', '--smoke-dir=' + directory] : undefined)
+          },
+          entry: path.join(__dirname, 'Back-End', 'electron', 'entrypoint.ts'),
           vite: {
             build: {
               outDir: path.join(__dirname, 'dist-electron'),
               // Clear stale chunks for packaging; preserve preload during dev watch rebuilds.
               emptyOutDir: command === 'build',
               rollupOptions: {
+                output: { entryFileNames: 'main.js' },
                 external: ['better-sqlite3']
               }
             }

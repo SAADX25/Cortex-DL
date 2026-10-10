@@ -1,3 +1,4 @@
+import { ensureEnginesReady, engineExecutionFailed } from './engineReadiness'
 import { spawn } from 'node:child_process'
 import type { DownloadTask, EngineContext } from './types'
 import { getBinaryPath } from './paths'
@@ -22,6 +23,7 @@ export function trimBounds(task: Pick<DownloadTask, 'startTime' | 'endTime'>): {
 
 /** Settles only after process close, including abort; listeners never outlive the attempt. */
 export async function runMediaProcess(args: string[], task: DownloadTask, ctx: EngineContext, duration?: number): Promise<void> {
+  await ensureEnginesReady(['ffmpeg', 'ffprobe'])
   const signal = ctx.runtime.abortController?.signal
   signal?.throwIfAborted()
   // Input options limit decoding; output options must also limit the encoder.
@@ -29,6 +31,7 @@ export async function runMediaProcess(args: string[], task: DownloadTask, ctx: E
   const decoderThreads = String(Math.max(1, Math.floor(budget / 3)))
   const encoderThreads = String(Math.max(1, budget - Number(decoderThreads)))
   const proc = spawn(getBinaryPath('ffmpeg'), ['-y', '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', decoderThreads, '-filter_threads', '1', '-filter_complex_threads', '1', '-progress', 'pipe:1', ...args.slice(0, -1), '-threads', encoderThreads, args[args.length - 1]], { windowsHide: true, detached: process.platform !== 'win32' })
+  proc.on('error', error => engineExecutionFailed('ffmpeg', error))
   ctx.runtime.child = proc
   let teardown: Promise<void> | undefined
   const terminate = () => { teardown ??= killProcessTree(proc) }

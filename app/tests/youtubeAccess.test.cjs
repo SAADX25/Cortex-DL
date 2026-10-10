@@ -13,6 +13,7 @@ function info(height) {
     automatic_captions: { ar: [{ name: 'Arabic' }] } })
 }
 Module._load = function(request, parent, ...rest) {
+  if (request === './engineReadiness' || request === '../engineReadiness') return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
   if (request === 'electron-log') return { info(){}, warn(){}, error(){} }
   if (request === 'electron') return { app: { isPackaged: false, getPath: () => os.tmpdir() } }
   if (request === './db') return { db: { prepare: () => ({ get: () => ({ value: cookies[1] }) }) } }

@@ -9,6 +9,7 @@ const cp = require('node:child_process')
 const Module = require('node:module')
 const load = Module._load
 Module._load = function(request,parent,...rest) {
+  if (request === './engineReadiness' || request === '../engineReadiness') return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
   if(request==='electron-log')return {info(){},warn(){},error(){}}
   if(request==='electron')return {Notification:{},BrowserWindow:{}}
   return load.call(this,request,parent,...rest)

@@ -20,6 +20,7 @@ import { promises as fsPromises } from 'node:fs'
 import { getBinaryPath } from '../paths'
 import type { AppHealthCheck } from '../types'
 import { checkJsRuntime, validateCookieFile } from '../ytdlp'
+import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
 import { engineHealth } from '../setup'
 import { buildInfo } from '../diagnostics'
 
@@ -35,6 +36,8 @@ export interface IpcDependencies {
   trackMediaProcess: (session: string, kind: 'ffmpeg' | 'probe', stop: () => void) => () => void
   isMediaSessionClosed: (session: string) => boolean
   serviceReadyPromise: Promise<void>
+  uiReadyPromise?: Promise<unknown>
+  mediaReadyPromise?: Promise<unknown>
 }
 
 async function isDirectoryWritable(directory: string): Promise<boolean> {
@@ -52,7 +55,7 @@ async function isDirectoryWritable(directory: string): Promise<boolean> {
   }
 }
 
-async function getAppHealthCheck(mediaPort: number, mediaToken: string): Promise<AppHealthCheck> {
+async function getAppHealthCheck(mediaPort: number, mediaToken: string, uiReady?: Promise<unknown>): Promise<AppHealthCheck> {
   let cookiePath: string | null = null
   let downloadDirectory = app.getPath('downloads')
 
@@ -77,6 +80,7 @@ async function getAppHealthCheck(mediaPort: number, mediaToken: string): Promise
   const probe = engines.find(engine => engine.name === 'ffprobe')!
   const database = db.pragma('quick_check', { simple: true }) === 'ok'
   const mediaServer = await fetch(`http://127.0.0.1:${mediaPort}/health?token=${encodeURIComponent(mediaToken)}`, { method: 'HEAD', signal: AbortSignal.timeout(2000) }).then(response => response.status === 204, () => false)
+  await uiReady
   const updateService = await fetchBoundedJson('https://api.github.com/repos/SAADX25/Cortex-DL/releases/latest', undefined, 3000).then(() => 'reachable' as const, () => 'unavailable' as const)
   const cookies = await validateCookieFile(cookiePath)
   const cookiesReady = cookies.valid || cookies.code === 'missing'
@@ -221,7 +225,8 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   })
 
   ipcMain.handle('cortexdl:health-check', async () => {
-    return getAppHealthCheck(getMediaPort(), getMediaToken())
+    await deps.mediaReadyPromise?.catch(() => {})
+    return getAppHealthCheck(getMediaPort(), getMediaToken(), deps.uiReadyPromise)
   })
 
   ipcMain.handle('cortexdl:downloads:list', async () => {
@@ -463,12 +468,15 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   const thumbnails = new ThumbnailCache(path.join(os.tmpdir(), 'cortexdl-thumbs'))
   ipcMain.handle('cortexdl:fetch-thumbnail', (_event, url: string) => thumbnails.fetch(url))
 
-  ipcMain.handle('cortexdl:get-media-port', () => getMediaPort())
+  ipcMain.handle('cortexdl:get-media-port', async () => {
+    await deps.mediaReadyPromise
+    return getMediaPort()
+  })
 
-  ipcMain.handle('cortexdl:get-media-endpoint', () => ({
-    port: getMediaPort(),
-    token: getMediaToken(),
-  }))
+  ipcMain.handle('cortexdl:get-media-endpoint', async () => {
+    await deps.mediaReadyPromise
+    return { port: getMediaPort(), token: getMediaToken() }
+  })
 
   ipcMain.handle('cortexdl:close-media-session', (_event, session: string) => {
     return closeMediaSession(session)
@@ -567,6 +575,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
       
       try {
+        await ensureEnginesReady(['ffprobe'])
         const ffprobePath = getBinaryPath('ffprobe')
         if (existsSync(ffprobePath) && (ext === '.mp4' || ext === '.mkv' || ext === '.webm')) {
           if (isMediaSessionClosed(playerSession)) return []
@@ -592,6 +601,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
               if (code === 0) resolve(output)
               else reject(new Error('ffprobe failed'))
             })
+            p.on('error', error => engineExecutionFailed('ffprobe', error))
             p.on('error', err => {
               clearTimeout(timer)
               untrack()

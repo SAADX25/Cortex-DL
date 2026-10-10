@@ -13,11 +13,12 @@ interface SetupOverlayProps {
 
 export default function SetupOverlay({ setupState }: SetupOverlayProps) {
   const { status, progress, message } = setupState
-  const isError = status === 'degraded' || status === 'fatal'
+  const isError = status === 'repair-required' || status === 'degraded' || status === 'fatal'
   const isDone = status === 'ready'
 
   return (
     <div
+      data-setup-overlay
       style={{
         position: 'fixed',
         inset: 0,

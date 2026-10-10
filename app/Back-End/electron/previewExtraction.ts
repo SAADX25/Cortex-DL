@@ -1,3 +1,4 @@
+import { engineExecutionFailed } from './engineReadiness'
 import { spawn } from 'node:child_process'
 import { killProcessTree } from './utils'
 
@@ -79,6 +80,7 @@ function runPreviewExtraction<T>(binary: string, args: string[], parse: (info: R
   if (options.isClosed?.()) return Promise.reject(new Error('Preview extraction cancelled'))
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, { windowsHide: true, detached: false, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
+    child.on('error', error => engineExecutionFailed('yt-dlp', error))
     let stdout = '', stderr = '', failure = ''
     let untrack = () => {}
     let teardown: Promise<void> | undefined
