@@ -10,7 +10,7 @@ export async function withYouTubeCookieFallback<T>(
   signal?.throwIfAborted()
   const publicFirst = isYouTubeUrl(url)
   try {
-    return await extract(publicFirst ? [] : cookies)
+    return await extract([])
   } catch (error) {
     signal?.throwIfAborted()
     if (!publicFirst || !cookies.length || !isYouTubeAuthRequiredError(error)) throw error

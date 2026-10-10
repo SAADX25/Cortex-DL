@@ -8,6 +8,7 @@ export class AnalysisCoordinator<T> {
   private cache = new Map<string, { value: T; at: number }>()
   private running = 0
   private queue: (() => void)[] = []
+  invalidate(input: string, scope = ''): void { this.cache.delete(`${normalizeAnalysisUrl(input)}\0${scope}`) }
   constructor(private limit = 3, private ttl = 300000, private max = 50,
     private now = Date.now, private cacheable: (value: T) => boolean = () => true, private stable: (value: T) => T = value => value) {}
 

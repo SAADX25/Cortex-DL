@@ -150,11 +150,16 @@ export interface Translations {
   youtube_rate_limited: string;
   youtube_subtitle_rate_limited: string;
   youtube_subtitle_unavailable: string;
+  youtube_formats_restricted: string;
+  youtube_po_token_required: string;
+  youtube_network_error: string;
   youtube_cookie_valid: string;
   youtube_cookie_cleared: string;
   youtube_cookie_missing: string;
   youtube_cookie_not_file: string;
   youtube_cookie_invalid_header: string;
+  youtube_cookie_invalid_rows: string;
+  youtube_cookie_expired: string;
   youtube_cookie_missing_youtube: string;
   youtube_cookie_read_error: string;
   youtube_cookie_save_error: string;
@@ -327,15 +332,20 @@ export const translations: Record<Language, Translations> = {
     btn_audio: "صوت",
     new_folder_placeholder: "مجلد جديد (اختياري)",
     speed_auto: "تلقائي",
-    youtube_auth_required: "يتطلب YouTube تسجيل الدخول أو التحقق من CAPTCHA. اختر ملف cookies.txt صالحاً لـ YouTube من الإعدادات ثم حاول مجدداً.",
+    youtube_auth_required: "يتطلب YouTube تسجيل الدخول أو التحقق من CAPTCHA. إذا رُفضت جلستك، فقد تكون منتهية أو لا تملك صلاحية الوصول للفيديو. اختر تصديراً حديثاً لملف cookies.txt من الإعدادات.",
     youtube_rate_limited: "قيّد YouTube الطلبات مؤقتاً (429). انتظر ثم أعد المحاولة؛ هذا الخطأ لا يعني أن ملف الكوكيز مطلوب.",
-    youtube_subtitle_rate_limited: "رفض YouTube طلب الترجمة (429). لم تُحمّل الترجمة المطلوبة، ولن يُعتمد الفيديو على أنه مكتمل بدونها. يُجرّب ملف كوكيز صالح، إن توفر، للترجمة وحدها. انتظر قبل إعادة المحاولة أو حدّث ملف جلسة YouTube من الإعدادات.",
+    youtube_subtitle_rate_limited: "قيّد YouTube طلبات الترجمة مؤقتاً (429). انتظر قبل إعادة المحاولة. لم تُحمّل الترجمة المطلوبة، ولن يُعتمد الفيديو على أنه مكتمل بدونها.",
     youtube_subtitle_unavailable: "لم يوفر YouTube ملفاً صالحاً للترجمة المختارة، أو فشل تضمينها في الفيديو. أعد تحليل الرابط واختر ترجمة متاحة ثم حاول مجدداً.",
     youtube_cookie_valid: "صيغة الملف صحيحة ويحتوي بيانات YouTube. يتحقق الموقع من صلاحية جلسة الدخول عند استخدامها.",
+    youtube_formats_restricted: "قيّد YouTube بعض الصيغ أو لم يوفر صيغة قابلة للتنزيل. حدّث الجودة لاحقاً.",
+    youtube_po_token_required: "تشير بيانات الاستخراج إلى ضرورة رمز إثبات المصدر لبعض الطلبات. ملف الكوكيز وحده قد لا يحل ذلك.",
+    youtube_network_error: "تعذر الاتصال بـ YouTube. تحقق من الشبكة ثم أعد المحاولة.",
     youtube_cookie_cleared: "تمت إزالة ملف Cookies.",
     youtube_cookie_missing: "ملف Cookies غير موجود.",
     youtube_cookie_not_file: "المسار المحدد ليس ملفاً.",
     youtube_cookie_invalid_header: "الملف ليس تصديراً صالحاً بصيغة Netscape cookies.txt.",
+    youtube_cookie_invalid_rows: "يحتوي الملف على أسطر غير صالحة بصيغة Netscape.",
+    youtube_cookie_expired: "انتهت صلاحية ملفات YouTube المصدّرة. صدّر جلسة جديدة.",
     youtube_cookie_missing_youtube: "الملف لا يحتوي على Cookies خاصة بـ YouTube.",
     youtube_cookie_read_error: "تعذر قراءة ملف Cookies.",
     youtube_cookie_save_error: "تعذر حفظ إعداد ملف Cookies.",
@@ -504,15 +514,20 @@ export const translations: Record<Language, Translations> = {
     btn_audio: "Audio",
     new_folder_placeholder: "New Folder (Optional)",
     speed_auto: "Auto",
-    youtube_auth_required: "YouTube requires sign-in or CAPTCHA verification. Select a valid YouTube cookies.txt file in Settings and try again.",
+    youtube_auth_required: "YouTube requires sign-in or bot verification. If your configured session was rejected, it may be expired or lack access to this video. Select a fresh YouTube cookies.txt export in Settings.",
     youtube_rate_limited: "YouTube temporarily rate-limited requests (429). Wait before trying again; this error does not mean a cookies file is required.",
-    youtube_subtitle_rate_limited: "YouTube rejected the subtitle request (429). The requested captions were not downloaded, so the video will not be marked complete without them. A valid configured cookies file is tried for subtitles alone when available. Wait before retrying or refresh your YouTube session file in Settings.",
+    youtube_subtitle_rate_limited: "YouTube temporarily rate-limited subtitle requests (429). Wait before retrying. Requested captions were not downloaded, so the video will not be marked complete without them.",
     youtube_subtitle_unavailable: "YouTube did not provide a valid file for the selected captions, or embedding failed. Analyze the link again, select available subtitles and retry.",
     youtube_cookie_valid: "The file format is valid and contains YouTube cookies. YouTube verifies whether the sign-in session is still active when used.",
+    youtube_formats_restricted: "YouTube restricted some formats or reported no downloadable format. Refresh formats later.",
+    youtube_po_token_required: "Extractor diagnostics report a required Proof of Origin token. Cookies alone may not resolve this requirement.",
+    youtube_network_error: "YouTube could not be reached. Check your connection and retry.",
     youtube_cookie_cleared: "The cookies file was removed.",
     youtube_cookie_missing: "The cookies file does not exist.",
     youtube_cookie_not_file: "The selected path is not a file.",
     youtube_cookie_invalid_header: "This is not a valid Netscape cookies.txt export.",
+    youtube_cookie_invalid_rows: "The export contains invalid Netscape cookie rows.",
+    youtube_cookie_expired: "The exported YouTube cookies have expired. Export a fresh session.",
     youtube_cookie_missing_youtube: "The file does not contain YouTube cookies.",
     youtube_cookie_read_error: "The cookies file could not be read.",
     youtube_cookie_save_error: "The cookies file setting could not be saved.",

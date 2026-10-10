@@ -20,7 +20,29 @@ export const AUDIO_SPECS: Record<AudioFormat, AudioSpec> = {
 
 export type MediaProbe = {
   format?: { format_name?: string; duration?: string }
-  streams?: { codec_type?: string; codec_name?: string; duration?: string; disposition?: { attached_pic?: number } }[]
+  streams?: { codec_type?: string; codec_name?: string; duration?: string; width?: number; height?: number;
+    avg_frame_rate?: string; r_frame_rate?: string; tags?: { language?: string; title?: string; handler_name?: string }; disposition?: { attached_pic?: number } }[]
+}
+
+/** MP4 uses ISO 639-2; title retains the original YouTube language variant. */
+export function subtitleLanguageTag(language: string): string {
+  const codes: Record<string, string> = { en: 'eng', ar: 'ara', fr: 'fra', de: 'deu', es: 'spa', it: 'ita', pt: 'por',
+    ru: 'rus', ja: 'jpn', ko: 'kor', zh: 'zho', hi: 'hin', tr: 'tur', nl: 'nld', pl: 'pol', uk: 'ukr',
+    fa: 'fas', he: 'heb', id: 'ind', vi: 'vie', th: 'tha', sv: 'swe', da: 'dan', no: 'nor', fi: 'fin',
+    cs: 'ces', el: 'ell', ro: 'ron', hu: 'hun', bn: 'ben', ur: 'urd', ta: 'tam', te: 'tel', ms: 'msa' }
+  const base = language.split('-')[0]
+  return codes[base] ?? (/^[a-z]{3}$/.test(base) ? base : 'und')
+}
+
+export function validateSubtitleMedia(source: MediaProbe, output: MediaProbe, language?: string): void {
+  const before = source.streams?.find(s => s.codec_type === 'video' && !s.disposition?.attached_pic)
+  const after = output.streams?.find(s => s.codec_type === 'video' && !s.disposition?.attached_pic)
+  if (before && (!after || before.width !== after.width || before.height !== after.height)) throw new Error('Subtitle processing changed video resolution')
+  const rate = (value?: string) => { const [n, d = '1'] = (value ?? '0').split('/'); return Number(n) / Number(d) }
+  if (before && rate(before.avg_frame_rate) > 0 && Math.abs(rate(before.avg_frame_rate) - rate(after?.avg_frame_rate)) > 0.01) throw new Error('Subtitle processing changed video FPS')
+  if (source.streams?.some(s => s.codec_type === 'audio') && !output.streams?.some(s => s.codec_type === 'audio')) throw new Error('Subtitle processing removed audio')
+  if (!output.streams?.some(s => s.codec_type === 'subtitle' && (!language || s.tags?.language === language
+    || s.tags?.title === language || s.tags?.handler_name === language || (subtitleLanguageTag(language) !== 'und' && s.tags?.language === subtitleLanguageTag(language))))) throw new Error('YOUTUBE_SUBTITLE_UNAVAILABLE')
 }
 
 type VideoSpec = { containers: string[]; video: string[]; audio?: string[]; args: string[] }
@@ -82,6 +104,11 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
     if (source?.streams?.some(s => s.codec_type === 'subtitle') && ['mp4', 'mov', 'm4v', 'mkv', 'webm'].includes(format)) {
       mapping.push('-map', '0:s?')
       subtitleArgs.push('-c:s', format === 'mkv' ? 'copy' : format === 'webm' ? 'webvtt' : 'mov_text')
+      source.streams.filter(s => s.codec_type === 'subtitle').forEach((stream, index) => {
+        const language = stream.tags?.title || stream.tags?.language
+        if (language) subtitleArgs.push(`-metadata:s:s:${index}`, `language=${['mp4', 'mov', 'm4v'].includes(format) ? subtitleLanguageTag(language) : language}`,
+          `-metadata:s:s:${index}`, `title=${language}`, `-metadata:s:s:${index}`, `handler_name=${language}`)
+      })
     }
   }
   if (decision === 'direct' || decision === 'remux') {

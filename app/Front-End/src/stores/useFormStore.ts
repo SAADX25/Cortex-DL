@@ -111,24 +111,12 @@ export function useAvailableVideoQualities(): { height: number; fps: number }[] 
   return useMemo(() => {
     if (analyzeResult?.kind !== 'ytdlp') return null
 
-    const normalizeHeight = (h: number) => {
-      if (h >= 4320) return 4320
-      if (h >= 2160 || h >= 2026) return 2160
-      if (h >= 1440 || h >= 1350) return 1440
-      if (h >= 1080 || h >= 1012) return 1080
-      if (h >= 720 || h >= 676) return 720
-      if (h >= 480 || h >= 450) return 480
-      if (h >= 360 || h >= 338) return 360
-      if (h >= 240 || h >= 224) return 240
-      return 144
-    }
-
     const formats = analyzeResult.formats
     const unique = new Map<number, number>()
 
     for (const f of formats) {
       if (!f.height || f.height < 140) continue
-      const standardHeight = normalizeHeight(f.height)
+      const standardHeight = f.height
       const fps = f.fps || Math.round(Number((f.description?.match(/(\d+)fps/) || [])[1])) || 0
       if (!unique.has(standardHeight) || fps > (unique.get(standardHeight) || 0)) {
         unique.set(standardHeight, fps)
