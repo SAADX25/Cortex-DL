@@ -1,3 +1,4 @@
+import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -18,7 +19,7 @@ import {
 } from '../progressParser'
 import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
-import { getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
+import { checkJsRuntime, getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
 import { isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode } from '../../../Shared/youtubeErrors'
 import { prepareYouTubeSubtitle, embedYouTubeSubtitle } from '../youtubeSubtitles'
 
@@ -38,6 +39,8 @@ export class YoutubeEngine implements IEngine {
   private childProcess: ChildProcessWithoutNullStreams | null = null
 
   async download(task: DownloadTask, context?: EngineContext): Promise<EngineResult> {
+    await ensureEnginesReady(['yt-dlp', 'deno', 'ffmpeg', 'ffprobe'])
+    await checkJsRuntime()
     if (!context) throw new Error('[YoutubeEngine] Missing EngineContext')
     const runtime = context.runtime
     this.runtime = runtime
@@ -143,6 +146,7 @@ export class YoutubeEngine implements IEngine {
 
     const proc = spawn(ytDlpPath, metaArgs, { windowsHide: true, detached: process.platform !== 'win32', env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' } })
 
+
     // Track metadata prefetch in the same attempt as the download.
     this.childProcess = proc
     runtime.child = proc
@@ -176,7 +180,7 @@ export class YoutubeEngine implements IEngine {
       try {
         info = JSON.parse(metaOut.trim())
       } catch {
-        
+
         const start = metaOut.indexOf('{')
         const end = metaOut.lastIndexOf('}')
         if (start >= 0 && end > start) info = JSON.parse(metaOut.slice(start, end + 1))
@@ -195,7 +199,7 @@ export class YoutubeEngine implements IEngine {
 
       if (info.title) task.title = String(info.title)
 
-      
+
       if (typeof info.duration === 'number') {
         log.info(`[YoutubeEngine] Duration for ${task.id}: ${info.duration}s`)
       }
@@ -277,7 +281,7 @@ export class YoutubeEngine implements IEngine {
       for (const line of lines) {
         if (!line.trim()) continue
 
-        
+
         if (/subtitle|sub|embed|caption|WARNING|ERROR/i.test(line)) {
           log.info(`[YoutubeEngine:sub] ${line.trim()}`)
         }
@@ -335,7 +339,8 @@ export class YoutubeEngine implements IEngine {
 
     const exitCode: number = await new Promise((resolve) => {
       proc.on('close', (code) => resolve(code ?? 1))
-      proc.on('error', () => resolve(1))
+      proc.on('error', error => engineExecutionFailed('yt-dlp', error))
+    proc.on('error', () => resolve(1))
     })
 
     // Retire handles and callbacks only after process settlement.
@@ -357,7 +362,7 @@ export class YoutubeEngine implements IEngine {
       args.push(...cookieArgs)
     }
 
-    
+
     if (task.username) args.push('--username', task.username)
     if (task.password) args.push('--password', task.password)
 
@@ -390,7 +395,7 @@ export class YoutubeEngine implements IEngine {
       '--no-mtime',
       '--no-playlist',
       '--geo-bypass',
-      
+
       ...(hasSubtitles ? [] : ['--no-warnings']),
       '--continue',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
@@ -400,7 +405,7 @@ export class YoutubeEngine implements IEngine {
       '--resize-buffer',
       '--file-access-retries', '5',
       '--socket-timeout', '10',
-      
+
       '-N', '10',
       '--concurrent-fragments', '6',
       '--http-chunk-size', '10.0M',
@@ -466,12 +471,12 @@ export class YoutubeEngine implements IEngine {
       }
     }
 
-    
+
     const tempDir = task.directory
     ytArgs.push('--paths', `temp:${tempDir}`)
     ytArgs.push('--paths', `home:${task.directory}`)
-    
-    
+
+
     ytArgs.push('-o', `${task.id}.%(ext)s`)
     ytArgs.push(task.url)
 

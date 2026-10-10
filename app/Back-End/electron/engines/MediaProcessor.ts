@@ -1,3 +1,4 @@
+import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import log from 'electron-log';
@@ -31,6 +32,7 @@ export class MediaProcessor {
   }
 
   async getFps(filePath: string): Promise<number | null> {
+    await ensureEnginesReady(['ffmpeg'])
     return new Promise((resolve) => {
       const ffmpeg = getBinaryPath('ffmpeg');
       const args = ['-i', filePath];
@@ -38,6 +40,8 @@ export class MediaProcessor {
       log.info(`[MediaProcessor] Running ffmpeg for FPS: ${ffmpeg} ${args.join(' ')}`);
 
       const proc = spawn(ffmpeg, args, { windowsHide: true });
+    proc.on('error', error => engineExecutionFailed('ffmpeg', error))
+  ;
       this.activeProcesses.add(proc);
       let output = '';
       let settled = false;

@@ -1,12 +1,12 @@
-import { spawn, spawnSync } from 'node:child_process'
 import type { AnalyzeResult, CookieValidationResult, JsRuntimeStatus, SubtitleTrack } from './types'
 import log from 'electron-log'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { downloadEngine, promoteEngine, verifyEngine } from './engineIntegrity'
 import { getBinaryPath, getBinDirectory } from './paths'
 import { db } from './db'
+import { engineReceipts, ensureEnginesReady } from './engineReadiness'
 import { ytdlpCacheArgs } from './ytdlpCache'
 import { analysisTiming } from './analysisTiming'
 import { CookieValidationCache } from './cookieValidation'
@@ -20,8 +20,6 @@ export { isYouTubeAuthRequiredError, YOUTUBE_AUTH_REQUIRED_CODE } from '../../Sh
 
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000
 const ANALYSIS_CACHE_MAX = 50
-const MIN_DENO_VERSION: VersionTuple = [2, 3, 0]
-const MIN_NODE_VERSION: VersionTuple = [22, 0, 0]
 export const YOUTUBE_EXTRACTOR_ARGS = ''
 
 export class YouTubeAuthRequiredError extends Error {
@@ -36,121 +34,17 @@ export class YouTubeAuthRequiredError extends Error {
   }
 }
 
-type VersionTuple = [number, number, number]
-
-type JsRuntimeCandidate = {
-  label: string
-  spec: string
-  command: string
-  minVersion: VersionTuple
-  maxVersion?: VersionTuple
-  env?: NodeJS.ProcessEnv
-}
-
-type JsRuntimeSelection = {
-  args: string[]
-  available: boolean
-  name: string
-}
-
+type JsRuntimeSelection = { args: string[]; available: boolean; name: string }
 const analysisCoordinator = new AnalysisCoordinator<AnalyzeResult>(3, ANALYSIS_CACHE_TTL_MS, ANALYSIS_CACHE_MAX, Date.now, result => result.kind !== 'unknown', result => {
   if (result.kind === 'ytdlp') result.formats = result.formats.map(({ url: _url, ...format }) => format)
   return result
 })
-let cachedJsRuntimeSelection: JsRuntimeSelection | null = null
-let runtimeCheckedAt = 0
-let warnedNoSupportedRuntime = false
-
-function parseVersion(text: string): VersionTuple | null {
-  const match = /v?(\d+)\.(\d+)\.(\d+)/.exec(text)
-  if (!match) return null
-  return [Number(match[1]), Number(match[2]), Number(match[3])]
+// Deno is a mandatory pinned engine. Selection consumes verified metadata only.
+let runtimeSelection: JsRuntimeSelection = { args: [], available: false, name: 'Checking Deno' }
+async function prepareYtdlp(): Promise<void> {
+  await ensureEnginesReady(['yt-dlp', 'deno'])
+  await checkJsRuntime()
 }
-
-function compareVersions(a: VersionTuple, b: VersionTuple): number {
-  for (let i = 0; i < 3; i++) {
-    if (a[i] !== b[i]) return a[i] - b[i]
-  }
-  return 0
-}
-
-function formatVersion(version: VersionTuple): string {
-  return version.join('.')
-}
-
-function getExistingBinaryPath(name: string): string | null {
-  const binaryPath = getBinaryPath(name)
-  return existsSync(binaryPath) ? binaryPath : null
-}
-
-function getRuntimeVersion(candidate: JsRuntimeCandidate): VersionTuple | null {
-  // If command is a file path, verify existence before calling spawnSync
-  if (candidate.command.includes('/') || candidate.command.includes('\\')) {
-    if (!existsSync(candidate.command)) return null
-  }
-
-  try {
-    const result = spawnSync(candidate.command, ['--version'], {
-      windowsHide: true,
-      encoding: 'utf8',
-      timeout: 5000,
-      env: candidate.env ?? process.env,
-    })
-    if (result.error || result.status !== 0) return null
-    return parseVersion(`${result.stdout ?? ''}\n${result.stderr ?? ''}`)
-  } catch {
-    return null
-  }
-}
-
-function trySelectRuntime(candidate: JsRuntimeCandidate): JsRuntimeSelection | null {
-  const version = getRuntimeVersion(candidate)
-  if (!version) return null
-  if (compareVersions(version, candidate.minVersion) < 0) return null
-  if (candidate.maxVersion && compareVersions(version, candidate.maxVersion) > 0) return null
-
-  return {
-    args: ['--js-runtimes', candidate.spec],
-    available: true,
-    name: `${candidate.label} ${formatVersion(version)}`,
-  }
-}
-
-function selectJsRuntime(): JsRuntimeSelection {
-  if (cachedJsRuntimeSelection && Date.now() - runtimeCheckedAt < 5000) return cachedJsRuntimeSelection
-  runtimeCheckedAt = Date.now()
-
-  const electronNodeEnv = { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
-  const candidates: JsRuntimeCandidate[] = []
-  const bundledDeno = getExistingBinaryPath('deno')
-  const bundledNode = getExistingBinaryPath('node')
-  if (bundledDeno) candidates.push({ label: 'Deno', spec: `deno:${bundledDeno}`, command: bundledDeno, minVersion: MIN_DENO_VERSION })
-  if (bundledNode) candidates.push({ label: 'Node', spec: `node:${bundledNode}`, command: bundledNode, minVersion: MIN_NODE_VERSION })
-  candidates.push({ label: 'Node', spec: `node:${process.execPath}`, command: process.execPath, minVersion: MIN_NODE_VERSION, env: electronNodeEnv })
-
-  for (const candidate of candidates) {
-    const selected = trySelectRuntime(candidate)
-    if (selected) {
-      cachedJsRuntimeSelection = selected
-      log.info(`[ytdlp] Using JS runtime: ${selected.name}`)
-      return selected
-    }
-  }
-
-  cachedJsRuntimeSelection = {
-    args: [],
-    available: false,
-    name: 'None',
-  }
-
-  if (!warnedNoSupportedRuntime) {
-    warnedNoSupportedRuntime = true
-    log.warn('[ytdlp] No supported JS runtime found. yt-dlp 2026.06.09 requires Deno >= 2.3.0 or Node >= 22; Bun support is limited to 1.2.11 through 1.3.14.')
-  }
-
-  return cachedJsRuntimeSelection
-}
-
 const cookieArgsCache = new CookieValidationCache()
 
 export async function validateCookieFile(filePath: string | null | undefined): Promise<CookieValidationResult> {
@@ -177,64 +71,11 @@ export async function getYtdlpCookieArgs(): Promise<string[]> {
 }
 
 export async function isYtdlpAvailable(): Promise<boolean> {
-  try {
-    const p = spawn(getBinaryPath('yt-dlp'), ['--version'], { windowsHide: true, detached: false })
-    const exitCode: number = await new Promise((resolve) => {
-      p.on('close', (code) => resolve(code ?? 1))
-      p.on('error', () => resolve(1))
-    })
-    return exitCode === 0
-  } catch {
-    return false
-  }
+  return (await engineReceipts.inspect('yt-dlp')).available
 }
-
 export async function getYtdlpVersion(): Promise<string> {
-  const TIMEOUT_MS = 5000
-
-  try {
-    const binaryPath = getBinaryPath('yt-dlp')
-    log.info(`[ytdlp] Checking version at: ${binaryPath}`)
-
-    if (!existsSync(binaryPath)) {
-      log.info('[ytdlp] Binary not found')
-      return 'Not Installed'
-    }
-
-    const p = spawn(binaryPath, ['--version'], {
-      windowsHide: true,
-      detached: false,
-      timeout: TIMEOUT_MS
-    })
-
-    let stdout = ''
-    p.stdout.on('data', (data) => {
-      stdout += data.toString()
-    })
-
-    const exitCode: number = await Promise.race([
-      new Promise<number>((resolve) => {
-        p.on('close', (code) => resolve(code ?? 1))
-        p.on('error', () => resolve(1))
-      }),
-      new Promise<number>((resolve) => {
-        setTimeout(() => {
-          try { p.kill() } catch {
-            // The timed-out process may have exited already.
-          }
-          resolve(1)
-        }, TIMEOUT_MS)
-      })
-    ])
-
-    if (exitCode === 0 && stdout.trim()) {
-      return stdout.trim()
-    }
-    return 'Unknown'
-  } catch (err) {
-    log.error('[ytdlp] Version check error:', err)
-    return 'Error'
-  }
+  const health = await engineReceipts.inspect('yt-dlp')
+  return health.available ? health.version : health.state === 'repair-required' ? 'Not Installed' : 'Unknown'
 }
 
 function fetchJson(url: string): Promise<any> {
@@ -258,7 +99,7 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
     if (!check.available) throw new Error(check.message)
     const final = path.join(binDir, 'yt-dlp.exe')
     await promoteEngine(candidate, final, spec)
-    await writeFile(final + '.integrity.json', JSON.stringify({ sha256: spec.sha256 }))
+    await engineReceipts.record('yt-dlp', check.version, spec.sha256)
     return { success: true, message: `Updated to ${check.version}`, version: check.version }
   } catch (error) {
     log.error('[Engine update]', error)
@@ -267,13 +108,13 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
 }
 
 export async function checkJsRuntime(): Promise<JsRuntimeStatus> {
-  const selected = selectJsRuntime()
-  return { available: selected.available, name: selected.name }
+  const health = await engineReceipts.inspect('deno')
+  runtimeSelection = health.available
+    ? { available: true, name: 'Deno ' + health.version, args: ['--js-runtimes', 'deno:' + getBinaryPath('deno')] }
+    : { available: false, name: health.message, args: [] }
+  return { available: runtimeSelection.available, name: runtimeSelection.name }
 }
-
-export function getJsRuntimeArgs(): string[] {
-  return selectJsRuntime().args
-}
+export function getJsRuntimeArgs(): string[] { return runtimeSelection.args }
 
 export async function analyzeWithYtdlp(url: string, signal?: AbortSignal): Promise<AnalyzeResult> {
   signal?.throwIfAborted()
@@ -428,6 +269,7 @@ async function extractFullAnalysis(url: string, signal: AbortSignal, cookies: st
 
 
 export async function getTrimPreviewStreams(url: string, options: PreviewExtractionOptions = {}): Promise<PreviewStreams | null> {
+  await prepareYtdlp()
   const binary = getBinaryPath('yt-dlp')
   if (!existsSync(binary)) throw new Error('yt-dlp binary not found in the bin directory')
   try {
@@ -447,6 +289,7 @@ export async function getTrimPreviewStreams(url: string, options: PreviewExtract
 }
 
 export async function getDirectStreamUrl(url: string, options: PreviewExtractionOptions = {}): Promise<string> {
+  await prepareYtdlp()
   const binary = getBinaryPath('yt-dlp')
   if (!existsSync(binary)) throw new Error('yt-dlp binary not found in the bin directory')
   try {

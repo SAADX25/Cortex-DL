@@ -15,6 +15,7 @@ const mockDb = {
   taskDb: { getAllTasks: { all: () => [...rows.values()] }, upsertTask: { run: row => rows.set(row.id, { ...row }) }, deleteTask: { run: id => rows.delete(id) }, clearCompleted: { run: () => {} } },
 }
 Module._load = function(request, parent, ...rest) {
+  if (request === './engineReadiness' || request === '../engineReadiness') return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
   if (request === './paths' || request === '../paths') return { getBinaryPath: name => path.join(process.cwd(), 'engine-baseline', name + '.exe'), getBinDirectory: () => path.join(process.cwd(), 'engine-baseline') }
   if (request === 'electron-log') return { info() {}, warn() {}, error() {} }
   if (request === './db' || request === '../db') return mockDb
@@ -344,6 +345,7 @@ test('Pause/Cancel during real merge stops FFmpeg and cannot approve its partial
     DirectEngine.prototype.download=async(draft,ctx)=>{
       draft.status='merging';ctx.sendUpdate(draft)
       const running=runMediaProcess(['-re','-i',video,'-i',audio,'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','aac',draft.filePath],draft,ctx)
+      await until(() => ctx.runtime.child)
       pid=ctx.runtime.child.pid
       setTimeout(()=>{stopped=manager[action](t.id)},50)
       await running

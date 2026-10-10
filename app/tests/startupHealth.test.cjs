@@ -6,6 +6,7 @@ const os = require('node:os')
 const Module = require('node:module')
 const originalLoad = Module._load
 const handlers = new Map()
+let networkChecks = 0
 Module._load = function(request, parent, ...rest) {
   if (request === 'electron') return {
     app: { isPackaged: false, getPath: () => os.tmpdir() },
@@ -16,7 +17,7 @@ Module._load = function(request, parent, ...rest) {
   if (request === '../setup') return { engineHealth: async () => ['ffmpeg', 'ffprobe'].map(name => ({ name, available: true, version: 'fixture' })) }
   if (request === '../ytdlp') return { getYtdlpVersion: async () => 'fixture', checkJsRuntime: async () => ({ available: true }), validateCookieFile: async () => ({ valid: false, code: 'missing' }) }
   if (request === '../diagnostics') return { buildInfo: () => ({}) }
-  if (request === '../analysisNetwork') return { fetchBoundedJson: async () => ({}) }
+  if (request === '../analysisNetwork') return { fetchBoundedJson: async () => { networkChecks++; return {} } }
   return originalLoad.call(this, request, parent, ...rest)
 }
 const { registerIpcHandlers } = require('../Back-End/electron/ipc/handlers.ts')
@@ -66,4 +67,38 @@ test('startup health authenticates its media probe and rejects unauthorized resp
     server.closeAllConnections()
     await new Promise(resolve => server.close(resolve))
   }
+})
+
+test('health updater network check waits for the first usable UI', async () => {
+  let uiReady, probed
+  const uiReadyPromise = new Promise(resolve => { uiReady = resolve })
+  const probePromise = new Promise(resolve => { probed = resolve })
+  const server = http.createServer((_req, res) => { res.writeHead(204); res.end(); probed() })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    registerIpcHandlers({ getMediaPort: () => server.address().port, getMediaToken: () => 'fixture', uiReadyPromise })
+    const before = networkChecks
+    const health = handlers.get('cortexdl:health-check')()
+    await probePromise
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(networkChecks, before)
+    uiReady()
+    await health
+    assert.equal(networkChecks, before + 1)
+  } finally {
+    uiReady()
+    server.closeAllConnections()
+    await new Promise(resolve => server.close(resolve))
+  }
+})
+
+test('early media endpoint requests wait for listening and use the final fallback port', async () => {
+  let listening, port = 3345, settled = false
+  const mediaReadyPromise = new Promise(resolve => { listening = resolve })
+  registerIpcHandlers({ getMediaPort: () => port, getMediaToken: () => 'fixture', mediaReadyPromise })
+  const endpoint = handlers.get('cortexdl:get-media-endpoint')().then(result => { settled = true; return result })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(settled, false)
+  port = 3410; listening()
+  assert.deepEqual(await endpoint, { port: 3410, token: 'fixture' })
 })

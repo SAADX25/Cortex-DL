@@ -6,21 +6,29 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { Worker } from 'node:worker_threads'
 import { createRequire } from 'node:module'
+import { setPriority, constants as osConstants } from 'node:os'
 
 export type EngineSpec = { name: string; filename: string; minimum: string; architecture: string; sha256?: string; version?: string }
 export type EngineHealth = { name: string; available: boolean; version: string; message: string }
-export async function sha256(file: string): Promise<string> {
+export const verificationMetrics = { subprocesses: 0, hashReads: 0, bytesHashed: 0 }
+export async function sha256(file: string, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted()
+  verificationMetrics.hashReads++
   const hash = createHash('sha256')
-  for await (const chunk of fs.createReadStream(file)) hash.update(chunk)
+  for await (const chunk of fs.createReadStream(file, { signal })) {
+    verificationMetrics.bytesHashed += chunk.length
+    hash.update(chunk)
+  }
   return hash.digest('hex')
 }
 
-export async function verifyEngine(file: string, spec: EngineSpec): Promise<EngineHealth> {
+export async function verifyEngine(file: string, spec: EngineSpec, signal?: AbortSignal): Promise<EngineHealth> {
   const fail = (message: string): EngineHealth => ({ name: spec.name, available: false, version: '', message })
   try {
+    signal?.throwIfAborted()
     const stat = await fs.promises.lstat(file)
     if (!stat.isFile() || stat.size < 100_000 || stat.size > 350 * 1024 * 1024) return fail(`${spec.name} executable is corrupt`)
-    if (spec.sha256 && await sha256(file) !== spec.sha256) return fail(`${spec.name} checksum is invalid`)
+    if (spec.sha256 && await sha256(file, signal) !== spec.sha256) return fail(`${spec.name} checksum is invalid`)
     if (process.platform === 'win32') {
       const handle = await fs.promises.open(file, 'r')
       try {
@@ -31,7 +39,10 @@ export async function verifyEngine(file: string, spec: EngineSpec): Promise<Engi
       } finally { await handle.close() }
     }
     const output = await new Promise<string>((resolve, reject) => {
-      execFile(file, [spec.name === 'ffmpeg' || spec.name === 'ffprobe' ? '-version' : '--version'], { windowsHide: true, timeout: 10_000, maxBuffer: 64 * 1024 }, (err, stdout) => err ? reject(err) : resolve(stdout))
+      signal?.throwIfAborted()
+      verificationMetrics.subprocesses++
+      const child = execFile(file, [spec.name === 'ffmpeg' || spec.name === 'ffprobe' ? '-version' : '--version'], { signal, windowsHide: true, timeout: 10_000, maxBuffer: 64 * 1024 }, (err, stdout) => err ? reject(err) : resolve(stdout))
+      child.once('spawn', () => { try { if (child.pid) setPriority(child.pid, osConstants.priority.PRIORITY_BELOW_NORMAL) } catch { /* best effort */ } })
     })
     const match = spec.name === 'yt-dlp' ? /^(\d{4}\.\d{2}\.\d{2})/m.exec(output) : /(?:version |deno )(\d+\.\d+(?:\.\d+)?|N-\d+)/.exec(output)
     if (!match) return fail(`${spec.name} version is unrecognized`)
@@ -111,8 +122,8 @@ export async function downloadEngine(url: string, destination: string, expectedH
 }
 
 /** Candidate is verified before touching the old engine, then validated after promotion. */
-export async function promoteEngine(candidate: string, final: string, spec: EngineSpec): Promise<void> {
-  const check = await verifyEngine(candidate, spec)
+export async function promoteEngine(candidate: string, final: string, spec: EngineSpec, signal?: AbortSignal): Promise<void> {
+  const check = await verifyEngine(candidate, spec, signal)
   if (!check.available) throw new Error(check.message)
   const backup = `${final}.previous`
   const hadOld = fs.existsSync(final)
@@ -120,7 +131,7 @@ export async function promoteEngine(candidate: string, final: string, spec: Engi
   if (hadOld) await fs.promises.rename(final, backup)
   try {
     await fs.promises.rename(candidate, final)
-    const installed = await verifyEngine(final, spec)
+    const installed = await verifyEngine(final, spec, signal)
     if (!installed.available) throw new Error(installed.message)
   } catch (error) {
     await fs.promises.rm(final, { force: true })
@@ -131,7 +142,8 @@ export async function promoteEngine(candidate: string, final: string, spec: Engi
 }
 
 /** Extract only allowlisted regular files, never archive paths, links, or directories. */
-export async function extractEngineZip(zip: string, destination: string, filenames: string[]): Promise<void> {
+export async function extractEngineZip(zip: string, destination: string, filenames: string[], signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
   if ((await fs.promises.stat(zip)).size > 350 * 1024 * 1024) throw new Error('Archive is too large')
   // adm-zip reads/inflates synchronously. Keep it off Electron's main event loop.
   const require = createRequire(path.join(process.env.APP_ROOT || process.cwd(), 'package.json'))
@@ -161,8 +173,15 @@ export async function extractEngineZip(zip: string, destination: string, filenam
     `, { eval: true, workerData: { zip, destination, filenames, zipModule: require.resolve('adm-zip') } })
     const timer = setTimeout(() => { void worker.terminate().then(() => reject(new Error('Engine archive extraction timed out'))) }, 120_000)
     let completed = false
-    worker.once('message', () => { completed = true; clearTimeout(timer); resolve() })
-    worker.once('error', error => { clearTimeout(timer); reject(error) })
-    worker.once('exit', code => { clearTimeout(timer); if (!completed) reject(new Error(`Engine archive worker exited before completion (${code})`)) })
+    const abort = () => {
+      clearTimeout(timer)
+      void worker.terminate().then(() => reject(new Error('Engine archive extraction cancelled')))
+    }
+    const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', abort) }
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
+    worker.once('message', () => { completed = true; cleanup(); resolve() })
+    worker.once('error', error => { cleanup(); reject(error) })
+    worker.once('exit', code => { cleanup(); if (!completed) reject(new Error(`Engine archive worker exited before completion (${code})`)) })
   })
 }

@@ -17,7 +17,7 @@ import http from 'node:http'
 import os from 'node:os'
 import { DownloadManager } from './downloadManager'
 import { installIpcBoundary } from './ipcSecurity'
-import { runSetup, setupState, engineHealth } from './setup'
+import { checkCachedEngines, reportEngineFailure, stopSetup, runSetup, setupState, engineHealth } from './setup'
 import { openLogs, exportDiagnostics, buildInfo } from './diagnostics'
 
 export let downloads: DownloadManager | null = null
@@ -26,6 +26,10 @@ import { createTray, destroyTray } from './tray'
 import { db } from './db'
 import { spawn } from 'node:child_process'
 import { getBinaryPath } from './paths'
+import { afterUiReady } from './startupWork'
+import { startupTimings, startupWallTimes, startupMark, startupDuration } from './startupTiming'
+import { verificationMetrics } from './engineIntegrity'
+import { engineReceipts, onEngineFailure, ensureEnginesReady, engineExecutionFailed } from './engineReadiness'
 import { MediaRequestRegistry } from './mediaRequestRegistry'
 import { parseMediaRange } from './mediaRange'
 
@@ -39,9 +43,12 @@ const serviceReadyPromise = new Promise<void>(resolve => {
 })
 
 async function loadBackendServices() {
+  if (isQuitting) return
 
+  startupMark('updaterStartMs')
+  const updaterStarted = performance.now()
   const { autoUpdater: electronUpdater } = await import('electron-updater')
-  const { DownloadManager } = await import('./downloadManager')
+
 
 
   autoUpdater = electronUpdater
@@ -113,14 +120,7 @@ async function loadBackendServices() {
   })
 
 
-  if (win && !downloads) {
-    downloads = new DownloadManager()
-    downloads.attachWindow(win)
-    log.info('[Backend] DownloadManager initialized')
-  }
-
-
-  serviceReadyResolve()
+  startupDuration('updaterInitializationMs', updaterStarted)
 
 
   log.info('Backend services loaded. Running startup checks...')
@@ -145,7 +145,14 @@ let win: BrowserWindow | null = null
 let isQuitting = false
 let shutdownPromise: Promise<void> | null = null
 let shutdownFinished = false
+let uiSnapshotPromise: Promise<unknown> = Promise.resolve(null)
+let verificationBeforeUi: typeof verificationMetrics | null = null
 let windowShownMs: number | null = null
+let shownResolve: () => void
+const shownPromise = new Promise<void>(resolve => { shownResolve = resolve })
+let firstRenderResolve: () => void
+const firstRenderPromise = new Promise<void>(resolve => { firstRenderResolve = resolve })
+
 
 function initTray() {
   const iconPath = VITE_DEV_SERVER_URL
@@ -186,8 +193,10 @@ function createWindow() {
 
   // History is local data and must be available before engine checks/downloads.
   if (!downloads) {
+    const managerStarted = performance.now()
     downloads = new DownloadManager()
-    void downloads.cleanupSettledFragments()
+    startupDuration('downloadManagerConstructionMs', managerStarted)
+    serviceReadyResolve()
   }
   downloads.attachWindow(win)
 
@@ -200,8 +209,12 @@ function createWindow() {
 
 
   win.once('ready-to-show', () => {
-    windowShownMs = Math.round(process.uptime() * 1000)
+    startupMark('readyToShowMs')
     win?.show()
+    startupMark('windowShownMs')
+    windowShownMs = startupTimings.windowShownMs
+    shownResolve()
+    initTray()
   })
 
 
@@ -227,6 +240,8 @@ function createWindow() {
     return { action: 'deny' }
   })
 
+  startupMark('rendererLoadStartMs')
+  win.webContents.once('did-finish-load', () => startupMark('rendererLoadMs'))
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
   } else {
@@ -270,6 +285,10 @@ const MEDIA_SERVER_PORT_BASE = Number(process.env.MEDIA_SERVER_PORT) || 3345
 const MEDIA_SERVER_PORT_MAX_TRIES = 10
 export let MEDIA_SERVER_PORT = MEDIA_SERVER_PORT_BASE
 let mediaServer: http.Server | null = null
+let mediaReadyResolve: () => void
+let mediaReadyReject: (error: unknown) => void
+const mediaReadyPromise = new Promise<void>((resolve, reject) => { mediaReadyResolve = resolve; mediaReadyReject = reject })
+void mediaReadyPromise.catch(error => log.error('[MediaServer unavailable]', error))
 const mediaRequests = new MediaRequestRegistry()
 
 /**
@@ -417,14 +436,15 @@ function isAllowedOrigin(origin: string | undefined, appOrigin: string): boolean
 
 const SUBTITLE_EXTRACT_TIMEOUT_MS = 30_000
 
-function streamEmbeddedSubtitle(
+async function streamEmbeddedSubtitle(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   filePath: string,
   rawStreamIndex: string | null,
   corsOrigin: string,
   playerSession: string | null,
-): void {
+): Promise<void> {
+  await ensureEnginesReady(['ffmpeg'])
   // Only a bare stream number is accepted; anything else could select an
   // unintended (e.g. video) stream and produce a huge conversion.
   const streamIndex = rawStreamIndex && /^\d{1,3}$/.test(rawStreamIndex) ? rawStreamIndex : '0'
@@ -483,6 +503,7 @@ function streamEmbeddedSubtitle(
   child.stdout.pipe(res)
 
   child.on('error', (err) => {
+    engineExecutionFailed('ffmpeg', err)
     log.error('[MediaServer] FFmpeg subtitle extraction error:', err)
     finish()
   })
@@ -652,7 +673,7 @@ async function handleMediaRequest(
     }
 
     if (urlObj.searchParams.get('subtitle') === 'true') {
-      streamEmbeddedSubtitle(req, res, filePath, urlObj.searchParams.get('streamIndex'), corsOrigin, playerSession)
+      await streamEmbeddedSubtitle(req, res, filePath, urlObj.searchParams.get('streamIndex'), corsOrigin, playerSession)
       return
     }
 
@@ -713,16 +734,19 @@ function startMediaStreamingServer(): void {
   const server = http.createServer((req, res) => {
     void handleMediaRequest(req, res, appOrigin)
   })
+  mediaServer = server
   server.keepAliveTimeout = 5000
 
   let attempt = 0
 
   const tryListen = (port: number) => {
     MEDIA_SERVER_PORT = port
-    server.listen(port, '127.0.0.1')
+    try { server.listen(port, '127.0.0.1') }
+    catch (error) { mediaServer = null; mediaReadyReject(error) }
   }
 
   server.on('error', (err: NodeJS.ErrnoException) => {
+    if (isQuitting) return
     if (err.code === 'EADDRINUSE') {
       attempt++
       const nextPort = MEDIA_SERVER_PORT_BASE + attempt
@@ -735,15 +759,22 @@ function startMediaStreamingServer(): void {
         tryListen(0) // An OS-assigned loopback port avoids conflicts with every preferred port.
       } else {
         log.error(`[MediaServer] All ports ${MEDIA_SERVER_PORT_BASE}–${nextPort} are in use. Media server could not start.`)
+        mediaServer = null
+        mediaReadyReject(err)
       }
     } else {
       log.error('[MediaServer] Server error:', err)
+      mediaServer = null
+      mediaReadyReject(err)
     }
   })
 
   server.on('listening', () => {
+    if (isQuitting) { server.close(); return }
     MEDIA_SERVER_PORT = (server.address() as import('node:net').AddressInfo).port
     mediaServer = server
+    startupMark('mediaServerReadyMs')
+    mediaReadyResolve()
     log.info(`[MediaServer] Streaming server ready at http://127.0.0.1:${MEDIA_SERVER_PORT} (token-protected)`)
   })
 
@@ -788,6 +819,8 @@ if (!gotTheLock) {
     event.preventDefault()
     if (shutdownPromise) return
     shutdownPromise = (async () => {
+      await engineReceipts.stop()
+      await stopSetup()
       await stopMediaStreamingServer()
       destroyTray()
       // pauseAll() terminates active download children before the final quit.
@@ -824,6 +857,14 @@ if (!gotTheLock) {
 
 
   installIpcBoundary(() => win)
+  ipcMain.on('cortexdl:first-ui-render', () => {
+    if (startupTimings.firstUiRenderMs !== undefined) return
+    startupMark('firstUiRenderMs')
+    verificationBeforeUi = { ...verificationMetrics }
+    if (startupProbe) uiSnapshotPromise = win!.webContents.executeJavaScript("({ shell: !!document.querySelector('.app-container'), overlay: !!document.querySelector('[data-setup-overlay]'), buttons: document.querySelectorAll('.app-container button').length })").catch(error => ({ error: String(error) }))
+    firstRenderResolve()
+  })
+  onEngineFailure(message => { if (win && !isQuitting) reportEngineFailure(win, message) })
   registerIpcHandlers({
     getWin: () => win,
     getDownloads: () => downloads,
@@ -834,13 +875,13 @@ if (!gotTheLock) {
     getMediaRequestStats: () => mediaRequests.snapshot(),
     trackMediaProcess: (session, kind, stop) => mediaRequests.track(session, kind === 'probe' ? 'probe' : 'subtitle', stop),
     isMediaSessionClosed: session => mediaRequests.isClosed(session),
-    serviceReadyPromise
+    serviceReadyPromise,
+    mediaReadyPromise,
+    uiReadyPromise: Promise.all([shownPromise, firstRenderPromise])
   })
 
   app.whenReady().then(async () => {
-    startMediaStreamingServer()
     createWindow()
-    initTray()
 
     markStartup('starting')
     if (previousStartupFailed && !safeMode && !smokeDirectory) void offerSafeMode()
@@ -848,15 +889,32 @@ if (!gotTheLock) {
     ipcMain.handle('cortexdl:setup-state', () => setupState)
     ipcMain.handle('cortexdl:repair-engines', async () => {
       if (downloads?.getActiveCount()) return { ...setupState, message: 'Wait for active downloads to finish before repair.' }
-      await initializeRuntime(true); return setupState
+      await initializeRuntime(true, true); return setupState
     })
     ipcMain.handle('cortexdl:open-logs', () => openLogs())
     ipcMain.handle('cortexdl:exit', () => app.quit())
     ipcMain.handle('cortexdl:export-diagnostics', async () => win ? exportDiagnostics(win, { engines: await engineHealth(), database: db.pragma('quick_check', { simple: true }), mediaServer: !!mediaServer, runtimeState: setupState.status }) : false)
     ipcMain.handle('cortexdl:build-info', () => ({ ...buildInfo(), safeMode }))
-    await initializeRuntime()
+    const cachedCheck = checkCachedEngines(win!).catch(error => log.error('[Engine cache]', error))
+    // Both Chromium's ready-to-show and React's first paint precede optional work.
+    const uiReady = Promise.all([shownPromise, firstRenderPromise])
+    const updaterInitialization = afterUiReady(uiReady, loadBackendServices, error => log.error('[Updater initialization]', error))
+    await uiReady
+    if (isQuitting) return
+    await cachedCheck
+    markStartup('ready')
+    startMediaStreamingServer()
+    const fragmentCleanup = afterUiReady(uiReady, async () => {
+      const started = performance.now()
+      await downloads?.cleanupSettledFragments()
+      startupDuration('fragmentCleanupMs', started)
+    }, error => log.error('[Fragment cleanup]', error))
+    await afterUiReady(uiReady, () => initializeRuntime(!process.argv.includes('--smoke-offline')), error => log.error('[Background setup]', error))
+    log.info('[Startup timings]', startupTimings, verificationMetrics)
     if (smokeDirectory && startupProbe) {
-      await fsPromises.writeFile(path.join(smokeDirectory, 'startup-timing.json'), JSON.stringify({ packaged: app.isPackaged, uiMs: windowShownMs, readyMs: Math.round(process.uptime() * 1000), state: setupState.status, version: app.getVersion(), build: buildInfo() }, null, 2))
+      await Promise.all([updaterInitialization, fragmentCleanup])
+      const uiSnapshot = await uiSnapshotPromise
+      await fsPromises.writeFile(path.join(smokeDirectory, 'startup-timing.json'), JSON.stringify({ packaged: app.isPackaged, uiMs: windowShownMs, readyMs: Math.round(process.uptime() * 1000), state: setupState.status, timings: startupTimings, wallTimes: startupWallTimes, verification: verificationMetrics, verificationBeforeUi, uiSnapshot, version: app.getVersion(), build: buildInfo() }, null, 2))
       app.quit()
     } else if (smokeDirectory) {
       const { runPackagedSmoke } = await import('./packagedSmoke')
@@ -872,13 +930,15 @@ if (!gotTheLock) {
 }
 
 let initialization: Promise<void> | null = null
-async function initializeRuntime(allowNetwork = true): Promise<void> {
+async function initializeRuntime(allowNetwork = true, force = false): Promise<void> {
+  if (isQuitting) return
   if (initialization) return initialization
   initialization = (async () => {
     try {
       if (!win) throw new Error('Window unavailable')
-      await runSetup(win, allowNetwork)
-      if (!autoUpdater) await loadBackendServices()
+      startupMark('backgroundEngineStartMs')
+      await runSetup(win, allowNetwork, force)
+
       markStartup('ready')
     } catch (error) {
       log.error('[Runtime unavailable]', error)

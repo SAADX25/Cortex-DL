@@ -19,6 +19,7 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
   })
 }
 contextBridge.exposeInMainWorld('cortexDl', {
+  reportFirstUiRender(): void { ipcRenderer.send('cortexdl:first-ui-render') },
   smokeMode: process.argv.includes('--cortex-smoke'),
   analysisDebug: process.env.CORTEX_ANALYSIS_DEBUG === '1',
   selectFolder(): Promise<string | null> {

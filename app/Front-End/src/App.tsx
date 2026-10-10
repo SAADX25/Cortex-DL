@@ -37,6 +37,11 @@ function App() {
   // funneling every piece of app state through `App` (and re-rendering the
   // whole tree on any change anywhere), each slice owns its own init effects
   // and leaf components read only the selectors they actually render.
+  useEffect(() => {
+    let second = 0
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => window.cortexDl.reportFirstUiRender()) })
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second) }
+  }, [])
   useSettingsInit()
   useDownloadInit()
   useEffect(() => {
@@ -68,7 +73,7 @@ function App() {
           useUIStore.getState().setMediaPlayerFile({ filePath: source, title: 'Packaged fixture' })
           for (let n = 0; n < 100; n++) { if ((document.querySelector(selector) as HTMLMediaElement)?.readyState) break; await delay(50) }
           const media = document.querySelector(selector) as HTMLMediaElement
-          if (!media || media.readyState < 1) throw new Error('Packaged player failed to load')
+          if (!media || media.readyState < 1) throw new Error('Packaged player failed to load: ' + JSON.stringify({ selector, present: !!media, readyState: media?.readyState, networkState: media?.networkState, error: media?.error?.code, sourceSet: !!media?.currentSrc }))
           useUIStore.getState().setMediaPlayerFile(null)
           await delay(100)
           if (document.querySelector(selector)) throw new Error('Player failed to close')
@@ -137,12 +142,10 @@ function App() {
     }
   }, [refreshHealth])
 
-  if (setupState && setupState.status !== 'ready') {
-    return <SetupOverlay setupState={setupState} />
-  }
 
   return (
     <div className="app-container" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      {setupState && ['repairing', 'repair-required', 'degraded', 'fatal'].includes(setupState.status) && <SetupOverlay setupState={setupState} />}
       <Sidebar />
 
       <main className="main-content">

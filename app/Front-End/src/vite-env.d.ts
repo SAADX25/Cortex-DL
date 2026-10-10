@@ -87,6 +87,7 @@ declare global {
     __cortexSmokeLifecycle?: (file: string, audioFile?: string, previewUrl?: string) => Promise<boolean>
     __cortexMediaDiagnostics?: () => Promise<unknown>
     cortexDl: {
+      reportFirstUiRender(): void
       analysisDebug: boolean
       smokeMode: boolean
 

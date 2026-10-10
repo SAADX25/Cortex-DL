@@ -15,6 +15,7 @@ const dbMock = {
   taskDb: { getAllTasks: { all: () => [] }, upsertTask: { run: row => { dbMock.lastRow = row } }, deleteTask: { run: () => {} }, clearCompleted: { run: () => {} } },
 }
 Module._load = function (request, parent, ...rest) {
+  if (request === './engineReadiness' || request === '../engineReadiness') return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
   if (request === './paths' || request === '../paths') return { getBinaryPath: name => path.join(process.cwd(), 'engine-baseline', name + '.exe'), getBinDirectory: () => path.join(process.cwd(), 'engine-baseline') }
   if (request === 'electron-log') return { info: () => {}, warn: () => {}, error: () => {} }
   if (request === './db' || request === '../db') return dbMock

@@ -2,6 +2,8 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'node:path'
 
+import { startupMark, startupDuration } from './startupTiming'
+const dbStarted = performance.now()
 const userDataPath = app.getPath('userData')
 const dbPath = path.join(userDataPath, 'tasks.sqlite')
 
@@ -37,6 +39,9 @@ db.exec(`
     value TEXT
   );
 `)
+
+startupDuration('dbOpenDurationMs', dbStarted)
+startupMark('dbOpenMs')
 
 export const taskDb = {
   upsertTask: db.prepare(`
