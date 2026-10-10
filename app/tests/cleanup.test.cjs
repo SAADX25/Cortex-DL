@@ -13,8 +13,8 @@ async function fixture(work) {
   const files = [
     'dist-electron/main.js', 'Front-End/dist/index.html', 'smoke-results/fixture/bin/ffmpeg.exe',
     'bin/ffmpeg.exe', 'build-manifest.json', 'THIRD-PARTY-NOTICES.txt',
-    'release/2.1.8/win-unpacked/app.exe', 'release/2.1.8/Cortex-DL-Setup-2.1.8.exe',
-    'release/2.1.8/latest.yml', 'release/2.1.8/Cortex-DL-Setup-2.1.8.exe.blockmap',
+    'release/2.2.0/win-unpacked/app.exe', 'release/2.2.0/Cortex-DL-Setup-2.2.0.exe',
+    'release/2.2.0/latest.yml', 'release/2.2.0/Cortex-DL-Setup-2.2.0.exe.blockmap',
     'build/installer.nsh', 'Front-End/src/App.tsx', 'Back-End/electron/main.ts',
     '.cortex_temp/paused/partial.part', '.env', 'node_modules/fixture/index.js',
     'engine-baseline/ffmpeg.exe', 'engine-baseline/FFmpeg.download',
@@ -38,10 +38,10 @@ test('cleanup preview changes nothing; cleanup preserves source, dependencies, e
     else assert.equal(await fs.readFile(path.join(app, file), 'utf8'), file)
   }
   await cleanProject(app) // Missing outputs are safe on repeated runs.
-  await fs.stat(path.join(app, 'release/2.1.8/win-unpacked/app.exe'))
+  await fs.stat(path.join(app, 'release/2.2.0/win-unpacked/app.exe'))
   await cleanProject(app, { packaged: true })
-  await assert.rejects(fs.stat(path.join(app, 'release/2.1.8/win-unpacked')), { code: 'ENOENT' })
-  for (const file of ['Cortex-DL-Setup-2.1.8.exe', 'latest.yml', 'Cortex-DL-Setup-2.1.8.exe.blockmap']) await fs.stat(path.join(app, 'release/2.1.8', file))
+  await assert.rejects(fs.stat(path.join(app, 'release/2.2.0/win-unpacked')), { code: 'ENOENT' })
+  for (const file of ['Cortex-DL-Setup-2.2.0.exe', 'latest.yml', 'Cortex-DL-Setup-2.2.0.exe.blockmap']) await fs.stat(path.join(app, 'release/2.2.0', file))
 }))
 
 test('cleanup refuses redirected parents or nested junctions before deleting outputs', () => fixture(async (app, directory) => {

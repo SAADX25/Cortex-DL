@@ -23,3 +23,7 @@ If you feel like a user is violating these guidelines or feel treated unfairly, 
 If you need to report an issue or contact the repository maintainers regarding the Code of Conduct, please contact:
 
 **Email:** [seed.rabade@gmail.com](mailto:seed.rabade@gmail.com)
+
+---
+
+[README](README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT License](LICENSE)

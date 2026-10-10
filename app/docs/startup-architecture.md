@@ -52,7 +52,7 @@ Receipt migration on the packaged EXE rendered usable UI at 561 ms. Its required
 
 For the healthy packaged empty profile, DB open took 3.19 ms, DownloadManager construction 0.37 ms, and deferred fragment cleanup 0.51 ms. With 500 paused records these were 4.41, 27.58, and 1.02 ms; first UI was 554 ms. History recovery was measurable but did not justify moving essential recovery out of construction for these fixtures. Updater initialization started at 484 ms, after first UI at 483 ms, and took 24.35 ms. It did not gate readiness.
 
-The existing installed EXE was unavailable at measurement time (`installedBefore: null`). An installed-versus-development comparison therefore remains unavailable. The real newly built packaged executable, `app/release/2.1.8/win-unpacked/Cortex DL.exe`, was validated directly; the NSIS installer was built successfully without replacing the user's installation.
+The existing installed EXE was unavailable at measurement time (`installedBefore: null`). An installed-versus-development comparison therefore remains unavailable. The real newly built packaged executable, `app/release/2.2.0/win-unpacked/Cortex DL.exe`, was validated directly; the NSIS installer was built successfully without replacing the user's installation.
 
 Raw results: [startup comparison JSON](../smoke-results/startup-comparison.json), [benchmark log](../smoke-results/validation/benchmark.log).
 
