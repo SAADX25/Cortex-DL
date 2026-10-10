@@ -19,7 +19,7 @@ import { db } from '../db'
 import { promises as fsPromises } from 'node:fs'
 import { getBinaryPath } from '../paths'
 import type { AppHealthCheck } from '../types'
-import { checkJsRuntime, validateCookieFile } from '../ytdlp'
+import { checkJsRuntime } from '../ytdlp'
 import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
 import { engineHealth } from '../setup'
 import { buildInfo } from '../diagnostics'
@@ -56,13 +56,10 @@ async function isDirectoryWritable(directory: string): Promise<boolean> {
 }
 
 async function getAppHealthCheck(mediaPort: number, mediaToken: string, uiReady?: Promise<unknown>): Promise<AppHealthCheck> {
-  let cookiePath: string | null = null
   let downloadDirectory = app.getPath('downloads')
 
   try {
-    const cookieRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
     const directoryRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('downloadDirectory') as { value: string } | undefined
-    cookiePath = cookieRow?.value ?? null
     downloadDirectory = directoryRow?.value || downloadDirectory
   } catch (err) {
     log.warn('[health] Failed to read persisted settings:', err)
@@ -82,12 +79,10 @@ async function getAppHealthCheck(mediaPort: number, mediaToken: string, uiReady?
   const mediaServer = await fetch(`http://127.0.0.1:${mediaPort}/health?token=${encodeURIComponent(mediaToken)}`, { method: 'HEAD', signal: AbortSignal.timeout(2000) }).then(response => response.status === 204, () => false)
   await uiReady
   const updateService = await fetchBoundedJson('https://api.github.com/repos/SAADX25/Cortex-DL/releases/latest', undefined, 3000).then(() => 'reachable' as const, () => 'unavailable' as const)
-  const cookies = await validateCookieFile(cookiePath)
-  const cookiesReady = cookies.valid || cookies.code === 'missing'
 
   return {
     checkedAt: Date.now(),
-    healthy: mediaServer && database && probe.available && ytDlpAvailable && ffmpegAvailable && jsRuntime.available && cookiesReady && directoryWritable,
+    healthy: mediaServer && database && probe.available && ytDlpAvailable && ffmpegAvailable && jsRuntime.available && directoryWritable,
     ytDlp: { available: ytDlpAvailable, version: ytDlpVersion },
     ffmpeg: { available: ffmpegAvailable, path: ffmpegPath, version: engines.find(e => e.name === 'ffmpeg')?.version },
     ffprobe: probe,
@@ -96,7 +91,6 @@ async function getAppHealthCheck(mediaPort: number, mediaToken: string, uiReady?
     mediaServer: { healthy: mediaServer },
     updateService,
     jsRuntime,
-    cookies,
     downloadDirectory: { writable: directoryWritable, path: downloadDirectory },
   }
 }
@@ -493,56 +487,6 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       })),
       mainMemory: await process.getProcessMemoryInfo(),
       requests: getMediaRequestStats(),
-    }
-  })
-
-  ipcMain.handle('cortexdl:select-cookie-file', async () => {
-    const win = getWin()
-    if (!win) return null
-    const result = await dialog.showOpenDialog(win, {
-      title: 'Select cookies.txt file',
-      properties: ['openFile'],
-      filters: [{ name: 'Cookies File', extensions: ['txt'] }],
-    })
-    if (result.canceled || !result.filePaths.length) return null
-    return result.filePaths[0] ?? null
-  })
-
-  ipcMain.handle('cortexdl:get-cookie-file', () => {
-    try {
-      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('cookieFilePath') as { value: string } | undefined
-      return row?.value ?? null
-    } catch {
-      return null
-    }
-  })
-
-  ipcMain.handle('cortexdl:set-cookie-file', async (_event, filePath: string | null) => {
-    try {
-      db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
-      if (!filePath) {
-        db.prepare('DELETE FROM settings WHERE key = ?').run('cookieFilePath')
-        return {
-          valid: true,
-          code: 'cleared',
-          message: 'YouTube cookies file was cleared.',
-          filePath: null,
-        }
-      }
-
-      const validation = await validateCookieFile(filePath)
-      if (!validation.valid || !validation.filePath) return validation
-
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('cookieFilePath', validation.filePath)
-      return validation
-    } catch (err) {
-      log.error('[cookies] Failed to persist cookieFilePath:', err)
-      return {
-        valid: false,
-        code: 'save_error',
-        message: 'The cookies file setting could not be saved.',
-        filePath,
-      }
     }
   })
 

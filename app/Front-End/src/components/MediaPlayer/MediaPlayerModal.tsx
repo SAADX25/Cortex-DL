@@ -5,11 +5,13 @@ import { buildMediaUrl, useMediaEndpoint } from '../../lib/mediaEndpoint';
 import { clearMediaCanvas, releaseAudioGraph, releaseMediaElement, stopPlayerFrame } from './mediaSession';
 import { markAudioContext, markMediaSession } from './mediaDiagnostics';
 import './MediaPlayer.css';
+import type { SubtitlePreview } from '../../../../Shared/localSubtitles';
 
 interface MediaPlayerModalProps {
   isOpen: boolean;
   filePath: string;
   title?: string;
+  subtitlePreview?: SubtitlePreview;
   onClose: () => void;
   dir?: 'ltr' | 'rtl';
 }
@@ -25,7 +27,7 @@ function getMediaType(filePath: string): MediaType {
   return 'unknown';
 }
 
-export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir = 'ltr' }: MediaPlayerModalProps) {
+export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePreview, onClose, dir = 'ltr' }: MediaPlayerModalProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMiniMode, setIsMiniMode] = useState(false);
   const [currentTheme, setCurrentTheme] = useState('midnight');
@@ -516,6 +518,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, onClose, dir
             fileUrl={fileUrl}
             title={displayTitle}
             filePath={filePath}
+            subtitlePreview={subtitlePreview}
             isPlaying={isPlaying}
             duration={duration}
             volume={volume}

@@ -12,9 +12,6 @@ import type {
   YtdlpFormat,
   SubtitleTrack,
   AnalyzeResult,
-  YouTubeOAuthCodePayload,
-  CookieValidationCode,
-  CookieValidationResult,
   JsRuntimeStatus,
   AppHealthCheck,
 } from '../../Shared/types'
@@ -31,13 +28,10 @@ export type {
   YtdlpFormat,
   SubtitleTrack,
   AnalyzeResult,
-  YouTubeOAuthCodePayload,
-  CookieValidationCode,
-  CookieValidationResult,
   JsRuntimeStatus,
   AppHealthCheck,
 }
-export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
+export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 
 export type StartInput = {
   url: string
@@ -66,7 +60,6 @@ export type TaskRuntime = {
   lastSpeedSampleBytes: number | null
   lastIpcAtMs: number
   retries: number
-  ignoreCookies?: boolean
   /**
    * Timestamp (ms) before which this task must not be picked up by
    * `DownloadManager.schedule()`. Set by `scheduleRetry()` while a
@@ -94,5 +87,4 @@ export interface EngineContext {
   sendUpdate: (task: DownloadTask) => void
   saveState: () => void
   flushSave: () => void
-  sendYouTubeOAuthCode: (payload: YouTubeOAuthCodePayload) => void
 }

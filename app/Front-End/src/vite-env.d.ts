@@ -9,7 +9,6 @@ import type {
   SubtitleTrack as SharedSubtitleTrack,
   ThumbnailDataUrl as SharedThumbnailDataUrl,
   AppHealthCheck as SharedAppHealthCheck,
-  CookieValidationResult as SharedCookieValidationResult,
   JsRuntimeStatus as SharedJsRuntimeStatus,
 } from '../../Shared/types'
 
@@ -25,7 +24,6 @@ declare global {
   type TargetFormat = SharedTargetFormat
   type ThumbnailDataUrl = SharedThumbnailDataUrl
   type AppHealthCheck = SharedAppHealthCheck
-  type CookieValidationResult = SharedCookieValidationResult
   type JsRuntimeStatus = SharedJsRuntimeStatus
 
   type HlsVariant = {
@@ -186,10 +184,15 @@ declare global {
       getTrimPreviewStreams: (url: string, previewSession: string) => Promise<{ videoUrl: string; audioUrl?: string } | null>
       logPreviewError: (message: string) => void
 
-      selectCookieFile: () => Promise<string | null>
-      getCookieFile: () => Promise<string | null>
-      setCookieFile: (filePath: string | null) => Promise<CookieValidationResult>
       getSubtitles: (filePath: string, session: string) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>
+      getLocalSubtitleState: () => Promise<import('../../Shared/localSubtitles').SubtitleState>
+      getLocalSubtitleReadiness: () => Promise<import('../../Shared/localSubtitles').SubtitleReadiness>
+      selectSubtitleMedia: () => Promise<string | null>
+      installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null) => Promise<string>
+      startLocalSubtitles: (request: import('../../Shared/localSubtitles').SubtitleRequest) => Promise<string>
+      cancelLocalSubtitles: (id: string) => Promise<void>
+      exportLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[], format: 'srt' | 'vtt') => Promise<string | null>
+      embedLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[]) => Promise<string | null>
 
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void
       onDownloadUpdated: (callback: (task: DownloadTask) => void) => () => void

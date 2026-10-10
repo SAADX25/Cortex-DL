@@ -142,8 +142,8 @@ test('yt-dlp continuation quality selects 4K over lower AVC and respects resolut
       { format_id: 'audio', vcodec: 'none', acodec: 'mp4a.40.2', ext: 'm4a', abr: 128, url: 'https://fixture.invalid/audio' }]
     const select = async (profile, quality, available) => {
       await fs.writeFile(infoPath, JSON.stringify({ id: 'fixture', title: 'Quality fixture', extractor: 'generic', webpage_url: 'https://fixture.invalid/video', formats: available }))
-      const args = new YoutubeEngine().buildYtdlpArgs(task({ targetFormat: profile === 'bestVideo' ? 'mp4' : 'mkv', ytdlpFormatId: quality }), profile, { ffmpegDir: '.' }, runtime(), ['--cookies', 'configured-cookies.txt'])
-      assert.equal(args[args.indexOf('--cookies') + 1], 'configured-cookies.txt')
+      const args = new YoutubeEngine().buildYtdlpArgs(task({ targetFormat: profile === 'bestVideo' ? 'mp4' : 'mkv', ytdlpFormatId: quality }), profile, { ffmpegDir: '.' }, runtime())
+      assert.equal(args.includes('--cookies'), false)
       const result = spawnSync(binary, ['--ignore-config', '--simulate', '--no-check-formats', '--load-info-json', infoPath, '--dump-single-json', '-f', args[args.indexOf('-f') + 1], '-S', args[args.indexOf('-S') + 1]], { encoding: 'utf8', timeout: 15000 })
       assert.equal(result.status, 0, result.stderr)
       return JSON.parse(result.stdout).format_id

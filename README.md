@@ -7,7 +7,7 @@ A modern, high-performance Windows desktop video and audio downloader built with
 
 [![Version](https://img.shields.io/badge/version-2.2.0-blue?style=flat-square)](https://github.com/SAADX25/Cortex-DL/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6?style=flat-square&logo=windows)](https://github.com/SAADX25/Cortex-DL/releases)
-[![Tests](https://img.shields.io/badge/tests-134%20passed-success?style=flat-square)](#validation)
+[![Tests](https://img.shields.io/badge/tests-159%20passed-success?style=flat-square)](#validation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Node](https://img.shields.io/badge/node-24.x-339933?style=flat-square&logo=node.js)](https://nodejs.org)
 [![Electron](https://img.shields.io/badge/electron-44.x-47848F?style=flat-square&logo=electron)](https://www.electronjs.org)
@@ -29,7 +29,8 @@ A modern, high-performance Windows desktop video and audio downloader built with
 - Queue downloads, process playlists and batches, pause/resume, and control concurrency.
 - Keep download history and queue state across restarts using SQLite.
 - Play downloaded video and audio inside the app.
-- Use English or Arabic, optional cookies, notifications, and the system tray.
+- Generate, translate, review and export speech subtitles locally. See [local subtitle setup](LOCAL-SUBTITLES.md).
+- Use English or Arabic, notifications, and the system tray.
 - Check engine health and repair missing or damaged engines.
 
 ## Development
@@ -191,7 +192,7 @@ Run these commands from the repository root. Standard cleanup removes `dist-elec
 
 ## Troubleshooting and implementation notes
 
-Use **Settings → Health Check** or **Repair Engines** for missing or damaged tools, and **Open Log Folder** for diagnostics. For content requiring an account, select a valid Netscape-format cookies file in Settings.
+Use **Settings → App readiness** or **Repair Engines** for missing or damaged tools, and **Open Logs** for diagnostics. Public video requests use no sign-in credentials. For restricted content, use a local media file in the subtitle workspace.
 
 Feature and architecture documentation:
 

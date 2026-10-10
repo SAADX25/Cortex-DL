@@ -18,10 +18,9 @@ import {
 } from '../progressParser'
 import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
-import { checkJsRuntime, getJsRuntimeArgs, getYtdlpCookieArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
-import { isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode } from '../../../Shared/youtubeErrors'
+import { checkJsRuntime, getJsRuntimeArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
+import { isYouTubeUrl, youtubeErrorCode } from '../../../Shared/youtubeErrors'
 import { prepareYouTubeSubtitle, embedYouTubeSubtitle } from '../youtubeSubtitles'
-import { withCookieSession } from '../cookieSession'
 import { diagnosticCategories, youtubeDiagnostic } from '../youtubeDiagnostics'
 import { findCompletedYouTubeMedia, rememberCompletedYouTubeMedia } from '../youtubeMediaCache'
 
@@ -56,13 +55,11 @@ export class YoutubeEngine implements IEngine {
     task.downloadedBytes = 0
     const profile = this.selectProfile(task)
     const publicFirst = isYouTubeUrl(task.url)
-    const configuredCookies = runtime.ignoreCookies || !publicFirst ? [] : await getYtdlpCookieArgs()
-    const cookieArgs = publicFirst ? [] : configuredCookies
     let subtitle: string | undefined
     const prepareSubtitle = async () => {
       if (publicFirst && task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
-        subtitle = await prepareYouTubeSubtitle(task, configuredCookies, runtime.abortController!.signal, cookies => {
-          const subtitleArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookies)
+        subtitle = await prepareYouTubeSubtitle(task, runtime.abortController!.signal, () => {
+          const subtitleArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
           subtitleArgs.splice(subtitleArgs.indexOf('--embed-subs'), 1)
           // Caption discovery must not depend on the selected video format existing.
           const selector = subtitleArgs.indexOf('-f')
@@ -92,27 +89,16 @@ export class YoutubeEngine implements IEngine {
       }
     }
     const mediaTask = publicFirst && task.subtitleLanguage ? { ...task, subtitleLanguage: undefined } : task
-    if (!task.title || !task.thumbnail) await this.prefetchMetadata(task, context, runtime, cookieArgs).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
+    if (!task.title || !task.thumbnail) await this.prefetchMetadata(task, context, runtime).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
     runtime.abortController.signal.throwIfAborted()
-    const args = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
+    const args = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
     let result = await this.runYtdlpAttempt(task, context, runtime, args, profile)
-    let authenticated = false
-    runtime.abortController.signal.throwIfAborted()
-    if (publicFirst && result.exitCode !== 0 && configuredCookies.length && isYouTubeAuthRequiredError(result.stderr)) {
-      authenticated = true
-      const authenticatedArgs = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, configuredCookies)
-      result = await withCookieSession(configuredCookies, runtime.abortController.signal, session => {
-        const index = authenticatedArgs.indexOf('--cookies')
-        authenticatedArgs.splice(index, 2, ...session)
-        return this.runYtdlpAttempt(task, context, runtime, authenticatedArgs, profile)
-      })
-    }
     runtime.abortController.signal.throwIfAborted()
     // Some public HTTPS formats are listed but denied by YouTube. Try its HLS
     // formats once, preserving the quality cap and requested subtitles.
-    if (publicFirst && !authenticated && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
+    if (publicFirst && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
       && !youtubeErrorCode(result.stderr) && !/Unable to download (?:video )?subtitles?/i.test(result.stderr)) {
-      const hlsArgs = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, [], true)
+      const hlsArgs = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, true)
       result = await this.runYtdlpAttempt(task, context, runtime, hlsArgs, profile)
     }
     runtime.abortController.signal.throwIfAborted()
@@ -149,10 +135,10 @@ export class YoutubeEngine implements IEngine {
     return 'default'
   }
 
-  private async prefetchMetadata(task: DownloadTask, context: EngineContext, runtime: TaskRuntime, cookieArgs: string[]): Promise<void> {
+  private async prefetchMetadata(task: DownloadTask, context: EngineContext, runtime: TaskRuntime): Promise<void> {
     const ytDlpPath = getBinaryPath('yt-dlp')
 
-    const selection = this.buildYtdlpArgs(task, this.selectProfile(task), { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, cookieArgs)
+    const selection = this.buildYtdlpArgs(task, this.selectProfile(task), { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
     const selectorArgs: string[] = []
     for (const flag of ['-f', '-S']) {
       const index = selection.indexOf(flag)
@@ -167,7 +153,7 @@ export class YoutubeEngine implements IEngine {
       '--no-mtime',
       '--geo-bypass',
       ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
-      ...this.buildAuthArgs(task, runtime, cookieArgs),
+      ...this.buildAuthArgs(task, runtime),
       ...getJsRuntimeArgs(),
       task.url,
     ]
@@ -271,8 +257,7 @@ export class YoutubeEngine implements IEngine {
     runtime.abortController?.signal.addEventListener('abort', onAbort, { once: true })
     if (runtime.abortController?.signal.aborted) onAbort()
 
-    const hasCookies = args.includes('--cookies')
-    log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile}${hasCookies ? ', cookies=active' : ''})`)
+    log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile})`)
 
     const ffmpegState: FfmpegState = { totalDuration: null, stderr: '' }
     let stdoutBuf = ''
@@ -383,15 +368,10 @@ export class YoutubeEngine implements IEngine {
     return { exitCode, detectedFinalPath, stderr: ffmpegState.stderr }
   }
 
-  private buildAuthArgs(task: DownloadTask, runtime: TaskRuntime, cookieArgs: string[]): string[] {
+  private buildAuthArgs(task: DownloadTask, _runtime: TaskRuntime): string[] {
     const args: string[] = []
 
-    if (!runtime.ignoreCookies) {
-      args.push(...cookieArgs)
-    }
-
-
-    // YouTube uses an explicitly authorized cookie session, not generic provider credentials.
+    // Generic provider credentials never apply to public YouTube requests.
     if (!isYouTubeUrl(task.url)) {
       if (task.username) args.push('--username', task.username)
       if (task.password) args.push('--password', task.password)
@@ -415,7 +395,6 @@ export class YoutubeEngine implements IEngine {
     profile: Profile,
     opts: { ffmpegDir: string },
     runtime: TaskRuntime,
-    cookieArgs: string[] = [],
     preferHls = false,
   ): string[] {
     const hasSubtitles = task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)
@@ -441,7 +420,7 @@ export class YoutubeEngine implements IEngine {
       '-N', '10',
       '--concurrent-fragments', '6',
       '--http-chunk-size', '10.0M',
-      ...this.buildAuthArgs(task, runtime, cookieArgs),
+      ...this.buildAuthArgs(task, runtime),
       ...getJsRuntimeArgs(),
     ]
 

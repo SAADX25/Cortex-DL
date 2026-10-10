@@ -2,6 +2,8 @@ import React, { useEffect } from 'react'
 import { primaryAnalysis } from '../../lib/analysisSession'
 import { Language } from '../../translations'
 import { YouTubeStatus } from './YouTubeStatus'
+import { Captions } from 'lucide-react'
+import { openSubtitleStudio } from '../../stores/useSubtitleStudioStore'
 
 interface UrlAnalysisViewProps {
   analyzeResult: any
@@ -138,6 +140,10 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
                   </select>
                 </label>
               )}
+              <button className="youtube-refresh-button speech-subtitles-button" type="button" title={lang === 'ar' ? 'إنشاء ترجمة من الصوت' : 'Generate subtitles from speech'} onClick={() => openSubtitleStudio(url)}>
+                <Captions size={19} />
+                <span>{lang === 'ar' ? 'ترجمة من الصوت' : 'Speech subtitles'}</span>
+              </button>
             </div>
           </div>
         )}

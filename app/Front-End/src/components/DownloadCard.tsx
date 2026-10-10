@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react'
-import { Play, FolderOpen, Trash2, X, Pause, RotateCcw, CheckCircle2, FileVideo, Music2, HardDrive, Gauge, Clock3 } from 'lucide-react'
+import { Play, FolderOpen, Trash2, X, Pause, RotateCcw, CheckCircle2, FileVideo, Music2, HardDrive, Gauge, Clock3, Captions } from 'lucide-react'
+import { openSubtitleStudio } from '../stores/useSubtitleStudioStore'
 import { useDownloadCardVM, type DisplayPhase } from '../hooks/useDownloadCardVM'
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
 import { useLang } from '../stores/useSettingsStore'
@@ -160,6 +161,11 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
         {/* Action buttons */}
         <div className="dc-actions">
           <div className="dc-action-group">
+            {vm.showSubtitleRecovery && (
+              <button className="dc-btn primary" onClick={() => openSubtitleStudio(vm.sourceUrl)}>
+                <Captions size={15} />{lang === 'ar' ? 'ترجمة محلية من الصوت' : 'Local speech subtitles'}
+              </button>
+            )}
             {vm.showPause && (
               <button className="dc-btn primary" onClick={vm.onPause} aria-label={t.btn_pause}>
                 <Pause size={15} />{lang === 'ar' ? 'إيقاف' : 'Pause'}
@@ -173,6 +179,11 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
             {vm.showCancel && (
               <button className="dc-btn danger" onClick={vm.onCancel} aria-label={t.btn_cancel}>
                 <X size={15} />{lang === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+            )}
+            {vm.showPlay && (
+              <button className="dc-btn primary" onClick={() => openSubtitleStudio(vm.filePath)} title={lang === 'ar' ? 'إنشاء ترجمة من الصوت' : 'Generate speech subtitles'}>
+                <Captions size={15} />{lang === 'ar' ? 'ترجمة' : 'Subtitles'}
               </button>
             )}
             {vm.showPlay && (

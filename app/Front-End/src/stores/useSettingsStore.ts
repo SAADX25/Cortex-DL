@@ -31,12 +31,6 @@ interface SettingsStoreState {
   engineUpdateStatus: { updating: boolean; message?: string; success?: boolean } | null
   setEngineUpdateStatus: (v: { updating: boolean; message?: string; success?: boolean } | null) => void
 
-  cookieFilePath: string | null
-  setCookieFilePath: (v: string | null) => void
-
-  cookieValidation: CookieValidationResult | null
-  setCookieValidation: (v: CookieValidationResult | null) => void
-
   healthCheck: AppHealthCheck | null
   setHealthCheck: (v: AppHealthCheck | null) => void
 
@@ -52,8 +46,6 @@ interface SettingsStoreState {
   refreshHealth: () => Promise<void>
   onCheckForUpdates: () => Promise<void>
   onUpdateEngine: () => Promise<void>
-  onSelectCookieFile: () => Promise<void>
-  onClearCookieFile: () => Promise<void>
   onResetStats: () => void
   onRestartAndInstall: () => Promise<void>
   onUninstall: () => void
@@ -87,12 +79,6 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   engineUpdateStatus: null,
   setEngineUpdateStatus: (v) => set({ engineUpdateStatus: v }),
 
-  cookieFilePath: null,
-  setCookieFilePath: (v) => set({ cookieFilePath: v }),
-
-  cookieValidation: null,
-  setCookieValidation: (v) => set({ cookieValidation: v }),
-
   healthCheck: null,
   setHealthCheck: (v) => set({ healthCheck: v }),
 
@@ -112,9 +98,6 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
         window.cortexDl.checkJsRuntime(),
       ])
       set({ healthCheck: { ...health, jsRuntime }, engineVersion: health.ytDlp.version })
-      if (health.cookies.filePath || health.cookies.code !== 'missing') {
-        set({ cookieValidation: health.cookies })
-      }
     } catch (err) {
       console.error('Health check failed:', err)
       set({ healthCheck: null })
@@ -151,32 +134,6 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       console.error('Engine update error:', err)
       set({ engineUpdateStatus: { updating: false, success: false, message: 'Update failed' } })
       setTimeout(() => set({ engineUpdateStatus: null }), 5000)
-    }
-  },
-
-  onSelectCookieFile: async () => {
-    try {
-      const filePath = await window.cortexDl.selectCookieFile()
-      if (filePath) {
-        const validation = await window.cortexDl.setCookieFile(filePath)
-        set({ cookieValidation: validation })
-        if (validation.valid && validation.filePath) {
-          set({ cookieFilePath: validation.filePath })
-          await get().refreshHealth()
-        }
-      }
-    } catch (err) {
-      console.error('Failed to select cookie file:', err)
-    }
-  },
-
-  onClearCookieFile: async () => {
-    try {
-      const validation = await window.cortexDl.setCookieFile(null)
-      set({ cookieFilePath: null, cookieValidation: validation })
-      await get().refreshHealth()
-    } catch (err) {
-      console.error('Failed to clear cookie file:', err)
     }
   },
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Plus, DownloadCloud, Settings, Github } from 'lucide-react'
+import { Plus, DownloadCloud, Settings, Github, Captions } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { translations } from '../translations'
 import { useUIStore } from '../stores/useUIStore'
@@ -26,7 +26,7 @@ const Sidebar: React.FC = () => {
   const badgeCount = activeCount > 0 ? activeCount : totalCount
 
   const navItems: Array<{
-    id: 'add' | 'downloads' | 'settings'
+    id: 'add' | 'downloads' | 'subtitles' | 'settings'
     label: string
     icon: any
     badge?: number
@@ -54,6 +54,7 @@ const Sidebar: React.FC = () => {
       ariaLabel: lang === 'ar' ? 'الإعدادات' : 'Settings',
     },
   ]
+  navItems.splice(2, 0, { id: 'subtitles', label: lang === 'ar' ? 'الترجمات' : 'Subtitles', icon: Captions, ariaLabel: lang === 'ar' ? 'ترجمة الفيديو' : 'Video subtitles' })
 
   return (
     <aside className="sidebar" role="complementary" aria-label={lang === 'ar' ? 'الشريط الجانبي' : 'Sidebar'}>

@@ -1,6 +1,6 @@
 import { ipcRenderer, contextBridge } from 'electron'
-import type { AppHealthCheck, CookieValidationResult, DownloadTask, AnalyzeResult, JsRuntimeStatus, StartInput } from './types'
-import { UPDATE_CHANNEL, YOUTUBE_OAUTH_CHANNEL } from './types'
+import type { AppHealthCheck, DownloadTask, AnalyzeResult, JsRuntimeStatus, StartInput } from './types'
+import { UPDATE_CHANNEL } from './types'
 
 function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
@@ -169,11 +169,6 @@ contextBridge.exposeInMainWorld('cortexDl', {
     ipcRenderer.on('cortexdl:setup-progress', listener)
     return () => ipcRenderer.off('cortexdl:setup-progress', listener)
   },
-  onYouTubeOAuthCode(callback: (data: { taskId: string; url: string; code: string; message?: string }) => void): () => void {
-    const listener = (_event: unknown, data: { taskId: string; url: string; code: string; message?: string }) => callback(data)
-    ipcRenderer.on(YOUTUBE_OAUTH_CHANNEL, listener)
-    return () => ipcRenderer.off(YOUTUBE_OAUTH_CHANNEL, listener)
-  },
   getMediaPort(): Promise<number> {
     return ipcRenderer.invoke('cortexdl:get-media-port')
   },
@@ -206,16 +201,15 @@ contextBridge.exposeInMainWorld('cortexDl', {
   logPreviewError(message: string): void {
     ipcRenderer.send('cortexdl:preview-error', message)
   },
-  selectCookieFile(): Promise<string | null> {
-    return ipcRenderer.invoke('cortexdl:select-cookie-file')
-  },
-  getCookieFile(): Promise<string | null> {
-    return ipcRenderer.invoke('cortexdl:get-cookie-file')
-  },
-  setCookieFile(filePath: string | null): Promise<CookieValidationResult> {
-    return ipcRenderer.invoke('cortexdl:set-cookie-file', filePath)
-  },
   getSubtitles(filePath: string, session: string): Promise<import('../../Shared/types').PlayerSubtitleTrack[]> {
     return ipcRenderer.invoke('cortexdl:get-subtitles', filePath, session)
   },
+  getLocalSubtitleState: () => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleState>('cortexdl:subtitles:state'),
+  getLocalSubtitleReadiness: () => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleReadiness>('cortexdl:subtitles:readiness'),
+  selectSubtitleMedia: () => invokeRendererSafe<string | null>('cortexdl:subtitles:select'),
+  installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null) => invokeRendererSafe<string>('cortexdl:subtitles:install', speech, translation),
+  startLocalSubtitles: (request: import('../../Shared/localSubtitles').SubtitleRequest) => invokeRendererSafe<string>('cortexdl:subtitles:start', request),
+  cancelLocalSubtitles: (id: string) => invokeRendererSafe<void>('cortexdl:subtitles:cancel', id),
+  exportLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[], format: 'srt' | 'vtt') => invokeRendererSafe<string | null>('cortexdl:subtitles:export', id, cues, format),
+  embedLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[]) => invokeRendererSafe<string | null>('cortexdl:subtitles:embed', id, cues),
 })

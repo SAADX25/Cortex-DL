@@ -17,9 +17,6 @@ export interface Translations {
   quality_best: string;
   save_to: string;
   choose_folder: string;
-  cookies_label: string;
-  cookies_none: string;
-  cookies_note: string;
   start_download: string;
   downloads_title: string;
   total_tasks: string;
@@ -88,10 +85,6 @@ export interface Translations {
   quality_360p: string;
   quality_240p: string;
   auth_group: string;
-  cookies_section_title: string;
-  cookies_section_desc: string;
-  select_cookies_file: string;
-  browser_load_cookies: string;
   advanced_auth_title: string;
   basic_auth_label: string;
   username_label: string;
@@ -135,23 +128,6 @@ export interface Translations {
   settings_cancel: string;
   use_inapp_player: string;
   use_inapp_player_desc: string;
-  youtube_auth_title: string;
-  youtube_auth_desc: string;
-  youtube_auth_get_extension: string;
-  youtube_auth_select_btn: string;
-  youtube_auth_no_file: string;
-  youtube_auth_clear_btn: string;
-  youtube_auth_optional: string;
-  youtube_auth_ready: string;
-  youtube_auth_selected: string;
-  youtube_auth_attention: string;
-  youtube_auth_empty_hint: string;
-  youtube_auth_replace_btn: string;
-  youtube_auth_quality_note: string;
-  youtube_auth_help: string;
-  youtube_auth_step_signin: string;
-  youtube_auth_step_export: string;
-  youtube_auth_step_select: string;
   paste_and_go: string;
   btn_video: string;
   btn_audio: string;
@@ -164,16 +140,6 @@ export interface Translations {
   youtube_formats_restricted: string;
   youtube_po_token_required: string;
   youtube_network_error: string;
-  youtube_cookie_valid: string;
-  youtube_cookie_cleared: string;
-  youtube_cookie_missing: string;
-  youtube_cookie_not_file: string;
-  youtube_cookie_invalid_header: string;
-  youtube_cookie_invalid_rows: string;
-  youtube_cookie_expired: string;
-  youtube_cookie_missing_youtube: string;
-  youtube_cookie_read_error: string;
-  youtube_cookie_save_error: string;
   health_title: string;
   health_desc: string;
   health_refresh: string;
@@ -183,13 +149,11 @@ export interface Translations {
   health_ytdlp: string;
   health_ffmpeg: string;
   health_js_runtime: string;
-  health_cookies: string;
   health_download_directory: string;
   health_available: string;
   health_missing: string;
   health_writable: string;
   health_not_writable: string;
-  health_cookie_optional: string;
   drag_drop_title: string;
   drag_drop_subtitle: string;
   drag_drop_toast: string;
@@ -214,9 +178,6 @@ export const translations: Record<Language, Translations> = {
     quality_best: "أفضل جودة تلقائياً",
     save_to: "حفظ في",
     choose_folder: "اختر مجلد الحفظ...",
-    cookies_label: "سحب الكوكيز (اختياري)",
-    cookies_none: "بدون (تنزيل عادي)",
-    cookies_note: "💡 ملاحظة: لبعض روابط يوتيوب قد يلزم كوكيز (تسجيل دخول/كابتشا). يمكنك اختيار متصفحك (يجب إغلاق المتصفح أثناء التحليل/التنزيل).",
     start_download: "🚀 بدء التنزيل الآن",
     downloads_title: "قائمة التنزيلات",
     total_tasks: "إجمالي المهام",
@@ -285,10 +246,6 @@ export const translations: Record<Language, Translations> = {
     quality_360p: "منخفضة (360p)",
     quality_240p: "منخفضة جداً (240p)",
     auth_group: "المصادقة (Authentication)",
-    cookies_section_title: "الكوكيز (موصى به)",
-    cookies_section_desc: "استخدام الكوكيز لتجاوز قيود المواقع وتحميل المحتوى الخاص.",
-    select_cookies_file: "اختر ملف cookies.txt",
-    browser_load_cookies: "تحميل الكوكيز تلقائياً من المتصفح",
     advanced_auth_title: "طرق متقدمة (Advanced)",
     basic_auth_label: "المصادقة الأساسية (Basic Auth)",
     username_label: "اسم المستخدم",
@@ -332,45 +289,18 @@ export const translations: Record<Language, Translations> = {
     settings_cancel: "إلغاء",
     use_inapp_player: "مشغل وسائط مدمج",
     use_inapp_player_desc: "تشغيل الفيديو والصوت داخل التطبيق بدلاً من المشغل الافتراضي",
-    youtube_auth_title: "ملف YouTube Cookies",
-    youtube_auth_desc: "استخدمه عندما يطلب YouTube تسجيل الدخول للوصول إلى فيديو أو ترجمة.",
-    youtube_auth_get_extension: "تحميل الإضافة",
-    youtube_auth_select_btn: "اختر ملف cookies.txt",
-    youtube_auth_no_file: "لم يتم اختيار ملف بعد",
-    youtube_auth_clear_btn: "إزالة الملف",
-    youtube_auth_optional: "اختياري",
-    youtube_auth_ready: "صيغة الملف صحيحة",
-    youtube_auth_selected: "تم اختيار الملف",
-    youtube_auth_attention: "يحتاج إلى مراجعة",
-    youtube_auth_empty_hint: "يمكنك تنزيل الفيديوهات العامة بدون ملف",
-    youtube_auth_replace_btn: "تغيير الملف",
-    youtube_auth_quality_note: "يُستخدم عند الحاجة فقط، مع الاحتفاظ بالجودات المكتشفة للفيديو العام.",
-    youtube_auth_help: "كيف أجهّز الملف؟",
-    youtube_auth_step_signin: "افتح YouTube في متصفحك وسجّل الدخول إلى حسابك.",
-    youtube_auth_step_export: "استخدم إضافة التصدير لحفظ Cookies الخاصة بـ YouTube بصيغة Netscape cookies.txt.",
-    youtube_auth_step_select: "اختر الملف هنا، ثم أعد محاولة تحليل الرابط أو تحديث الترجمة.",
     paste_and_go: "لصق وانطلاق",
     btn_video: "فيديو",
     btn_audio: "صوت",
     new_folder_placeholder: "مجلد جديد (اختياري)",
     speed_auto: "تلقائي",
-    youtube_auth_required: "يتطلب YouTube تسجيل الدخول أو التحقق من CAPTCHA. إذا رُفضت جلستك، فقد تكون منتهية أو لا تملك صلاحية الوصول للفيديو. اختر تصديراً حديثاً لملف cookies.txt من الإعدادات.",
+    youtube_auth_required: "يتطلب YouTube تسجيل الدخول أو التحقق. جرّب فيديو عامًا أو اختر ملفًا من جهازك في قسم الترجمات.",
     youtube_rate_limited: "قيّد YouTube الطلبات مؤقتاً (429). انتظر ثم أعد المحاولة؛ هذا الخطأ لا يعني أن ملف الكوكيز مطلوب.",
     youtube_subtitle_rate_limited: "قيّد YouTube طلبات الترجمة مؤقتاً (429). انتظر قبل إعادة المحاولة. لم تُحمّل الترجمة المطلوبة، ولن يُعتمد الفيديو على أنه مكتمل بدونها.",
-    youtube_subtitle_unavailable: "لم يوفر YouTube ملفاً صالحاً للترجمة المختارة، أو فشل تضمينها في الفيديو. أعد تحليل الرابط واختر ترجمة متاحة ثم حاول مجدداً.",
-    youtube_cookie_valid: "صيغة الملف صحيحة ويحتوي بيانات YouTube. يتحقق الموقع من صلاحية جلسة الدخول عند استخدامها.",
+    youtube_subtitle_unavailable: "تعذر الحصول على ترجمة YouTube المختارة أو تضمينها. استخدم «ترجمة محلية من الصوت» لإنشاء ترجمة على جهازك.",
     youtube_formats_restricted: "قيّد YouTube بعض الصيغ أو لم يوفر صيغة قابلة للتنزيل. حدّث الجودة لاحقاً.",
     youtube_po_token_required: "تشير بيانات الاستخراج إلى ضرورة رمز إثبات المصدر لبعض الطلبات. ملف الكوكيز وحده قد لا يحل ذلك.",
     youtube_network_error: "تعذر الاتصال بـ YouTube. تحقق من الشبكة ثم أعد المحاولة.",
-    youtube_cookie_cleared: "تمت إزالة ملف Cookies.",
-    youtube_cookie_missing: "ملف Cookies غير موجود.",
-    youtube_cookie_not_file: "المسار المحدد ليس ملفاً.",
-    youtube_cookie_invalid_header: "الملف ليس تصديراً صالحاً بصيغة Netscape cookies.txt.",
-    youtube_cookie_invalid_rows: "يحتوي الملف على أسطر غير صالحة بصيغة Netscape.",
-    youtube_cookie_expired: "انتهت صلاحية ملفات YouTube المصدّرة. صدّر جلسة جديدة.",
-    youtube_cookie_missing_youtube: "الملف لا يحتوي على Cookies خاصة بـ YouTube.",
-    youtube_cookie_read_error: "تعذر قراءة ملف Cookies.",
-    youtube_cookie_save_error: "تعذر حفظ إعداد ملف Cookies.",
     health_title: "فحص جاهزية التطبيق",
     health_desc: "يتحقق من المكونات المطلوبة للتحليل والتنزيل على Windows.",
     health_refresh: "إعادة الفحص",
@@ -380,13 +310,11 @@ export const translations: Record<Language, Translations> = {
     health_ytdlp: "محرك yt-dlp",
     health_ffmpeg: "محرك FFmpeg",
     health_js_runtime: "مشغل JavaScript",
-    health_cookies: "ملف YouTube Cookies",
     health_download_directory: "مجلد التنزيل",
     health_available: "متاح",
     health_missing: "غير متاح",
     health_writable: "قابل للكتابة",
     health_not_writable: "غير قابل للكتابة",
-    health_cookie_optional: "غير محدد (اختياري)",
     drag_drop_title: "أسقط الرابط هنا للتحليل والمتابعة 🚀",
     drag_drop_subtitle: "سيتم التعرف على الفيديو تلقائياً وجلب خيارات التحميل",
     drag_drop_toast: "🚀 تم التقاط الرابط ومباشرة التحليل!",
@@ -407,9 +335,6 @@ export const translations: Record<Language, Translations> = {
     quality_best: "Best Quality Auto",
     save_to: "Save To",
     choose_folder: "Choose download folder...",
-    cookies_label: "Import Cookies (Optional)",
-    cookies_none: "None (Normal Download)",
-    cookies_note: "💡 Note: Some YouTube links require cookies (login/CAPTCHA). You can select a browser (must be closed during analyze/download).",
     start_download: "🚀 Start Download Now",
     downloads_title: "Download List",
     total_tasks: "Total Tasks",
@@ -478,10 +403,6 @@ export const translations: Record<Language, Translations> = {
     quality_360p: "Low (360p)",
     quality_240p: "Very Low (240p)",
     auth_group: "Authentication",
-    cookies_section_title: "Cookies (Recommended)",
-    cookies_section_desc: "Use cookies to bypass site restrictions and download private content.",
-    select_cookies_file: "Select cookies.txt file",
-    browser_load_cookies: "Automatically load cookies from a browser",
     advanced_auth_title: "Advanced Methods",
     basic_auth_label: "Basic Auth",
     username_label: "Username",
@@ -525,45 +446,18 @@ export const translations: Record<Language, Translations> = {
     settings_cancel: "Cancel",
     use_inapp_player: "In-App Media Player",
     use_inapp_player_desc: "Play videos and audio inside the app instead of system default",
-    youtube_auth_title: "YouTube Cookies",
-    youtube_auth_desc: "Use this when YouTube asks you to sign in to access a video or its captions.",
-    youtube_auth_get_extension: "Get Extension",
-    youtube_auth_select_btn: "Select cookies.txt File",
-    youtube_auth_no_file: "No file selected",
-    youtube_auth_clear_btn: "Remove File",
-    youtube_auth_optional: "Optional",
-    youtube_auth_ready: "File format checked",
-    youtube_auth_selected: "File selected",
-    youtube_auth_attention: "Needs attention",
-    youtube_auth_empty_hint: "Public videos can download without a file",
-    youtube_auth_replace_btn: "Change file",
-    youtube_auth_quality_note: "Used only when needed. Discovered public video qualities are preserved.",
-    youtube_auth_help: "How do I prepare this file?",
-    youtube_auth_step_signin: "Open YouTube in your browser and sign in to your account.",
-    youtube_auth_step_export: "Use the export extension to save YouTube cookies in Netscape cookies.txt format.",
-    youtube_auth_step_select: "Select the file here, then retry analysis or refresh captions.",
     paste_and_go: "Paste & Go",
     btn_video: "Video",
     btn_audio: "Audio",
     new_folder_placeholder: "New Folder (Optional)",
     speed_auto: "Auto",
-    youtube_auth_required: "YouTube requires sign-in or bot verification. If your configured session was rejected, it may be expired or lack access to this video. Select a fresh YouTube cookies.txt export in Settings.",
-    youtube_rate_limited: "YouTube temporarily rate-limited requests (429). Wait before trying again; this error does not mean a cookies file is required.",
+    youtube_auth_required: "YouTube requires sign-in or bot verification. Try a public video, or select a local file in Subtitles.",
+    youtube_rate_limited: "YouTube temporarily rate-limited requests (429). Wait before trying again.",
     youtube_subtitle_rate_limited: "YouTube temporarily rate-limited subtitle requests (429). Wait before retrying. Requested captions were not downloaded, so the video will not be marked complete without them.",
-    youtube_subtitle_unavailable: "YouTube did not provide a valid file for the selected captions, or embedding failed. Analyze the link again, select available subtitles and retry.",
-    youtube_cookie_valid: "The file format is valid and contains YouTube cookies. YouTube verifies whether the sign-in session is still active when used.",
+    youtube_subtitle_unavailable: "The selected YouTube captions could not be fetched or embedded. Use Local speech subtitles to generate captions on your computer.",
     youtube_formats_restricted: "YouTube restricted some formats or reported no downloadable format. Refresh formats later.",
-    youtube_po_token_required: "Extractor diagnostics report a required Proof of Origin token. Cookies alone may not resolve this requirement.",
+    youtube_po_token_required: "The video provider requires an additional access token. Select a local file to generate subtitles.",
     youtube_network_error: "YouTube could not be reached. Check your connection and retry.",
-    youtube_cookie_cleared: "The cookies file was removed.",
-    youtube_cookie_missing: "The cookies file does not exist.",
-    youtube_cookie_not_file: "The selected path is not a file.",
-    youtube_cookie_invalid_header: "This is not a valid Netscape cookies.txt export.",
-    youtube_cookie_invalid_rows: "The export contains invalid Netscape cookie rows.",
-    youtube_cookie_expired: "The exported YouTube cookies have expired. Export a fresh session.",
-    youtube_cookie_missing_youtube: "The file does not contain YouTube cookies.",
-    youtube_cookie_read_error: "The cookies file could not be read.",
-    youtube_cookie_save_error: "The cookies file setting could not be saved.",
     health_title: "App readiness",
     health_desc: "Checks the components required for Windows analysis and downloads.",
     health_refresh: "Run again",
@@ -573,13 +467,11 @@ export const translations: Record<Language, Translations> = {
     health_ytdlp: "yt-dlp engine",
     health_ffmpeg: "FFmpeg engine",
     health_js_runtime: "JavaScript runtime",
-    health_cookies: "YouTube cookies",
     health_download_directory: "Download directory",
     health_available: "Available",
     health_missing: "Missing",
     health_writable: "Writable",
     health_not_writable: "Not writable",
-    health_cookie_optional: "Not configured (optional)",
     drag_drop_title: "Drop URL here to analyze 🚀",
     drag_drop_subtitle: "Your video will be automatically detected and options extracted",
     drag_drop_toast: "🚀 Link captured & analysis started!",

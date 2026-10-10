@@ -5,6 +5,7 @@ import { translations } from '../translations'
 import { getProgressView } from '../../../Shared/progressModel'
 import type { DownloadPhase } from '../../../Shared/types'
 import { youtubeErrorMessage } from '../lib/downloadHelpers'
+import { youtubeErrorCode } from '../../../Shared/youtubeErrors'
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '-'
@@ -60,6 +61,7 @@ export interface DownloadCardVM {
 
   
   errorMessage: string | null
+  showSubtitleRecovery: boolean
 
   
   showPause: boolean
@@ -210,6 +212,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       speedLabel,
       etaLabel,
       errorMessage: youtubeErrorMessage(task.errorMessage, t) ?? task.errorMessage ?? null,
+      showSubtitleRecovery: phase === 'error' && ['YOUTUBE_SUBTITLE_UNAVAILABLE', 'YOUTUBE_SUBTITLE_RATE_LIMITED'].includes(youtubeErrorCode(task.errorMessage) ?? ''),
       showPause,
       showResume,
       showCancel,

@@ -40,6 +40,9 @@ db.exec(`
   );
 `)
 
+// Remove the retired credential setting; the exported user file is never deleted.
+db.prepare('DELETE FROM settings WHERE key = ?').run('cookieFilePath')
+
 startupDuration('dbOpenDurationMs', dbStarted)
 startupMark('dbOpenMs')
 

@@ -17,4 +17,6 @@ for (const dir of new Set(dirs)) {
 }
 notices.push('\n=== Engines downloaded separately on first run ===\n')
 for (const pkg of require('../engines.lock.json').packages) notices.push(`${pkg.name} ${pkg.version}: ${pkg.license}\n${pkg.url}\n`)
+notices.push('\n=== Optional local subtitle engines and models (downloaded on request) ===\n')
+notices.push('whisper.cpp: MIT — https://github.com/ggml-org/whisper.cpp\nWhisper speech models: MIT — https://github.com/openai/whisper\nSilero VAD: MIT — https://github.com/snakers4/silero-vad\nllama.cpp: MIT — https://github.com/ggml-org/llama.cpp\nTranslateGemma: Gemma Terms of Use — https://ai.google.dev/gemma/terms\nQuantized TranslateGemma weights — https://huggingface.co/bullerwins/translategemma-4b-it-GGUF and https://huggingface.co/bullerwins/translategemma-12b-it-GGUF\n')
 fs.writeFileSync(path.join(root, 'THIRD-PARTY-NOTICES.txt'), notices.join('\n'))

@@ -374,6 +374,8 @@
 
 .dc-action-group {
   display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 7px;
   align-items: center;
 }

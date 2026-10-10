@@ -1,0 +1,11 @@
+export type SubtitleAsset = { id: string; url: string; sha256: string; bytes: number; file: string; archive?: boolean; executable?: string }
+const whisperRepo = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/'
+export const SUBTITLE_ASSETS: Record<string, SubtitleAsset> = {
+  whisper: { id: 'whisper-b5454', file: 'whisper', archive: true, executable: 'whisper-cli.exe', bytes: 8928640, sha256: '6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb', url: 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip' },
+  llama: { id: 'llama-b11541', file: 'llama', archive: true, executable: 'llama-server.exe', bytes: 19518702, sha256: 'cdc0535d11038bb337dfba3c15682050eaa9c07aedd0f915b4c09e8a8e8c0a5c', url: 'https://github.com/ggml-org/llama.cpp/releases/download/b11541/llama-b11541-bin-win-cpu-x64.zip' },
+  accurate: { id: 'whisper-large-v3', file: 'ggml-large-v3.bin', bytes: 3095033483, sha256: '64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2', url: whisperRepo + 'ggml-large-v3.bin' },
+  fast: { id: 'whisper-large-v3-turbo-q5', file: 'ggml-large-v3-turbo-q5_0.bin', bytes: 574041195, sha256: '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2', url: whisperRepo + 'ggml-large-v3-turbo-q5_0.bin' },
+  vad: { id: 'silero-v6.2', file: 'ggml-silero-v6.2.0.bin', bytes: 885098, sha256: '2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987', url: 'https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin' },
+  standard: { id: 'translategemma-4b-q4', file: 'translategemma-4b-it-Q4_K_M.gguf', bytes: 2489909312, sha256: '7f7357c14abd9da4eb200b38b05da502cd6e10d7e1d403fbc9f78c19f3209b72', url: 'https://huggingface.co/bullerwins/translategemma-4b-it-GGUF/resolve/7c938465a870d8624bcfa98a8e4a3510053c19a8/translategemma-4b-it-Q4_K_M.gguf' },
+  quality: { id: 'translategemma-12b-q4', file: 'translategemma-12b-it-Q4_K_M.gguf', bytes: 7300793664, sha256: '9196d728812afbf5efc10b539298585725edc3a4ecc092c22fdde5bbaf41879e', url: 'https://huggingface.co/bullerwins/translategemma-12b-it-GGUF/resolve/d7d1d8cc4ff53d4bc883ef33eae3894f07833b63/translategemma-12b-it-Q4_K_M.gguf' },
+}

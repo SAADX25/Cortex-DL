@@ -31,7 +31,6 @@ Module._load = function(request, parent, ...rest) {
 const { AnalysisCoordinator } = require('../Back-End/electron/analysisCoordinator.ts')
 const { extractAnalysis } = require('../Back-End/electron/analysisProcess.ts')
 const { ThumbnailCache } = require('../Back-End/electron/thumbnailCache.ts')
-const { CookieValidationCache } = require('../Back-End/electron/cookieValidation.ts')
 const { fetchBoundedJson } = require('../Back-End/electron/analysisNetwork.ts')
 const { isDirectMedia } = require('../Back-End/electron/directAnalysis.ts')
 const { normalizeAnalysisUrl, youtubeVideoId } = require('../Shared/analysisUrl.ts')
@@ -170,14 +169,7 @@ test('thumbnail streams are bounded, typed, deduplicated, cached and partial fil
   })
 }))
 
-test('cookie validation caches metadata only and invalidates changes and deletion', async () => sandbox(async dir=>{
-  const file=path.join(dir,'cookies.txt'),cache=new CookieValidationCache()
-  await fs.writeFile(file,'# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tname\tprivate')
-  const first=await cache.validate(file);assert.equal(first.valid,true)
-  first.valid=false;assert.equal((await cache.validate(file)).valid,true)
-  await fs.writeFile(file,'invalid export changed size');assert.equal((await cache.validate(file)).code,'invalid_header')
-  await fs.unlink(file);assert.equal((await cache.validate(file)).code,'missing')
-}))
+
 
 test('codec decisions preserve compatible streams and accurate trim encoding', () => {
   const source={format:{format_name:'matroska'},streams:[{codec_type:'video',codec_name:'h264'},{codec_type:'audio',codec_name:'aac'}]}

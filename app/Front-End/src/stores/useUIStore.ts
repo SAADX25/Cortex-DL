@@ -2,10 +2,11 @@ import { primaryAnalysis } from '../lib/analysisSession'
 import { create } from 'zustand'
 import type { BatchItem } from '../components/AddDownloadTab'
 import type { ModalConfig } from '../hooks/types'
+import type { SubtitlePreview } from '../../../Shared/localSubtitles'
 
-export type ActiveTab = 'add' | 'downloads' | 'settings'
+export type ActiveTab = 'add' | 'downloads' | 'subtitles' | 'settings'
 
-export type MediaPlayerFile = { filePath: string; title?: string }
+export type MediaPlayerFile = { filePath: string; title?: string; subtitlePreview?: SubtitlePreview }
 
 const DEFAULT_MODAL_CONFIG: ModalConfig = {
   isOpen: false,

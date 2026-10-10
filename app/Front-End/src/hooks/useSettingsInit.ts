@@ -16,7 +16,6 @@ export function useSettingsInit(): void {
   const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
   const setEngineVersion = useSettingsStore((s) => s.setEngineVersion)
   const setUpdateStatus = useSettingsStore((s) => s.setUpdateStatus)
-  const setCookieFilePath = useSettingsStore((s) => s.setCookieFilePath)
   const setUsername = useSettingsStore((s) => s.setUsername)
   const setPassword = useSettingsStore((s) => s.setPassword)
   const setTotalDownloadedBytes = useSettingsStore((s) => s.setTotalDownloadedBytes)
@@ -68,16 +67,6 @@ export function useSettingsInit(): void {
     return () => clearTimeout(timer)
   }, [totalDownloadedBytes])
 
-  useEffect(() => {
-    if (window.cortexDl?.getCookieFile) {
-      window.cortexDl.getCookieFile().then((path) => {
-        if (path) setCookieFilePath(path)
-      }).catch(() => {})
-    }
-    
-  }, [setCookieFilePath])
-
-  
   useEffect(() => {
     (async () => {
       try {

@@ -5,9 +5,8 @@ import type { DownloadTask, EngineContext } from './types'
 import { runMediaProcess } from './mediaPipeline'
 import { probeMediaFile } from './mediaFiles'
 import { validateSubtitleMedia } from './mediaFormatRegistry'
-import { withCookieSession } from './cookieSession'
 import { youtubeDiagnostic } from './youtubeDiagnostics'
-import { isYouTubeAuthRequiredError, youtubeErrorCode } from '../../Shared/youtubeErrors'
+import { youtubeErrorCode } from '../../Shared/youtubeErrors'
 
 type SubtitleResult = { exitCode: number; stderr: string }
 
@@ -34,27 +33,19 @@ export async function validateSubtitleFile(file: string): Promise<boolean> {
   } catch { return false }
 }
 
-/** Fetch captions separately so their account session cannot limit the video formats. */
+/** Fetch captions separately so caption failures cannot limit the video formats. */
 export async function prepareYouTubeSubtitle(
   task: DownloadTask,
-  configuredCookies: string[],
   signal: AbortSignal,
-  run: (cookies: string[]) => Promise<SubtitleResult>,
+  run: () => Promise<SubtitleResult>,
 ): Promise<string> {
   signal.throwIfAborted()
   if (!task.subtitleLanguage || !/^[a-zA-Z0-9_-]+$/.test(task.subtitleLanguage)) throw new Error('Invalid subtitle language')
   const file = path.join(task.directory, `${task.id}.${task.subtitleLanguage}.vtt`)
   if (await validateSubtitleFile(file)) { signal.throwIfAborted(); return file }
   try {
-    let result = await run([])
+    const result = await run()
     signal.throwIfAborted()
-    const mayUseAccount = isYouTubeAuthRequiredError(result.stderr)
-    if (result.exitCode !== 0 && mayUseAccount && configuredCookies[0] === '--cookies' && configuredCookies[1]) {
-      // yt-dlp can rewrite its cookie jar. Keep the user's export unchanged.
-      await fs.rm(file, { force: true })
-      result = await withCookieSession(configuredCookies, signal, run)
-      signal.throwIfAborted()
-    }
     if (result.exitCode !== 0) throw new Error(youtubeErrorCode(result.stderr)
       ?? (result.stderr.split(/\r?\n/).find(line => /^ERROR:/i.test(line)) || 'Subtitle download failed'))
     if (!await validateSubtitleFile(file)) throw new Error('YOUTUBE_SUBTITLE_UNAVAILABLE')

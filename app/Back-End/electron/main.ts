@@ -19,6 +19,7 @@ import { DownloadManager } from './downloadManager'
 import { installIpcBoundary } from './ipcSecurity'
 import { checkCachedEngines, reportEngineFailure, stopSetup, runSetup, setupState, engineHealth } from './setup'
 import { openLogs, exportDiagnostics, buildInfo } from './diagnostics'
+import { registerLocalSubtitleIpc, stopLocalSubtitles } from './subtitles/ipc'
 
 export let downloads: DownloadManager | null = null
 import { registerIpcHandlers } from './ipc/handlers'
@@ -820,6 +821,7 @@ if (!gotTheLock) {
     event.preventDefault()
     if (shutdownPromise) return
     shutdownPromise = (async () => {
+      await stopLocalSubtitles()
       await engineReceipts.stop()
       await stopSetup()
       await stopMediaStreamingServer()
@@ -883,6 +885,7 @@ if (!gotTheLock) {
 
   app.whenReady().then(async () => {
     createWindow()
+    registerLocalSubtitleIpc(() => win)
 
     markStartup('starting')
     if (previousStartupFailed && !safeMode && !smokeDirectory) void offerSafeMode()

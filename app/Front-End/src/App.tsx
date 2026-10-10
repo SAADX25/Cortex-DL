@@ -6,6 +6,7 @@ import MediaPlayerModal from './components/MediaPlayer/MediaPlayerModal'
 import DownloadList from './components/DownloadList'
 import Sidebar from './components/Sidebar'
 import SettingsTab from './components/SettingsTab'
+import SubtitleStudio from './components/SubtitleStudio'
 import AddDownloadTab from './components/AddDownloadTab'
 import SetupOverlay from './components/SetupOverlay'
 import { useUIStore } from './stores/useUIStore'
@@ -195,6 +196,9 @@ function App() {
         <div style={tabPaneStyle(activeTab === 'settings')}>
           <SettingsTab />
         </div>
+        <div style={tabPaneStyle(activeTab === 'subtitles')}>
+          <SubtitleStudio />
+        </div>
       </main>
 
       {/* ── Confirm Modal ── */}
@@ -220,6 +224,7 @@ function App() {
           isOpen
           filePath={mediaPlayerFile.filePath}
           title={mediaPlayerFile.title}
+          subtitlePreview={mediaPlayerFile.subtitlePreview}
           dir={lang === 'ar' ? 'rtl' : 'ltr'}
           onClose={() => setMediaPlayerFile(null)}
         />

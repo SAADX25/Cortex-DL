@@ -2,6 +2,7 @@ import React from 'react';
 import { PlayerControls } from './PlayerControls';
 import { MediaInfoOverlay } from './MediaInfoOverlay';
 import { buildMediaUrl, type MediaEndpoint } from '../../lib/mediaEndpoint';
+import type { SubtitlePreview } from '../../../../Shared/localSubtitles';
 
 interface VideoViewProps {
   mediaEndpoint: MediaEndpoint | null;
@@ -9,6 +10,7 @@ interface VideoViewProps {
   fileUrl: string;
   title: string;
   filePath: string;
+  subtitlePreview?: SubtitlePreview;
   isPlaying: boolean;
   duration: number;
   volume: number;
@@ -37,7 +39,7 @@ interface VideoViewProps {
 }
 
 export function VideoPlayerView({
-  mediaEndpoint, sessionId, fileUrl, title, filePath, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
+  mediaEndpoint, sessionId, fileUrl, title, filePath, subtitlePreview, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
   isFullscreen, showControls, videoRef, mediaRef, ambilightRef,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP,
   onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
@@ -45,12 +47,18 @@ export function VideoPlayerView({
   const [isBuffering, setIsBuffering] = React.useState(true);
   const [showMediaInfo, setShowMediaInfo] = React.useState(false);
   const [hasError, setHasError] = React.useState(false);
-  const [subtitles, setSubtitles] = React.useState<import('../../../../Shared/types').PlayerSubtitleTrack[]>([]);
+  const [subtitles, setSubtitles] = React.useState<(import('../../../../Shared/types').PlayerSubtitleTrack & { previewUrl?: string })[]>([]);
   const [activeSubtitle, setActiveSubtitle] = React.useState<number>(-1);
 
   React.useEffect(() => {
     setShowMediaInfo(false);
     setSubtitles([]); setActiveSubtitle(-1);
+    if (subtitlePreview) {
+      const previewUrl = URL.createObjectURL(new Blob([subtitlePreview.vtt], { type: 'text/vtt' }));
+      setSubtitles([{ label: subtitlePreview.language, language: subtitlePreview.language, previewUrl }]);
+      setActiveSubtitle(0);
+      return () => URL.revokeObjectURL(previewUrl);
+    }
     if (filePath && window.cortexDl?.getSubtitles) {
       let cancelled = false;
       window.cortexDl.getSubtitles(filePath, sessionId).then(subs => {
@@ -64,7 +72,7 @@ export function VideoPlayerView({
       }).catch(console.error);
       return () => { cancelled = true; };
     }
-  }, [filePath, sessionId]);
+  }, [filePath, sessionId, subtitlePreview]);
 
   
   React.useEffect(() => {
@@ -109,9 +117,9 @@ export function VideoPlayerView({
             playsInline
           >
             {subtitles.map((sub, i) => {
-              const srcUrl = sub.isEmbedded
+              const srcUrl = sub.previewUrl ?? (sub.isEmbedded
                 ? buildMediaUrl(filePath, mediaEndpoint, { session: sessionId, subtitle: 'true', streamIndex: sub.streamIndex })
-                : buildMediaUrl(sub.filePath, mediaEndpoint, { session: sessionId, ...(sub.filePath?.endsWith('.srt') ? { subtitle: 'true', streamIndex: 0 } : {}) })
+                : buildMediaUrl(sub.filePath, mediaEndpoint, { session: sessionId, ...(sub.filePath?.endsWith('.srt') ? { subtitle: 'true', streamIndex: 0 } : {}) }))
 
               if (!srcUrl) return null
 

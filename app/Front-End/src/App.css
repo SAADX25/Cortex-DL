@@ -1337,6 +1337,13 @@ body {
   border-color: #38bdf8;
 }
 
+.youtube-refresh-button.speech-subtitles-button {
+  width: auto;
+  gap: 7px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+
 .youtube-refresh-button:focus-visible {
   outline: 2px solid #38bdf8;
   outline-offset: 3px;

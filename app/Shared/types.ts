@@ -30,14 +30,6 @@ export const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'wav', 'm4a', 'ogg', 'flac',
 export const UPDATE_CHANNEL = 'cortexdl:download-updated'
 export const PROGRESS_CHANNEL = 'cortexdl:download-progress'
 export const STATS_CHANNEL = 'cortexdl:download-stats-updated'
-export const YOUTUBE_OAUTH_CHANNEL = 'cortexdl:youtube-oauth-code'
-
-export type YouTubeOAuthCodePayload = {
-  taskId: string
-  url: string
-  code: string
-  message?: string
-}
 
 export type DownloadTask = {
   validatedAttemptId?: string
@@ -143,25 +135,6 @@ export type AnalyzeResult =
     }
   | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
 
-export type CookieValidationCode =
-  | 'valid'
-  | 'cleared'
-  | 'missing'
-  | 'not_file'
-  | 'invalid_header'
-  | 'invalid_rows'
-  | 'expired'
-  | 'missing_youtube'
-  | 'read_error'
-  | 'save_error'
-
-export type CookieValidationResult = {
-  valid: boolean
-  code: CookieValidationCode
-  message: string
-  filePath: string | null
-}
-
 export type JsRuntimeStatus = {
   available: boolean
   name: string
@@ -178,7 +151,6 @@ export type AppHealthCheck = {
   updateService?: 'reachable' | 'unavailable'
   build?: { version: string; commit: string }
   jsRuntime: JsRuntimeStatus
-  cookies: CookieValidationResult
   downloadDirectory: { writable: boolean; path: string }
 }
 

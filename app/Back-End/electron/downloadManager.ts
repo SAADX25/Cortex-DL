@@ -9,7 +9,7 @@ import type {
   DownloadTask, TaskRuntime, AttemptRuntime, EngineResult, StartInput, EngineContext,
   DownloadEngine, AudioFormat, TargetFormat,
 } from './types'
-import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
+import { STATS_CHANNEL, AUDIO_FORMATS } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
 import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion, validateSubtitleMedia } from './mediaFormatRegistry'
 import { runMediaProcess, trimBounds, validateMediaOutput } from './mediaPipeline'
@@ -580,9 +580,6 @@ export class DownloadManager {
       },
       saveState: () => { if (current()) this.markDirty(taskId) },
       flushSave: () => { if (current()) this.saveStateImmediate(taskId) },
-      sendYouTubeOAuthCode: payload => {
-        if (current() && this.win && !this.win.isDestroyed()) this.win.webContents.send(YOUTUBE_OAUTH_CHANNEL, payload)
-      },
     }
   }
 
@@ -656,7 +653,6 @@ export class DownloadManager {
     const attemptId = randomUUID()
     const attempt: AttemptRuntime = {
       ...this.freshRuntime(), retries: previousRuntime?.retries ?? 0,
-      ignoreCookies: previousRuntime?.ignoreCookies,
       abortController: new AbortController(), attemptId,
       directory: path.join(task.directory, '.cortex_temp', task.id, attemptId),
     }

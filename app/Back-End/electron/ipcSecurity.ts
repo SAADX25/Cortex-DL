@@ -1,11 +1,17 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import path from 'node:path'
+import { validateSubtitleRequest } from '../../Shared/localSubtitles'
 
 export function validateIpcArguments(channel: string, args: unknown[]): void {
   const first = args[0]
+  if (channel === 'cortexdl:subtitles:start') validateSubtitleRequest(first)
+  if (channel === 'cortexdl:subtitles:install' && (!['accurate', 'fast'].includes(String(first)) || args[1] !== null && !['standard', 'quality'].includes(String(args[1])))) throw new Error('Invalid subtitle models')
+  if (['cortexdl:subtitles:cancel', 'cortexdl:subtitles:export', 'cortexdl:subtitles:embed'].includes(channel) && (typeof first !== 'string' || !/^[\w-]{1,128}$/.test(first))) throw new Error('Invalid subtitle operation ID')
+  if (channel === 'cortexdl:subtitles:embed' && (!Array.isArray(args[1]) || args[1].length > 50000)) throw new Error('Invalid subtitle embedding')
+  if (channel === 'cortexdl:subtitles:export' && (!Array.isArray(args[1]) || args[1].length > 50000 || !['srt', 'vtt'].includes(String(args[2])))) throw new Error('Invalid subtitle export')
   if (channel === 'cortexdl:analyze-url' && args[2] !== undefined && !['formats', 'captions'].includes(String(args[2]))) throw new Error('Invalid analysis mode')
-  const paths = ['open-folder', 'open-file', 'get-media-fps', 'get-subtitles', 'set-cookie-file']
-  if (paths.some(name => channel === `cortexdl:${name}`) && !(channel.endsWith('set-cookie-file') && first === null)) {
+  const paths = ['open-folder', 'open-file', 'get-media-fps', 'get-subtitles']
+  if (paths.some(name => channel === `cortexdl:${name}`)) {
     if (typeof first !== 'string' || first.length > 32767 || first.includes('\0') || !path.isAbsolute(first)) throw new Error('Invalid file path')
     if (channel.endsWith('open-file') && !/\.(?:mp4|mkv|webm|avi|mov|ogv|m4v|gif|mp3|m4a|aac|opus|flac|wav|ogg|wma|srt|vtt|txt)$/i.test(first)) throw new Error('Only media and text files can be opened')
   }

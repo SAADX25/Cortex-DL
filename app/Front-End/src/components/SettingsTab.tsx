@@ -4,8 +4,6 @@ import { translations } from '../translations'
 import type { Language } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 import { useLang, useSettingsStore } from '../stores/useSettingsStore'
-import { getCookieStatusText } from '../lib/cookieStatus'
-import YouTubeCookieSettings from './YouTubeCookieSettings'
 
 declare const __APP_VERSION__: string
 
@@ -54,11 +52,6 @@ const SettingsTab: React.FC = () => {
           label: t.health_js_runtime,
           ok: healthCheck.jsRuntime.available,
           detail: healthCheck.jsRuntime.available ? healthCheck.jsRuntime.name + ' — Supported' : 'No supported yt-dlp JS runtime',
-        },
-        {
-          label: t.health_cookies,
-          ok: healthCheck.cookies.valid || healthCheck.cookies.code === 'missing',
-          detail: healthCheck.cookies.code === 'missing' ? t.health_cookie_optional : healthCheck.cookies.code === 'valid' ? t.youtube_auth_ready : getCookieStatusText(t, healthCheck.cookies),
         },
         {
           label: t.health_download_directory,
@@ -135,7 +128,6 @@ const SettingsTab: React.FC = () => {
           </div>
 
           {}
-          <YouTubeCookieSettings />
 
           {}
           <div className="minimal-row">

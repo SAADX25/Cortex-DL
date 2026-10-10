@@ -37,86 +37,21 @@ test('YouTube subtitles validate cues and reject missing, empty, HTML and header
   }
   await fs.writeFile(file, vtt); assert.equal(await validateSubtitleFile(file), true)
   let called = false
-  assert.equal(await prepareYouTubeSubtitle(task, [], new AbortController().signal, async () => { called = true }), file)
+  assert.equal(await prepareYouTubeSubtitle(task, new AbortController().signal, async () => { called = true }), file)
   assert.equal(called, false, 'resume reuses valid owned subtitles')
 }))
 
-test('YouTube subtitle-only cookies retry is bounded and preserves the original cookie file', () => sandbox(async task => {
-  const original = path.join(task.directory, 'synthetic-original.txt')
-  await fs.writeFile(original, 'synthetic fixture, no real credentials')
-  const seen = []
-  const file = await prepareYouTubeSubtitle(task, ['--cookies', original], new AbortController().signal, async cookies => {
-    seen.push(cookies)
-    if (!cookies.length) return { exitCode: 1, stderr: 'LOGIN_REQUIRED' }
-    assert.notEqual(cookies[1], original)
-    assert.notEqual(path.dirname(cookies[1]), task.directory, 'credentials belong in private OS temp')
-    assert.equal(await fs.readFile(cookies[1], 'utf8'), 'synthetic fixture, no real credentials')
-    await fs.writeFile(cookies[1], 'yt-dlp rewritten cookie jar')
-    await fs.writeFile(path.join(task.directory, 'test.ar.vtt'), vtt)
-    return { exitCode: 0, stderr: '' }
-  })
-  assert.equal(await validateSubtitleFile(file), true)
-  assert.equal(seen.length, 2)
-  assert.deepEqual(seen[0], [])
-  await assert.rejects(fs.stat(seen[1][1]), /ENOENT/)
-  assert.equal(await fs.readFile(original, 'utf8'), 'synthetic fixture, no real credentials')
-}))
-
-test('YouTube subtitle failures and cancellation clean temporary credentials and never certify missing captions', () => sandbox(async task => {
-  const original = path.join(task.directory, 'synthetic-original.txt')
-  await fs.writeFile(original, 'synthetic')
-  for (const mode of ['limited', 'cancel', 'throw', 'missing']) {
-    let calls = 0, copy
-    const controller = new AbortController()
-    const run = async cookies => {
-      if (++calls === 1) return { exitCode: 1, stderr: 'LOGIN_REQUIRED' }
-      copy = cookies[1]
-      if (mode === 'cancel') { controller.abort(); return limited }
-      if (mode === 'throw') throw new Error('Child process failed')
-      return mode === 'missing' ? { exitCode: 0, stderr: '' } : limited
-    }
-    await assert.rejects(prepareYouTubeSubtitle(task, ['--cookies', original], controller.signal, run),
-      mode === 'cancel' ? /abort/i : mode === 'throw' ? /Child process failed/ : mode === 'missing' ? /YOUTUBE_SUBTITLE_UNAVAILABLE/ : /YOUTUBE_SUBTITLE_RATE_LIMITED/)
-    assert.equal(calls, 2)
-    await assert.rejects(fs.stat(copy), /ENOENT/)
-    assert.equal(await fs.readFile(original, 'utf8'), 'synthetic')
+test('YouTube captions fail explicitly and clean partial files without authentication retries', () => sandbox(async task => {
+  for (const error of [limited, { exitCode: 1, stderr: 'LOGIN_REQUIRED' }, { exitCode: 0, stderr: '' }]) {
+    let calls = 0;
+    const file = path.join(task.directory, 'test.ar.vtt');
+    await assert.rejects(prepareYouTubeSubtitle(task, new AbortController().signal, async () => {
+      calls++; await fs.writeFile(file + '.part', 'partial'); return error;
+    }), /YOUTUBE_SUBTITLE_RATE_LIMITED|YOUTUBE_AUTH_REQUIRED|YOUTUBE_SUBTITLE_UNAVAILABLE/);
+    assert.equal(calls, 1);
+    await assert.rejects(fs.stat(file + '.part'), /ENOENT/);
   }
-}))
-
-test('YouTube unrelated subtitle failures make no account request and reject invalid language paths', () => sandbox(async task => {
-  let calls = 0
-  await assert.rejects(prepareYouTubeSubtitle(task, ['--cookies', 'unused'], new AbortController().signal, async () => {
-    calls++; return { exitCode: 1, stderr: 'ERROR: HTTP Error 500: unavailable' }
-  }), /500/)
-  assert.equal(calls, 1)
-  await assert.rejects(prepareYouTubeSubtitle({ ...task, subtitleLanguage: '../outside' }, [], new AbortController().signal, async () => {}), /Invalid subtitle language/)
-  await assert.rejects(prepareYouTubeSubtitle(task, [], new AbortController().signal, async () => limited), /YOUTUBE_SUBTITLE_RATE_LIMITED/)
-}))
-
-test('YouTube subtitle 429 stops without testing an account and removes partial caption files', () => sandbox(async task => {
-  let calls = 0
-  const file = path.join(task.directory, 'test.ar.vtt')
-  await assert.rejects(prepareYouTubeSubtitle(task, ['--cookies', 'must-not-read'], new AbortController().signal, async args => {
-    calls++; assert.deepEqual(args, []); await fs.writeFile(file + '.part', '<html>rate limited</html>'); return limited
-  }), /YOUTUBE_SUBTITLE_RATE_LIMITED/)
-  assert.equal(calls, 1)
-  await assert.rejects(fs.stat(file + '.part'), /ENOENT/)
-}))
-
-test('YouTube cookie validation rejects expired exports, fake domains and malformed rows without certifying sign-in', () => sandbox(async task => {
-  const { CookieValidationCache } = require('../Back-End/electron/cookieValidation.ts')
-  const file = path.join(task.directory, 'export.txt'), cache = new CookieValidationCache()
-  for (const [body, code] of [
-    ['# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t1\tSID\tfixture', 'expired'],
-    ['# Netscape HTTP Cookie File\n.youtube.com.evil.test\tTRUE\t/\tTRUE\t0\tSID\tfixture', 'missing_youtube'],
-    ['# Netscape HTTP Cookie File\n# youtube.com\nmalformed-row', 'invalid_rows'],
-    ['# Netscape HTTP Cookie File\n#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tfixture', 'valid'],
-  ]) {
-    await fs.writeFile(file, body)
-    const result = await cache.validate(file)
-    assert.equal(result.code, code)
-    if (result.valid) assert.match(result.message, /not been verified/)
-  }
+  await assert.rejects(prepareYouTubeSubtitle({...task, subtitleLanguage: '../outside'}, new AbortController().signal, async () => {}), /Invalid subtitle language/);
 }))
 
 test('YouTube output verification rejects changed resolution, FPS, missing audio and subtitle language', () => {
