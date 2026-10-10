@@ -1,27 +1,13 @@
 import React from 'react'
-import { RefreshCw, AlertTriangle, ShieldAlert, FolderOpen, X, ExternalLink } from 'lucide-react'
+import { RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { translations } from '../translations'
-import type { Translations, Language } from '../translations'
+import type { Language } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 import { useLang, useSettingsStore } from '../stores/useSettingsStore'
+import { getCookieStatusText } from '../lib/cookieStatus'
+import YouTubeCookieSettings from './YouTubeCookieSettings'
 
 declare const __APP_VERSION__: string
-
-function getCookieStatusText(t: Translations, validation: CookieValidationResult): string {
-  switch (validation.code) {
-    case 'valid': return t.youtube_cookie_valid
-    case 'cleared': return t.youtube_cookie_cleared
-    case 'missing': return t.youtube_cookie_missing
-    case 'not_file': return t.youtube_cookie_not_file
-    case 'invalid_header': return t.youtube_cookie_invalid_header
-    case 'invalid_rows': return t.youtube_cookie_invalid_rows
-    case 'expired': return t.youtube_cookie_expired
-    case 'missing_youtube': return t.youtube_cookie_missing_youtube
-    case 'read_error': return t.youtube_cookie_read_error
-    case 'save_error': return t.youtube_cookie_save_error
-    default: return validation.message
-  }
-}
 
 /**
  * No props: every value/action this tab needs comes straight from
@@ -38,12 +24,8 @@ const SettingsTab: React.FC = () => {
   const onResetStats = useSettingsStore((s) => s.onResetStats)
   const useInAppPlayer = useSettingsStore((s) => s.useInAppPlayer)
   const setUseInAppPlayer = useSettingsStore((s) => s.setUseInAppPlayer)
-  const cookieFilePath = useSettingsStore((s) => s.cookieFilePath)
-  const cookieValidation = useSettingsStore((s) => s.cookieValidation)
   const healthCheck = useSettingsStore((s) => s.healthCheck)
   const healthChecking = useSettingsStore((s) => s.healthChecking)
-  const onSelectCookieFile = useSettingsStore((s) => s.onSelectCookieFile)
-  const onClearCookieFile = useSettingsStore((s) => s.onClearCookieFile)
   const refreshHealth = useSettingsStore((s) => s.refreshHealth)
   const concurrentDownloads = useSettingsStore((s) => s.concurrentDownloads)
   const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
@@ -56,10 +38,6 @@ const SettingsTab: React.FC = () => {
   const onUninstall = useSettingsStore((s) => s.onUninstall)
 
   
-  const cookieFileName = cookieFilePath
-    ? cookieFilePath.split(/[\\/]/).pop() ?? cookieFilePath
-    : null
-
   const healthRows = healthCheck
     ? [
         {
@@ -80,7 +58,7 @@ const SettingsTab: React.FC = () => {
         {
           label: t.health_cookies,
           ok: healthCheck.cookies.valid || healthCheck.cookies.code === 'missing',
-          detail: healthCheck.cookies.code === 'missing' ? t.health_cookie_optional : getCookieStatusText(t, healthCheck.cookies),
+          detail: healthCheck.cookies.code === 'missing' ? t.health_cookie_optional : healthCheck.cookies.code === 'valid' ? t.youtube_auth_ready : getCookieStatusText(t, healthCheck.cookies),
         },
         {
           label: t.health_download_directory,
@@ -157,140 +135,7 @@ const SettingsTab: React.FC = () => {
           </div>
 
           {}
-          <div className="minimal-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-              <div className="row-info" style={{ flex: 1 }}>
-                <span className="row-title">{t.youtube_auth_title}</span>
-
-                {}
-                <span className="row-subtitle" style={{ marginTop: '4px', display: 'block' }}>
-                  {t.youtube_auth_desc}
-                </span>
-
-                {}
-                <button
-                  id="get-cookies-extension-btn"
-                  className="btn-ghost-primary"
-                  style={{ marginTop: '10px', fontSize: '0.82rem', padding: '0.4rem 0.9rem', width: 'fit-content' }}
-                  onClick={() =>
-                    window.cortexDl.openExternal(
-                      'https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc?hl=en-US&utm_source=ext_sidebar'
-                    )
-                  }
-                  title={t.youtube_auth_get_extension}
-                >
-                  <ExternalLink size={14} />
-                  {t.youtube_auth_get_extension}
-                </button>
-
-              </div>
-
-              {}
-              <div className="row-control" style={{ flexShrink: 0 }}>
-                <button
-                  className="btn-ghost-primary"
-                  onClick={onSelectCookieFile}
-                  id="select-cookie-file-btn"
-                  title={t.youtube_auth_select_btn}
-                >
-                  <FolderOpen size={16} />
-                  <span>{t.youtube_auth_select_btn}</span>
-                </button>
-              </div>
-            </div>
-
-            {}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                background: cookieFilePath
-                  ? 'rgba(34, 197, 94, 0.07)'
-                  : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${cookieFilePath ? 'rgba(34, 197, 94, 0.25)' : 'rgba(255,255,255,0.07)'}`,
-                transition: 'all 0.25s ease',
-              }}
-            >
-              {cookieFilePath ? (
-                <>
-                  {}
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#22c55e',
-                      flexShrink: 0,
-                      boxShadow: '0 0 6px rgba(34,197,94,0.6)',
-                    }}
-                  />
-                  <span
-                    style={{
-                      flex: 1,
-                      fontSize: '0.82rem',
-                      color: '#94a3b8',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      fontFamily: 'monospace',
-                      letterSpacing: '0.01em',
-                    }}
-                    title={cookieFilePath}
-                  >
-                    {cookieFileName}
-                  </span>
-                  <button
-                    onClick={onClearCookieFile}
-                    title={t.youtube_auth_clear_btn}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#ef4444',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '2px',
-                      borderRadius: '4px',
-                      opacity: 0.7,
-                      transition: 'opacity 0.15s',
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
-                  >
-                    <X size={14} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#475569',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span style={{ fontSize: '0.82rem', color: '#475569' }}>
-                    {t.youtube_auth_no_file}
-                  </span>
-                </>
-              )}
-            </div>
-            {cookieValidation && (
-              <span
-                role="status"
-                style={{ fontSize: '0.82rem', color: cookieValidation.valid ? '#22c55e' : '#f87171' }}
-              >
-                {getCookieStatusText(t, cookieValidation)}
-              </span>
-            )}
-
-          </div>
+          <YouTubeCookieSettings />
 
           {}
           <div className="minimal-row">

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
-import { X, Trash2, DownloadCloud, Search } from 'lucide-react'
+import { X, Trash2, DownloadCloud, Search, Plus, CheckCheck } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useTaskIds, useTasksVersion, getTasksSnapshot, useDownloadStore } from '../stores/downloadStore'
 import { useUIStore } from '../stores/useUIStore'
@@ -8,6 +8,10 @@ import { useDebounce } from '../hooks/useDebounce'
 import { onOpenFile, onOpenFolder, onDelete } from '../actions/downloadActions'
 import DownloadCard from './DownloadCard'
 import { translations } from '../translations'
+import { getProgressView } from '../../../Shared/progressModel'
+import './DownloadList.css'
+
+type DownloadFilter = 'all' | 'active' | 'completed' | 'paused' | 'error'
 
 /**
  * No props — sources `lang` from the settings store and its callbacks
@@ -31,6 +35,7 @@ const DownloadList: React.FC = () => {
   const tasksVersion = useTasksVersion()
 
   const [searchInput, setSearchInput] = useState('')
+  const [filter, setFilter] = useState<DownloadFilter>('all')
   const debouncedSearchQuery = useDebounce(searchInput, 300)
 
   const [showClearModal, setShowClearModal] = useState(false)
@@ -65,35 +70,46 @@ const DownloadList: React.FC = () => {
     }
   }
 
-  const filteredIds = useMemo(() => {
-    if (!debouncedSearchQuery.trim()) return taskIds
-    const q = debouncedSearchQuery.toLowerCase()
+  const { filteredIds, counts } = useMemo(() => {
+    const q = debouncedSearchQuery.trim().toLowerCase()
     const tasks = getTasksSnapshot()
-    return taskIds.filter((id) => {
+    const counts: Record<DownloadFilter, number> = { all: taskIds.length, active: 0, completed: 0, paused: 0, error: 0 }
+    const filteredIds = taskIds.filter((id) => {
       const task = tasks.get(id)
       if (!task) return false
-      return (
+      const phase = getProgressView(task).phase
+      const category = phase === 'completed' ? 'completed' : phase === 'error' ? 'error'
+        : phase === 'paused' || phase === 'pausing' ? 'paused' : phase === 'canceled' ? null : 'active'
+      if (category) counts[category]++
+      return (filter === 'all' || category === filter) && (!q || (
         (task.title || task.filename || '').toLowerCase().includes(q) ||
         (task.url || '').toLowerCase().includes(q)
-      )
+      ))
     })
+    return { filteredIds, counts }
     // `tasksVersion` is intentionally in the dependency list even though
     // it's unused in the body — it's what makes this memo re-run whenever
     // any task's fields are updated in place, not just when tasks are
     // added/removed (see the comment on `tasksVersion` above).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskIds, debouncedSearchQuery, tasksVersion])
+  }, [taskIds, debouncedSearchQuery, tasksVersion, filter])
 
   const totalCount = taskIds.length
+  const filterLabels: Record<DownloadFilter, string> = lang === 'ar'
+    ? { all: 'الكل', active: 'قيد التنزيل', completed: 'مكتملة', paused: 'متوقفة', error: 'فشلت' }
+    : { all: 'All', active: 'In progress', completed: 'Completed', paused: 'Paused', error: 'Failed' }
+  const resetFilters = () => { setSearchInput(''); setFilter('all') }
 
   return (
-    <div className="tab-content fade-in">
+    <div className="tab-content downloads-page fade-in" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       {/* ── Professional Sticky Header & Interactive Search Toolbar ── */}
       <header className="dl-header-pro">
         {/* Top: Title and Subtitle under each other */}
-        <div className="dl-title-section">
-          <h1 className="dl-main-title">{t.downloads_title}</h1>
-          <p className="dl-subtitle-muted">{t.total_tasks}: {totalCount}</p>
+        <div className="dl-heading-row">
+          <div className="dl-title-section">
+            <h1 className="dl-main-title">{lang === 'ar' ? 'التنزيلات' : 'Downloads'} <span className="dl-total-count">{totalCount}</span></h1>
+            <p className="dl-subtitle-muted">{lang === 'ar' ? 'تابع تنزيلاتك وملفاتك في مكان واحد' : 'Your downloads and files, in one place'}</p>
+          </div>
         </div>
 
         {/* Bottom: Search Bar + Clear All Button Row */}
@@ -123,7 +139,7 @@ const DownloadList: React.FC = () => {
                     setSearchInput('')
                     searchInputRef.current?.focus()
                   }}
-                  aria-label="Clear search"
+                  aria-label={lang === 'ar' ? 'مسح البحث' : 'Clear search'}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
@@ -152,6 +168,11 @@ const DownloadList: React.FC = () => {
               </motion.button>
             )}
           </AnimatePresence>
+        </div>
+        <div className="dl-filter-row" role="group" aria-label={lang === 'ar' ? 'تصفية التنزيلات' : 'Filter downloads'}>
+          {(Object.keys(filterLabels) as DownloadFilter[]).map(key => <button key={key} type="button" className={`dl-filter ${filter === key ? 'selected' : ''}`} aria-pressed={filter === key} onClick={() => setFilter(key)}>
+            {filterLabels[key]}<span>{counts[key]}</span>
+          </button>)}
         </div>
       </header>
 
@@ -261,18 +282,23 @@ const DownloadList: React.FC = () => {
         </div>
 
         {/* Empty state: No downloads exist */}
-        {totalCount === 0 && (
+        {filteredIds.length === 0 && (
           <motion.div
-            className="empty-state"
+            className="dl-empty-state"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: 'easeOut' }}
           >
-            <div className="empty-icon-container">
-              <DownloadCloud size={48} strokeWidth={1.5} className="empty-icon-svg" />
+            <div className="dl-empty-art" aria-hidden="true">
+              <div className="dl-empty-sheet"><span /><span /><span /></div>
+              <div className="dl-empty-symbol">{totalCount === 0 ? <DownloadCloud size={28} strokeWidth={1.7} /> : <Search size={27} />}</div>
             </div>
-            <h3>{t.empty_title}</h3>
-            <p>{t.empty_subtitle}</p>
+            <h3>{totalCount === 0 ? (lang === 'ar' ? 'جاهز لتنزيلك الأول؟' : 'Ready for your first download?') : (lang === 'ar' ? 'لا توجد تنزيلات مطابقة' : 'No matching downloads')}</h3>
+            <p>{totalCount === 0 ? (lang === 'ar' ? 'أضف رابط فيديو أو صوت، وسنتولى الباقي.' : 'Add a video or audio link. We’ll take it from here.') : (lang === 'ar' ? 'جرّب بحثاً آخر أو اختر تصنيفاً مختلفاً.' : 'Try another search or choose a different filter.')}</p>
+            <button type="button" className="dl-add-button" onClick={totalCount === 0 ? () => useUIStore.getState().setActiveTab('add') : resetFilters}>
+              {totalCount === 0 ? <Plus size={18} /> : <X size={17} />}{totalCount === 0 ? (lang === 'ar' ? 'إضافة رابط' : 'Add link') : (lang === 'ar' ? 'إظهار الكل' : 'Show all downloads')}
+            </button>
+            {totalCount === 0 && <span className="dl-empty-note"><CheckCheck size={14} />{lang === 'ar' ? 'ستظهر ملفاتك هنا فور إضافة تنزيل' : 'Your files will appear here as you add downloads'}</span>}
           </motion.div>
         )}
       </section>

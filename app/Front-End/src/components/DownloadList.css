@@ -1,0 +1,50 @@
+.downloads-page .dl-header-pro {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  background: transparent;
+  backdrop-filter: none;
+  margin: 0 0 22px;
+  padding: 0 0 18px;
+  gap: 20px;
+}
+
+.dl-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.downloads-page .dl-main-title { display: flex; align-items: center; gap: 12px; font-size: 28px; font-weight: 700; letter-spacing: -0.6px; }
+.dl-total-count { font-size: 13px; font-weight: 600; letter-spacing: 0; color: #a5b6cc; background: #1c293b; padding: 3px 9px; border-radius: 7px; }
+.downloads-page .dl-subtitle-muted { color: #8799b2; font-size: 13px; margin-top: 3px; }
+.dl-add-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 15px; border: 1px solid #329fd0; border-radius: 9px; background: #1683b3; color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.dl-add-button:hover { background: #1999cf; }
+.downloads-page .dl-toolbar-row { gap: 12px; }
+.downloads-page .dl-search-input { border-radius: 9px; background: #141e2e; font-size: 13px; }
+.downloads-page .dl-search-input::placeholder { color: #7f8da3; }
+.downloads-page .dl-clear-all-btn-pro { border-color: rgba(255,255,255,0.09); background: transparent; color: #a7b4c7; border-radius: 9px; font-size: 12px; }
+.downloads-page .dl-clear-all-btn-pro:hover { color: #f87171; border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.06); }
+.dl-filter-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.dl-filter { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #95a5bc; font: inherit; font-size: 12px; cursor: pointer; }
+.dl-filter span { min-width: 18px; text-align: center; font-size: 11px; color: #8a9db8; }
+.dl-filter:hover { color: #e2e8f0; background: rgba(255,255,255,0.04); }
+.dl-filter.selected { background: rgba(56,189,248,0.1); border-color: rgba(56,189,248,0.2); color: #7dd3fc; }
+.dl-filter.selected span { color: #bae6fd; }
+.downloads-page .task-grid { gap: 12px; padding-bottom: 0; }
+.downloads-page button:focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+.dl-empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 48px 20px 38px; min-height: 330px; border: 1px dashed rgba(148,163,184,0.16); border-radius: 14px; background: rgba(15,23,42,0.25); }
+.dl-empty-art { width: 102px; height: 91px; position: relative; margin-bottom: 22px; }
+.dl-empty-sheet { position: absolute; inset: 0 21px 14px 9px; border: 1px solid #2d415b; border-radius: 10px; background: linear-gradient(145deg,#1c2d44,#111c2d); transform: rotate(-9deg); padding: 20px 13px; }
+.dl-empty-sheet span { display: block; height: 4px; border-radius: 4px; background: #344963; margin-bottom: 9px; }
+.dl-empty-sheet span:last-child { width: 60%; }
+.dl-empty-symbol { position: absolute; bottom: 0; right: 0; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; border-radius: 15px; background: #102d42; border: 1px solid #24506b; color: #55c7f3; box-shadow: 0 8px 18px #0b122066; }
+.dl-empty-state h3 { color: #e4ebf5; font-size: 21px; font-weight: 600; margin: 0 0 8px; }
+.dl-empty-state p { color: #8d9eb7; font-size: 13px; line-height: 1.7; max-width: 350px; margin: 0 0 23px; }
+.dl-empty-note { display: flex; align-items: center; gap: 6px; color: #647991; font-size: 11px; margin-top: 23px; }
+@media (max-width: 600px) {
+  .downloads-page .dl-main-title { font-size: 24px; }
+  .downloads-page .dl-subtitle-muted { max-width: 230px; }
+  .dl-heading-row { align-items: flex-start; gap: 10px; }
+  .dl-filter { padding: 6px 8px; gap: 5px; }
+  .downloads-page .dl-kbd-hint { display: none; }
+  .dl-empty-state { padding-inline: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .downloads-page *, .downloads-page *::after { animation: none !important; transition: none !important; }
+}

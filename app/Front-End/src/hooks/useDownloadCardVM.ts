@@ -41,6 +41,7 @@ export interface DownloadCardVM {
   
   id: string
   title: string
+  sourceUrl: string
   thumbnail: string | null
   formatTag: string
 
@@ -196,6 +197,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     return {
       id: task.id,
       title: task.title || task.filename,
+      sourceUrl: task.url,
       thumbnail: task.thumbnail ?? null,
       formatTag: task.targetFormat,
       phase,

@@ -678,10 +678,34 @@
 }
 
 .media-info-title {
-  margin: 0 0 15px 0;
+  margin: 0;
   font-size: 1rem;
   color: #38bdf8;
 }
+
+.media-info-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.media-info-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.media-info-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.media-info-close:focus-visible, .media-info-toggle:focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
 
 .media-info-grid {
   display: grid;

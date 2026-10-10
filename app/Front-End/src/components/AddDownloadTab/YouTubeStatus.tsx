@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Captions, MonitorPlay, RefreshCw } from 'lucide-react'
 import { useUIStore } from '../../stores/useUIStore'
 import { useFormStore } from '../../stores/useFormStore'
 import { normalizeIpcError } from '../../lib/downloadHelpers'
@@ -52,11 +53,23 @@ export function YouTubeStatus({ url, lang }: { url: string; lang: Language }) {
       if (owned()) useUIStore.getState().showToast(normalizeIpcError(error, translations[lang].analyze_failed, translations[lang]))
     } finally { if (request.current === id) { request.current = null; setBusy(null) } }
   }
-  return <div className="youtube-status" role="status" style={{ color: '#9caec6', fontSize: '12px', display: 'flex', flexWrap: 'wrap', gap: '10px', margin: '8px 0' }}>
+  const formatLabel = lang === 'ar' ? 'تحديث الجودات المتاحة' : 'Refresh available qualities'
+  const captionLabel = lang === 'ar' ? 'تحديث الترجمات المتاحة' : 'Refresh available captions'
+  return <div className="youtube-status" role="status" style={{ color: '#9caec6', fontSize: '12px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px', margin: '8px 0' }}>
     {result.qualityStatus === 'restricted' && <span>{lang === 'ar' ? 'قيّد YouTube بعض الصيغ' : 'YouTube restricted some formats'}</span>}
     {result.qualityStatus === 'limited' && <span>{lang === 'ar' ? 'الدقات الأعلى غير متاحة من هذا الاستخراج' : 'Higher resolutions unavailable from this extraction'}</span>}
     <span>{labels[state]}</span>
-    <button type="button" className="metadata-badge" disabled={!!busy} onClick={() => void refresh('formats')}>{lang === 'ar' ? 'تحديث الجودة' : 'Refresh formats'}</button>
-    <button type="button" className="metadata-badge" disabled={!!busy} onClick={() => void refresh('captions')}>{lang === 'ar' ? 'تحديث الترجمة' : 'Refresh captions'}</button>
+    <button type="button" className="youtube-refresh-button" title={formatLabel} aria-label={formatLabel} aria-busy={busy === 'formats'} disabled={!!busy} onClick={() => void refresh('formats')}>
+      {busy === 'formats' ? <RefreshCw size={19} className="spin" aria-hidden="true" /> : <>
+        <MonitorPlay size={21} aria-hidden="true" />
+        <RefreshCw size={11} className="youtube-refresh-mark" aria-hidden="true" />
+      </>}
+    </button>
+    <button type="button" className="youtube-refresh-button" title={captionLabel} aria-label={captionLabel} aria-busy={busy === 'captions'} disabled={!!busy} onClick={() => void refresh('captions')}>
+      {busy === 'captions' ? <RefreshCw size={19} className="spin" aria-hidden="true" /> : <>
+        <Captions size={21} aria-hidden="true" />
+        <RefreshCw size={11} className="youtube-refresh-mark" aria-hidden="true" />
+      </>}
+    </button>
   </div>
 }

@@ -49,6 +49,7 @@ export function VideoPlayerView({
   const [activeSubtitle, setActiveSubtitle] = React.useState<number>(-1);
 
   React.useEffect(() => {
+    setShowMediaInfo(false);
     setSubtitles([]); setActiveSubtitle(-1);
     if (filePath && window.cortexDl?.getSubtitles) {
       let cancelled = false;
@@ -146,8 +147,8 @@ export function VideoPlayerView({
       <div
         className="player-header"
         style={{
-          opacity: showControls ? 1 : 0,
-          pointerEvents: showControls ? 'auto' : 'none',
+          opacity: showControls || showMediaInfo ? 1 : 0,
+          pointerEvents: showControls || showMediaInfo ? 'auto' : 'none',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -162,6 +163,7 @@ export function VideoPlayerView({
              mediaType="video"
              showOverlay={showMediaInfo}
              toggleOverlay={() => setShowMediaInfo(!showMediaInfo)}
+             closeOverlay={() => setShowMediaInfo(false)}
            />
            <button className="media-player-close" onClick={onClose} title="Close (Esc)">
              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>

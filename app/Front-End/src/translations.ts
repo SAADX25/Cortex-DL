@@ -141,6 +141,17 @@ export interface Translations {
   youtube_auth_select_btn: string;
   youtube_auth_no_file: string;
   youtube_auth_clear_btn: string;
+  youtube_auth_optional: string;
+  youtube_auth_ready: string;
+  youtube_auth_selected: string;
+  youtube_auth_attention: string;
+  youtube_auth_empty_hint: string;
+  youtube_auth_replace_btn: string;
+  youtube_auth_quality_note: string;
+  youtube_auth_help: string;
+  youtube_auth_step_signin: string;
+  youtube_auth_step_export: string;
+  youtube_auth_step_select: string;
   paste_and_go: string;
   btn_video: string;
   btn_audio: string;
@@ -321,12 +332,23 @@ export const translations: Record<Language, Translations> = {
     settings_cancel: "إلغاء",
     use_inapp_player: "مشغل وسائط مدمج",
     use_inapp_player_desc: "تشغيل الفيديو والصوت داخل التطبيق بدلاً من المشغل الافتراضي",
-    youtube_auth_title: "ملفات Cookies",
-    youtube_auth_desc: "يبدأ تنزيل الفيديوهات العامة بدون كوكيز للحفاظ على الجودة. عند الحاجة لتسجيل الدخول أو رفض تنزيل الترجمة، يمكن للبرنامج تجربة ملفك للطلب المطلوب فقط؛ استخدامه للترجمة لا يخفض دقة الفيديو. صدّر ملف cookies.txt من YouTube ثم اختره هنا.",
+    youtube_auth_title: "ملف YouTube Cookies",
+    youtube_auth_desc: "استخدمه عندما يطلب YouTube تسجيل الدخول للوصول إلى فيديو أو ترجمة.",
     youtube_auth_get_extension: "تحميل الإضافة",
     youtube_auth_select_btn: "اختر ملف cookies.txt",
     youtube_auth_no_file: "لم يتم اختيار ملف بعد",
     youtube_auth_clear_btn: "إزالة الملف",
+    youtube_auth_optional: "اختياري",
+    youtube_auth_ready: "صيغة الملف صحيحة",
+    youtube_auth_selected: "تم اختيار الملف",
+    youtube_auth_attention: "يحتاج إلى مراجعة",
+    youtube_auth_empty_hint: "يمكنك تنزيل الفيديوهات العامة بدون ملف",
+    youtube_auth_replace_btn: "تغيير الملف",
+    youtube_auth_quality_note: "يُستخدم عند الحاجة فقط، مع الاحتفاظ بالجودات المكتشفة للفيديو العام.",
+    youtube_auth_help: "كيف أجهّز الملف؟",
+    youtube_auth_step_signin: "افتح YouTube في متصفحك وسجّل الدخول إلى حسابك.",
+    youtube_auth_step_export: "استخدم إضافة التصدير لحفظ Cookies الخاصة بـ YouTube بصيغة Netscape cookies.txt.",
+    youtube_auth_step_select: "اختر الملف هنا، ثم أعد محاولة تحليل الرابط أو تحديث الترجمة.",
     paste_and_go: "لصق وانطلاق",
     btn_video: "فيديو",
     btn_audio: "صوت",
@@ -504,11 +526,22 @@ export const translations: Record<Language, Translations> = {
     use_inapp_player: "In-App Media Player",
     use_inapp_player_desc: "Play videos and audio inside the app instead of system default",
     youtube_auth_title: "YouTube Cookies",
-    youtube_auth_desc: "Public videos start without cookies to preserve quality. When sign-in is required or subtitle access fails, your file can be tried for that request alone. Using it for subtitles does not lower video resolution. Export a YouTube cookies.txt file and select it here.",
+    youtube_auth_desc: "Use this when YouTube asks you to sign in to access a video or its captions.",
     youtube_auth_get_extension: "Get Extension",
     youtube_auth_select_btn: "Select cookies.txt File",
     youtube_auth_no_file: "No file selected",
     youtube_auth_clear_btn: "Remove File",
+    youtube_auth_optional: "Optional",
+    youtube_auth_ready: "File format checked",
+    youtube_auth_selected: "File selected",
+    youtube_auth_attention: "Needs attention",
+    youtube_auth_empty_hint: "Public videos can download without a file",
+    youtube_auth_replace_btn: "Change file",
+    youtube_auth_quality_note: "Used only when needed. Discovered public video qualities are preserved.",
+    youtube_auth_help: "How do I prepare this file?",
+    youtube_auth_step_signin: "Open YouTube in your browser and sign in to your account.",
+    youtube_auth_step_export: "Use the export extension to save YouTube cookies in Netscape cookies.txt format.",
+    youtube_auth_step_select: "Select the file here, then retry analysis or refresh captions.",
     paste_and_go: "Paste & Go",
     btn_video: "Video",
     btn_audio: "Audio",

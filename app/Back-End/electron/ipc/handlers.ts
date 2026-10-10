@@ -455,7 +455,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       const { MediaProcessor } = await import('../engines/MediaProcessor')
       if (isMediaSessionClosed(playerSession)) return null
       const processor = new MediaProcessor()
-      untrack = trackMediaProcess(playerSession, 'ffmpeg', () => processor.killAll())
+      untrack = trackMediaProcess(playerSession, 'probe', () => processor.killAll())
       if (isMediaSessionClosed(playerSession)) return null
       return await processor.getFps(filePath)
     } catch (err) {

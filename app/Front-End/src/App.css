@@ -1316,6 +1316,50 @@ body {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+.youtube-refresh-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  border-radius: 9px;
+  background: #16293c;
+  color: #7dd3fc;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.youtube-refresh-button:hover:not(:disabled) {
+  background: #1e3a52;
+  border-color: #38bdf8;
+}
+
+.youtube-refresh-button:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+}
+
+.youtube-refresh-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.youtube-refresh-button[aria-busy="true"] {
+  opacity: 1;
+}
+
+.youtube-refresh-mark {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  background: inherit;
+  box-shadow: 0 0 0 2px #16293c;
+  border-radius: 50%;
+}
+
 
 /* ── Subtitle Language Control ────────────── */
 
