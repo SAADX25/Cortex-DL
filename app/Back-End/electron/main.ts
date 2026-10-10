@@ -471,6 +471,7 @@ async function streamEmbeddedSubtitle(
     '-loglevel', 'error',
     '-i', filePath,
     '-map', `0:${streamIndex}`,
+    '-c:s', 'webvtt',
     '-f', 'webvtt',
     'pipe:1'
   ], { windowsHide: true })

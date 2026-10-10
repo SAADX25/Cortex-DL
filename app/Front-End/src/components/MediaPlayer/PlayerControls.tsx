@@ -145,6 +145,12 @@ export function PlayerControls({
               >
                 <Subtitles size={20} />
               </button>
+                <select aria-label="Subtitle language" value={activeSubtitle ?? -1}
+                  onChange={event => onSubtitleChange(Number(event.target.value))}
+                  style={{ background: '#172237', color: '#fff', maxWidth: '150px', borderRadius: '6px' }}>
+                  <option value={-1}>Subtitles off</option>
+                  {subtitles.map((track, index) => <option key={index} value={index}>{track.label}</option>)}
+                </select>
             </div>
           )}
 

@@ -11,9 +11,10 @@ import type {
 } from './types'
 import { STATS_CHANNEL, YOUTUBE_OAUTH_CHANNEL, AUDIO_FORMATS } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
-import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion } from './mediaFormatRegistry'
+import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion, validateSubtitleMedia } from './mediaFormatRegistry'
 import { runMediaProcess, trimBounds, validateMediaOutput } from './mediaPipeline'
 import { probeMediaFile } from './mediaFiles'
+import { youtubeDiagnostic } from './youtubeDiagnostics'
 import {
   sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
   withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
@@ -790,6 +791,7 @@ export class DownloadManager {
     let candidate = source
     if (trimming || !matchesMediaFormat(task.targetFormat, probe)) {
       const conversion = decideMediaConversion(task.targetFormat, probe, trimming)
+      if (task.engine === 'ytdlp') youtubeDiagnostic('conversion', { decision: conversion, targetFormat: task.targetFormat, trimming })
       log.info(`[Finalize] ${task.id}: ${conversion} to ${task.targetFormat}`)
       phase(trimming ? 'trimming' : conversion === 'remux' ? 'merging' : 'converting')
       candidate = path.join(attempt.directory, `candidate.${task.targetFormat}`)
@@ -801,10 +803,16 @@ export class DownloadManager {
     }
     phase('validating')
     const finalProbe = await probeMediaFile(candidate, child => { attempt.child = child }, attempt.abortController!.signal)
+    if (task.engine === 'ytdlp') {
+      const summarize = (streams: typeof probe.streams) => streams?.map(stream => ({ type: stream.codec_type, codec: stream.codec_name,
+        width: stream.width, height: stream.height, fps: stream.avg_frame_rate, language: stream.tags?.language }))
+      youtubeDiagnostic('output-validation', { source: summarize(probe.streams), final: summarize(finalProbe.streams) })
+    }
     check()
     if (!matchesMediaFormat(task.targetFormat, finalProbe)) throw new Error(`Invalid ${task.targetFormat} container or codec`)
     if (task.engine === 'ytdlp' && task.subtitleLanguage && ['mp4', 'mkv', 'webm'].includes(task.targetFormat)
       && !finalProbe.streams?.some(stream => stream.codec_type === 'subtitle')) throw new Error('YOUTUBE_SUBTITLE_UNAVAILABLE')
+    if (task.engine === 'ytdlp' && task.subtitleLanguage && !trimming) validateSubtitleMedia(probe, finalProbe, task.subtitleLanguage)
     const actualDuration = Number(finalProbe.format?.duration ?? finalProbe.streams?.find(s => s.duration)?.duration)
     if (expectedDuration !== undefined && (!Number.isFinite(actualDuration) || Math.abs(actualDuration - expectedDuration) > Math.max(0.25, Math.min(1, expectedDuration * 0.02)))) throw new Error('Trim duration failed validation')
     await validateMediaOutput(candidate, draft, ctx, Number.isFinite(actualDuration) && actualDuration > 0 ? actualDuration : undefined)

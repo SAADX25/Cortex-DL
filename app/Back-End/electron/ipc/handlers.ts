@@ -13,7 +13,7 @@ import { ThumbnailCache } from '../thumbnailCache'
 import { normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
 import { fetchBoundedJson } from '../analysisNetwork'
 import { analyzeUrlForHls } from '../hls'
-import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
+import { analyzeWithYtdlp, refreshYouTubeCaptions, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
 import { extractAndSaveComments } from '../commentsExtractor'
 import { db } from '../db'
 import { promises as fsPromises } from 'node:fs'
@@ -368,7 +368,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   ipcMain.handle('cortexdl:cancel-analysis', (event, id: string) => {
     analyses.get(`${event.sender.id}:${id}`)?.abort()
   })
-  ipcMain.handle('cortexdl:analyze-url', async (event, input: string, id?: string) => {
+  ipcMain.handle('cortexdl:analyze-url', async (event, input: string, id?: string, mode?: 'formats' | 'captions') => {
     const start = Date.now()
     const url = normalizeAnalysisUrl(input)
     analysisTiming('normalizationMs', start)
@@ -393,17 +393,18 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     const videoId = youtubeVideoId(url)
     analysisTiming('providerDetectionMs', start)
     const enrichment: Promise<unknown>[] = []
-    if (id && videoId && !['list', 'list_id'].some(key => new URL(url).searchParams.has(key))) {
+    if (!mode && id && videoId && !['list', 'list_id'].some(key => new URL(url).searchParams.has(key))) {
       enrichment.push(fetchBoundedJson(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, controller.signal)
         .then(data => { if (typeof data.title === 'string') send('preview', { title: data.title }) }).catch(() => {}))
     }
     try {
+      if (mode === 'captions') return await refreshYouTubeCaptions(url, controller.signal)
       if (await isDirectMedia(url, controller.signal)) return { kind: 'direct' }
       const hlsResult = await analyzeUrlForHls(url, controller.signal)
       if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') return hlsResult
-      const result = await analyzeWithYtdlp(url, controller.signal)
+      const result = await analyzeWithYtdlp(url, controller.signal, mode === 'formats')
       analysisTiming('totalAnalysisMs', start)
-      if (id && videoId && result.kind === 'ytdlp') {
+      if (!mode && id && videoId && result.kind === 'ytdlp') {
         const base = process.env.RYD_API_URL || 'https://returnyoutubedislikeapi.com/votes?videoId='
         enrichment.push(fetchBoundedJson(`${base}${videoId}`, controller.signal, 2000)
           .then(data => { if (typeof data.dislikes === 'number') send('enrichment', { dislikes: data.dislikes }) }).catch(() => {}))
@@ -559,7 +560,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
       
       for (const file of files) {
-        if (file.startsWith(baseName) && (file.endsWith('.vtt') || file.endsWith('.srt'))) {
+        if (file.startsWith(baseName + '.') && (file.endsWith('.vtt') || file.endsWith('.srt'))) {
           
           const namePart = file.slice(baseName.length, -path.extname(file).length)
           const langCode = namePart.replace(/^\./, '') || 'Unknown'
@@ -577,13 +578,13 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       try {
         await ensureEnginesReady(['ffprobe'])
         const ffprobePath = getBinaryPath('ffprobe')
-        if (existsSync(ffprobePath) && (ext === '.mp4' || ext === '.mkv' || ext === '.webm')) {
+        if (existsSync(ffprobePath) && ['.mp4', '.mkv', '.webm', '.mov', '.m4v'].includes(ext.toLowerCase())) {
           if (isMediaSessionClosed(playerSession)) return []
           const probeData = await new Promise<string>((resolve, reject) => {
             let output = ''
             const p = spawn(ffprobePath, [
               '-v', 'error',
-              '-show_entries', 'stream=index,codec_name:stream_tags=language',
+              '-show_entries', 'stream=index,codec_name:stream_tags=language,title,handler_name',
               '-select_streams', 's',
               '-of', 'json',
               videoPath
@@ -612,9 +613,10 @@ export function registerIpcHandlers(deps: IpcDependencies) {
           const parsed = JSON.parse(probeData)
           if (parsed && Array.isArray(parsed.streams)) {
             for (const stream of parsed.streams) {
-              const langCode = stream.tags?.language || 'Unknown'
+              const langCode = stream.tags?.title || stream.tags?.language || 'Unknown'
+              const label = stream.tags?.title || (stream.tags?.handler_name !== 'SubtitleHandler' ? stream.tags?.handler_name : undefined) || langCode.toUpperCase()
               subtitles.push({
-                label: `[Embedded] ${langCode.toUpperCase()}`,
+                label: `[Embedded] ${label}`,
                 language: langCode,
                 isEmbedded: true,
                 streamIndex: stream.index

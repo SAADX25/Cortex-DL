@@ -354,7 +354,7 @@ const AddDownloadTab: React.FC = () => {
                               {q.height}p {q.fps > 0 ? `(${q.fps}fps)` : ''}
                             </option>
                           ))
-                        ) : (
+                        ) : analyzeResult?.kind !== 'ytdlp' && (
                           <>
                             <option value="2160p">{t.quality_4k || '4K'}</option>
                             <option value="1440p">{t.quality_2k || '2K'}</option>

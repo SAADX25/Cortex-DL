@@ -55,6 +55,12 @@ contextBridge.exposeInMainWorld('cortexDl', {
   analyzeUrl(url: string, id?: string): Promise<AnalyzeResult> {
     return invokeRendererSafe('cortexdl:analyze-url', url, id)
   },
+  refreshFormats(url: string, id: string): Promise<AnalyzeResult> {
+    return invokeRendererSafe('cortexdl:analyze-url', url, id, 'formats')
+  },
+  refreshCaptions(url: string, id: string): Promise<import('../../Shared/types').CaptionDiscovery> {
+    return invokeRendererSafe('cortexdl:analyze-url', url, id, 'captions')
+  },
   cancelAnalysis(id: string): Promise<void> {
     return invokeRendererSafe('cortexdl:cancel-analysis', id)
   },

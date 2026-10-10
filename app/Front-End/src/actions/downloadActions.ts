@@ -218,6 +218,7 @@ export function onAddToList(): void {
   const selectedSubtitleTrack = analyzeResult?.kind === 'ytdlp' && selectedSubtitleLanguage
     ? analyzeResult.subtitles?.find((track) => track.languageCode === selectedSubtitleLanguage)
     : undefined
+  if (selectedSubtitleLanguage && !selectedSubtitleTrack) { ui.showToast(t().youtube_subtitle_unavailable); return }
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const knownTitle = analyzeResult?.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined
@@ -354,6 +355,7 @@ export async function onDownloadNow(): Promise<void> {
       const selectedSubtitleTrack = analyzeResult.kind === 'ytdlp' && form.selectedSubtitleLanguage
         ? analyzeResult.subtitles?.find((track) => track.languageCode === form.selectedSubtitleLanguage)
         : undefined
+      if (form.selectedSubtitleLanguage && !selectedSubtitleTrack) throw new Error('YOUTUBE_SUBTITLE_UNAVAILABLE')
 
       await window.cortexDl.addDownload({
         url: downloadUrl,

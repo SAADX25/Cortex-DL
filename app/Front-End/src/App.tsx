@@ -74,6 +74,23 @@ function App() {
           for (let n = 0; n < 100; n++) { if ((document.querySelector(selector) as HTMLMediaElement)?.readyState) break; await delay(50) }
           const media = document.querySelector(selector) as HTMLMediaElement
           if (!media || media.readyState < 1) throw new Error('Packaged player failed to load: ' + JSON.stringify({ selector, present: !!media, readyState: media?.readyState, networkState: media?.networkState, error: media?.error?.code, sourceSet: !!media?.currentSrc }))
+          if (selector === 'video' && i === 0) {
+            const video = media as HTMLVideoElement
+            if (video.videoWidth !== 1920 || video.videoHeight !== 1080) throw new Error('Packaged player lost 1080p resolution')
+            for (let n = 0; n < 100; n++) { if (video.textTracks.length >= 3 && document.querySelector('[aria-label="Subtitle language"]')) break; await delay(50) }
+            const languages = document.querySelector('[aria-label="Subtitle language"]') as HTMLSelectElement
+            if (!languages || video.textTracks.length < 3) throw new Error('Embedded and external captions were not discovered')
+            for (let index = 0; index < video.textTracks.length; index++) {
+              languages.value = String(index); languages.dispatchEvent(new Event('change', { bubbles: true }))
+              const track = video.textTracks[index]
+              for (let n = 0; n < 100; n++) { if (track.cues?.length && track.mode === 'showing') break; await delay(50) }
+              if (!track.cues?.length || track.mode !== 'showing') throw new Error('Selected caption track failed to load')
+              await video.play(); await delay(100); video.pause(); video.currentTime = 0.5; await delay(150)
+              if (!track.activeCues?.length || video.currentTime < 0.4 || !video.paused) throw new Error('Caption cues missing after seek/pause')
+            }
+            languages.value = '-1'; languages.dispatchEvent(new Event('change', { bubbles: true })); await delay(50)
+            if (Array.from(video.textTracks).some(track => track.mode === 'showing')) throw new Error('Captions did not turn off')
+          }
           useUIStore.getState().setMediaPlayerFile(null)
           await delay(100)
           if (document.querySelector(selector)) throw new Error('Player failed to close')

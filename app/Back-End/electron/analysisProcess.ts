@@ -6,7 +6,7 @@ import { analysisTiming } from './analysisTiming'
 
 /** Analysis-only child; resolve/reject after close so a concurrency slot owns all teardown. */
 export function extractAnalysis(binary: string, args: string[], signal: AbortSignal,
-  maxBytes = 32 * 1024 * 1024, timeoutMs = 90000): Promise<string> {
+  maxBytes = 32 * 1024 * 1024, timeoutMs = 90000, diagnostics?: (stderr: string) => void): Promise<string> {
   signal.throwIfAborted()
   return new Promise((resolve, reject) => {
     const start = Date.now()
@@ -40,7 +40,7 @@ export function extractAnalysis(binary: string, args: string[], signal: AbortSig
       if (signal.aborted) reject(signal.reason)
       else if (failure) reject(failure)
       else if (code !== 0) reject(new Error(stderr || `Analysis exited with code ${code}`))
-      else resolve(output + decoder.end())
+      else { diagnostics?.(stderr); resolve(output + decoder.end()) }
     })
   })
 }

@@ -44,7 +44,14 @@ export async function runPackagedSmoke(win: BrowserWindow, downloads: DownloadMa
     assert.equal((await fs.stat(path.join(extraction, 'fixture.exe'))).size, 1024 * 1024)
   } finally { await fs.rm(extraction, { recursive: true, force: true }) }
   const fixture = path.join(directory, 'fixture.mp4')
-  await new Promise<void>((resolve, reject) => execFile(getBinaryPath('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=128x72:rate=10:duration=1', '-f', 'lavfi', '-i', 'sine=duration=1', '-c:v', 'libx264', '-c:a', 'aac', fixture], { windowsHide: true, timeout: 20000 }, err => err ? reject(err) : resolve()))
+  const english = path.join(directory, 'smoke.en.vtt'), arabic = path.join(directory, 'smoke.ar.vtt')
+  await fs.writeFile(english, 'WEBVTT\n\n00:00:00.000 --> 00:00:01.900\nEnglish smoke caption\n')
+  await fs.writeFile(arabic, 'WEBVTT\n\n00:00:00.000 --> 00:00:01.900\nترجمة عربية للاختبار\n')
+  await new Promise<void>((resolve, reject) => execFile(getBinaryPath('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=30:duration=2', '-f', 'lavfi', '-i', 'sine=duration=2',
+    '-i', english, '-i', arabic, '-map', '0:v', '-map', '1:a', '-map', '2:0', '-map', '3:0',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-c:s', 'mov_text',
+    '-metadata:s:s:0', 'language=eng', '-metadata:s:s:1', 'language=ara', fixture], { windowsHide: true, timeout: 30000 }, err => err ? reject(err) : resolve()))
   const audio = path.join(directory, 'fixture.wav')
   await new Promise<void>((resolve, reject) => execFile(getBinaryPath('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=duration=1', audio], { windowsHide: true, timeout: 20000 }, err => err ? reject(err) : resolve()))
   const data = await fs.readFile(fixture)
@@ -59,6 +66,7 @@ export async function runPackagedSmoke(win: BrowserWindow, downloads: DownloadMa
     const completed = downloads.get(task.id)!
     assert.equal(completed.status, 'completed', completed.errorMessage || undefined)
     assert.ok(completed.filePath)
+    await fs.writeFile(path.join(directory, path.parse(completed.filePath!).name + '.fr.srt'), '1\n00:00:00,000 --> 00:00:01,900\nSous-titre français\n')
     downloads.flushPendingSave()
     const mediaUrl = `http://127.0.0.1:${port}/?token=${token}&path=${encodeURIComponent(completed.filePath!)}&session=smoke`
     const denied = await fetch(mediaUrl.replace(token, 'bad'))
@@ -77,6 +85,6 @@ export async function runPackagedSmoke(win: BrowserWindow, downloads: DownloadMa
     assert.equal(renderer.version, true, 'Renderer About version mismatch')
     assert.ok(renderer.lifecycle)
     await wait(() => { const resource = stats(); return resource.streams === 0 && resource.ffmpegProcesses === 0 && resource.probeProcesses === 0 })
-    await fs.writeFile(path.join(directory, second ? 'second-run.json' : 'first-run.json'), JSON.stringify({ runtimeReadyAt: Date.now() - process.uptime() * 1000, smokeDurationMs: Date.now() - started, build, engines, electron: process.versions.electron, abi: process.versions.modules, napi: process.versions.napi, restored: second, checks: ['boot', 'ZIP worker', 'setup animation', 'setup progress', 'trim sound', 'preload', 'version', 'sqlite WAL', 'native unpacked', 'engines', 'direct analysis', 'direct download', 'ffmpeg fixture', 'media token', 'range', 'video x10', 'audio x20', 'Visual Trim x20'], stats: stats() }, null, 2))
+    await fs.writeFile(path.join(directory, second ? 'second-run.json' : 'first-run.json'), JSON.stringify({ runtimeReadyAt: Date.now() - process.uptime() * 1000, smokeDurationMs: Date.now() - started, build, engines, electron: process.versions.electron, abi: process.versions.modules, napi: process.versions.napi, restored: second, checks: ['boot', 'ZIP worker', 'setup animation', 'setup progress', 'trim sound', 'preload', 'version', 'sqlite WAL', 'native unpacked', 'engines', 'direct analysis', 'direct download', '1080p 30fps playback', 'embedded English/Arabic and external SRT cues', 'subtitle language selection/on/off/seek/pause', 'media token', 'range', 'video x10', 'audio x20', 'Visual Trim x20'], stats: stats() }, null, 2))
   } finally { await new Promise<void>(resolve => server.close(() => resolve())) }
 }
