@@ -1,4 +1,4 @@
-import { ipcRenderer, contextBridge } from 'electron'
+import { ipcRenderer, contextBridge, webUtils } from 'electron'
 import type { AppHealthCheck, DownloadTask, AnalyzeResult, JsRuntimeStatus, StartInput } from './types'
 import { UPDATE_CHANNEL } from './types'
 
@@ -19,6 +19,18 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
   })
 }
 contextBridge.exposeInMainWorld('cortexDl', {
+  getDroppedMediaPaths: (files: File[]): string[] => files.map(file => webUtils.getPathForFile(file)).filter(Boolean),
+  listMediaLibrary: () => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:list'),
+  getMediaLibraryThumbnail: (id: string) => invokeRendererSafe<string | null>('cortexdl:library:thumbnail', id),
+  getMediaLibraryArtworkInfo: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryArtworkInfo>('cortexdl:library:artwork-info', id),
+  selectMediaLibraryArtwork: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>('cortexdl:library:artwork-select', id),
+  removeMediaLibraryArtwork: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-remove', id),
+  embedMediaLibraryArtwork: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-embed', id),
+  selectMediaLibraryFiles: () => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult | null>('cortexdl:library:select'),
+  addMediaLibraryFiles: (files: string[]) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult>('cortexdl:library:add', files),
+  removeMediaLibraryItem: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:remove', id),
+  playMediaLibraryItem: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem>('cortexdl:library:play', id),
+  relocateMediaLibraryItem: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>('cortexdl:library:relocate', id),
   listDownloadSubtitleFiles: (id: string) => invokeRendererSafe<import('../../Shared/downloadSubtitles').DownloadSubtitleFile[]>('cortexdl:subtitle-files:list', id),
   mergeDownloadSubtitle: (id: string, fileName: string, format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat) => invokeRendererSafe<string | null>('cortexdl:subtitle-files:merge', id, fileName, format),
   cancelDownloadSubtitleMerge: (id: string) => invokeRendererSafe<void>('cortexdl:subtitle-files:cancel', id),

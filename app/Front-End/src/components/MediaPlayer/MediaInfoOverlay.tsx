@@ -55,9 +55,10 @@ export function MediaInfoOverlay({ filePath, videoWidth, videoHeight, mediaType,
 
   useEffect(() => {
     if (!showOverlay) return
+    const document = panelRef.current?.ownerDocument ?? window.document
     const outside = (event: PointerEvent) => {
       const target = event.target
-      if (target instanceof Node && !panelRef.current?.contains(target) && !buttonRef.current?.contains(target)) closeOverlay()
+      if (target && !panelRef.current?.contains(target as Node) && !buttonRef.current?.contains(target as Node)) closeOverlay()
     }
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return

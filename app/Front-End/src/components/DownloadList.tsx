@@ -21,6 +21,8 @@ type DownloadFilter = 'all' | 'active' | 'completed' | 'paused' | 'error'
  */
 const DownloadList: React.FC = () => {
   const lang = useLang()
+  const activeTab = useUIStore((s) => s.activeTab)
+  const playerOpen = useUIStore((s) => !!s.mediaPlayerFile && !s.mediaPlayerFloating)
   const onError = useUIStore((s) => s.setGlobalError)
   const t = translations[lang]
   const taskIds = useTaskIds()
@@ -43,6 +45,7 @@ const DownloadList: React.FC = () => {
 
   // Keyboard shortcuts: Ctrl+F / Ctrl+K to focus search, Esc to clear & blur
   useEffect(() => {
+    if (activeTab !== 'downloads' || playerOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'k')) {
         e.preventDefault()
@@ -55,7 +58,7 @@ const DownloadList: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [activeTab, playerOpen])
 
   const handleClearAll = async (deleteFiles: boolean) => {
     setShowClearModal(false)

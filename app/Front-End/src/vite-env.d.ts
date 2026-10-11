@@ -82,8 +82,21 @@ declare global {
 
   interface Window {
     __cortexSmokeLifecycle?: (file: string, audioFile?: string, previewUrl?: string) => Promise<boolean>
+    __cortexSmokeArtwork?: (file: string, retain: boolean) => Promise<boolean>
     __cortexMediaDiagnostics?: () => Promise<unknown>
     cortexDl: {
+      getDroppedMediaPaths: (files: File[]) => string[]
+      listMediaLibrary: () => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      getMediaLibraryThumbnail: (id: string) => Promise<string | null>
+      getMediaLibraryArtworkInfo: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryArtworkInfo>
+      selectMediaLibraryArtwork: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
+      removeMediaLibraryArtwork: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      embedMediaLibraryArtwork: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      selectMediaLibraryFiles: () => Promise<import('../../Shared/mediaLibrary').LibraryImportResult | null>
+      addMediaLibraryFiles: (files: string[]) => Promise<import('../../Shared/mediaLibrary').LibraryImportResult>
+      removeMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      playMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem>
+      relocateMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
       reportFirstUiRender(): void
       analysisDebug: boolean
       smokeMode: boolean

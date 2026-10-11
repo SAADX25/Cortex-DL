@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture, Palette } from 'lucide-react';
 import { SubtitleMenu } from './SubtitleMenu';
 import type { PlayerSubtitleTrack } from '../../../../Shared/types';
+import { useLang } from '../../stores/useSettingsStore';
 
 interface PlayerControlsProps {
   mediaRef: React.RefObject<HTMLVideoElement | HTMLAudioElement | null>;
@@ -25,6 +26,9 @@ interface PlayerControlsProps {
   toggleSettings: () => void;
   toggleFullscreen?: () => void;
   togglePiP?: () => void;
+  isFloating?: boolean;
+  floatingActions?: React.ReactNode;
+  artworkControl?: React.ReactNode;
   currentTheme?: string;
   onToggleTheme?: () => void;
 }
@@ -38,8 +42,11 @@ function formatTime(seconds: number): string {
 
 export function PlayerControls({
   mediaRef, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, mediaType, isFullscreen, subtitles, activeSubtitle, onSubtitleChange, onSubtitleMenuChange,
-  togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP, currentTheme, onToggleTheme
+  togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP, isFloating, floatingActions, artworkControl, currentTheme, onToggleTheme
 }: PlayerControlsProps) {
+  const lang = useLang();
+  const floatingLabel = isFloating ? (lang === 'ar' ? 'إرجاع المشغل' : 'Return player') : (lang === 'ar' ? 'مشغل عائم مع الترجمة' : 'Floating player with subtitles');
+  const miniLabel = lang === 'ar' ? 'تصغير مشغل الصوت' : 'Minimize audio player';
   const progressRef = useRef<HTMLInputElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
 
@@ -107,12 +114,13 @@ export function PlayerControls({
              />
           </div>
 
-          <span className="time-display" ref={timeDisplayRef}>
+          <span className="time-display" ref={timeDisplayRef} dir="ltr">
             0:00 / {formatTime(duration)}
           </span>
         </div>
 
         <div className="controls-right">
+          {artworkControl}
           <div className="settings-wrapper">
              <button className={`control-btn ${showSettings ? 'active' : ''}`} onClick={toggleSettings} title="Settings">
                <Settings2 size={20} />
@@ -133,7 +141,7 @@ export function PlayerControls({
           </div>
 
           {mediaType === 'video' && subtitles && subtitles.length > 0 && onSubtitleChange && (
-            <SubtitleMenu tracks={subtitles} active={activeSubtitle ?? -1} onChange={onSubtitleChange} onOpenChange={onSubtitleMenuChange} />
+            <SubtitleMenu tracks={subtitles} active={activeSubtitle ?? -1} onChange={onSubtitleChange} onOpenChange={onSubtitleMenuChange} isFloating={isFloating} />
           )}
 
           {mediaType === 'audio' && onToggleTheme && (
@@ -143,7 +151,7 @@ export function PlayerControls({
           )}
 
           {togglePiP && (
-            <button className="control-btn" onClick={togglePiP} title={mediaType === 'video' ? "Picture in Picture" : "Mini Player"}>
+            <button className="control-btn player-floating-toggle" onClick={togglePiP} aria-pressed={!!isFloating} aria-label={mediaType === 'video' ? floatingLabel : miniLabel} title={mediaType === 'video' ? floatingLabel : miniLabel}>
               <PictureInPicture size={20} />
             </button>
           )}
@@ -153,6 +161,7 @@ export function PlayerControls({
               {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
             </button>
           )}
+          {isFloating && floatingActions}
         </div>
       </div>
     </>

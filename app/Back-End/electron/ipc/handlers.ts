@@ -24,6 +24,7 @@ import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
 import { engineHealth } from '../setup'
 import { buildInfo } from '../diagnostics'
 import { registerDownloadSubtitleIpc } from '../subtitles/downloadMergeIpc'
+import { registerMediaLibraryIpc } from './mediaLibraryIpc'
 
 export interface IpcDependencies {
   getWin: () => Electron.BrowserWindow | null
@@ -103,6 +104,7 @@ function validateDownloadInput(input: StartInput): void {
 }
 export function registerIpcHandlers(deps: IpcDependencies) {
   registerDownloadSubtitleIpc(deps)
+  registerMediaLibraryIpc(deps.getWin)
   const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
 
   const waitForEngines = async () => {

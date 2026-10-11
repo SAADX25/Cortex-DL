@@ -3,6 +3,7 @@ import { PlayerControls } from './PlayerControls';
 import { MediaInfoOverlay } from './MediaInfoOverlay';
 import { buildMediaUrl, type MediaEndpoint } from '../../lib/mediaEndpoint';
 import type { SubtitlePreview } from '../../../../Shared/localSubtitles';
+import { GripHorizontal } from 'lucide-react';
 
 interface VideoViewProps {
   mediaEndpoint: MediaEndpoint | null;
@@ -19,6 +20,7 @@ interface VideoViewProps {
   showSettings: boolean;
   isFullscreen: boolean;
   showControls: boolean;
+  isFloating?: boolean;
   videoRef: React.RefObject<HTMLVideoElement>;
   mediaRef: React.RefObject<HTMLVideoElement | HTMLAudioElement | null>;
   ambilightRef: React.RefObject<HTMLCanvasElement>;
@@ -36,13 +38,15 @@ interface VideoViewProps {
   onPlay: () => void;
   onPause: () => void;
   onClose: () => void;
+  artworkControl?: React.ReactNode;
+  artworkMenuOpen?: boolean;
 }
 
 export function VideoPlayerView({
   mediaEndpoint, sessionId, fileUrl, title, filePath, subtitlePreview, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings,
-  isFullscreen, showControls, videoRef, mediaRef, ambilightRef,
+  isFullscreen, showControls, isFloating, videoRef, mediaRef, ambilightRef,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP,
-  onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose
+  onTimeUpdate, onLoadedMetadata, onEnded, onPlay, onPause, onClose, artworkControl, artworkMenuOpen
 }: VideoViewProps) {
   const [isBuffering, setIsBuffering] = React.useState(true);
   const [subtitleMenuOpen, setSubtitleMenuOpen] = React.useState(false);
@@ -50,23 +54,27 @@ export function VideoPlayerView({
   const [hasError, setHasError] = React.useState(false);
   const [subtitles, setSubtitles] = React.useState<(import('../../../../Shared/types').PlayerSubtitleTrack & { previewUrl?: string })[]>([]);
   const [activeSubtitle, setActiveSubtitle] = React.useState<number>(-1);
+  const subtitleFile = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     setShowMediaInfo(false);
-    setSubtitles([]); setActiveSubtitle(-1);
+    const sameFile = subtitleFile.current === filePath;
+    if (!sameFile) { setSubtitles([]); setActiveSubtitle(-1); }
     if (subtitlePreview) {
       const previewUrl = URL.createObjectURL(new Blob([subtitlePreview.vtt], { type: 'text/vtt' }));
       setSubtitles([{ label: subtitlePreview.language, language: subtitlePreview.language, previewUrl }]);
       setActiveSubtitle(0);
+      subtitleFile.current = filePath;
       return () => URL.revokeObjectURL(previewUrl);
     }
     if (filePath && window.cortexDl?.getSubtitles) {
       let cancelled = false;
       window.cortexDl.getSubtitles(filePath, sessionId).then(subs => {
         if (cancelled) return;
+        subtitleFile.current = filePath;
         setSubtitles(subs);
         if (subs && subs.length > 0) {
-          setActiveSubtitle(0); 
+          setActiveSubtitle(previous => sameFile && previous >= -1 && previous < subs.length ? previous : 0);
         } else {
           setActiveSubtitle(-1);
         }
@@ -91,6 +99,15 @@ export function VideoPlayerView({
     return () => elements.forEach(track => track.removeEventListener('load', apply));
   }, [activeSubtitle, subtitles, videoRef]);
 
+  const playerActions = <>
+    <MediaInfoOverlay sessionId={sessionId} title={title} filePath={filePath}
+      videoWidth={videoRef.current?.videoWidth} videoHeight={videoRef.current?.videoHeight}
+      mediaType="video" showOverlay={showMediaInfo} toggleOverlay={() => setShowMediaInfo(!showMediaInfo)} closeOverlay={() => setShowMediaInfo(false)} />
+    <button className="media-player-close" onClick={onClose} title="Close (Esc)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+    </button>
+  </>;
+
   return (
     <>
       <div className="player-body">
@@ -102,7 +119,7 @@ export function VideoPlayerView({
             className="main-video"
             src={fileUrl || undefined}
             preload="metadata"
-            onClick={togglePlay}
+            onClick={isFloating ? undefined : togglePlay}
             onTimeUpdate={onTimeUpdate}
             onLoadedMetadata={onLoadedMetadata}
             onEnded={onEnded}
@@ -131,7 +148,6 @@ export function VideoPlayerView({
                   label={sub.label}
                   srcLang={sub.language}
                   src={srcUrl}
-                  default={i === activeSubtitle}
                 />
               )
             })}
@@ -153,7 +169,7 @@ export function VideoPlayerView({
         </div>
       </div>
 
-      <div
+      {!isFloating && <div
         className="player-header"
         style={{
           opacity: showControls || showMediaInfo ? 1 : 0,
@@ -161,34 +177,24 @@ export function VideoPlayerView({
         }}
         onClick={e => e.stopPropagation()}
       >
-        <span className="player-header-title">{title}</span>
+        <span className="player-header-title" title={title}>{title}</span>
         <div className="player-header-actions">
-           <MediaInfoOverlay 
-             sessionId={sessionId}
-             title={title}
-             filePath={filePath}
-             videoWidth={videoRef.current?.videoWidth}
-             videoHeight={videoRef.current?.videoHeight}
-             mediaType="video"
-             showOverlay={showMediaInfo}
-             toggleOverlay={() => setShowMediaInfo(!showMediaInfo)}
-             closeOverlay={() => setShowMediaInfo(false)}
-           />
-           <button className="media-player-close" onClick={onClose} title="Close (Esc)">
-             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-           </button>
+          {playerActions}
         </div>
-      </div>
+      </div>}
 
       <div
         className="player-footer"
+        dir={isFloating ? 'ltr' : undefined}
         style={{
-          opacity: showControls || subtitleMenuOpen ? 1 : 0,
-          pointerEvents: showControls || subtitleMenuOpen ? 'auto' : 'none',
+          opacity: isFloating || showControls || subtitleMenuOpen || artworkMenuOpen ? 1 : 0,
+          pointerEvents: isFloating || showControls || subtitleMenuOpen || artworkMenuOpen ? 'auto' : 'none',
         }}
         onClick={e => e.stopPropagation()}
       >
+        {isFloating && <div className="floating-player-drag-handle" title="Drag to move" aria-hidden="true"><GripHorizontal size={16} /></div>}
         <PlayerControls
+          artworkControl={artworkControl}
           mediaRef={mediaRef}
           mediaType="video"
           isPlaying={isPlaying} 
@@ -208,8 +214,10 @@ export function VideoPlayerView({
           toggleMute={toggleMute}
           onSpeedChange={onSpeedChange}
           toggleSettings={toggleSettings}
-          toggleFullscreen={toggleFullscreen}
+          toggleFullscreen={isFloating ? undefined : toggleFullscreen}
           togglePiP={togglePiP}
+          isFloating={isFloating}
+          floatingActions={isFloating ? <div className="floating-player-actions">{playerActions}</div> : undefined}
         />
       </div>
     </>

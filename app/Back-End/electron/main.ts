@@ -10,7 +10,7 @@ dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
 log.initialize({ preload: true })
 log.transports.file.level = 'info'
 
-import { app, BrowserWindow, dialog, session, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, session, ipcMain } from 'electron'
 import { existsSync, createReadStream, promises as fsPromises } from 'node:fs'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import http from 'node:http'
@@ -24,6 +24,7 @@ import { stopDownloadSubtitleMerges } from './subtitles/downloadMergeIpc'
 
 export let downloads: DownloadManager | null = null
 import { registerIpcHandlers } from './ipc/handlers'
+import { isLibraryMediaPath, stopLibraryThumbnails } from './ipc/mediaLibraryIpc'
 import { createTray, destroyTray } from './tray'
 import { db } from './db'
 import { spawn } from 'node:child_process'
@@ -34,6 +35,7 @@ import { verificationMetrics } from './engineIntegrity'
 import { engineReceipts, onEngineFailure, ensureEnginesReady, engineExecutionFailed } from './engineReadiness'
 import { MediaRequestRegistry } from './mediaRequestRegistry'
 import { parseMediaRange } from './mediaRange'
+import { installFloatingPlayerWindow } from './floatingPlayer'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -237,10 +239,7 @@ function createWindow() {
     log.error('[Renderer crash]', { ...buildInfo(), ...details, timestamp: new Date().toISOString() })
     if (++crashes > 1) void offerSafeMode()
   })
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  installFloatingPlayerWindow(win)
 
   startupMark('rendererLoadStartMs')
   win.webContents.once('did-finish-load', () => startupMark('rendererLoadMs'))
@@ -646,7 +645,7 @@ async function handleMediaRequest(
       return
     }
 
-    if (!(await isServablePath(filePath))) {
+    if (!(await isServablePath(filePath)) && !(await isLibraryMediaPath(requestedPath, filePath))) {
       res.writeHead(403)
       res.end('Forbidden path')
       return
@@ -824,6 +823,7 @@ if (!gotTheLock) {
     shutdownPromise = (async () => {
       await stopLocalSubtitles()
       await stopDownloadSubtitleMerges()
+      await stopLibraryThumbnails()
       await engineReceipts.stop()
       await stopSetup()
       await stopMediaStreamingServer()

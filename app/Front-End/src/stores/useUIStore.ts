@@ -4,7 +4,7 @@ import type { BatchItem } from '../components/AddDownloadTab'
 import type { ModalConfig } from '../hooks/types'
 import type { SubtitlePreview } from '../../../Shared/localSubtitles'
 
-export type ActiveTab = 'add' | 'downloads' | 'subtitles' | 'settings'
+export type ActiveTab = 'add' | 'downloads' | 'library' | 'subtitles' | 'settings'
 
 export type MediaPlayerFile = { filePath: string; title?: string; subtitlePreview?: SubtitlePreview }
 
@@ -50,6 +50,8 @@ interface UIStoreState {
   
   mediaPlayerFile: MediaPlayerFile | null
   setMediaPlayerFile: (file: MediaPlayerFile | null) => void
+  mediaPlayerFloating: boolean
+  setMediaPlayerFloating: (floating: boolean) => void
 }
 
 export const useUIStore = create<UIStoreState>((set, get) => ({
@@ -107,7 +109,9 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
 
   
   mediaPlayerFile: null,
-  setMediaPlayerFile: (file) => set({ mediaPlayerFile: file }),
+  setMediaPlayerFile: (file) => set(state => ({ mediaPlayerFile: file, mediaPlayerFloating: !!file && file.filePath === state.mediaPlayerFile?.filePath && state.mediaPlayerFloating })),
+  mediaPlayerFloating: false,
+  setMediaPlayerFloating: (floating) => set({ mediaPlayerFloating: floating }),
 }))
 
 export const useActiveTab = () => useUIStore((s) => s.activeTab)

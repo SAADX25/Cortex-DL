@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import './App.css'
 import ConfirmModal from './components/ConfirmModal'
@@ -10,6 +10,7 @@ import SubtitleStudio from './components/SubtitleStudio'
 import AddDownloadTab from './components/AddDownloadTab'
 import SetupOverlay from './components/SetupOverlay'
 import { useUIStore } from './stores/useUIStore'
+import { useMediaLibraryStore } from './stores/useMediaLibraryStore'
 import { useSettingsStore } from './stores/useSettingsStore'
 import { useCommentsStore, initCommentsStore } from './stores/useCommentsStore'
 import { useSettingsInit } from './hooks/useSettingsInit'
@@ -17,6 +18,7 @@ import { useDownloadInit } from './hooks/useDownloadInit'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import Trimmer from './components/AdvancedTrimmer'
+const MediaLibrary = lazy(() => import('./components/MediaLibrary'))
 
 /**
  * Tab pane wrapper — all tabs stay mounted to avoid first-visit jank.
@@ -52,6 +54,42 @@ function App() {
 
   useEffect(() => {
     if (!window.cortexDl.smokeMode) return
+    window.__cortexSmokeArtwork = async (file, retain) => {
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+      const wait = async (condition: () => boolean) => { for (let i = 0; i < 200; i++) { if (condition()) return; await delay(50) } throw new Error('Player cover edit timed out') }
+      useUIStore.getState().setMediaPlayerFile({ filePath: file, title: 'Cover editing fixture' })
+      const selector = file.endsWith('.mp4') ? 'video' : 'audio'
+      await wait(() => (document.querySelector(selector) as HTMLMediaElement)?.readyState >= 2)
+      const media = document.querySelector(selector) as HTMLMediaElement
+      media.currentTime = 0.4; await media.play()
+      await wait(() => !!document.querySelector('.player-artwork-trigger'))
+      document.querySelector<HTMLButtonElement>('.player-artwork-trigger')!.click()
+      const change = async () => {
+        await wait(() => !!document.querySelector('.player-artwork-change') && !document.querySelector<HTMLButtonElement>('.player-artwork-change')!.disabled)
+        document.querySelector<HTMLButtonElement>('.player-artwork-change')!.click()
+        await wait(() => !useMediaLibraryStore.getState().busy && media.readyState >= 2 && media.currentTime >= 0.35 && !!document.querySelector('.player-artwork-remove'))
+        if (useMediaLibraryStore.getState().error) throw Error(useMediaLibraryStore.getState().error!)
+      }
+      await change()
+      if (media.paused || document.querySelector(selector) !== media) throw Error('Cover edit lost playback or media element')
+      media.pause(); media.currentTime = 0.4
+      const checkCaptions = async () => {
+        if (selector !== 'video') return
+        const video = media as HTMLVideoElement
+        await wait(() => !!video.textTracks[0]?.activeCues?.length)
+        if (Array.from(video.textTracks).filter(track => track.mode === 'showing').length !== 1) throw Error('Cover editing changed the selected subtitles')
+      }
+      await checkCaptions()
+      await wait(() => !document.querySelector<HTMLButtonElement>('.player-artwork-remove')!.disabled)
+      document.querySelector<HTMLButtonElement>('.player-artwork-remove')!.click()
+      await wait(() => !useMediaLibraryStore.getState().busy && media.readyState >= 2 && media.currentTime >= 0.35 && !document.querySelector('.player-artwork-remove'))
+      if (!media.paused || useMediaLibraryStore.getState().error) throw Error('Cover removal lost the paused position or failed')
+      await checkCaptions()
+      if (retain) { await change(); if (!media.paused) throw Error('Cover change resumed a paused player') }
+      useUIStore.getState().setMediaPlayerFile(null)
+      await wait(() => !document.querySelector(selector))
+      return true
+    }
     window.__cortexSmokeLifecycle = async (file: string, audioFile?: string, previewUrl?: string) => {
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
       const overlay = document.createElement('div'); document.body.appendChild(overlay)
@@ -68,6 +106,37 @@ function App() {
         await delay(100)
         if (overlay.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow') !== '60') throw new Error('Engine setup progress stalled')
       } finally { overlayRoot.unmount(); overlay.remove() }
+      useUIStore.getState().setActiveTab('library')
+      await useMediaLibraryStore.getState().importFiles([file, ...(audioFile ? [audioFile] : [])])
+      const library = useMediaLibraryStore.getState()
+      if (library.error || !library.items.some(item => item.filePath === file)) throw new Error('Packaged media library failed to import files')
+      for (let n = 0; n < 100; n++) { if (document.querySelectorAll('.library-card').length) break; await delay(50) }
+      if (!document.querySelector('.library-card')) throw new Error('Packaged media library did not render')
+      if (document.querySelector('.library-drop')) throw new Error('Populated library still shows the large drop banner')
+      const libraryVideo = library.items.find(item => item.filePath === file)!
+      const thumbnail = await window.cortexDl.getMediaLibraryThumbnail(libraryVideo.id)
+      if (!thumbnail?.startsWith('data:image/jpeg;base64,')) throw new Error('Packaged library failed to generate a video thumbnail')
+      for (let n = 0; n < 100; n++) {
+        if ([...document.querySelectorAll<HTMLImageElement>('.library-thumbnail img')].some(image => image.complete && image.naturalWidth > 0)) break
+        await delay(50)
+      }
+      if (![...document.querySelectorAll<HTMLImageElement>('.library-thumbnail img')].some(image => image.complete && image.naturalWidth > 0)) throw new Error('Packaged library thumbnail did not display')
+      for (const source of [file, audioFile]) {
+        if (!source) continue
+        const item = library.items.find(entry => entry.filePath === source)
+        if (!item) throw new Error('Packaged media library lost an imported file')
+        await library.play(item.id)
+        if (useUIStore.getState().mediaPlayerFile?.filePath !== source) throw new Error('Library playback did not open the player')
+        for (let n = 0; n < 100; n++) { if ((document.querySelector(item.kind) as HTMLMediaElement)?.readyState) break; await delay(50) }
+        if (!((document.querySelector(item.kind) as HTMLMediaElement)?.readyState)) throw new Error('Library media failed to load in the packaged player')
+        const libraryMedia = document.querySelector(item.kind) as HTMLMediaElement
+        document.querySelector<HTMLButtonElement>('.play-btn')?.click()
+        for (let n = 0; n < 100; n++) { if (libraryMedia.currentTime > 0 || libraryMedia.error) break; await delay(50) }
+        if (libraryMedia.paused || libraryMedia.currentTime <= 0 || libraryMedia.error) throw new Error('Imported library media did not play: ' + JSON.stringify({ kind: item.kind, paused: libraryMedia.paused, time: libraryMedia.currentTime, error: libraryMedia.error?.code }))
+        libraryMedia.pause()
+        useUIStore.getState().setMediaPlayerFile(null)
+        await delay(100)
+      }
       for (const [source, count, selector] of [[file, 10, 'video'], [audioFile, 20, 'audio']] as const) {
         if (!source) continue
         for (let i = 0; i < count; i++) {
@@ -78,18 +147,39 @@ function App() {
           if (selector === 'video' && i === 0) {
             const video = media as HTMLVideoElement
             if (video.videoWidth !== 1920 || video.videoHeight !== 1080) throw new Error('Packaged player lost 1080p resolution')
-            for (let n = 0; n < 100; n++) { if (video.textTracks.length >= 3 && document.querySelector('[aria-label="Subtitle language"]')) break; await delay(50) }
-            const languages = document.querySelector('[aria-label="Subtitle language"]') as HTMLSelectElement
-            if (!languages || video.textTracks.length < 3) throw new Error('Embedded and external captions were not discovered')
+            for (let n = 0; n < 100; n++) { if (video.textTracks.length >= 3 && document.querySelector('.subtitle-trigger')) break; await delay(50) }
+            const subtitleTrigger = document.querySelector<HTMLButtonElement>('.subtitle-trigger')
+            if (!subtitleTrigger || video.textTracks.length < 3) throw new Error('Embedded and external captions were not discovered: ' + JSON.stringify({ tracks: video.textTracks.length, menuAvailable: !!subtitleTrigger }))
+            const selectSubtitle = async (index: number) => {
+              subtitleTrigger.click()
+              for (let n = 0; n < 100; n++) { if (document.querySelectorAll('.subtitle-menu [role="menuitemradio"]').length === video.textTracks.length + 1) break; await delay(50) }
+              const options = document.querySelectorAll<HTMLButtonElement>('.subtitle-menu [role="menuitemradio"]')
+              const option = options[index + 1]
+              if (options.length !== video.textTracks.length + 1 || !option) throw new Error('Subtitle menu did not list all caption tracks')
+              option.click()
+              for (let n = 0; n < 100; n++) { if (subtitleTrigger.getAttribute('aria-expanded') === 'false') break; await delay(50) }
+              if (subtitleTrigger.getAttribute('aria-expanded') !== 'false') throw new Error('Subtitle menu did not close after selection')
+            }
             for (let index = 0; index < video.textTracks.length; index++) {
-              languages.value = String(index); languages.dispatchEvent(new Event('change', { bubbles: true }))
+              await selectSubtitle(index)
               const track = video.textTracks[index]
               for (let n = 0; n < 100; n++) { if (track.cues?.length && track.mode === 'showing') break; await delay(50) }
               if (!track.cues?.length || track.mode !== 'showing') throw new Error('Selected caption track failed to load')
+              if (Array.from(video.textTracks).some((other, otherIndex) => otherIndex !== index && other.mode === 'showing')) throw new Error('Multiple caption tracks are showing')
               await video.play(); await delay(100); video.pause(); video.currentTime = 0.5; await delay(150)
               if (!track.activeCues?.length || video.currentTime < 0.4 || !video.paused) throw new Error('Caption cues missing after seek/pause')
             }
-            languages.value = '-1'; languages.dispatchEvent(new Event('change', { bubbles: true })); await delay(50)
+            await selectSubtitle(1)
+            video.currentTime = 0.5
+            await video.play()
+            document.querySelector<HTMLButtonElement>('.player-floating-toggle')?.click()
+            for (let n = 0; n < 100; n++) { if (useUIStore.getState().mediaPlayerFloating && video.readyState >= 2 && !video.paused && video.textTracks[1]?.activeCues?.length) break; await delay(50) }
+            if (!useUIStore.getState().mediaPlayerFloating || video.ownerDocument === document || document.querySelector('.media-player-overlay') || video.paused || !video.textTracks[1]?.activeCues?.length) throw new Error('Packaged floating player lost playback, captions or blocked the main app')
+            document.querySelector<HTMLButtonElement>('.floating-player-return button')?.click()
+            for (let n = 0; n < 100; n++) { if (!useUIStore.getState().mediaPlayerFloating && video.ownerDocument === document && video.readyState >= 2 && !video.paused) break; await delay(50) }
+            if (video.ownerDocument !== document || video.paused || video.textTracks[1]?.mode !== 'showing') throw new Error('Packaged floating player failed to restore')
+            await selectSubtitle(-1)
+            for (let n = 0; n < 100; n++) { if (Array.from(video.textTracks).every(track => track.mode === 'disabled')) break; await delay(50) }
             if (Array.from(video.textTracks).some(track => track.mode === 'showing')) throw new Error('Captions did not turn off')
           }
           useUIStore.getState().setMediaPlayerFile(null)
@@ -117,7 +207,7 @@ function App() {
       }
       return true
     }
-    return () => { delete window.__cortexSmokeLifecycle }
+    return () => { delete window.__cortexSmokeLifecycle; delete window.__cortexSmokeArtwork }
   }, [])
   const lang = useSettingsStore((s) => s.lang)
   const refreshHealth = useSettingsStore((s) => s.refreshHealth)
@@ -191,6 +281,10 @@ function App() {
 
         <div style={tabPaneStyle(activeTab === 'downloads')}>
           <DownloadList />
+        </div>
+
+        <div style={tabPaneStyle(activeTab === 'library')}>
+          <Suspense fallback={<div className="tab-content" role="status">{lang === 'ar' ? 'جارٍ تحميل المكتبة…' : 'Loading your library…'}</div>}><MediaLibrary /></Suspense>
         </div>
 
         <div style={tabPaneStyle(activeTab === 'settings')}>

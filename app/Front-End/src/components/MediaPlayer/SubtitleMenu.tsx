@@ -12,8 +12,8 @@ function trackName(track: PlayerSubtitleTrack, lang: string): string {
   return track.label || code
 }
 
-export function SubtitleMenu({ tracks, active, onChange, onOpenChange }: {
-  tracks: PlayerSubtitleTrack[]; active: number; onChange: (index: number) => void; onOpenChange?: (open: boolean) => void
+export function SubtitleMenu({ tracks, active, onChange, onOpenChange, isFloating }: {
+  tracks: PlayerSubtitleTrack[]; active: number; onChange: (index: number) => void; onOpenChange?: (open: boolean) => void; isFloating?: boolean
 }) {
   const lang = useLang(), ar = lang === 'ar'
   const title = ar ? 'الترجمة' : 'Subtitles', off = ar ? 'إيقاف الترجمة' : 'Subtitles off'
@@ -25,6 +25,7 @@ export function SubtitleMenu({ tracks, active, onChange, onOpenChange }: {
   useEffect(() => { onOpenChange?.(open); return () => onOpenChange?.(false) }, [open, onOpenChange])
   useEffect(() => {
     if (!open) return
+    const document = wrapper.current?.ownerDocument ?? window.document
     options.current[selected + 1]?.focus()
     const outside = (event: PointerEvent) => { if (!wrapper.current?.contains(event.target as Node)) setOpen(false) }
     const focusOutside = (event: FocusEvent) => { if (!wrapper.current?.contains(event.target as Node)) setOpen(false) }
@@ -36,19 +37,20 @@ export function SubtitleMenu({ tracks, active, onChange, onOpenChange }: {
     document.addEventListener('focusin', focusOutside, true)
     document.addEventListener('keydown', escape, true)
     return () => { document.removeEventListener('pointerdown', outside, true); document.removeEventListener('focusin', focusOutside, true); document.removeEventListener('keydown', escape, true) }
-  }, [open, selected])
+  }, [open, selected, isFloating])
   const select = (index: number) => { onChange(index); setOpen(false); trigger.current?.focus() }
   return <div className="subtitle-menu-wrapper" ref={wrapper} onClick={e => e.stopPropagation()}
     onBlur={e => { if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setOpen(false) }}
     onKeyDown={e => {
       e.stopPropagation()
       if (!open && ['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); setOpen(true); return }
-      if (open && ['Enter', ' '].includes(e.key) && e.target instanceof HTMLButtonElement && e.target.getAttribute('role') === 'menuitemradio') {
-        e.preventDefault(); select(options.current.indexOf(e.target) - 1); return
+      const target = e.target as HTMLButtonElement
+      if (open && ['Enter', ' '].includes(e.key) && target.tagName === 'BUTTON' && target.getAttribute('role') === 'menuitemradio') {
+        e.preventDefault(); select(options.current.indexOf(target) - 1); return
       }
       if (!open || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
       e.preventDefault()
-      const current = options.current.indexOf(document.activeElement as HTMLButtonElement), count = tracks.length + 1
+      const current = options.current.indexOf(wrapper.current?.ownerDocument.activeElement as HTMLButtonElement), count = tracks.length + 1
       const next = e.key === 'Home' ? 0 : e.key === 'End' ? count - 1 : (current + (e.key === 'ArrowDown' ? 1 : -1) + count) % count
       options.current[next]?.focus()
     }}>

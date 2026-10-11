@@ -4,6 +4,14 @@ import { validateSubtitleRequest } from '../../Shared/localSubtitles'
 
 export function validateIpcArguments(channel: string, args: unknown[]): void {
   const first = args[0]
+  if (channel.startsWith('cortexdl:library:')) {
+    const operation = channel.slice('cortexdl:library:'.length)
+    if (['list', 'select'].includes(operation)) {
+      if (args.length) throw new Error('Invalid library operation')
+    } else if (operation === 'add') {
+      if (args.length !== 1 || !Array.isArray(first) || first.length > 500 || first.some(value => typeof value !== 'string' || value.length > 32767 || value.includes('\0') || !path.isAbsolute(value))) throw new Error('Invalid library paths')
+    } else if (!['remove', 'play', 'relocate', 'thumbnail', 'artwork-info', 'artwork-select', 'artwork-remove', 'artwork-embed'].includes(operation) || args.length !== 1 || typeof first !== 'string' || !/^[\w-]{1,128}$/.test(first)) throw new Error('Invalid library item')
+  }
   if (channel.startsWith('cortexdl:subtitle-files:')) {
     if (typeof first !== 'string' || !/^[\w-]{1,128}$/.test(first)) throw new Error('Invalid download ID')
     if (channel.endsWith(':merge')) {

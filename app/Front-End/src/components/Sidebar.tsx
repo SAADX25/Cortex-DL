@@ -1,8 +1,9 @@
 import React from 'react'
-import { Plus, DownloadCloud, Settings, Github, Captions } from 'lucide-react'
+import { Plus, DownloadCloud, Settings, Github, Captions, Library, Coffee, ArrowUpRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { translations } from '../translations'
 import { useUIStore } from '../stores/useUIStore'
+import type { ActiveTab } from '../stores/useUIStore'
 import { useLang } from '../stores/useSettingsStore'
 import { useActiveDownloadCount, useTotalDownloadCount } from '../stores/downloadStore'
 
@@ -26,7 +27,7 @@ const Sidebar: React.FC = () => {
   const badgeCount = activeCount > 0 ? activeCount : totalCount
 
   const navItems: Array<{
-    id: 'add' | 'downloads' | 'subtitles' | 'settings'
+    id: ActiveTab
     label: string
     icon: any
     badge?: number
@@ -54,7 +55,9 @@ const Sidebar: React.FC = () => {
       ariaLabel: lang === 'ar' ? 'الإعدادات' : 'Settings',
     },
   ]
-  navItems.splice(2, 0, { id: 'subtitles', label: lang === 'ar' ? 'الترجمات' : 'Subtitles', icon: Captions, ariaLabel: lang === 'ar' ? 'ترجمة الفيديو' : 'Video subtitles' })
+  navItems.splice(2, 0,
+    { id: 'library', label: lang === 'ar' ? 'مكتبة الوسائط' : 'Media Library', icon: Library, ariaLabel: lang === 'ar' ? 'مكتبة الوسائط' : 'Media Library' },
+    { id: 'subtitles', label: lang === 'ar' ? 'الترجمات' : 'Subtitles', icon: Captions, ariaLabel: lang === 'ar' ? 'ترجمة الفيديو' : 'Video subtitles' })
 
   return (
     <aside className="sidebar" role="complementary" aria-label={lang === 'ar' ? 'الشريط الجانبي' : 'Sidebar'}>
@@ -105,18 +108,30 @@ const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      {/* Developer badge */}
-      <a
-        href="https://github.com/SAADX25"
-        target="_blank"
-        rel="noreferrer noopener"
-        title="Developed by SAADX25"
-        className="dev-badge"
-        aria-label="GitHub profile of SAADX25 (opens in new tab)"
-      >
-        <Github className="dev-badge-icon" aria-hidden="true" />
-        <span className="dev-badge-label">SAADX25</span>
-      </a>
+      <div className="sidebar-links">
+        <a
+          href="https://ko-fi.com/saadx25"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="sidebar-link sidebar-link-support"
+          aria-label={lang === 'ar' ? 'دعم Cortex DL عبر Ko-fi (يفتح في المتصفح)' : 'Support Cortex DL on Ko-fi (opens in your browser)'}
+        >
+          <span className="sidebar-link-icon" aria-hidden="true"><Coffee size={18} /></span>
+          <span className="sidebar-link-copy"><span className="sidebar-link-title">{lang === 'ar' ? 'ادعم Cortex DL' : 'Support Cortex DL'}</span><span className="sidebar-link-detail" dir="ltr">Ko-fi</span></span>
+          <ArrowUpRight className="sidebar-link-arrow" size={15} aria-hidden="true" />
+        </a>
+        <a
+          href="https://github.com/SAADX25"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="sidebar-link sidebar-link-github"
+          aria-label={lang === 'ar' ? 'ملف SAADX25 على GitHub (يفتح في المتصفح)' : 'GitHub profile of SAADX25 (opens in your browser)'}
+        >
+          <span className="sidebar-link-icon" aria-hidden="true"><Github size={18} /></span>
+          <span className="sidebar-link-copy"><span className="sidebar-link-title" dir="ltr">SAADX25</span><span className="sidebar-link-detail" dir="ltr">GitHub</span></span>
+          <ArrowUpRight className="sidebar-link-arrow" size={15} aria-hidden="true" />
+        </a>
+      </div>
     </aside>
   )
 }

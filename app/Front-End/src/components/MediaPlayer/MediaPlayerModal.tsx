@@ -6,6 +6,11 @@ import { clearMediaCanvas, releaseAudioGraph, releaseMediaElement, stopPlayerFra
 import { markAudioContext, markMediaSession } from './mediaDiagnostics';
 import './MediaPlayer.css';
 import type { SubtitlePreview } from '../../../../Shared/localSubtitles';
+import { libraryMediaKind } from '../../../../Shared/mediaLibrary';
+import { createPortal } from 'react-dom';
+import { useFloatingPlayer } from './useFloatingPlayer';
+import { PlayerArtworkMenu } from './PlayerArtworkMenu';
+import ArtworkProgress from '../ArtworkProgress';
 
 interface MediaPlayerModalProps {
   isOpen: boolean;
@@ -19,12 +24,7 @@ interface MediaPlayerModalProps {
 type MediaType = 'video' | 'audio' | 'unknown';
 
 function getMediaType(filePath: string): MediaType {
-  const ext = filePath.split('.').pop()?.toLowerCase() || '';
-  const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'ogv', 'm4v'];
-  const audioExts = ['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'opus', 'wma'];
-  if (videoExts.includes(ext)) return 'video';
-  if (audioExts.includes(ext)) return 'audio';
-  return 'unknown';
+  return libraryMediaKind(filePath) ?? 'unknown';
 }
 
 export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePreview, onClose, dir = 'ltr' }: MediaPlayerModalProps) {
@@ -49,6 +49,13 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   const [showControls, setShowControls] = useState(true);
   const [isIdle, setIsIdle] = useState(false);
   const [safeMode, setSafeMode] = useState(false);
+  const [mediaSuspended, setMediaSuspended] = useState(false);
+  const [mediaRevision, setMediaRevision] = useState(0);
+  const [artworkMenuOpen, setArtworkMenuOpen] = useState(false);
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  const resumePlaybackRef = useRef<{ time: number; playing: boolean } | null>(null);
+  const { host, floatingWindow, open: openFloating, restore: restoreFloating } = useFloatingPlayer(title || '', dir);
+  const [floatingError, setFloatingError] = useState(false);
   useEffect(() => { void window.cortexDl.getBuildInfo?.().then(info => setSafeMode(info.safeMode)); }, []);
   const mediaEndpoint = useMediaEndpoint();
 
@@ -78,7 +85,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   const effectGenerationRef = useRef(0);
 
   const mediaType = getMediaType(filePath);
-  const fileUrl = buildMediaUrl(filePath, mediaEndpoint, { session: sessionIdRef.current });
+  const fileUrl = mediaSuspended ? '' : buildMediaUrl(filePath, mediaEndpoint, { session: sessionIdRef.current, revision: mediaRevision });
   const displayTitle = title || '';
 
   const isMiniModeRef = useRef(isMiniMode);
@@ -86,7 +93,14 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     isMiniModeRef.current = isMiniMode;
   }, [isMiniMode]);
 
-  const toggleMiniMode = () => setIsMiniMode(prev => !prev);
+  const toggleMiniMode = () => {
+    clearHideTimer();
+    setShowControls(true);
+    setIsIdle(false);
+    setShowSettings(false);
+    setIsMiniMode(prev => !prev);
+    startHideTimer();
+  };
 
   const toggleTheme = () => {
     const themes = ['midnight', 'crimson', 'emerald', 'onyx'];
@@ -221,7 +235,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   }, [safeMode, isOpen, mediaType, filePath]);
 
   const togglePlay = useCallback(() => {
-    if (!mediaRef.current || sessionClosedRef.current) return;
+    if (!mediaRef.current || sessionClosedRef.current || mediaSuspended) return;
     if (isPlaying) {
       mediaRef.current.pause();
     } else {
@@ -233,7 +247,28 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
       });
     }
     setIsPlaying(p => !p);
-  }, [isPlaying]);
+  }, [isPlaying, mediaSuspended]);
+
+  const suspendForArtwork = async () => {
+    const media = mediaRef.current;
+    if (!media || sessionClosedRef.current) throw new Error('MEDIA_LIBRARY_ARTWORK_PLAYING');
+    const position = { time: media.currentTime, playing: !media.paused && !media.ended };
+    setMediaSuspended(true);
+    releaseMediaElement(media);
+    const oldSession = sessionIdRef.current;
+    const reload = () => {
+      if (sessionClosedRef.current) return;
+      sessionIdRef.current = crypto.randomUUID();
+      markMediaSession(oldSession, false);
+      markMediaSession(sessionIdRef.current, true);
+      resumePlaybackRef.current = position;
+      setMediaSuspended(false);
+      setMediaRevision(revision => revision + 1);
+    };
+    try { await window.cortexDl.closeMediaSession(oldSession); }
+    catch (error) { reload(); throw error; }
+    return reload;
+  };
 
   const releasePlayerSession = useCallback((captured?: {
     video: HTMLVideoElement | null;
@@ -264,15 +299,20 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   }, [clearHideTimer]);
 
   const handleClose = useCallback(() => {
+    restoreFloating();
     void releasePlayerSession();
     onClose();
-  }, [releasePlayerSession, onClose]);
+  }, [releasePlayerSession, onClose, restoreFloating]);
 
 
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (floatingWindow && e.currentTarget === window) return;
+      if (mediaSuspended && e.key !== 'Escape') return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, select, textarea, button, [role="menu"], [contenteditable="true"]')) return;
       switch (e.key) {
         case 'Escape':
           isFullscreen ? document.exitFullscreen?.() : handleClose();
@@ -297,15 +337,16 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
           setIsMuted(m => !m);
           break;
         case 'f':
-          if (mediaType === 'video') toggleFullscreen();
+          if (mediaType === 'video' && !floatingWindow) toggleFullscreen();
           break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    floatingWindow?.addEventListener('keydown', handleKeyDown);
+    return () => { window.removeEventListener('keydown', handleKeyDown); floatingWindow?.removeEventListener('keydown', handleKeyDown); };
 
-  }, [handleClose, isFullscreen, isOpen, mediaType, togglePlay]);
+  }, [floatingWindow, handleClose, isFullscreen, isOpen, mediaType, mediaSuspended, togglePlay]);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -335,21 +376,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
 
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleLeavePiP = () => {
-      setIsMiniMode(false);
-      if (!sessionClosedRef.current && window.cortexDl?.showMainWindow) {
-        window.cortexDl.showMainWindow().catch(console.error);
-      }
-    };
-
-    video.addEventListener('leavepictureinpicture', handleLeavePiP);
-    return () => video.removeEventListener('leavepictureinpicture', handleLeavePiP);
-  }, [isOpen, mediaType]);
-
-  useEffect(() => {
     mediaRef.current = mediaType === 'video' ? videoRef.current : audioRef.current;
   }, [mediaType, filePath, isOpen]);
 
@@ -368,7 +394,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
 
 
   useEffect(() => {
-    if (mediaType !== 'video' || safeMode) return;
+    if (mediaType !== 'video' || safeMode || floatingWindow) return;
 
     let rafId: number | null = null;
     let isActive = true;
@@ -423,7 +449,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
       stop();
       if (stopAmbilightRef.current === stop) stopAmbilightRef.current = null;
     };
-  }, [safeMode, isPlaying, mediaType]);
+  }, [floatingWindow, safeMode, isPlaying, mediaType]);
 
 
 
@@ -437,11 +463,20 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
       setDuration(el.duration);
       el.volume = isMuted ? 0 : volume;
       el.playbackRate = playbackSpeed;
+      const resume = resumePlaybackRef.current;
+      if (resume) {
+        resumePlaybackRef.current = null;
+        el.currentTime = Math.min(resume.time, Number.isFinite(el.duration) ? Math.max(0, el.duration - 0.01) : resume.time);
+        if (resume.playing) {
+          void audioContextRef.current?.resume().catch(() => {});
+          void el.play().catch(() => {});
+        }
+      }
     }
   };
 
   const handleSeek = (time: number) => {
-    if (mediaRef.current) {
+    if (mediaRef.current && !mediaSuspended) {
       mediaRef.current.currentTime = time;
     }
   };
@@ -469,13 +504,15 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   const togglePiP = async () => {
     if (!videoRef.current) return;
     try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      } else {
-        await videoRef.current.requestPictureInPicture();
-      }
+      setFloatingError(false);
+      if (floatingWindow) { restoreFloating(); return; }
+      if (document.fullscreenElement) await document.exitFullscreen();
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      openFloating();
+      handleMouseMove();
     } catch (err) {
-      console.warn("PiP not supported or failed to start", err);
+      setFloatingError(true);
+      console.warn('Floating player failed to start', err);
     }
   };
 
@@ -487,6 +524,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   };
 
   const handleMouseLeave = () => {
+    if (artworkMenuOpen) return;
     clearHideTimer();
     setShowControls(false);
     setIsIdle(true);
@@ -498,10 +536,17 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   };
 
   if (!isOpen) return null;
+  const artworkControl = <PlayerArtworkMenu filePath={filePath} suspend={suspendForArtwork} onOpenChange={setArtworkMenuOpen} onImage={setCoverImage} />;
 
-  return (
+  return <>
+    {floatingWindow && <div className="floating-player-return" dir={dir} role="status">
+      <span>{dir === 'rtl' ? 'الفيديو يعمل في النافذة العائمة' : 'Video playing in floating window'}</span>
+      <button onClick={restoreFloating}>{dir === 'rtl' ? 'إرجاع المشغل' : 'Return player'}</button>
+      <button onClick={handleClose} aria-label={dir === 'rtl' ? 'إغلاق المشغل' : 'Close player'}>×</button>
+    </div>}
+    {createPortal(
     <div
-      className={`media-player-overlay ${isMiniMode ? 'mini-mode-overlay' : ''}`}
+      className={`media-player-overlay ${mediaType === 'audio' ? 'audio-player-overlay' : ''} ${isMiniMode ? 'mini-mode-overlay' : ''} ${floatingWindow ? 'floating-player-overlay' : ''}`}
       onClick={e => { if (e.target === e.currentTarget && !isMiniMode) handleClose() }}
       dir={dir}
     >
@@ -513,6 +558,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
       >
         {mediaType === 'video' && (
           <VideoPlayerView
+            artworkControl={artworkControl}
+            artworkMenuOpen={artworkMenuOpen}
             mediaEndpoint={mediaEndpoint}
             sessionId={sessionIdRef.current}
             fileUrl={fileUrl}
@@ -527,6 +574,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
             showSettings={showSettings}
             isFullscreen={isFullscreen}
             showControls={showControls}
+            isFloating={!!floatingWindow}
             videoRef={videoRef}
             mediaRef={mediaRef}
             ambilightRef={ambilightRef}
@@ -549,6 +597,8 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
 
         {mediaType === 'audio' && (
           <AudioPlayerView
+            artworkControl={artworkControl}
+            coverImage={coverImage}
             fileUrl={fileUrl}
             title={displayTitle}
             isPlaying={isPlaying}
@@ -557,7 +607,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
             isMuted={isMuted}
             playbackSpeed={playbackSpeed}
             showSettings={showSettings}
-            showControls={showControls}
+            showControls={showControls || artworkMenuOpen}
             audioRef={audioRef}
             mediaRef={mediaRef}
             canvasRef={canvasRef}
@@ -585,7 +635,9 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
             <p>Unsupported file format</p>
           </div>
         )}
+        {floatingError && <div className="floating-player-error" role="alert">{dir === 'rtl' ? 'تعذر فتح المشغل العائم. حاول مجددًا.' : 'Could not open the floating player. Try again.'}<button onClick={() => setFloatingError(false)}>×</button></div>}
+        {mediaSuspended && <div className="player-artwork-saving" aria-hidden="true"><ArtworkProgress /></div>}
       </div>
-    </div>
-  );
+    </div>, host)}
+  </>;
 }
