@@ -658,11 +658,12 @@ export class DirectEngine implements IEngine {
   }
 
   private isAbort(error: unknown): boolean {
+    if (this.stopRequested || this.abortController?.signal.aborted) return true;
     if (error instanceof DownloadAbortedError) return true;
     if (axios.isCancel(error)) return true;
     const name = (error as { name?: string } | null | undefined)?.name;
     const code = (error as { code?: string } | null | undefined)?.code;
-    return name === 'CanceledError' || name === 'AbortError' || code === 'ERR_CANCELED';
+    return name === 'CanceledError' || name === 'AbortError' || code === 'ERR_CANCELED' || code === 'ABORT_ERR';
   }
 
   /** Removes the partial output file and clears any resume state. */
