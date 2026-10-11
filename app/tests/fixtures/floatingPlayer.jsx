@@ -26,7 +26,11 @@ window.cortexDl = {
   removeMediaLibraryArtwork: id => edit(id, true),
   getBuildInfo: async () => ({ safeMode: useUIStore.getState().mediaPlayerFile?.filePath !== 'audio.mp3' }),
   getMediaEndpoint: async () => ({ port: __MEDIA_PORT__, token: 'fixture' }),
-  getSubtitles: async () => [{ language: 'ar', label: 'Arabic', filePath: 'ar.vtt' }, { language: 'en', label: 'English', filePath: 'en.vtt' }],
+  getSubtitles: async () => {
+    // Re-probing embedded subtitles after editing is slower than media metadata.
+    if (closed.length) await new Promise(resolve => setTimeout(resolve, 300))
+    return [{ language: 'ar', label: 'Arabic', filePath: 'ar.vtt' }, { language: 'en', label: 'English', filePath: 'en.vtt' }]
+  },
   closeMediaSession: async id => { closed.push(id) },
   getMediaDiagnostics: async () => ({ streams: 0, ffmpegProcesses: 0, probeProcesses: 0, sessions: 0 }),
 }

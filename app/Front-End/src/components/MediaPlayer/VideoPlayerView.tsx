@@ -94,10 +94,18 @@ export function VideoPlayerView({
       }
     };
     apply();
+    // Reloading the file after a cover edit resets Chromium's track modes.
+    // Restore the selection as the media and asynchronous tracks become ready.
+    video.addEventListener('loadedmetadata', apply);
+    video.textTracks.addEventListener('addtrack', apply);
     const elements = Array.from(video.querySelectorAll('track'));
     elements.forEach(track => track.addEventListener('load', apply));
-    return () => elements.forEach(track => track.removeEventListener('load', apply));
-  }, [activeSubtitle, subtitles, videoRef]);
+    return () => {
+      video.removeEventListener('loadedmetadata', apply);
+      video.textTracks.removeEventListener('addtrack', apply);
+      elements.forEach(track => track.removeEventListener('load', apply));
+    };
+  }, [activeSubtitle, subtitles, videoRef, fileUrl, sessionId]);
 
   const playerActions = <>
     <MediaInfoOverlay sessionId={sessionId} title={title} filePath={filePath}

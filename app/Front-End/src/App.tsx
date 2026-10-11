@@ -56,18 +56,33 @@ function App() {
     if (!window.cortexDl.smokeMode) return
     window.__cortexSmokeArtwork = async (file, retain) => {
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-      const wait = async (condition: () => boolean) => { for (let i = 0; i < 200; i++) { if (condition()) return; await delay(50) } throw new Error('Player cover edit timed out') }
+      const wait = async (condition: () => boolean, stage: string) => {
+        for (let i = 0; i < 200; i++) { if (condition()) return; await delay(50) }
+        const media = document.querySelector<HTMLMediaElement>('video, audio')
+        throw new Error('Player cover edit timed out at ' + stage + ': ' + JSON.stringify({ readyState: media?.readyState, paused: media?.paused, time: media?.currentTime, busy: useMediaLibraryStore.getState().busy, error: useMediaLibraryStore.getState().error, tracks: media ? Array.from(media.textTracks).map(track => ({ label: track.label, mode: track.mode, cues: track.cues?.length })) : [] }))
+      }
       useUIStore.getState().setMediaPlayerFile({ filePath: file, title: 'Cover editing fixture' })
       const selector = file.endsWith('.mp4') ? 'video' : 'audio'
-      await wait(() => (document.querySelector(selector) as HTMLMediaElement)?.readyState >= 2)
+      await wait(() => (document.querySelector(selector) as HTMLMediaElement)?.readyState >= 2, 'initial media load')
       const media = document.querySelector(selector) as HTMLMediaElement
-      media.currentTime = 0.4; await media.play()
-      await wait(() => !!document.querySelector('.player-artwork-trigger'))
+      const selectedSubtitle = 1
+      if (selector === 'video') {
+        const video = media as HTMLVideoElement
+        await wait(() => video.textTracks.length >= 3 && !!document.querySelector('.subtitle-trigger'), 'subtitle discovery')
+        document.querySelector<HTMLButtonElement>('.subtitle-trigger')!.click()
+        await wait(() => document.querySelectorAll('.subtitle-menu [role="menuitemradio"]').length === video.textTracks.length + 1, 'subtitle menu')
+        document.querySelectorAll<HTMLButtonElement>('.subtitle-menu [role="menuitemradio"]')[selectedSubtitle + 1].click()
+        await wait(() => video.textTracks[selectedSubtitle]?.mode === 'showing' && !!video.textTracks[selectedSubtitle]?.cues?.length, 'selected subtitle load')
+      }
+      await wait(() => !!document.querySelector('.player-artwork-trigger'), 'artwork trigger')
       document.querySelector<HTMLButtonElement>('.player-artwork-trigger')!.click()
+      await wait(() => !!document.querySelector('.player-artwork-change') && !document.querySelector<HTMLButtonElement>('.player-artwork-change')!.disabled, 'initial artwork menu')
+      // The short fixture must not end while captions and artwork are probed.
+      media.currentTime = 0.4; await media.play()
       const change = async () => {
-        await wait(() => !!document.querySelector('.player-artwork-change') && !document.querySelector<HTMLButtonElement>('.player-artwork-change')!.disabled)
+        await wait(() => !!document.querySelector('.player-artwork-change') && !document.querySelector<HTMLButtonElement>('.player-artwork-change')!.disabled, 'artwork change button')
         document.querySelector<HTMLButtonElement>('.player-artwork-change')!.click()
-        await wait(() => !useMediaLibraryStore.getState().busy && media.readyState >= 2 && media.currentTime >= 0.35 && !!document.querySelector('.player-artwork-remove'))
+        await wait(() => !useMediaLibraryStore.getState().busy && media.readyState >= 2 && media.currentTime >= 0.35 && !!document.querySelector('.player-artwork-remove'), 'reload after artwork change')
         if (useMediaLibraryStore.getState().error) throw Error(useMediaLibraryStore.getState().error!)
       }
       await change()
@@ -76,18 +91,23 @@ function App() {
       const checkCaptions = async () => {
         if (selector !== 'video') return
         const video = media as HTMLVideoElement
-        await wait(() => !!video.textTracks[0]?.activeCues?.length)
-        if (Array.from(video.textTracks).filter(track => track.mode === 'showing').length !== 1) throw Error('Cover editing changed the selected subtitles')
+        // Media metadata can be ready before re-probing and loading captions.
+        for (let i = 0; i < 200; i++) {
+          const tracks = Array.from(video.textTracks)
+          if (tracks[selectedSubtitle]?.mode === 'showing' && tracks[selectedSubtitle]?.activeCues?.length && tracks.every((track, index) => index === selectedSubtitle || track.mode === 'disabled')) return
+          await delay(50)
+        }
+        throw Error('Cover editing changed the selected subtitles: ' + JSON.stringify(Array.from(video.textTracks).map(track => ({ label: track.label, mode: track.mode, cues: track.cues?.length, activeCues: track.activeCues?.length }))))
       }
       await checkCaptions()
-      await wait(() => !document.querySelector<HTMLButtonElement>('.player-artwork-remove')!.disabled)
+      await wait(() => !document.querySelector<HTMLButtonElement>('.player-artwork-remove')!.disabled, 'artwork removal button')
       document.querySelector<HTMLButtonElement>('.player-artwork-remove')!.click()
-      await wait(() => !useMediaLibraryStore.getState().busy && media.readyState >= 2 && media.currentTime >= 0.35 && !document.querySelector('.player-artwork-remove'))
+      await wait(() => !useMediaLibraryStore.getState().busy && media.readyState >= 2 && media.currentTime >= 0.35 && !document.querySelector('.player-artwork-remove'), 'reload after artwork removal')
       if (!media.paused || useMediaLibraryStore.getState().error) throw Error('Cover removal lost the paused position or failed')
       await checkCaptions()
       if (retain) { await change(); if (!media.paused) throw Error('Cover change resumed a paused player') }
       useUIStore.getState().setMediaPlayerFile(null)
-      await wait(() => !document.querySelector(selector))
+      await wait(() => !document.querySelector(selector), 'player close')
       return true
     }
     window.__cortexSmokeLifecycle = async (file: string, audioFile?: string, previewUrl?: string) => {

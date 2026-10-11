@@ -54,7 +54,26 @@ test('floating player preserves real playback and Arabic cues, frees downloads, 
         if(process.env.CORTEX_FLOATING_CAPTURE){await delay(200);fs.writeFileSync(path.join(process.env.CORTEX_FLOATING_CAPTURE,'video-cover-menu.png'),(await win.webContents.capturePage()).toPNG());}
         assert.equal(await js('window.fixture.video()===document.querySelector("video")'),true,'Cover edit must retain the media element');
         assert.equal(await js('window.fixture.video().textTracks[0].mode'),'showing');
+        // Off is a selection too: delayed discovery must not re-enable captions.
+        await js('document.querySelector(".player-artwork-trigger").click();document.querySelector(".subtitle-trigger").click()');
+        await wait('!!document.querySelector(".subtitle-menu")');
+        await js('document.querySelectorAll(".subtitle-option")[0].click()');
+        await wait('Array.from(window.fixture.video().textTracks).every(track=>track.mode==="disabled")');
         await js('document.querySelector(".player-artwork-trigger").click()');
+        await wait('document.querySelector(".player-artwork-remove") && !document.querySelector(".player-artwork-remove").disabled');
+        await js('document.querySelector(".player-artwork-remove").click()');
+        await wait('!document.querySelector(".player-artwork-remove") && window.fixture.video().readyState>=2 && !window.fixture.video().paused');
+        await delay(400);
+        assert.equal(await js('Array.from(window.fixture.video().textTracks).every(track=>track.mode==="disabled")'),true,'Cover removal must preserve subtitles Off after delayed discovery');
+        await wait('!document.querySelector(".player-artwork-change").disabled');
+        await js('document.querySelector(".player-artwork-change").click()');
+        await wait('document.querySelector(".player-artwork-remove") && window.fixture.video().readyState>=2 && !window.fixture.video().paused');
+        await delay(400);
+        assert.equal(await js('Array.from(window.fixture.video().textTracks).every(track=>track.mode==="disabled")'),true,'Cover change must preserve subtitles Off after delayed discovery');
+        await js('document.querySelector(".player-artwork-trigger").click();document.querySelector(".subtitle-trigger").click()');
+        await wait('!!document.querySelector(".subtitle-menu")');
+        await js('document.querySelectorAll(".subtitle-option")[1].click()');
+        await wait('window.fixture.video().textTracks[0]?.activeCues?.[0]?.text.includes("عربية")');
         await js('document.querySelector(".player-floating-toggle").click()');await wait('window.fixture.result().floating');
         const child=BrowserWindow.getAllWindows().find(w=>w!==win);assert.ok(child);assert.equal(child.isAlwaysOnTop(),true);console.log('floating');
         const childJs=s=>child.webContents.executeJavaScript(s),childWait=async s=>{for(let n=0;n<100;n++){if(await childJs(s))return;await delay(40)}throw Error('Floating did not settle: '+s)};
@@ -142,6 +161,7 @@ test('floating player preserves real playback and Arabic cues, frees downloads, 
         const third=BrowserWindow.getAllWindows().find(w=>w!==win);
         const closedBeforeVideo=await js('window.fixture.result().closed.length');
         await third.webContents.executeJavaScript('document.querySelector(".player-footer .media-player-close").click()');await wait('window.fixture.result().closed.length==='+String(closedBeforeVideo+1));
+        for(let n=0;n<100 && BrowserWindow.getAllWindows().length!==1;n++)await delay(40);
         assert.equal(BrowserWindow.getAllWindows().length,1);assert.equal(await js('window.fixture.video().getAttribute("src")'),null);
         assert.equal(await js('window.fixture.result().floating'),false);
         await js('window.fixture.reopen()');await wait('document.querySelector("video")?.readyState>=2');
