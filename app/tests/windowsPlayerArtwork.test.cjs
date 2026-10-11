@@ -70,6 +70,19 @@ test('redirected cache and backup directories are skipped before closing the pla
   assert.equal(await fs.readFile(path.join(outside, name), 'utf8'), 'unrelated file')
 }))
 
+test('Windows cache refresh tolerates realpath alias differences for validated files', () => fixture(async ({ local, images, backups, song }) => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  const name = windowsPlayerArtworkPrefixes(song)[0] + '-0-512-512'
+  await fs.writeFile(path.join(images, name), 'cached cover')
+  const originalRealpath = fs.realpath
+  fs.realpath = async () => { throw new Error('short-name alias unavailable') }
+  try {
+    assert.equal(await refreshWindowsPlayerArtwork(song, local, async () => true), 1)
+    assert.equal(await fs.readFile(path.join(backups, name), 'utf8'), 'cached cover')
+  } finally { fs.realpath = originalRealpath; Object.defineProperty(process, 'platform', platform) }
+}))
+
 test('Media Player close is bounded, checks the Microsoft package install path and uses no forced termination', async () => {
   assert.equal(await closeWindowsMediaPlayer(), true)
   const { binary, args, options } = nativeCalls.at(-1), script = Buffer.from(args.at(-1), 'base64').toString('utf16le')
