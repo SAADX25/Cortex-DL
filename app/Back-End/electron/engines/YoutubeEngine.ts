@@ -7,7 +7,7 @@ import log from 'electron-log'
 import type { DownloadTask, EngineContext, TaskRuntime, VideoFormat, EngineResult } from '../types'
 import { VIDEO_FORMATS } from '../types'
 import { AUDIO_SPECS, isAudioFormat } from '../audioFormats'
-import { findTaskMediaFile, probeMediaFile } from '../mediaFiles'
+import { findTaskMediaFile } from '../mediaFiles'
 import { getBinaryPath } from '../paths'
 import { nowMs, killProcessTree } from '../utils'
 import {
@@ -20,9 +20,7 @@ import type { FfmpegState } from '../progressParser'
 import type { IEngine } from './IEngine'
 import { checkJsRuntime, getJsRuntimeArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
 import { isYouTubeUrl, youtubeErrorCode } from '../../../Shared/youtubeErrors'
-import { prepareYouTubeSubtitle, embedYouTubeSubtitle } from '../youtubeSubtitles'
 import { diagnosticCategories, youtubeDiagnostic } from '../youtubeDiagnostics'
-import { findCompletedYouTubeMedia, rememberCompletedYouTubeMedia } from '../youtubeMediaCache'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -55,60 +53,23 @@ export class YoutubeEngine implements IEngine {
     task.downloadedBytes = 0
     const profile = this.selectProfile(task)
     const publicFirst = isYouTubeUrl(task.url)
-    let subtitle: string | undefined
-    const prepareSubtitle = async () => {
-      if (publicFirst && task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)) {
-        subtitle = await prepareYouTubeSubtitle(task, runtime.abortController!.signal, () => {
-          const subtitleArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
-          subtitleArgs.splice(subtitleArgs.indexOf('--embed-subs'), 1)
-          // Caption discovery must not depend on the selected video format existing.
-          const selector = subtitleArgs.indexOf('-f')
-          if (selector >= 0) subtitleArgs.splice(selector, 2)
-          subtitleArgs.splice(subtitleArgs.length - 1, 0, '--skip-download', '--no-progress', '--ignore-no-formats-error', '--sub-format', 'vtt')
-          return this.runYtdlpAttempt(task, context, runtime, subtitleArgs, profile)
-        })
-      }
-    }
-    const finishWithSubtitles = async (candidate: string): Promise<EngineResult> => {
-      try {
-        await prepareSubtitle()
-        return { kind: 'success', candidate: subtitle ? await embedYouTubeSubtitle(task, context, candidate, subtitle) : candidate }
-      } catch (error) {
-        runtime.abortController!.signal.throwIfAborted()
-        return { kind: 'fatal-error', message: error instanceof Error ? error.message : 'Subtitle download failed' }
-      }
-    }
-    // Resume a subtitle-only failure from a fully downloaded, attempt-owned file.
-    if (publicFirst && task.subtitleLanguage) {
-      const cached = await findCompletedYouTubeMedia(task)
-      if (cached) {
-        try {
-          const probe = await probeMediaFile(cached, child => { runtime.child = child }, runtime.abortController.signal)
-          if (probe.streams?.some(stream => stream.codec_type === 'video')) return finishWithSubtitles(cached)
-        } catch { runtime.abortController.signal.throwIfAborted() }
-      }
-    }
-    const mediaTask = publicFirst && task.subtitleLanguage ? { ...task, subtitleLanguage: undefined } : task
     if (!task.title || !task.thumbnail) await this.prefetchMetadata(task, context, runtime).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
     runtime.abortController.signal.throwIfAborted()
-    const args = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
+    const args = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
     let result = await this.runYtdlpAttempt(task, context, runtime, args, profile)
     runtime.abortController.signal.throwIfAborted()
     // Some public HTTPS formats are listed but denied by YouTube. Try its HLS
-    // formats once, preserving the quality cap and requested subtitles.
+    // formats once, preserving the quality cap.
     if (publicFirst && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
-      && !youtubeErrorCode(result.stderr) && !/Unable to download (?:video )?subtitles?/i.test(result.stderr)) {
-      const hlsArgs = this.buildYtdlpArgs(mediaTask, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, true)
+      && !youtubeErrorCode(result.stderr)) {
+      const hlsArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, true)
       result = await this.runYtdlpAttempt(task, context, runtime, hlsArgs, profile)
     }
     runtime.abortController.signal.throwIfAborted()
     if (result.exitCode === 0) {
       const candidate = await findTaskMediaFile(task, result.detectedFinalPath)
       runtime.abortController.signal.throwIfAborted()
-      if (candidate) {
-        if (publicFirst && task.subtitleLanguage) await rememberCompletedYouTubeMedia(task, candidate)
-        return finishWithSubtitles(candidate)
-      }
+      if (candidate) return { kind: 'success', candidate }
       return { kind: 'fatal-error', message: 'yt-dlp produced no final media file' }
     }
     const youtubeFailure = publicFirst ? youtubeErrorCode(result.stderr) : null
@@ -397,7 +358,6 @@ export class YoutubeEngine implements IEngine {
     runtime: TaskRuntime,
     preferHls = false,
   ): string[] {
-    const hasSubtitles = task.subtitleLanguage && VIDEO_FORMATS.includes(task.targetFormat as VideoFormat)
 
     const ytArgs: string[] = [
       '--newline',
@@ -427,20 +387,12 @@ export class YoutubeEngine implements IEngine {
     if (isAudioFormat(task.targetFormat)) {
       ytArgs.push('--postprocessor-args', 'ExtractAudio+ffmpeg:-y -hide_banner -threads 2 -max_muxing_queue_size 1024', '--embed-thumbnail', '--add-metadata')
     } else {
-      ytArgs.push('--postprocessor-args', hasSubtitles && task.targetFormat === 'mp4'
-        ? 'Merger+ffmpeg:-y -hide_banner -threads 2 -c:v copy -c:a copy -c:s mov_text -movflags +faststart'
-        : 'Merger+ffmpeg:-y -hide_banner -threads 2 -c:v copy -c:a copy -max_muxing_queue_size 4096')
+      ytArgs.push('--postprocessor-args', 'Merger+ffmpeg:-y -hide_banner -threads 2 -c:v copy -c:a copy -max_muxing_queue_size 4096')
     }
 
     const ffmpegExePath = getBinaryPath('ffmpeg')
     if (existsSync(ffmpegExePath)) ytArgs.push('--ffmpeg-location', opts.ffmpegDir)
 
-    if (hasSubtitles) {
-      ytArgs.push(task.subtitleIsAutomatic ? '--write-auto-subs' : '--write-subs')
-      ytArgs.push('--sub-langs', task.subtitleLanguage!)
-      ytArgs.push('--embed-subs')
-      log.info(`[YoutubeEngine] Subtitle args: lang=${task.subtitleLanguage}, auto=${task.subtitleIsAutomatic}, embedded=true`)
-    }
 
     const heightConstraint = this.parseHeightFromFormatId(task.ytdlpFormatId)
     const protocolFilter = preferHls ? '[protocol^=m3u8]' : ''

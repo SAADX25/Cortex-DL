@@ -246,3 +246,32 @@ test('IPC progressive analysis never waits for optional dislike service and play
   assert.ok(spawns.every(item=>item.args.includes('--dump-single-json')))
   assert.ok(!binaryRequests.includes('ffmpeg'))
 })
+
+test('IPC rejection stops optional preview requests and an equivalent share link sends no additional requests', async () => {
+  const ytdlp = require('../Back-End/electron/ytdlp.ts'), originalAnalysis = ytdlp.analyzeWithYtdlp, originalGuard = ytdlp.assertAnalysisAllowed, originalFetch = global.fetch
+  let blocked = false, previews = 0, stopped = false, extractions = 0
+  const controllerListeners = []
+  global.fetch = (_url, options) => {
+    previews++
+    return new Promise((_resolve, reject) => {
+      const abort = () => { stopped = true; reject(options.signal.reason) }
+      controllerListeners.push(abort)
+      options.signal.addEventListener('abort', abort, { once: true })
+    })
+  }
+  ytdlp.assertAnalysisAllowed = () => { if (blocked) throw Error('YOUTUBE_BOT_VERIFICATION') }
+  ytdlp.analyzeWithYtdlp = async () => { extractions++; blocked = true; throw Error('YOUTUBE_BOT_VERIFICATION') }
+  try {
+    require('../Back-End/electron/ipc/handlers.ts').registerIpcHandlers({})
+    const sender = new EventEmitter(); sender.id = 99; sender.isDestroyed = () => false; sender.send = () => {}
+    const invoke = handlers.get('cortexdl:analyze-url')
+    await assert.rejects(invoke({ sender }, 'https://www.youtube.com/watch?v=blockfix001', 'request'), /YOUTUBE_BOT_VERIFICATION/)
+    await tick(); await tick()
+    assert.equal(previews, 1); assert.equal(stopped, true); assert.equal(sender.listenerCount('destroyed'), 0)
+    await assert.rejects(invoke({ sender }, 'https://youtu.be/blockfix001?si=shared', 'another'), /YOUTUBE_BOT_VERIFICATION/)
+    assert.equal(previews, 1); assert.equal(extractions, 1)
+  } finally {
+    ytdlp.analyzeWithYtdlp = originalAnalysis; ytdlp.assertAnalysisAllowed = originalGuard; global.fetch = originalFetch
+    for (const stop of controllerListeners) stop()
+  }
+})

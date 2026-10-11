@@ -2,7 +2,7 @@ import { primaryAnalysis } from '../lib/analysisSession'
 import React, { useState, useMemo, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { translations } from '../translations'
-import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud } from 'lucide-react'
+import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud, AlertCircle } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
 import { getTrimPreviewSource } from './trimSource'
@@ -466,11 +466,11 @@ const AddDownloadTab: React.FC = () => {
 
         </div>
 
-        {globalError ? <div className="global-error-banner">{globalError}</div> : null}
+        {globalError ? <div className="global-error-banner" role="alert" dir={lang === 'ar' ? 'rtl' : 'ltr'}><AlertCircle size={19} /><span>{globalError}</span></div> : null}
       </section>
 
       {}
-      <div className="w-full mt-auto pt-4 flex-none">
+      {batchItems.length > 0 && <div className="w-full mt-auto pt-4 flex-none">
         <div className="w-full max-w-full mx-auto px-2">
           {(() => {
             const isBatchProcessing = batchItems.some(b => b.status === 'processing')
@@ -496,7 +496,7 @@ const AddDownloadTab: React.FC = () => {
             )
           })()}
         </div>
-      </div>
+      </div>}
 
       <div className="quick-access-bar-minimal">
         <div className="quick-access-buttons">

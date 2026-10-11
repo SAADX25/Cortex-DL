@@ -6,7 +6,6 @@ import type {
   AudioFormat as SharedAudioFormat,
   TargetFormat as SharedTargetFormat,
   DownloadTask as SharedDownloadTask,
-  SubtitleTrack as SharedSubtitleTrack,
   ThumbnailDataUrl as SharedThumbnailDataUrl,
   AppHealthCheck as SharedAppHealthCheck,
   JsRuntimeStatus as SharedJsRuntimeStatus,
@@ -60,8 +59,6 @@ declare global {
       likes?: number
       dislikes?: number
       duration?: number
-      subtitles?: SharedSubtitleTrack[]
-      captionDiscovery?: import('../../Shared/types').CaptionDiscovery
       qualityStatus?: 'restricted' | 'limited' | 'available'
       comments?: { author: string; text: string; likeCount: number }[]
     }
@@ -113,8 +110,6 @@ declare global {
         engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
         targetFormat?: TargetFormat
         ytdlpFormatId?: string
-        subtitleLanguage?: string
-        subtitleIsAutomatic?: boolean
         title?: string
         thumbnail?: string
         username?: string
@@ -131,8 +126,6 @@ declare global {
         engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
         targetFormat?: TargetFormat
         ytdlpFormatId?: string
-        subtitleLanguage?: string
-        subtitleIsAutomatic?: boolean
         title?: string
         thumbnail?: string
         username?: string

@@ -10,7 +10,6 @@ import type {
   ThumbnailDataUrl,
   HlsVariant,
   YtdlpFormat,
-  SubtitleTrack,
   AnalyzeResult,
   JsRuntimeStatus,
   AppHealthCheck,
@@ -26,7 +25,6 @@ export type {
   ThumbnailDataUrl,
   HlsVariant,
   YtdlpFormat,
-  SubtitleTrack,
   AnalyzeResult,
   JsRuntimeStatus,
   AppHealthCheck,
@@ -41,8 +39,6 @@ export type StartInput = {
   engine?: 'auto' | DownloadEngine
   targetFormat?: TargetFormat
   ytdlpFormatId?: string
-  subtitleLanguage?: string
-  subtitleIsAutomatic?: boolean
   title?: string
   thumbnail?: string
   username?: string

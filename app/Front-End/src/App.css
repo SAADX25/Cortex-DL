@@ -3,6 +3,23 @@
    ║          Organized into sections for easy navigation & editing          ║
    ╚══════════════════════════════════════════════════════════════════════════╝ */
 
+.global-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 15px 17px;
+  margin-top: 18px;
+  border: 1px solid rgba(251, 146, 60, .28);
+  border-radius: 12px;
+  background: rgba(251, 146, 60, .07);
+  color: #f4c9a8;
+  font-size: 13px;
+  line-height: 1.8;
+  text-align: start;
+}
+.global-error-banner > svg { flex-shrink: 0; margin-top: 2px; color: #fbad65; }
+.global-error-banner > span { min-width: 0; overflow-wrap: anywhere; }
+
 :root {
   /* ── Colors ─────────────────────────────── */
   --bg-sidebar: #0f172a;

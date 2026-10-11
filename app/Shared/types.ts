@@ -68,8 +68,6 @@ export type DownloadTask = {
   convertingPercent?: number
   downloadPercent?: number
   ytdlpFormatId?: string
-  subtitleLanguage?: string
-  subtitleIsAutomatic?: boolean
   fps?: number | string
   ytdlpExpectedBytes?: number
   ytdlpExpectedStreamCount?: number
@@ -101,18 +99,6 @@ export type YtdlpFormat = {
   tbr?: number
 }
 
-export type SubtitleTrack = {
-  languageCode: string
-  name: string
-  isAutomatic: boolean
-}
-
-export type CaptionDiscovery = {
-  state: 'available' | 'none-confirmed' | 'restricted' | 'rate-limited' | 'unknown' | 'loading'
-  subtitles: SubtitleTrack[]
-  errorCode?: string
-}
-
 export type AnalyzeResult =
   | { kind: 'unknown' }
   | { kind: 'direct' }
@@ -128,8 +114,6 @@ export type AnalyzeResult =
       likes?: number
       dislikes?: number
       duration?: number
-      subtitles?: SubtitleTrack[]
-      captionDiscovery?: CaptionDiscovery
       qualityStatus?: 'restricted' | 'limited' | 'available'
       comments?: { author: string; text: string; likeCount: number }[]
     }

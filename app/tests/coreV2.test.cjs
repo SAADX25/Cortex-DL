@@ -468,7 +468,7 @@ test('MP4 remux retains embedded subtitles and metadata through the shared regis
   })
 }))
 
-test('manager refuses Completed when a requested YouTube subtitle stream is missing', async () => sandbox(async dir => {
+test('manager completes ordinary video downloads despite retired online-caption options in a legacy task', async () => sandbox(async dir => {
   const { YoutubeEngine } = require('../Back-End/electron/engines/YoutubeEngine.ts')
   const source = path.join(dir, 'source.mp4'); fixture(source, true, 1)
   const original = YoutubeEngine.prototype.download
@@ -480,11 +480,25 @@ test('manager refuses Completed when a requested YouTube subtitle stream is miss
   const t = item(dir, { engine: 'ytdlp', subtitleLanguage: 'ar' }), manager = managerFor(t)
   try {
     await manager.executeEngine(t.id)
-    assert.equal(t.status, 'error')
-    assert.equal(t.errorMessage, 'YOUTUBE_SUBTITLE_UNAVAILABLE')
-    assert.equal(await fs.stat(t.filePath).then(() => true).catch(() => false), false)
+    assert.equal(t.status, 'completed', t.errorMessage)
+    assert.equal(await fs.stat(t.filePath).then(() => true).catch(() => false), true)
   } finally { YoutubeEngine.prototype.download = original; manager.flushPendingSave() }
 }))
+
+test('manager restores download history without retired caption options or obsolete errors and preserves source paths', () => {
+  rows.clear()
+  const old = item(os.tmpdir(), { engine: 'ytdlp', status: 'error', subtitleLanguage: 'ar', subtitleIsAutomatic: true, errorMessage: 'YOUTUBE_SUBTITLE_UNAVAILABLE' })
+  rows.set(old.id, { full_payload: JSON.stringify(old) })
+  const manager = new DownloadManager(), restored = manager.get(old.id)
+  assert.equal(Object.hasOwn(restored, 'subtitleLanguage'), false)
+  assert.equal(Object.hasOwn(restored, 'subtitleIsAutomatic'), false)
+  assert.equal(restored.errorMessage, 'DOWNLOAD_RETRY_REQUIRED')
+  assert.equal(restored.filePath, old.filePath)
+  assert.equal(restored.status, 'error')
+  const persisted = JSON.parse(rows.get(old.id).full_payload)
+  assert.equal(Object.hasOwn(persisted, 'subtitleLanguage'), false)
+  manager.flushPendingSave(); rows.clear()
+})
 
 
 test('decodable headers cannot certify a corrupt media payload', async () => sandbox(async dir => {

@@ -13,7 +13,7 @@ import { ThumbnailCache } from '../thumbnailCache'
 import { normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
 import { fetchBoundedJson } from '../analysisNetwork'
 import { analyzeUrlForHls } from '../hls'
-import { analyzeWithYtdlp, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
+import { analyzeWithYtdlp, assertAnalysisAllowed, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
 import { extractAndSaveComments } from '../commentsExtractor'
 import { db } from '../db'
 import { promises as fsPromises } from 'node:fs'
@@ -367,6 +367,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   ipcMain.handle('cortexdl:analyze-url', async (event, input: string, id?: string) => {
     const start = Date.now()
     const url = normalizeAnalysisUrl(input)
+    assertAnalysisAllowed(url)
     analysisTiming('normalizationMs', start)
     const controller = new AbortController()
     const key = `${event.sender.id}:${id ?? randomUUID()}`
@@ -405,6 +406,9 @@ export function registerIpcHandlers(deps: IpcDependencies) {
           .then(data => { if (typeof data.dislikes === 'number') send('enrichment', { dislikes: data.dislikes }) }).catch(() => {}))
       }
       return result.kind === 'unknown' ? hlsResult : result
+    } catch (error) {
+      controller.abort()
+      throw error
     } finally {
       void Promise.allSettled(enrichment).then(() => {
         owner.controllers.delete(controller)

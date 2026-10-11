@@ -1,7 +1,6 @@
 # Local video subtitles
 
 Open **Video subtitles / ترجمة الفيديو** in the sidebar or from a completed download's **Subtitles** button.
-Caption failures in the downloads list also offer **Local speech subtitles** to open this workflow with the original public URL.
 
 1. Choose a local video/audio file or enter a public URL supported by yt-dlp.
 2. Select the spoken language (or automatic detection) and subtitle language.
@@ -46,7 +45,9 @@ The player's CC button opens a language menu with readable language names, an of
 
 ## Legacy cleanup and retained tools
 
-The YouTube cookies file selector, validation/session fallback, obsolete authentication IPC and unused prototype downloader were removed. Startup removes the obsolete cookies path setting, without deleting any user-owned cookies file. Public analysis, native public captions, downloads, updates, engine repair, readiness checks, diagnostics and logs remain available. Restricted videos require a readable local file for this workflow.
+The YouTube cookies selector, online caption discovery/download/embedding, caption retry cache, obsolete authentication IPC and unused prototype downloader were removed. Startup removes retired caption options from download history and the obsolete cookies setting, without deleting user-owned media or subtitle files. Public analysis, downloads, updates, engine repair, readiness checks, diagnostics and logs remain available. Subtitle creation now uses the local speech system; embedding uses the local subtitle workflow or the completed download's merge button. YouTube can still reject public URL analysis with bot verification or viewing-permission checks; those failures are reported separately from subtitle processing.
+
+Rejected analysis has a short cooldown shared across equivalent YouTube watch, Shorts and share URLs. The IPC handler checks it before fetching optional title metadata, and aborts optional requests when analysis fails. This prevents repeated requests from the app; it does not clear a verification requirement imposed by YouTube. On the current device, a direct native audit confirmed Deno 2.9.4, EJS 0.8.0 and yt-dlp 2026.08.19 were available, while both the requested video and a separate public video were rejected before format discovery. Testing alternate supported clients and Chrome request impersonation also failed; these unproven overrides were not added to the production pipeline.
 
 ## Verification
 

@@ -42,7 +42,7 @@ export function validateSubtitleMedia(source: MediaProbe, output: MediaProbe, la
   if (before && rate(before.avg_frame_rate) > 0 && Math.abs(rate(before.avg_frame_rate) - rate(after?.avg_frame_rate)) > 0.01) throw new Error('Subtitle processing changed video FPS')
   if (source.streams?.some(s => s.codec_type === 'audio') && !output.streams?.some(s => s.codec_type === 'audio')) throw new Error('Subtitle processing removed audio')
   if (!output.streams?.some(s => s.codec_type === 'subtitle' && (!language || s.tags?.language === language
-    || s.tags?.title === language || s.tags?.handler_name === language || (subtitleLanguageTag(language) !== 'und' && s.tags?.language === subtitleLanguageTag(language))))) throw new Error('YOUTUBE_SUBTITLE_UNAVAILABLE')
+    || s.tags?.title === language || s.tags?.handler_name === language || (subtitleLanguageTag(language) !== 'und' && s.tags?.language === subtitleLanguageTag(language))))) throw new Error('SUBTITLE_TRACK_UNAVAILABLE')
 }
 
 type VideoSpec = { containers: string[]; video: string[]; audio?: string[]; args: string[] }

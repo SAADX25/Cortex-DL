@@ -162,11 +162,6 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
         {/* Action buttons */}
         <div className="dc-actions">
           <div className="dc-action-group">
-            {vm.showSubtitleRecovery && (
-              <button className="dc-btn primary" onClick={() => openSubtitleStudio(vm.sourceUrl)}>
-                <Captions size={15} />{lang === 'ar' ? 'ترجمة محلية من الصوت' : 'Local speech subtitles'}
-              </button>
-            )}
             {vm.showPause && (
               <button className="dc-btn primary" onClick={vm.onPause} aria-label={t.btn_pause}>
                 <Pause size={15} />{lang === 'ar' ? 'إيقاف' : 'Pause'}

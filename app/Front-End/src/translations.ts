@@ -135,8 +135,8 @@ export interface Translations {
   speed_auto: string;
   youtube_auth_required: string;
   youtube_rate_limited: string;
-  youtube_subtitle_rate_limited: string;
-  youtube_subtitle_unavailable: string;
+  youtube_bot_verification: string;
+  download_retry_required: string;
   youtube_formats_restricted: string;
   youtube_po_token_required: string;
   youtube_network_error: string;
@@ -294,10 +294,10 @@ export const translations: Record<Language, Translations> = {
     btn_audio: "صوت",
     new_folder_placeholder: "مجلد جديد (اختياري)",
     speed_auto: "تلقائي",
-    youtube_auth_required: "يتطلب YouTube تسجيل الدخول أو التحقق. جرّب فيديو عامًا أو اختر ملفًا من جهازك في قسم الترجمات.",
+    youtube_auth_required: "هذا الفيديو يتطلب حسابًا أو صلاحية مشاهدة على YouTube. تعذر تحليل الرابط.",
     youtube_rate_limited: "قيّد YouTube الطلبات مؤقتاً (429). انتظر ثم أعد المحاولة؛ هذا الخطأ لا يعني أن ملف الكوكيز مطلوب.",
-    youtube_subtitle_rate_limited: "قيّد YouTube طلبات الترجمة مؤقتاً (429). انتظر قبل إعادة المحاولة. لم تُحمّل الترجمة المطلوبة، ولن يُعتمد الفيديو على أنه مكتمل بدونها.",
-    youtube_subtitle_unavailable: "تعذر الحصول على ترجمة YouTube المختارة أو تضمينها. استخدم «ترجمة محلية من الصوت» لإنشاء ترجمة على جهازك.",
+    youtube_bot_verification: "رفض YouTube تحليل الرابط بسبب التحقق الآلي. تحقق من فتح الفيديو في المتصفح، وحدّث محرك yt-dlp ثم أعد المحاولة لاحقًا.",
+    download_retry_required: "لم يكتمل التنزيل السابق. أعد المحاولة لتنزيل الفيديو بالنظام الحالي.",
     youtube_formats_restricted: "قيّد YouTube بعض الصيغ أو لم يوفر صيغة قابلة للتنزيل. حدّث الجودة لاحقاً.",
     youtube_po_token_required: "تشير بيانات الاستخراج إلى ضرورة رمز إثبات المصدر لبعض الطلبات. ملف الكوكيز وحده قد لا يحل ذلك.",
     youtube_network_error: "تعذر الاتصال بـ YouTube. تحقق من الشبكة ثم أعد المحاولة.",
@@ -451,10 +451,10 @@ export const translations: Record<Language, Translations> = {
     btn_audio: "Audio",
     new_folder_placeholder: "New Folder (Optional)",
     speed_auto: "Auto",
-    youtube_auth_required: "YouTube requires sign-in or bot verification. Try a public video, or select a local file in Subtitles.",
+    youtube_auth_required: "This video requires an account or viewing permission on YouTube. The link could not be analyzed.",
     youtube_rate_limited: "YouTube temporarily rate-limited requests (429). Wait before trying again.",
-    youtube_subtitle_rate_limited: "YouTube temporarily rate-limited subtitle requests (429). Wait before retrying. Requested captions were not downloaded, so the video will not be marked complete without them.",
-    youtube_subtitle_unavailable: "The selected YouTube captions could not be fetched or embedded. Use Local speech subtitles to generate captions on your computer.",
+    youtube_bot_verification: "YouTube blocked link analysis with a bot verification check. Check that the video opens in your browser, update the yt-dlp engine, then try again later.",
+    download_retry_required: "The previous download did not finish. Retry to download the video with the current system.",
     youtube_formats_restricted: "YouTube restricted some formats or reported no downloadable format. Refresh formats later.",
     youtube_po_token_required: "The video provider requires an additional access token. Select a local file to generate subtitles.",
     youtube_network_error: "YouTube could not be reached. Check your connection and retry.",

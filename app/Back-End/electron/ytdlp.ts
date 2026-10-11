@@ -1,5 +1,4 @@
 import type { AnalyzeResult, JsRuntimeStatus } from './types'
-import { discoverCaptions } from './captionDiscovery'
 import { diagnosticCategories, youtubeDiagnostic } from './youtubeDiagnostics'
 import log from 'electron-log'
 import path from 'node:path'
@@ -11,10 +10,11 @@ import { engineReceipts, ensureEnginesReady } from './engineReadiness'
 import { ytdlpCacheArgs } from './ytdlpCache'
 import { analysisTiming } from './analysisTiming'
 import { AnalysisCoordinator } from './analysisCoordinator'
+import { normalizeAnalysisUrl } from '../../Shared/analysisUrl'
 import { extractAnalysis } from './analysisProcess'
 import { fetchBoundedJson } from './analysisNetwork'
 import { extractPreview, extractPreviewStreams, PREVIEW_FORMAT, TRIM_PREVIEW_FORMAT, type PreviewStreams, type PreviewExtractionOptions } from './previewExtraction'
-import { getErrorText, isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE } from '../../Shared/youtubeErrors'
+import { getErrorText, isYouTubeUrl, isYouTubeAuthRequiredError, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_BOT_VERIFICATION_CODE } from '../../Shared/youtubeErrors'
 export { isYouTubeAuthRequiredError, YOUTUBE_AUTH_REQUIRED_CODE } from '../../Shared/youtubeErrors'
 
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000
@@ -26,8 +26,8 @@ export class YouTubeAuthRequiredError extends Error {
 
   constructor() {
     super(
-      `${YOUTUBE_AUTH_REQUIRED_CODE}: YouTube requires sign-in or CAPTCHA verification. ` +
-      'For local subtitles, select a video file already on your device.',
+      `${YOUTUBE_AUTH_REQUIRED_CODE}: This video requires YouTube viewing permission. ` +
+      'Video analysis was blocked by YouTube.',
     )
     this.name = 'YouTubeAuthRequiredError'
   }
@@ -45,6 +45,14 @@ async function prepareYtdlp(): Promise<void> {
   await checkJsRuntime()
 }
 const analysisCooldown = new Map<string, { code: string; until: number }>()
+
+/** Check before optional metadata calls too; share links identify the same video. */
+export function assertAnalysisAllowed(input: string): void {
+  const key = `${normalizeAnalysisUrl(input)}\0public`
+  const cooldown = analysisCooldown.get(key)
+  if (cooldown && cooldown.until > Date.now()) throw new Error(cooldown.code)
+  analysisCooldown.delete(key)
+}
 
 export async function isYtdlpAvailable(): Promise<boolean> {
   return (await engineReceipts.inspect('yt-dlp')).available
@@ -94,17 +102,17 @@ export function getJsRuntimeArgs(): string[] { return runtimeSelection.args }
 
 export async function analyzeWithYtdlp(url: string, signal?: AbortSignal): Promise<AnalyzeResult> {
   signal?.throwIfAborted()
+  url = normalizeAnalysisUrl(url)
+  assertAnalysisAllowed(url)
   await prepareYtdlp()
   signal?.throwIfAborted()
   const scope = 'public'
   const cooldownKey = `${url}\0${scope}`
-  const cooldown = analysisCooldown.get(cooldownKey)
-  if (cooldown && cooldown.until > Date.now()) throw new Error(cooldown.code)
-  analysisCooldown.delete(cooldownKey)
+  assertAnalysisAllowed(url)
   try { return await analysisCoordinator.run(url, (normalized, owned) => extractFullAnalysis(normalized, owned), signal, scope) } catch (error) {
     signal?.throwIfAborted()
     const code = youtubeErrorCode(error)
-    if (isYouTubeUrl(url) && (code?.includes('RATE_LIMITED') || code === YOUTUBE_AUTH_REQUIRED_CODE)) {
+    if (isYouTubeUrl(url) && (code?.includes('RATE_LIMITED') || code === YOUTUBE_AUTH_REQUIRED_CODE || code === YOUTUBE_BOT_VERIFICATION_CODE)) {
       analysisCooldown.set(cooldownKey, { code, until: Date.now() + 60_000 })
       if (analysisCooldown.size > 50) analysisCooldown.delete(analysisCooldown.keys().next().value!)
     }
@@ -212,13 +220,10 @@ async function extractFullAnalysis(url: string, signal: AbortSignal): Promise<An
       extractedThumbnail = info.thumbnails[info.thumbnails.length - 1].url;
   }
 
-  const captionDiscovery = discoverCaptions(info, warnings)
-  const subtitles = captionDiscovery.subtitles
   const resolutions = [...new Set<number>(formats.map((f: { height: number }) => f.height).filter(Boolean))]
   const categories = diagnosticCategories(warnings)
   youtubeDiagnostic('analysis', { mode: 'public', runtime: runtimeSelection.name,
-    ytDlpVersion: await getYtdlpVersion(), elapsedMs: Date.now() - startMs, formatCount: formats.length, resolutions, categories,
-    manualCaptions: subtitles.filter(track => !track.isAutomatic).length, automaticCaptions: subtitles.filter(track => track.isAutomatic).length })
+    ytDlpVersion: await getYtdlpVersion(), elapsedMs: Date.now() - startMs, formatCount: formats.length, resolutions, categories })
 
 
   const result: AnalyzeResult = {
@@ -230,7 +235,6 @@ async function extractFullAnalysis(url: string, signal: AbortSignal): Promise<An
     likes: info.like_count,
     dislikes: info.dislike_count,
     duration: info.duration,
-    subtitles, captionDiscovery,
     qualityStatus: categories.some(category => /FORMATS_RESTRICTED|PO_TOKEN_REQUIRED|formats-skipped|js-challenge/.test(category))
       ? 'restricted' : resolutions.length && Math.max(...resolutions) <= 360 ? 'limited' : 'available',
   };

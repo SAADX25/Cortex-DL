@@ -5,8 +5,6 @@ const Module = require('node:module')
 const os = require('node:os')
 const originalLoad = Module._load
 const calls = []
-let subtitlePlan
-let reusableMedia = false
 let fixtureWarnings = ''
 let extract = async () => info(1080)
 function info(height) {
@@ -14,10 +12,6 @@ function info(height) {
     automatic_captions: { ar: [{ name: 'Arabic' }] } })
 }
 Module._load = function(request, parent, ...rest) {
-  if (request === '../youtubeMediaCache') return {
-    findCompletedYouTubeMedia: async () => reusableMedia ? 'fixture.mp4' : null,
-    rememberCompletedYouTubeMedia: async () => {},
-  }
   if (request === './engineReadiness' || request === '../engineReadiness') return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
   if (request === 'electron-log') return { info(){}, warn(){}, error(){} }
   if (request === 'electron') return { app: { isPackaged: false, getPath: () => os.tmpdir() } }
@@ -30,27 +24,23 @@ Module._load = function(request, parent, ...rest) {
     extractPreviewStreams: async (_binary, args) => { calls.push(args); return extract(args) } }
   if (request === '../mediaFiles' && parent.filename.endsWith('YoutubeEngine.ts')) return {
     findTaskMediaFile: async () => 'fixture.mp4',
-    probeMediaFile: async () => { if (!reusableMedia) throw new Error('No completed cached media'); return { streams: [{ codec_type: 'video', height: 1080 }] } },
-  }
-  if (request === '../youtubeSubtitles' && parent.filename.endsWith('YoutubeEngine.ts')) return {
-    prepareYouTubeSubtitle: (...args) => subtitlePlan(...args), embedYouTubeSubtitle: async () => 'fixture.subtitled.mkv',
   }
   return originalLoad.call(this, request, parent, ...rest)
 }
 const { youtubeErrorCode, isYouTubeAuthRequiredError, isYouTubeUrl } = require('../Shared/youtubeErrors.ts')
-const { analyzeWithYtdlp, getDirectStreamUrl, getTrimPreviewStreams } = require('../Back-End/electron/ytdlp.ts')
+const { analyzeWithYtdlp, assertAnalysisAllowed, getDirectStreamUrl, getTrimPreviewStreams } = require('../Back-End/electron/ytdlp.ts')
 const { YoutubeEngine } = require('../Back-End/electron/engines/YoutubeEngine.ts')
 const { normalizeIpcError, youtubeErrorMessage } = require('../Front-End/src/lib/downloadHelpers.ts')
 const { translations } = require('../Front-End/src/translations.ts')
 
-test('YouTube subtitle 429 is never reported as authentication, including generic cookies advice', () => {
-  const subtitle = "ERROR: Unable to download video subtitles for 'ar': HTTP Error 429: Too Many Requests"
+test('YouTube 429 is never reported as authentication, including generic login advice', () => {
+  const subtitle = "ERROR: HTTP Error 429: Too Many Requests. Sign in to confirm you are not a bot"
   for (const error of [subtitle, new Error(subtitle), { stderr: subtitle }, new Error('Failed', { cause: new Error(subtitle) })]) {
-    assert.equal(youtubeErrorCode(error), 'YOUTUBE_SUBTITLE_RATE_LIMITED')
+    assert.equal(youtubeErrorCode(error), 'YOUTUBE_RATE_LIMITED')
     assert.equal(isYouTubeAuthRequiredError(error), false)
   }
   assert.equal(youtubeErrorCode('HTTP Error 429. Use --cookies-from-browser or --cookies'), 'YOUTUBE_RATE_LIMITED')
-  assert.equal(youtubeErrorCode('Sign in to confirm you are not a bot'), 'YOUTUBE_AUTH_REQUIRED')
+  assert.equal(youtubeErrorCode('Sign in to confirm you are not a bot'), 'YOUTUBE_BOT_VERIFICATION')
   assert.equal(youtubeErrorCode('HTTP Error 403: Forbidden'), null)
 })
 
@@ -65,7 +55,8 @@ test('YouTube analysis preserves 1080p when configured cookies would expose only
   extract = async args => info(args.includes('--cookies') ? 360 : 1080)
   const result = await analyzeWithYtdlp('https://youtu.be/publicfix01')
   assert.equal(result.formats[0].height, 1080)
-  assert.equal(result.subtitles.find(track => track.languageCode === 'ar').isAutomatic, true)
+  assert.equal(Object.hasOwn(result, 'subtitles'), false)
+  assert.equal(Object.hasOwn(result, 'captionDiscovery'), false)
   assert.equal(calls.length, 1)
   assert.equal(calls[0].includes('--cookies'), false)
 })
@@ -81,20 +72,6 @@ test('YouTube first analysis initializes Deno and retains warnings with no clien
   assert.equal(calls[0].includes('--extractor-args'), false)
 })
 
-test('YouTube caption discovery retains manual preference and distinguishes missing from blocked', () => {
-  const { discoverCaptions, captionFailure } = require('../Back-End/electron/captionDiscovery.ts')
-  const result = discoverCaptions({ subtitles: { en: [{ name: 'English' }] }, automatic_captions: {
-    en: [{ name: 'English auto' }], 'en-US': [{ name: 'English (US)' }], ar: [{ name: 'Arabic' }], empty: [] } })
-  assert.equal(result.state, 'available')
-  assert.equal(result.subtitles.find(s => s.languageCode === 'en').isAutomatic, false)
-  assert.equal(result.subtitles.find(s => s.languageCode === 'en-US').isAutomatic, true)
-  assert.equal(discoverCaptions({ subtitles: {}, automatic_captions: {} }).state, 'none-confirmed')
-  assert.equal(discoverCaptions({}).state, 'unknown')
-  assert.equal(discoverCaptions({ subtitles: {}, automatic_captions: {} }, 'ERROR: LOGIN_REQUIRED').state, 'restricted')
-  assert.equal(captionFailure('HTTP Error 429').state, 'rate-limited')
-  assert.equal(captionFailure('Failed to resolve host').state, 'unknown')
-})
-
 test('YouTube classifier requires actual PO token diagnostics and never treats generic cookie advice as authentication', () => {
   for (const [message, code] of [
     ['ERROR: Failed to resolve host; use --cookies-from-browser or --cookies', 'YOUTUBE_NETWORK_ERROR'],
@@ -102,19 +79,6 @@ test('YouTube classifier requires actual PO token diagnostics and never treats g
     ['WARNING: formats have been skipped as they are missing a url', 'YOUTUBE_FORMATS_RESTRICTED'],
     ['HTTP Error 403', null], ['Use --cookies-from-browser or --cookies', null],
   ]) assert.equal(youtubeErrorCode(message), code)
-})
-
-test('YouTube manual and automatic caption extraction use separate arguments and bounded retries', () => {
-  const engine = new YoutubeEngine()
-  for (const automatic of [true, false]) {
-    const args = engine.buildYtdlpArgs({ ...task(), subtitleLanguage: 'en-US', subtitleIsAutomatic: automatic }, 'bestVideo', { ffmpegDir: os.tmpdir() }, context().runtime)
-    assert.equal(args.includes('--write-auto-subs'), automatic)
-    assert.equal(args.includes('--write-subs'), !automatic)
-    assert.equal(args[args.indexOf('--retries') + 1], '0')
-    assert.equal(args[args.indexOf('--sub-langs') + 1], 'en-US')
-    assert.match(args[args.indexOf('-f') + 1], /bestvideo.*\+bestaudio/)
-    assert.equal(args.includes('--merge-output-format'), true)
-  }
 })
 
 test('YouTube analysis reports private content without retrying an account',async()=>{
@@ -170,30 +134,56 @@ test('YouTube public media omits generic provider credentials while other provid
   assert.equal(providerArgs.includes('--cookies'), false)
 })
 
-test('YouTube download fails once for authentication and subtitle throttling', async () => {
-  for (const failure of ['LOGIN_REQUIRED', "Unable to download video subtitles for 'ar': HTTP Error 429: Too Many Requests"]) {
+test('YouTube download fails once for authentication and request throttling', async () => {
+  for (const failure of ['LOGIN_REQUIRED', 'HTTP Error 429: Too Many Requests']) {
     const engine = new YoutubeEngine(), seen = []
     engine.runYtdlpAttempt = async (_task, _context, _runtime, args) => {
       seen.push(args); return { exitCode: 1, detectedFinalPath: null, stderr: failure }
     }
     const result = await engine.download(task(), context())
-    assert.deepEqual(result, { kind: 'fatal-error', message: failure === 'LOGIN_REQUIRED' ? 'YOUTUBE_AUTH_REQUIRED' : 'YOUTUBE_SUBTITLE_RATE_LIMITED' })
+    assert.deepEqual(result, { kind: 'fatal-error', message: failure === 'LOGIN_REQUIRED' ? 'YOUTUBE_AUTH_REQUIRED' : 'YOUTUBE_RATE_LIMITED' })
     assert.equal(seen.length, 1)
     assert.equal(seen[0].includes('--cookies'), false)
   }
 })
 
-test('Arabic and English errors distinguish subtitle throttling, request throttling and sign-in', () => {
+test('Arabic and English errors distinguish bot verification, request throttling and viewing permission', () => {
   for (const messages of Object.values(translations)) {
     for (const [code, message] of [['YOUTUBE_AUTH_REQUIRED', messages.youtube_auth_required],
-      ['YOUTUBE_RATE_LIMITED', messages.youtube_rate_limited], ['YOUTUBE_SUBTITLE_RATE_LIMITED', messages.youtube_subtitle_rate_limited],
-      ['YOUTUBE_SUBTITLE_UNAVAILABLE', messages.youtube_subtitle_unavailable]]) {
+      ['YOUTUBE_RATE_LIMITED', messages.youtube_rate_limited],
+      ['YOUTUBE_BOT_VERIFICATION', messages.youtube_bot_verification]]) {
       assert.equal(youtubeErrorMessage(code, messages), message)
       assert.equal(normalizeIpcError(new Error(`Error invoking remote method 'analyze': Error: ${code}`), 'fallback', messages), message)
     }
     assert.equal(normalizeIpcError('HTTP Error 429: Too Many Requests', 'fallback', messages), messages.youtube_rate_limited)
     assert.equal(normalizeIpcError('', 'fallback', messages), 'fallback')
   }
+})
+
+test('YouTube bot verification is reported separately, without caption advice or repeated analysis requests', async () => {
+  calls.length = 0
+  extract = async () => { throw new Error("Sign in to confirm you're not a bot. Use --cookies") }
+  const url = 'https://youtu.be/botfixture1'
+  await assert.rejects(analyzeWithYtdlp(url), /YOUTUBE_BOT_VERIFICATION/)
+  await assert.rejects(analyzeWithYtdlp('https://www.youtube.com/watch?v=botfixture1&si=shared&t=10'), /YOUTUBE_BOT_VERIFICATION/)
+  assert.throws(() => assertAnalysisAllowed('https://www.youtube.com/shorts/botfixture1'), /YOUTUBE_BOT_VERIFICATION/)
+  await assert.rejects(analyzeWithYtdlp(url), /YOUTUBE_BOT_VERIFICATION/)
+  assert.equal(calls.length, 1)
+  for (const messages of Object.values(translations)) {
+    assert.equal(normalizeIpcError(new Error('YOUTUBE_BOT_VERIFICATION'), 'fallback', messages), messages.youtube_bot_verification)
+    assert.equal(normalizeIpcError('DOWNLOAD_RETRY_REQUIRED', 'fallback', messages), messages.download_retry_required)
+    assert.doesNotMatch(messages.youtube_bot_verification, /Subtitles|ترجمات|ترجمة|cookies/i)
+  }
+})
+
+test('YouTube video engine ignores obsolete subtitle selections even when passed by legacy callers', async () => {
+  const engine = new YoutubeEngine(), seen = []
+  engine.runYtdlpAttempt = async (_task, _context, _runtime, args) => {
+    seen.push(args); return { exitCode: 0, detectedFinalPath: 'fixture.mp4', stderr: '' }
+  }
+  assert.deepEqual(await engine.download({ ...task(), subtitleLanguage: 'ar', subtitleIsAutomatic: true }, context()), { kind: 'success', candidate: 'fixture.mp4' })
+  assert.equal(seen.length, 1)
+  for (const flag of ['--write-auto-subs', '--write-subs', '--sub-langs', '--embed-subs', '--cookies']) assert.equal(seen[0].includes(flag), false)
 })
 
 test('YouTube media 403 tries public HLS once with the same quality', async () => {
@@ -210,66 +200,13 @@ test('YouTube media 403 tries public HLS once with the same quality', async () =
   assert.equal(seen[1].includes('--cookies'), false)
 })
 
-test('YouTube keeps media and HLS public then extracts subtitles independently before embedding', async () => {
-  const engine = new YoutubeEngine(), seen = []
-  subtitlePlan = async (_task, signal, run) => {
-    signal.throwIfAborted()
-    const result = await run()
-    assert.equal(result.exitCode, 0)
-    return 'fixture.ar.vtt'
-  }
-  engine.runYtdlpAttempt = async (_task, _context, _runtime, args) => {
-    seen.push(args)
-    return { exitCode: seen.length === 1 ? 1 : 0, detectedFinalPath: 'fixture.mp4',
-      stderr: seen.length === 1 ? 'unable to download video data: HTTP Error 403: Forbidden' : '' }
-  }
-  const result = await engine.download({ ...task(), subtitleLanguage: 'ar', subtitleIsAutomatic: true }, context())
-  assert.deepEqual(result, { kind: 'success', candidate: 'fixture.subtitled.mkv' })
-  assert.equal(seen.length, 3)
-  assert.equal(seen[2].includes('--skip-download'), true)
-  assert.equal(seen[2].includes('--no-progress'), true, 'caption bytes must not count as video progress')
-  assert.equal(seen[2].includes('--cookies'), false)
-  assert.equal(seen[2].includes('--write-auto-subs'), true)
-  assert.equal(seen[2].includes('--embed-subs'), false)
-  assert.equal(seen[2][seen[2].indexOf('--sub-format') + 1], 'vtt')
-  for (const args of seen.slice(0, 2)) {
-    assert.equal(args.includes('--cookies'), false)
-    assert.equal(args.includes('--write-auto-subs'), false)
-    assert.equal(args.includes('--embed-subs'), false)
-    assert.match(args[args.indexOf('-f') + 1], /height<=1080/)
-  }
-})
-
-test('YouTube retains media for subtitle-only retry but never approves missing requested captions', async () => {
-  const engine = new YoutubeEngine()
-  subtitlePlan = async () => { throw new Error('YOUTUBE_SUBTITLE_RATE_LIMITED') }
-  let mediaCalls = 0
-  engine.runYtdlpAttempt = async () => { mediaCalls++; return { exitCode: 0, detectedFinalPath: 'fixture.mp4', stderr: '' } }
-  assert.deepEqual(await engine.download({ ...task(), subtitleLanguage: 'ar' }, context()),
-    { kind: 'fatal-error', message: 'YOUTUBE_SUBTITLE_RATE_LIMITED' })
-  assert.equal(mediaCalls, 1)
-})
-
-test('YouTube subtitle-only retry reuses completed media without another media extraction', async () => {
-  reusableMedia = true
-  try {
-    const engine = new YoutubeEngine()
-    subtitlePlan = async () => 'fixture.ar.vtt'
-    engine.runYtdlpAttempt = async () => { throw new Error('Completed media must not be requested again') }
-    assert.deepEqual(await engine.download({ ...task(), subtitleLanguage: 'ar' }, context()),
-      { kind: 'success', candidate: 'fixture.subtitled.mkv' })
-  } finally { reusableMedia = false }
-})
-
-test('YouTube HLS fallback is bounded, skips subtitle errors and honors cancellation', async () => {
-  for (const mode of ['media', 'subtitle', 'cancel']) {
+test('YouTube HLS fallback is bounded and honors cancellation', async () => {
+  for (const mode of ['media', 'cancel']) {
     const engine = new YoutubeEngine(), seen = [], ctx = context()
     engine.runYtdlpAttempt = async (_task, _context, runtime, args) => {
       seen.push(args)
       if (mode === 'cancel') runtime.abortController.abort()
-      return { exitCode: 1, detectedFinalPath: null, stderr: mode === 'subtitle'
-        ? "Unable to download video subtitles for 'ar': HTTP Error 403: Forbidden"
-        : 'unable to download video data: HTTP Error 403: Forbidden' }
+      return { exitCode: 1, detectedFinalPath: null, stderr: 'unable to download video data: HTTP Error 403: Forbidden' }
     }
     if (mode === 'cancel') await assert.rejects(engine.download(task(), ctx), /abort/i)
     else assert.equal((await engine.download(task(), ctx)).kind, 'fatal-error')

@@ -1,4 +1,4 @@
-import { getErrorText, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_RATE_LIMITED_CODE, YOUTUBE_SUBTITLE_RATE_LIMITED_CODE, YOUTUBE_SUBTITLE_UNAVAILABLE_CODE } from '../../../Shared/youtubeErrors'
+import { getErrorText, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_RATE_LIMITED_CODE, YOUTUBE_BOT_VERIFICATION_CODE } from '../../../Shared/youtubeErrors'
 import type { Translations } from '../translations'
 
 export function isYtdlpUrl(url: string): boolean {
@@ -25,14 +25,13 @@ export function isYtdlpUrl(url: string): boolean {
 }
 
 
-type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_subtitle_rate_limited' | 'youtube_subtitle_unavailable' | 'youtube_formats_restricted' | 'youtube_po_token_required' | 'youtube_network_error'>
+type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_bot_verification' | 'download_retry_required' | 'youtube_formats_restricted' | 'youtube_po_token_required' | 'youtube_network_error'>
 
 export function youtubeErrorMessage(error: unknown, messages: YouTubeMessages): string | null {
   switch (youtubeErrorCode(error)) {
     case YOUTUBE_AUTH_REQUIRED_CODE: return messages.youtube_auth_required
     case YOUTUBE_RATE_LIMITED_CODE: return messages.youtube_rate_limited
-    case YOUTUBE_SUBTITLE_RATE_LIMITED_CODE: return messages.youtube_subtitle_rate_limited
-    case YOUTUBE_SUBTITLE_UNAVAILABLE_CODE: return messages.youtube_subtitle_unavailable
+    case YOUTUBE_BOT_VERIFICATION_CODE: return messages.youtube_bot_verification
     case 'YOUTUBE_FORMATS_RESTRICTED': return messages.youtube_formats_restricted
     case 'YOUTUBE_PO_TOKEN_REQUIRED': return messages.youtube_po_token_required
     case 'YOUTUBE_NETWORK_ERROR': return messages.youtube_network_error
@@ -42,6 +41,7 @@ export function youtubeErrorMessage(error: unknown, messages: YouTubeMessages): 
 
 export function normalizeIpcError(error: unknown, fallback: string, messages: YouTubeMessages): string {
   const rawMessage = getErrorText(error)
+  if (rawMessage.includes('DOWNLOAD_RETRY_REQUIRED')) return messages.download_retry_required
   const youtubeMessage = youtubeErrorMessage(error, messages)
   if (youtubeMessage) return youtubeMessage
 
