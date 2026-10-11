@@ -8,6 +8,7 @@ const gpuHelpers = require('../Back-End/electron/subtitles/gpu.ts')
 const originalLoad = Module._load
 Module._load = function(request, parent, ...rest) {
   if (request === '../paths') return { getBinaryPath: name => name }
+  if (request === 'electron-log') return { info() {}, warn() {}, error() {} }
   if (request === '../engineReadiness') return { ensureEnginesReady: async () => {} }
   if (request === '../ytdlp') return { getJsRuntimeArgs: () => [], checkJsRuntime: async () => {} }
   if (request === '../mediaFiles') return { probeMediaFile: async () => ({ format: { duration: String(mediaDuration) }, streams: [{ codec_type: 'audio' }] }) }

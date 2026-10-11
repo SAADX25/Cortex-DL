@@ -6,7 +6,12 @@ const root = path.resolve(__dirname, '..')
 const version = require('../package.json').version
 async function run(exe, directory, offline = false) {
   await new Promise((resolve, reject) => {
-    const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
+    const env = {
+      ...process.env,
+      APPDATA: path.join(directory, 'appdata'),
+      LOCALAPPDATA: path.join(directory, 'localappdata'),
+    }
+    delete env.ELECTRON_RUN_AS_NODE
     const child = spawn(exe, ['--packaged-smoke', ...(offline ? ['--smoke-offline'] : []), `--smoke-dir=${directory}`], { windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
     child.stdout.on('data', chunk => { output = (output + chunk.toString()).slice(-65536) })

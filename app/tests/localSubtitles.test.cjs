@@ -6,6 +6,12 @@ const path = require('node:path')
 const os = require('node:os')
 const http = require('node:http')
 const { createHash } = require('node:crypto')
+const Module = require('node:module')
+const originalLoad = Module._load
+Module._load = function(request, parent, ...rest) {
+  if (request === 'electron-log') return { info() {}, warn() {}, error() {} }
+  return originalLoad.call(this, request, parent, ...rest)
+}
 const { SUBTITLE_LANGUAGES, validateSubtitleRequest } = require('../Shared/localSubtitles.ts')
 const { parseWhisperDocument, parseSpeechRecognition, hasSpokenText, serializeSubtitles, validateCues } = require('../Shared/subtitleCues.ts')
 const { translationPrompt, validateTranslation } = require('../Back-End/electron/subtitles/translator.ts')
