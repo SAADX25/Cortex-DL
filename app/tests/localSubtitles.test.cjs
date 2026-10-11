@@ -61,6 +61,15 @@ test('recognition distinguishes music events from multilingual speech without hi
   assert.throws(() => parseSpeechRecognition({ transcription: [segment('♪', -1)] }, 11), /timing/)
   assert.throws(() => parseSpeechRecognition({}, 11), /Invalid speech/)
 })
+test('repeated recognition phrases need review without deleting speech or changing its audio offsets', () => {
+  const transcription = ['جملة أخرى', 'أنا محامي', 'أنا محامي', 'أنا محامي', 'أنا محامي', 'نهاية الكلام'].map((text, i) => ({
+    text, offsets: { from: i * 2000, to: i * 2000 + 1500 }, tokens: [{ p: .98 }],
+  }))
+  const parsed = parseSpeechRecognition({ result: { language: 'ar' }, transcription }, 12)
+  assert.deepEqual(parsed.cues.map(c => c.review), [false, true, true, true, true, false])
+  assert.deepEqual(parsed.cues.map(c => [c.text, c.start, c.end]), transcription.map(c => [c.text, c.offsets.from / 1000, c.offsets.to / 1000]))
+})
+
 test('local translation uses the model template and refuses empty or truncated-looking output', () => {
   const prompt = translationPrompt('Hello, how are you?', 'en', 'ar')
   assert.match(prompt, /English \(en\) to Arabic \(ar\)/)

@@ -148,6 +148,12 @@ test('floating player preserves real playback and Arabic cues, frees downloads, 
         win.webContents.setWindowOpenHandler(()=>({action:'deny'}));await js('document.querySelector(".player-floating-toggle").click()');await wait('!!document.querySelector(".floating-player-error")');
         assert.equal(await js('window.fixture.result().floating'),false);assert.equal(await js('!!document.querySelector("video")'),true);
         await js('window.fixture.stop()');await wait('!document.querySelector("video")');
+        // Windows Server can request reduced motion. Exercise both preferences explicitly.
+        win.webContents.debugger.attach('1.3');
+        await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+        await wait('!window.matchMedia("(prefers-reduced-motion: reduce)").matches');
+        // Observe real animation creation rather than racing its short active lifetime over IPC.
+        await js('(()=>{window.recordTransitions=[];window.nativeAnimate=Element.prototype.animate;Element.prototype.animate=function(...args){const animation=window.nativeAnimate.apply(this,args);if(this.classList.contains("audio-record-motion"))window.recordTransitions.push({frames:animation.effect.getKeyframes(),duration:animation.effect.getTiming().duration});return animation};})()');
         win.showInactive();await js('window.fixture.openAudio()');await wait('document.querySelector("audio")?.readyState>=2');
         await js('window.originalAudio=document.querySelector("audio");document.querySelector(".play-btn").click()');
         await wait('window.originalAudio.currentTime>0 && !window.originalAudio.paused');
@@ -168,7 +174,10 @@ test('floating player preserves real playback and Arabic cues, frees downloads, 
         const audioTime=await js('window.originalAudio.currentTime');
         await js('document.querySelector(".player-floating-toggle").click()');await wait('!!document.querySelector(".audio-view-wrapper.mini-mode")');
         assert.equal(await js('document.querySelector("audio")===window.originalAudio'),true,'Minimizing must preserve the audio element');
-        assert.ok(await js('document.querySelector(".audio-record-motion").getAnimations().length>0'),'Record must animate into the dock');
+        const recordTransition=await js('window.recordTransitions.at(-1)');
+        assert.ok(recordTransition,'Record must animate into the dock');
+        assert.equal(recordTransition.duration,320);
+        assert.notEqual(recordTransition.frames[0].transform,recordTransition.frames.at(-1).transform,'Transition must move the record into its new position');
         await delay(400);assert.ok(await js('window.originalAudio.currentTime')>audioTime);
         const miniBounds=await js('(()=>{const r=document.querySelector(".mini-mode").getBoundingClientRect();return {left:r.left,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight}})()');
         assert.ok(miniBounds.left>=0&&miniBounds.right<=miniBounds.width&&miniBounds.bottom<=miniBounds.height,JSON.stringify(miniBounds));
@@ -192,9 +201,11 @@ test('floating player preserves real playback and Arabic cues, frees downloads, 
         const narrow=await js('(()=>{const r=document.querySelector(".mini-mode").getBoundingClientRect();return {left:r.left,right:r.right,width:innerWidth,scroll:document.documentElement.scrollWidth}})()');
         assert.ok(narrow.left>=0&&narrow.right<=narrow.width,JSON.stringify(narrow));assert.equal(narrow.scroll,narrow.width);
         if(process.env.CORTEX_FLOATING_CAPTURE)fs.writeFileSync(path.join(process.env.CORTEX_FLOATING_CAPTURE,'audio-mini-narrow.png'),(await win.webContents.capturePage()).toPNG());
-        win.webContents.debugger.attach('1.3');await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+        await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
         await wait('window.matchMedia("(prefers-reduced-motion: reduce)").matches');
+        const transitionsBeforeReduce=await js('window.recordTransitions.length');
         await js('document.querySelector(".mini-expand").click();document.querySelector(".player-floating-toggle").click()');
+        assert.equal(await js('window.recordTransitions.length'),transitionsBeforeReduce,'Reduced motion must not create a record transition');
         assert.equal(await js('document.querySelector(".audio-record-motion").getAnimations().length'),0,'Reduced motion must skip the transition');
         await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[]});win.webContents.debugger.detach();
         const sessionsBeforeClose=await js('window.fixture.result().closed.length');

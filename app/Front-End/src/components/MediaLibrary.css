@@ -31,6 +31,8 @@
 .library-toolbar select { min-width: 145px; border: 1px solid rgba(255,255,255,.09); border-radius: 10px; padding: 0 10px; background: #142032; color: #b6c6dc; font-size: 12px; }
 .library-icon-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; border: 1px solid transparent; background: transparent; border-radius: 8px; color: #8d9fb8; transition: background .18s, color .18s; }
 .library-icon-button:hover:not(:disabled) { background: rgba(148,163,184,.1); color: #e2e8f0; }
+.library-folder { color: #facc15; background: rgba(250,204,21,.08); border-color: rgba(234,179,8,.2); }
+.library-folder:hover:not(:disabled) { background: #facc15; color: #000; border-color: #facc15; }
 .library-refresh { width: 43px; height: 43px; border-color: rgba(255,255,255,.09); }
 .library-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 20px 0 18px; margin-bottom: 22px; border-bottom: 1px solid rgba(255,255,255,.07); }
 .library-filters > button { display: inline-flex; gap: 8px; align-items: center; background: none; color: #91a6c0; border: 1px solid transparent; border-radius: 8px; padding: 8px 11px; font-size: 12px; }

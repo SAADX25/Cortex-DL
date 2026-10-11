@@ -45,6 +45,15 @@ export function parseSpeechRecognition(value: unknown, duration: number): Return
   if (Array.isArray(doc?.transcription) && doc.transcription.every(segment => typeof segment.text === 'string' && !cleanText(segment.text))) return null
   const parsed = parseWhisperDocument(value, duration)
   parsed.cues = parsed.cues.filter(cue => hasSpokenText(cue.text)).map((cue, i) => ({ ...cue, id: i + 1 }))
+  // A confident decoder can still get stuck repeating a phrase. Keep its words and
+  // audio offsets, but draw attention to runs that need a human review.
+  let runStart = 0
+  for (let i = 1; i < parsed.cues.length; i++) {
+    if (parsed.cues[i].text !== parsed.cues[i - 1].text) { runStart = i; continue }
+    if (i - runStart >= 2) {
+      parsed.cues[runStart].review = parsed.cues[runStart + 1].review = parsed.cues[i].review = true
+    }
+  }
   return parsed.cues.length ? parsed : null
 }
 export function subtitleTimestamp(seconds: number, srt = false): string {

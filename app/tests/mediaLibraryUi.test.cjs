@@ -24,7 +24,12 @@ test('media library UI imports, filters, plays, relocates, confirms removal and 
         assert.equal(await js('document.querySelectorAll(".library-card").length'),0,'Canceled file picker must not change the library');
         await js('window.fixture.canceled(false);document.querySelector(".library-header .library-add").click()');await wait('document.querySelectorAll(".library-card").length===3');await capture('library-en');
         assert.equal(await js('!!document.querySelector(".library-drop")'),false,'Populated library must not waste space on the drop banner');
-        await wait('Array.from(document.querySelectorAll(".library-thumbnail img")).filter(img=>img.naturalWidth>0).length===2');
+        // Artwork loads only near the viewport; row heights vary with runner fonts/DPI.
+        for(const selector of ['.library-card.video','.library-card.audio:not(.is-unavailable)']) {
+          await js('document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center",behavior:"instant"})');
+          await wait('document.querySelector('+JSON.stringify(selector+' .library-thumbnail img')+')?.naturalWidth>0');
+        }
+        await js('document.querySelector(".main-content").scrollTop=0');
         const assertRows=async()=>{
           const rows=await js('Array.from(document.querySelectorAll(".library-card")).map(card=>{const r=card.getBoundingClientRect(),t=card.querySelector(".library-thumbnail").getBoundingClientRect(),b=card.querySelector(".library-card-details").getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,imageRight:t.right,imageLeft:t.left,bodyLeft:b.left,bodyRight:b.right,rtl:document.querySelector(".media-library").dir==="rtl"}})');
           for(let i=0;i<rows.length;i++){

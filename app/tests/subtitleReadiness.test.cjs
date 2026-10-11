@@ -65,6 +65,15 @@ test('subtitle Generate enables after delayed readiness IPC, and refreshes exist
         assert.equal(await js('!!document.querySelector(".ss-review")'),false,'Non-verbal output must not offer a completed translation');
         await js('window.fixture.language("ar")');
         await wait("document.querySelector('.ss-error')?.textContent.includes('لم تُكتشف كلمات')",'Arabic no-speech explanation missing');
+        await js('document.querySelector(".ss-primary").click()');
+        await wait('!!document.querySelector(".ss-operation")','Timing retry operation did not start');
+        await js('window.fixture.retryTiming()');
+        await wait("document.querySelector('.ss-operation')?.textContent.includes('تعذّر ضبط توقيت الكلام')",'Arabic timing retry explanation missing');
+        await js('window.fixture.invalidTiming()');
+        await wait("document.querySelector('.ss-error')?.textContent.includes('توقيتًا غير صالح')",'Arabic timing failure explanation missing');
+        await js('window.fixture.language("en")');
+        await wait("document.querySelector('.ss-error')?.textContent.includes('invalid caption timing')",'English timing failure explanation missing');
+        await js('window.fixture.language("ar")');
         await js('window.fixture.gpu()');
         await wait('!!document.querySelector(".ss-gpu-setup")','GPU preparation should be offered for existing CPU models');
         await js("document.querySelector('.ss-compute-options input[value=cpu]').click()");

@@ -2,7 +2,7 @@ require('./register-ts.cjs')
 const test = require('node:test'), assert = require('node:assert/strict')
 const fs = require('node:fs/promises'), os = require('node:os'), path = require('node:path'), Module = require('node:module')
 let recognized = 0, stopped = 0, translated = 0, failTranslation = false, holdRecognition = false, activeChild = false
-let outputMode = 'speech', recognitionArgs = [], onRecognized = () => {}
+let outputMode = 'speech', recognitionArgs = [], onRecognized = () => {}, mediaDuration = 11
 let gpuFixture = null, gpuFailure = false, translatorGpuFailure = false, gpuAssets = true, recognitionBinaries = [], translatorConfigs = []
 const gpuHelpers = require('../Back-End/electron/subtitles/gpu.ts')
 const originalLoad = Module._load
@@ -10,7 +10,7 @@ Module._load = function(request, parent, ...rest) {
   if (request === '../paths') return { getBinaryPath: name => name }
   if (request === '../engineReadiness') return { ensureEnginesReady: async () => {} }
   if (request === '../ytdlp') return { getJsRuntimeArgs: () => [], checkJsRuntime: async () => {} }
-  if (request === '../mediaFiles') return { probeMediaFile: async () => ({ format: { duration: '11' }, streams: [{ codec_type: 'audio' }] }) }
+  if (request === '../mediaFiles') return { probeMediaFile: async () => ({ format: { duration: String(mediaDuration) }, streams: [{ codec_type: 'audio' }] }) }
   if (request === './gpu') return { ...gpuHelpers, detectNvidiaGpu: async () => gpuFixture }
   if (request === './process') return { SubtitleProcesses: class {
     constructor(signal) { this.signal = signal }
@@ -21,9 +21,18 @@ Module._load = function(request, parent, ...rest) {
         recognized++; recognitionArgs.push(args); recognitionBinaries.push(binary); activeChild = true
         try {
           if (binary === 'whisperGpu' && gpuFailure) throw Error('GPU memory allocation failed')
-          if (binary === 'whisperGpu') { onOutput?.('whisper_model_load: CUDA0 total size = 1080.47 MB'); onOutput?.('x'.repeat(15000)) }
+          if (binary === 'whisperGpu') {
+            onOutput?.('whisper_model_load: CUDA0 total size = 1080.47 MB'); onOutput?.('x'.repeat(15000))
+            if (args.includes('--vad')) onOutput?.('whisper_vad_init_with_params: CPU total size = 0.88 MB\nwhisper_backend_init_gpu: no GPU found')
+          }
           if (holdRecognition) await new Promise((resolve, reject) => this.signal.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')), { once: true }))
-          const transcription = outputMode === 'empty' ? [] : outputMode === 'music-only' || outputMode === 'retry' && args.includes('--vad') ? [{ offsets: { from: 70, to: 570 }, text: '♪' }] : [
+          const transcription = outputMode === 'invalid-timing' ? [{ offsets: { from: 7500, to: 7500 }, text: 'كلام عربي' }]
+            : outputMode === 'vad-timing' && args.includes('--vad') ? [
+              { offsets: { from: 11450, to: 14000 }, text: 'شوف بس شوف' },
+              { offsets: { from: 14000, to: 14100 }, text: 'كلام عربي' },
+              { offsets: { from: 14000, to: 14100 }, text: 'كلام عربي' },
+            ]
+            : outputMode === 'empty' ? [] : outputMode === 'music-only' || outputMode === 'retry' && args.includes('--vad') ? [{ offsets: { from: 70, to: 570 }, text: '♪' }] : [
             { offsets: { from: 230, to: 7500 }, text: 'Original speech', tokens: [{ p: .9 }] },
             { offsets: { from: 8180, to: 10380 }, text: 'Another sentence', tokens: [{ p: .95 }] },
           ]
@@ -51,7 +60,7 @@ async function fixture(run) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-local-lifecycle-'))
   const file = path.join(dir, 'source.wav'); await fs.writeFile(file, 'fixture')
   recognized = stopped = translated = 0; failTranslation = holdRecognition = activeChild = false
-  outputMode = 'speech'; recognitionArgs = []; onRecognized = () => {}
+  outputMode = 'speech'; recognitionArgs = []; onRecognized = () => {}; mediaDuration = 11
   gpuFixture = null; gpuFailure = translatorGpuFailure = false; gpuAssets = true; recognitionBinaries = []; translatorConfigs = []
   try { await run(new LocalSubtitleService(assets), file, dir) } finally { await fs.rm(dir, { recursive: true, force: true }) }
 }
@@ -131,6 +140,48 @@ test('singing mode bypasses VAD and invalidates a transcript cached for dialogue
   assert.equal(recognitionArgs[1].includes('--vad'), false)
   assert.equal(service.state.stage, 'ready')
 }))
+
+test('recognition resets noisy context and uses natural timing, with a balanced Turbo search and wider accuracy search', () => fixture(async (service, file) => {
+  service.start(request(file)); await settled(service)
+  let args = recognitionArgs.at(-1)
+  assert.equal(args[args.indexOf('-bs') + 1], '3'); assert.equal(args[args.indexOf('-bo') + 1], '3')
+  assert.equal(args[args.indexOf('-mc') + 1], '0')
+  assert.equal(args.includes('-sow'), false); assert.equal(args.includes('-ml'), false)
+  service.start({ ...request(file), speechModel: 'accurate' }); await settled(service)
+  args = recognitionArgs.at(-1)
+  assert.equal(args[args.indexOf('-bs') + 1], '5'); assert.equal(args[args.indexOf('-bo') + 1], '5')
+  assert.equal(args[args.indexOf('-mc') + 1], '0')
+}))
+
+test('invalid VAD timing on a twenty-minute video retries full audio once and preserves valid speech timing', () => fixture(async (service, file) => {
+  mediaDuration = 20 * 60; outputMode = 'vad-timing'
+  service.start({ ...request(file), sourceLanguage: 'ar', targetLanguage: 'ar' }); await settled(service)
+  assert.equal(service.state.stage, 'ready', service.state.error)
+  assert.equal(recognized, 2); assert.equal(translated, 0, 'Arabic speech to Arabic captions needs no translation model')
+  assert.deepEqual(recognitionArgs.map(args => args.includes('--vad')), [true, false])
+  assert.equal(service.state.document.duration, 1200)
+  assert.deepEqual(service.state.document.cues.map(c => [c.start, c.end]), [[.23, 7.5], [8.18, 10.38]])
+  assert.equal(service.state.detail, undefined)
+}))
+
+test('persistent invalid timing fails after one retry without inventing timestamps or caching a document', () => fixture(async (service, file) => {
+  outputMode = 'invalid-timing'
+  service.start(request(file)); await settled(service)
+  assert.equal(service.state.error, 'Speech engine returned invalid timing')
+  assert.equal(recognized, 2); assert.equal(translated, 0); assert.equal(service.state.document, undefined)
+  const before = recognized
+  service.start({ ...request(file), recognitionMode: 'music' }); await settled(service)
+  assert.equal(recognized - before, 1, 'Full audio must not retry itself')
+  assert.equal(service.state.error, 'Speech engine returned invalid timing')
+}))
+
+test('canceling invalid timing recognition prevents the full-audio retry', () => fixture(async (service, file) => {
+  outputMode = 'vad-timing'
+  const id = service.start(request(file))
+  onRecognized = () => { void service.cancel(id) }
+  await settled(service)
+  assert.equal(service.state.stage, 'canceled'); assert.equal(recognized, 1); assert.equal(translated, 0)
+}))
 test('empty or non-verbal audio reports no speech, starts no translator, and caches no successful transcript', () => fixture(async (service, file) => {
   for (const mode of ['music-only', 'empty']) {
     outputMode = mode
@@ -167,6 +218,15 @@ test('GPU recognition and translation startup failures fall back to CPU once and
   assert.deepEqual(translatorConfigs.map(c => c.binary), ['llamaGpu', 'llama'])
   assert.equal(service.state.acceleration.speech, 'cpu'); assert.equal(service.state.acceleration.translation, 'cpu')
   assert.deepEqual(service.state.document.cues.map(c => [c.start, c.end]), [[.23, 7.5], [8.18, 10.38]])
+}))
+test('CPU voice activity detection does not overwrite a confirmed CUDA speech backend', () => fixture(async (service, file) => {
+  gpuFixture = installedGpu
+  service.start({ ...request(file), targetLanguage: 'original' }); await settled(service)
+  assert.equal(service.state.stage, 'ready', service.state.error)
+  assert.equal(recognitionArgs[0].includes('--vad'), true)
+  assert.equal(service.state.acceleration.speech, 'gpu')
+  assert.equal(service.state.detail, undefined)
+  assert.deepEqual(recognitionBinaries, ['whisperGpu'])
 }))
 test('CPU override avoids GPU engines, and newly prepared GPU engines invalidate a CPU recognition cache', () => fixture(async (service, file) => {
   gpuFixture = installedGpu; gpuAssets = false

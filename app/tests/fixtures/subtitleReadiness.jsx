@@ -32,6 +32,8 @@ window.fixture = {
   installs: () => installs,
   request: () => lastRequest,
   noSpeech: () => { state = { id: 'recognition', stage: 'error', error: 'LOCAL_SUBTITLES_NO_SPEECH', progress: null } },
+  invalidTiming: () => { state = { id: 'recognition', stage: 'error', error: 'Speech engine returned invalid timing', progress: null } },
+  retryTiming: () => { state = { id: 'recognition', stage: 'transcribing', detail: 'retrying-speech-timing', progress: null } },
   language: lang => useSettingsStore.setState({ lang }),
   gpu: () => { gpuDetected = true; window.dispatchEvent(new Event('focus')) },
   done: () => {

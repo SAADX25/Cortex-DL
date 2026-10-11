@@ -13,10 +13,10 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -28,7 +28,11 @@ jobs:
       - run: npm run lint
       - run: npm run test:unit
       - run: npm run test:integration
-      - run: npm test
+      - name: Run all tests
+        run: |
+          New-Item -ItemType Directory -Force -Path smoke-results | Out-Null
+          npm test 2>&1 | Tee-Object -FilePath smoke-results/tests.log
+          exit $LASTEXITCODE
       - if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/verify-release.cjs --release
       - run: npm run build
@@ -36,16 +40,22 @@ jobs:
       - run: npm run test:installer
       - run: npm run release:verify
       - run: node scripts/license-gate.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - name: Upload validated installer files
+        uses: actions/upload-artifact@v6
         with:
           name: windows-validation
           path: |
             app/release/*/*.exe
             app/release/*/*.blockmap
             app/release/*/latest.yml
-            app/smoke-results/
           if-no-files-found: error
+      - name: Upload validation diagnostics
+        uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: windows-diagnostics
+          path: app/smoke-results/
+          if-no-files-found: ignore
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: windows
@@ -57,13 +67,13 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: windows-validation
-          path: app
+          path: app/release
       - shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

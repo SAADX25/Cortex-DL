@@ -33,6 +33,8 @@ npm run check
 
 This runs TypeScript, ESLint and the full regression suite. Tests using actual media tools need the staged engines. If they are absent, run `npm run engines:stage` from `app` first.
 
+The full suite runs at most two test files concurrently to bound native media and Electron workloads. Player motion checks set their preference explicitly, and library checks scroll lazily loaded artwork into view. CI saves the full test log in `app/smoke-results/tests.log` and uploads available diagnostics as `windows-diagnostics` even when validation fails. Validated installers are uploaded separately as `windows-validation`; their artifact root is `app/release`.
+
 For packaging, installer or release changes, run from `app` on Windows:
 
 ```powershell
