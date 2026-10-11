@@ -19,6 +19,9 @@ interface SettingsStoreState {
   useInAppPlayer: boolean
   setUseInAppPlayer: (v: boolean) => void
 
+  refreshWindowsPlayerArtwork: boolean
+  setRefreshWindowsPlayerArtwork: (v: boolean) => void
+
   totalDownloadedBytes: number
   setTotalDownloadedBytes: (updater: number | ((prev: number) => number)) => void
 
@@ -62,6 +65,12 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   setUseInAppPlayer: (v) => {
     localStorage.setItem('cortex-inapp-player', String(v))
     set({ useInAppPlayer: v })
+  },
+
+  refreshWindowsPlayerArtwork: localStorage.getItem('cortex-refresh-windows-artwork') !== 'false',
+  setRefreshWindowsPlayerArtwork: (v) => {
+    localStorage.setItem('cortex-refresh-windows-artwork', String(v))
+    set({ refreshWindowsPlayerArtwork: v })
   },
 
   totalDownloadedBytes: parseInt(localStorage.getItem('cortex-total-bytes') || '0', 10),

@@ -272,7 +272,8 @@ function App() {
 
 
   return (
-    <div className="app-container" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <div className={`app-container${window.cortexDl.customTitleBar ? ' has-titlebar' : ''}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      {window.cortexDl.customTitleBar && <div className="app-titlebar" aria-hidden="true"><div className="app-titlebar-drag" /></div>}
       {setupState && ['repairing', 'repair-required', 'degraded', 'fatal'].includes(setupState.status) && <SetupOverlay setupState={setupState} />}
       <Sidebar />
 

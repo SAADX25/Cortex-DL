@@ -4,8 +4,11 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { canEmbedLibraryArtwork } from '../../Shared/mediaLibrary'
+import { refreshArtworkFile } from './artworkRefresh'
+import { refreshExternalPlayerArtwork } from './externalPlayerArtwork'
+import { vlcArtworkMetadata, type VlcArtworkMetadata } from './vlcArtwork'
 
-type Probe = { format?: { duration?: string }; streams?: { index: number; codec_type?: string; codec_name?: string; sample_rate?: string; channels?: number; width?: number; height?: number; disposition?: { attached_pic?: number } }[] }
+type Probe = { format?: { duration?: string; tags?: Record<string, string> }; streams?: { index: number; codec_type?: string; codec_name?: string; sample_rate?: string; channels?: number; width?: number; height?: number; disposition?: { attached_pic?: number } }[] }
 
 /** Remux artwork with copied media, then replace only a verified, unchanged source. */
 export class AudioArtwork {
@@ -15,7 +18,8 @@ export class AudioArtwork {
   private inspections = new Map<string, Promise<number | null>>()
   private inspecting = 0
   private waiting: (() => void)[] = []
-  constructor(private binary: (name: 'ffmpeg' | 'ffprobe') => Promise<string>) {}
+  constructor(private binary: (name: 'ffmpeg' | 'ffprobe') => Promise<string>, private refresh: (file: string) => Promise<unknown> = refreshArtworkFile,
+    private refreshPlayer: (file: string, metadata: VlcArtworkMetadata) => Promise<unknown> = refreshExternalPlayerArtwork) {}
 
   private run(binary: string, args: string[]): Promise<string> {
     if (this.stopped) return Promise.reject(new Error('MEDIA_LIBRARY_ARTWORK_WRITE_FAILED'))
@@ -34,8 +38,8 @@ export class AudioArtwork {
     })
   }
 
-  write(file: string, image: Buffer | null, persist: () => Promise<void>): Promise<void> {
-    const work = this.replace(file, image, persist).finally(() => this.pending.delete(work))
+  write(file: string, image: Buffer | null, persist: () => Promise<void>, refreshPlayer = false): Promise<void> {
+    const work = this.replace(file, image, persist, refreshPlayer).finally(() => this.pending.delete(work))
     this.pending.add(work)
     return work
   }
@@ -66,7 +70,7 @@ export class AudioArtwork {
     return work
   }
 
-  private async replace(file: string, image: Buffer | null, persist: () => Promise<void>): Promise<void> {
+  private async replace(file: string, image: Buffer | null, persist: () => Promise<void>, refreshPlayer: boolean): Promise<void> {
     if (this.stopped) throw new Error('MEDIA_LIBRARY_ARTWORK_WRITE_FAILED')
     if (!canEmbedLibraryArtwork(file)) throw new Error('MEDIA_LIBRARY_ARTWORK_UNSUPPORTED')
     const source = await fs.realpath(file), before = await fs.stat(source)
@@ -74,13 +78,15 @@ export class AudioArtwork {
     const extension = path.extname(file).toLowerCase(), prefix = path.join(path.dirname(source), `.cortex-cover-${randomUUID()}`)
     const candidate = prefix + extension, cover = prefix + '.jpg', backup = prefix + '.backup'
     let replaced = false, preserveBackup = false
+    let artworkMetadata: VlcArtworkMetadata = {}
     try {
       await fs.access(source, constants.W_OK)
       const ffmpeg = await this.binary('ffmpeg')
       if (this.stopped) throw new Error('MEDIA_LIBRARY_ARTWORK_WRITE_FAILED')
       const ffprobe = await this.binary('ffprobe')
-      const probe = async (target: string): Promise<Probe> => JSON.parse(await this.run(ffprobe, ['-v', 'error', '-show_entries', 'format=duration:stream=index,codec_type,codec_name,sample_rate,channels,width,height:stream_disposition=attached_pic', '-of', 'json', target]))
+      const probe = async (target: string): Promise<Probe> => JSON.parse(await this.run(ffprobe, ['-v', 'error', '-show_entries', 'format=duration:format_tags=title,artist,album:stream=index,codec_type,codec_name,sample_rate,channels,width,height:stream_disposition=attached_pic', '-of', 'json', target]))
       const original = await probe(source)
+      artworkMetadata = vlcArtworkMetadata(original.format?.tags, original.streams?.filter(stream => stream.disposition?.attached_pic).length ?? 0)
       const media = original.streams?.filter(stream => !stream.disposition?.attached_pic) ?? []
       const videoCount = media.filter(stream => stream.codec_type === 'video').length
       if (extension !== '.mp4' ? media.length !== 1 || media[0].codec_type !== 'audio' : !media.some(stream => ['audio', 'video'].includes(stream.codec_type ?? ''))) throw new Error('MEDIA_LIBRARY_ARTWORK_WRITE_FAILED')
@@ -119,6 +125,15 @@ export class AudioArtwork {
       await fs.unlink(candidate).catch(() => {})
       await fs.unlink(cover).catch(() => {})
       if (!preserveBackup) await fs.unlink(backup).catch(() => {})
+    }
+    // Refresh the shell only after both the file and library commit succeeded.
+    // A shell/cache failure must not roll back an already saved media file.
+    if (!this.stopped) {
+      if (refreshPlayer) {
+        try { await this.refreshPlayer(source, artworkMetadata) } catch { /* Player cache refresh is optional. */ }
+      }
+      if (this.stopped) return
+      try { await this.refresh(source) } catch { /* Optional shell notification cannot undo a committed edit. */ }
     }
   }
 

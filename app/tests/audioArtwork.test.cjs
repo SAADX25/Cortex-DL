@@ -10,7 +10,7 @@ const pcm = file => run('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:a:0', '
 const art = color => execFileSync(binary('ffmpeg'), ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=' + color + ':size=120x120', '-frames:v', '1', '-c:v', 'mjpeg', '-f', 'image2pipe', '-'], { windowsHide: true, timeout: 10000 })
 async function fixture(run) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-embedded-art-'))
-  const editor = new AudioArtwork(async name => binary(name))
+  const editor = new AudioArtwork(async name => binary(name), async () => {})
   try { await run(dir, editor) } finally { await editor.stop(); await fs.rm(dir, { recursive: true, force: true }) }
 }
 const make = file => run('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=480:duration=1.2', '-metadata', 'title=أغنية اختبار', '-metadata', 'artist=Test artist', '-metadata', 'album=Test album', '-metadata', 'track=7', file])
@@ -77,6 +77,44 @@ test('embedded cover edit rolls back source bytes and library when saving metada
   await assert.rejects(editor.write(invalid, image, async () => assert.fail('Must not save invalid media')), /WRITE_FAILED/)
   assert.equal(await fs.readFile(invalid, 'utf8'), 'not audio')
   assert.ok(!(await fs.readdir(dir)).some(name => name.startsWith('.cortex-cover-')))
+}))
+
+test('shell refresh follows committed cover replacement and removal; failed writes do not notify and refresh failures do not undo saved covers', () => fixture(async (dir) => {
+  const file = path.join(dir, 'أغنية refresh.mp3'); make(file)
+  const notifications = [], playerNotifications = [], image = art('blue')
+  let committed = false, failRefresh = false
+  const editor = new AudioArtwork(async name => binary(name), async source => {
+    assert.equal(committed, true, 'Library persistence must finish before notifying other apps')
+    assert.equal(source, await fs.realpath(file))
+    assert.ok(!(await fs.readdir(dir)).some(name => name.startsWith('.cortex-cover-')), 'Temporary files must be cleaned before notifying')
+    notifications.push(source)
+    if (failRefresh) throw new Error('Shell unavailable')
+  }, async (source, metadata) => {
+    assert.equal(committed, true)
+    assert.equal(source, await fs.realpath(file))
+    playerNotifications.push(source)
+    assert.equal(metadata.title, 'أغنية اختبار'); assert.equal(metadata.artist, 'Test artist'); assert.equal(metadata.album, 'Test album')
+    assert.equal(metadata.attachmentCount, 1, 'Cache matching must use the original cover metadata, even after removal')
+  })
+  try {
+    await editor.write(file, image, async () => { committed = true })
+    assert.equal(notifications.length, 1)
+    assert.equal(playerNotifications.length, 0, 'Legacy edits must not close an external player')
+    const saved = await fs.readFile(file)
+    committed = false
+    await assert.rejects(editor.write(file, null, async () => { throw new Error('Persistence failed') }, true), /WRITE_FAILED/)
+    assert.equal(notifications.length, 1, 'Rolled back edits must not send a success notification')
+    assert.equal(playerNotifications.length, 0, 'Failed edits must not touch the external player')
+    assert.deepEqual(await fs.readFile(file), saved)
+    await editor.write(file, null, async () => { committed = true }, true)
+    assert.equal(notifications.length, 2, 'Removing an embedded cover also refreshes the file')
+    assert.equal(playerNotifications.length, 1, 'Explicitly enabled edits refresh the player cache')
+    assert.equal(await editor.coverStream(file), null)
+    failRefresh = true
+    await editor.write(file, image, async () => { committed = true })
+    assert.equal(notifications.length, 3)
+    assert.notEqual(await editor.coverStream(file), null, 'A refresh failure must not roll back the cover')
+  } finally { await editor.stop() }
 }))
 
 test('external file changes, read-only files and shutdown cannot overwrite the source', () => fixture(async (dir, editor) => {

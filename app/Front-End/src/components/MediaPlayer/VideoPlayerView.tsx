@@ -1,6 +1,7 @@
 import React from 'react';
 import { PlayerControls } from './PlayerControls';
 import { MediaInfoOverlay } from './MediaInfoOverlay';
+import { PlayerHeader } from './PlayerHeader';
 import { buildMediaUrl, type MediaEndpoint } from '../../lib/mediaEndpoint';
 import type { SubtitlePreview } from '../../../../Shared/localSubtitles';
 import { GripHorizontal } from 'lucide-react';
@@ -107,11 +108,12 @@ export function VideoPlayerView({
     };
   }, [activeSubtitle, subtitles, videoRef, fileUrl, sessionId]);
 
-  const playerActions = <>
-    <MediaInfoOverlay sessionId={sessionId} title={title} filePath={filePath}
+  const infoAction = <MediaInfoOverlay sessionId={sessionId} title={title} filePath={filePath}
       videoWidth={videoRef.current?.videoWidth} videoHeight={videoRef.current?.videoHeight}
-      mediaType="video" showOverlay={showMediaInfo} toggleOverlay={() => setShowMediaInfo(!showMediaInfo)} closeOverlay={() => setShowMediaInfo(false)} />
-    <button className="media-player-close" onClick={onClose} title="Close (Esc)">
+      mediaType="video" showOverlay={showMediaInfo} toggleOverlay={() => setShowMediaInfo(!showMediaInfo)} closeOverlay={() => setShowMediaInfo(false)} />;
+  const playerActions = <>
+    {infoAction}
+    <button className="media-player-close" onClick={onClose} title="Close (Esc)" aria-label="Close player (Esc)">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
     </button>
   </>;
@@ -177,19 +179,7 @@ export function VideoPlayerView({
         </div>
       </div>
 
-      {!isFloating && <div
-        className="player-header"
-        style={{
-          opacity: showControls || showMediaInfo ? 1 : 0,
-          pointerEvents: showControls || showMediaInfo ? 'auto' : 'none',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        <span className="player-header-title" title={title}>{title}</span>
-        <div className="player-header-actions">
-          {playerActions}
-        </div>
-      </div>}
+      {!isFloating && <PlayerHeader title={title} visible={showControls || showMediaInfo} onClose={onClose} actions={infoAction} />}
 
       <div
         className="player-footer"

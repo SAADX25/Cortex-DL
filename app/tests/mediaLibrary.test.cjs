@@ -108,5 +108,52 @@ test('malformed saved libraries and untrusted paths are rejected without overwri
   await assert.rejects(library.add([source]), /MEDIA_LIBRARY_READ_FAILED/)
   assert.equal(await fs.readFile(saved, 'utf8'), raw)
   const valid = new MediaLibrary(path.join(directory, 'new.json'))
-  for (const paths of [['relative.mp4'], ['C:\\bad\0.mp4'], Array(501).fill(source)]) await assert.rejects(valid.add(paths), /MEDIA_LIBRARY_INVALID_PATH/)
+  for (const paths of [['relative.mp4'], ['C:\\bad\0.mp4'], Array(10001).fill(source)]) await assert.rejects(valid.add(paths), /MEDIA_LIBRARY_INVALID_PATH/)
+}))
+
+test('1200-file libraries import with bounded concurrency and open without scanning offline or hidden files', { timeout: 20000 }, () => fixture(async (directory, saved) => {
+  const files = Array.from({ length: 1200 }, (_, index) => path.join(directory, `track-${index}.mp3`))
+  for (let offset = 0; offset < files.length; offset += 64) await Promise.all(files.slice(offset, offset + 64).map(file => fs.writeFile(file, 'source sentinel')))
+  const originalStat = fs.stat, sources = new Set(files)
+  let reads = 0, active = 0, peak = 0
+  fs.stat = async function(file, ...args) {
+    if (!sources.has(file)) return originalStat.call(this, file, ...args)
+    reads++; active++; peak = Math.max(peak, active)
+    try { await new Promise(resolve => setTimeout(resolve, 3)); return await originalStat.call(this, file, ...args) }
+    finally { active-- }
+  }
+  try {
+    const library = new MediaLibrary(saved), start = performance.now(), imported = await library.add(files)
+    const importMs = performance.now() - start
+    assert.equal(imported.added, 1200); assert.equal(reads, 1200, 'Do not rescan the library after validating imports')
+    assert.ok(peak > 1 && peak <= 32, 'Concurrent source checks must be bounded')
+    const restored = new MediaLibrary(saved)
+    reads = 0
+    const opened = performance.now(), catalog = await restored.catalog(), openMs = performance.now() - opened
+    assert.equal(catalog.length, 1200); assert.equal(reads, 0, 'Opening must read saved metadata, never all source files')
+    const inspect = restored.inspectFile
+    let unblock, started
+    const gate = new Promise(resolve => { unblock = resolve }), checking = new Promise(resolve => { started = resolve })
+    restored.inspectFile = async function(file) { started(); await gate; return inspect.call(this, file) }
+    const slowCheck = restored.check([catalog[10].id]); await checking
+    try {
+      let timer
+      try {
+        await Promise.race([restored.catalog(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Slow drives blocked the saved catalog')), 750) })])
+        assert.equal((await restored.get(catalog[11].id, false)).id, catalog[11].id, 'Cached artwork metadata must remain accessible during a slow page check')
+      } finally { clearTimeout(timer) }
+    } finally { unblock(); await slowCheck; restored.inspectFile = inspect; reads = 0 }
+    await fs.unlink(files[0]); await fs.unlink(files[1199])
+    const page = await restored.check(catalog.slice(0, 4).map(item => item.id))
+    assert.equal(reads, 4); assert.equal(page[0].availability, 'missing')
+    assert.equal((await restored.catalog())[0].availability, 'missing', 'Retain known status between visits')
+    await assert.rejects(restored.play(catalog[1199].id), /MEDIA_LIBRARY_MISSING/, 'Playback must revalidate even an unchecked hidden file')
+    reads = 0
+    await restored.remove(catalog[1].id)
+    assert.equal(reads, 0, 'Removing one reference must not rescan unrelated files')
+    await assert.rejects(restored.check(Array(33).fill(catalog[0].id)), /MEDIA_LIBRARY_INVALID/)
+    const fullScan = performance.now(); await restored.list(); const scanMs = performance.now() - fullScan
+    console.log(`1200 files: import ${importMs.toFixed(1)} ms, saved catalog ${openMs.toFixed(1)} ms, full source scan ${scanMs.toFixed(1)} ms; peak checks ${peak}`)
+    assert.equal(await fs.readFile(files[1], 'utf8'), 'source sentinel')
+  } finally { fs.stat = originalStat }
 }))

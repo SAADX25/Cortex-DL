@@ -25,6 +25,8 @@ test('real sandboxed preload resolves native File paths and imports them through
         const result=await js('window.cortexDl.addMediaLibraryFiles(window.cortexDl.getDroppedMediaPaths(Array.from(document.querySelector("input").files)))');
         assert.equal(result.added,1);assert.equal(result.items[0].kind,'audio');assert.equal(result.items[0].filePath,source);
         assert.equal((await js('window.cortexDl.listMediaLibrary()')).length,1);
+        assert.equal((await js('window.cortexDl.checkMediaLibraryFiles(['+JSON.stringify(result.items[0].id)+'])'))[0].availability,'available');
+        await assert.rejects(js('window.cortexDl.checkMediaLibraryFiles(["../unregistered"])'),/Invalid library items/);
         assert.equal((await js('window.cortexDl.removeMediaLibraryArtwork('+JSON.stringify(result.items[0].id)+')')).length,1);
         await assert.rejects(js('window.cortexDl.selectMediaLibraryArtwork("../unregistered")'),/Invalid library item/);
         await assert.rejects(js('window.cortexDl.embedMediaLibraryArtwork("../unregistered")'),/Invalid library item/);

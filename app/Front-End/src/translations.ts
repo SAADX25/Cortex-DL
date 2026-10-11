@@ -128,6 +128,8 @@ export interface Translations {
   settings_cancel: string;
   use_inapp_player: string;
   use_inapp_player_desc: string;
+  refresh_windows_artwork: string;
+  refresh_windows_artwork_desc: string;
   paste_and_go: string;
   btn_video: string;
   btn_audio: string;
@@ -289,6 +291,8 @@ export const translations: Record<Language, Translations> = {
     settings_cancel: "إلغاء",
     use_inapp_player: "مشغل وسائط مدمج",
     use_inapp_player_desc: "تشغيل الفيديو والصوت داخل التطبيق بدلاً من المشغل الافتراضي",
+    refresh_windows_artwork: "تحديث كاش الأغلفة في Media Player وVLC",
+    refresh_windows_artwork_desc: "تحديث الأغلفة بعد تغييرها أو حذفها. قد يُغلق Media Player؛ إذا كان VLC مفتوحًا، أعد تشغيله لعرض التغيير.",
     paste_and_go: "لصق وانطلاق",
     btn_video: "فيديو",
     btn_audio: "صوت",
@@ -446,6 +450,8 @@ export const translations: Record<Language, Translations> = {
     settings_cancel: "Cancel",
     use_inapp_player: "In-App Media Player",
     use_inapp_player_desc: "Play videos and audio inside the app instead of system default",
+    refresh_windows_artwork: "Refresh Media Player and VLC cover caches",
+    refresh_windows_artwork_desc: "Refresh covers after changes or removal. Media Player may close; restart VLC if it is already open to see the change.",
     paste_and_go: "Paste & Go",
     btn_video: "Video",
     btn_audio: "Audio",

@@ -1,6 +1,7 @@
 import { ipcRenderer, contextBridge, webUtils } from 'electron'
 import type { AppHealthCheck, DownloadTask, AnalyzeResult, JsRuntimeStatus, StartInput } from './types'
 import { UPDATE_CHANNEL } from './types'
+import { customTitleBar } from './windowChrome'
 
 function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
@@ -19,13 +20,15 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
   })
 }
 contextBridge.exposeInMainWorld('cortexDl', {
+  customTitleBar,
   getDroppedMediaPaths: (files: File[]): string[] => files.map(file => webUtils.getPathForFile(file)).filter(Boolean),
   listMediaLibrary: () => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:list'),
+  checkMediaLibraryFiles: (ids: string[]) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:check', ids),
   getMediaLibraryThumbnail: (id: string) => invokeRendererSafe<string | null>('cortexdl:library:thumbnail', id),
   getMediaLibraryArtworkInfo: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryArtworkInfo>('cortexdl:library:artwork-info', id),
-  selectMediaLibraryArtwork: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>('cortexdl:library:artwork-select', id),
-  removeMediaLibraryArtwork: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-remove', id),
-  embedMediaLibraryArtwork: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-embed', id),
+  selectMediaLibraryArtwork: (id: string, refreshPlayer = false) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>('cortexdl:library:artwork-select', id, refreshPlayer),
+  removeMediaLibraryArtwork: (id: string, refreshPlayer = false) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-remove', id, refreshPlayer),
+  embedMediaLibraryArtwork: (id: string, refreshPlayer = false) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-embed', id, refreshPlayer),
   selectMediaLibraryFiles: () => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult | null>('cortexdl:library:select'),
   addMediaLibraryFiles: (files: string[]) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult>('cortexdl:library:add', files),
   removeMediaLibraryItem: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:remove', id),

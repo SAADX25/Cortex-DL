@@ -24,6 +24,9 @@
   backdrop-filter: blur(10px);
 }
 
+/* The portal lives in document.body, outside the app's titlebar padding. */
+.media-player-overlay.below-titlebar { top: env(titlebar-area-height, 32px); }
+
 .floating-player-return { position: fixed; bottom: 20px; inset-inline-end: 20px; z-index: 900; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 40px); padding: 11px 14px; border: 1px solid #315272; border-radius: 12px; background: #102036; color: #dbeafe; box-shadow: 0 6px 25px #0005; font-size: 12px; }
 .floating-player-return button { padding: 5px 8px; border: 0; border-radius: 6px; background: #1c3b57; color: #7dd3fc; cursor: pointer; font: inherit; }
 .floating-player-error { position: absolute; top: 85px; left: 50%; transform: translateX(-50%); z-index: 60; padding: 12px 18px; background: #4a2424; color: #fecaca; border-radius: 9px; }
@@ -72,13 +75,15 @@
 }
 
 .media-player-container {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   position: relative;
   overflow: hidden;
   max-width: 100%;
   max-height: 100%;
 }
+
+.media-player-container:fullscreen { width: 100vw; height: 100vh; }
 
 .media-player-container.idle-hide {
   cursor: none;
@@ -435,21 +440,26 @@
   top: 0;
   left: 0;
   right: 0;
-  padding: 30px 40px;
+  min-height: 64px;
+  padding: 12px 24px;
+  box-sizing: border-box;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 100%);
+  gap: 16px;
+  align-items: center;
+  background: rgba(11, 17, 32, 0.88);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(12px);
   z-index: 30;
   transition: opacity 0.4s ease;
 }
 
 .player-header-title {
   color: #f8fafc;
-  font-size: 1.2rem;
+  font-size: 0.95rem;
   font-weight: 500;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
-  max-width: 70%;
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -457,7 +467,8 @@
 
 .player-header-actions {
   display: flex;
-  gap: 15px;
+  gap: 8px;
+  flex-shrink: 0;
   position: relative;
   align-items: center;
 }
@@ -484,6 +495,36 @@
   border-color: transparent;
   transform: scale(1.1);
   box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+.player-header .player-back {
+  flex-shrink: 0;
+  width: auto;
+  height: 36px;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.2);
+  color: #bae6fd;
+  font: inherit;
+  font-size: 13px;
+}
+.player-header[dir="rtl"] .player-back svg { transform: rotate(180deg); }
+.player-header .player-back:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+  color: #f0f9ff;
+  transform: none;
+  box-shadow: none;
+}
+.player-back:focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+.player-header .media-info-toggle { width: 36px; height: 36px; border-radius: 10px; background: rgba(148, 163, 184, 0.08); }
+.player-header .media-info-toggle:hover { background: rgba(148, 163, 184, 0.18); }
+.player-header .media-info-toggle.active { background: #38bdf8; color: #0f172a; }
+.player-header[dir="rtl"] .media-info-panel { right: auto; left: 0; }
+@media (max-width: 600px) {
+  .player-header { padding-inline: 12px; gap: 10px; }
 }
 
 /* Glassmorphism Control Bar */

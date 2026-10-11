@@ -25,7 +25,7 @@ const labels = {
     added: 'added', duplicates: 'already in your library', rejected: 'could not be added', dismiss: 'Dismiss message', retry: 'Try again',
     error: 'Could not update your library. Please try again.', loadError: 'Could not read the saved library. Your media files are safe.',
     missingError: 'This file is no longer available. Refresh the library, then locate the file.', duplicateError: 'That file is already in your library.',
-    fullError: 'Your library has reached its limit of 10,000 files.', tooMany: 'Add up to 500 files at a time.',
+    fullError: 'Your library has reached its limit of 10,000 files.', tooMany: 'Add up to 10,000 files at a time.',
     dropActive: 'Drop to add video & audio', count: 'items', loading: 'Loading your library…',
     previous: 'Previous', next: 'Next', pages: 'Media library pages', perPage: 'Items per page', page: 'Page', of: 'of',
   },
@@ -45,7 +45,7 @@ const labels = {
     added: 'تمت إضافتها', duplicates: 'موجودة في المكتبة', rejected: 'تعذرت إضافتها', dismiss: 'إغلاق الرسالة', retry: 'إعادة المحاولة',
     error: 'تعذر تحديث المكتبة. حاول مجددًا.', loadError: 'تعذرت قراءة المكتبة المحفوظة. ملفات الوسائط محفوظة على جهازك.',
     missingError: 'هذا الملف غير متاح. حدّث المكتبة ثم حدد موقع الملف.', duplicateError: 'هذا الملف موجود في المكتبة بالفعل.',
-    fullError: 'وصلت مكتبتك إلى الحد الأقصى: 10,000 ملف.', tooMany: 'يمكن إضافة 500 ملف في المرة الواحدة.',
+    fullError: 'وصلت مكتبتك إلى الحد الأقصى: 10,000 ملف.', tooMany: 'يمكن إضافة 10,000 ملف في المرة الواحدة.',
     dropActive: 'أفلت لإضافة الفيديو والصوت', count: 'عنصر', loading: 'جارٍ تحميل المكتبة…',
     previous: 'السابق', next: 'التالي', pages: 'صفحات مكتبة الوسائط', perPage: 'عدد الملفات في الصفحة', page: 'صفحة', of: 'من',
   },
@@ -64,6 +64,7 @@ export default function MediaLibrary() {
   const loaded = useMediaLibraryStore(state => state.loaded), loading = useMediaLibraryStore(state => state.loading)
   const error = useMediaLibraryStore(state => state.error), imported = useMediaLibraryStore(state => state.imported)
   const refresh = useMediaLibraryStore(state => state.refresh), importFiles = useMediaLibraryStore(state => state.importFiles)
+  const checkFiles = useMediaLibraryStore(state => state.checkFiles), refreshVersion = useMediaLibraryStore(state => state.refreshVersion)
   const play = useMediaLibraryStore(state => state.play), remove = useMediaLibraryStore(state => state.remove)
   const relocate = useMediaLibraryStore(state => state.relocate), dismissNotice = useMediaLibraryStore(state => state.dismissNotice)
   const selectArtwork = useMediaLibraryStore(state => state.selectArtwork), removeArtwork = useMediaLibraryStore(state => state.removeArtwork)
@@ -110,6 +111,10 @@ export default function MediaLibrary() {
   }, [items, query, filter, sort, lang])
   const pageCount = Math.max(1, Math.ceil(visible.length / pageSize)), currentPage = Math.min(page, pageCount)
   const start = (currentPage - 1) * pageSize, pageItems = visible.slice(start, start + pageSize)
+  const pageIds = JSON.stringify(pageItems.map(item => item.id))
+  useEffect(() => {
+    if (activeTab === 'library' && !busy && !loading) void checkFiles(JSON.parse(pageIds) as string[])
+  }, [activeTab, busy, loading, pageIds, refreshVersion, checkFiles])
   useEffect(() => { setPage(previous => Math.min(previous, pageCount)) }, [pageCount])
   const changePage = (next: number) => {
     setPage(Math.max(1, Math.min(next, pageCount)))
@@ -141,7 +146,7 @@ export default function MediaLibrary() {
     if (busy) return
     const files = Array.from(event.dataTransfer.files)
     if (!files.length) return
-    if (files.length > 500) { setDropError(t.tooMany); return }
+    if (files.length > 10000) { setDropError(t.tooMany); return }
     try {
       const paths = window.cortexDl.getDroppedMediaPaths(files)
       if (!paths.length) { setDropError(t.error); return }

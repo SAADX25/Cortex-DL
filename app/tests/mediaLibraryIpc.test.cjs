@@ -29,6 +29,11 @@ test('library IPC validates bounded arguments, handles native dialog cancellatio
     assert.equal(await isLibraryMediaPath(file, await fs.realpath(file)), true, 'Streaming must use the same library as import/playback')
     selection = { canceled: true, filePaths: [] }; assert.equal(await invoke('relocate', item.id), null)
     assert.equal((await invoke('list')).length, 1)
+    assert.equal((await invoke('check', [item.id]))[0].availability, 'available')
+    await fs.rename(file, file + '.moved')
+    assert.equal((await invoke('check', [item.id]))[0].availability, 'missing')
+    await fs.rename(file + '.moved', file)
+    await invoke('check', [item.id])
     assert.equal(await invoke('artwork-select', item.id), null, 'MP4 cover picker supports cancellation')
     const song = path.join(userData, 'song.mp3'), picture = path.join(userData, 'cover.png')
     const ffmpeg = path.resolve(__dirname, '../engine-baseline/ffmpeg.exe')
@@ -53,6 +58,17 @@ test('library IPC validates bounded arguments, handles native dialog cancellatio
     const covered = await invoke('artwork-select', audio.id)
     assert.ok(covered.find(entry => entry.id === audio.id).artwork)
     assert.equal(covered.find(entry => entry.id === audio.id).artworkEmbedded, true)
+    const { AudioArtwork } = require('../Back-End/electron/audioArtwork.ts'), originalProbe = AudioArtwork.prototype.coverStream
+    let probes = 0, sourceReads = 0
+    const originalStat = fs.stat
+    fs.stat = async function(file, ...args) { if (file === song) sourceReads++; return originalStat.call(this, file, ...args) }
+    AudioArtwork.prototype.coverStream = async () => { probes++; throw Error('Engine unavailable') }
+    try {
+      const info = await invoke('artwork-info', audio.id)
+      assert.match(info.thumbnail, /^data:image\/jpeg/); assert.equal(info.embedded, true)
+      assert.equal(probes, 0, 'Saved covers must display immediately without ffprobe or engine readiness')
+      assert.equal(sourceReads, 0, 'Saved covers must not wait for a slow or offline source drive')
+    } finally { AudioArtwork.prototype.coverStream = originalProbe; fs.stat = originalStat }
     const probe = () => JSON.parse(require('node:child_process').execFileSync(path.resolve(__dirname, '../engine-baseline/ffprobe.exe'), ['-v', 'error', '-show_streams', '-of', 'json', song], { windowsHide: true, timeout: 10000 }).toString())
     assert.equal(probe().streams.filter(stream => stream.disposition.attached_pic).length, 1, 'Picker must embed the cover in the actual MP3')
     assert.deepEqual(dialogOptions.properties, ['openFile']); assert.ok(dialogOptions.filters[0].extensions.includes('png'))
@@ -64,7 +80,7 @@ test('library IPC validates bounded arguments, handles native dialog cancellatio
     assert.equal(probe().streams.filter(stream => stream.disposition.attached_pic).length, 0)
     await invoke('remove', audio.id)
     assert.equal(audioHash(), originalSound, 'Embedding and removing cover must preserve audio')
-    for (const [name, args] of [['list', ['extra']], ['add', [['relative.mp4']]], ['add', [Array(501).fill(file)]], ['remove', ['../private']], ['play', ['valid', true]], ['thumbnail', [file]], ['artwork-select', ['../private']], ['artwork-select', ['valid', picture]], ['artwork-remove', []], ['unknown', []]]) assert.throws(() => validateIpcArguments('cortexdl:library:' + name, args))
+    for (const [name, args] of [['list', ['extra']], ['add', [['relative.mp4']]], ['add', [Array(10001).fill(file)]], ['check', [Array(33).fill('valid')]], ['check', [['../private']]], ['check', []], ['remove', ['../private']], ['play', ['valid', true]], ['thumbnail', [file]], ['artwork-select', ['../private']], ['artwork-select', ['valid', picture]], ['artwork-remove', []], ['unknown', []]]) assert.throws(() => validateIpcArguments('cortexdl:library:' + name, args))
     assert.deepEqual(await invoke('remove', item.id), [])
     assert.equal(await isLibraryMediaPath(file, await fs.realpath(file)), false)
     assert.equal(await invoke('thumbnail', item.id), null)

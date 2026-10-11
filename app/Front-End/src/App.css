@@ -129,6 +129,28 @@ body {
   z-index: 1;
 }
 
+.app-container.has-titlebar {
+  --app-titlebar-height: env(titlebar-area-height, 32px);
+  padding-top: var(--app-titlebar-height);
+}
+
+.app-titlebar {
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--app-titlebar-height);
+  background: linear-gradient(90deg, #0f172a 0%, #0f172a 24%, #102134 85%);
+  z-index: 10000;
+  user-select: none;
+}
+
+.app-titlebar-drag {
+  position: absolute;
+  left: env(titlebar-area-x, 0px);
+  width: env(titlebar-area-width, calc(100% - 138px));
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
 .tab-content {
   width: 100%;
   max-width: 1000px;
@@ -2371,6 +2393,11 @@ body {
 
 .toggle-switch.active {
   background-color: var(--accent-primary);
+}
+
+button.toggle-switch {
+  border: 0;
+  padding: 0;
 }
 
 .toggle-switch-thumb {

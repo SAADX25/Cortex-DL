@@ -162,6 +162,24 @@ test('media library UI imports, filters, plays, relocates, confirms removal and 
         assert.match(await js('document.querySelector(".library-heading").textContent'),/مكتبة الوسائط/);
         await js('window.fixture.many()');await selectSize(12);await wait('document.querySelectorAll(".library-card").length===9');
         await assertSticky();await capture('library-sticky-ar-narrow');await assertSticky(100000);
+        win.setContentSize(1080,850);await js('window.fixture.language("en")');await selectSize(4);
+        await js('window.fixture.resetRequests();window.fixture.holdCheck();window.fixture.large()');
+        await wait('document.querySelector(".library-count").textContent==="1200"&&document.querySelectorAll(".library-card").length===4');
+        await wait('window.fixture.requests().checks.length>0');
+        assert.equal(await js('!!document.querySelector(".library-loading")'),false,'A slow availability check must not block the saved library');
+        assert.equal(await js('document.querySelector(".library-page-number").textContent'),'Page 1 of 300');
+        assert.ok((await js('window.fixture.requests().checks')).every(ids=>ids.length<=4),'Check only the current page in a 1200-file library');
+        await js('window.fixture.releaseCheck();document.querySelector(".main-content").scrollTop=0');await delay(200);
+        assert.ok(new Set(await js('window.fixture.requests().thumbnails')).size<=4,'Do not generate hidden-page thumbnails');
+        await js('document.querySelector(".main-content").scrollTop=100000');await delay(100);
+        await js('document.querySelector(".main-content").scrollTop=0');await wait('new Set(window.fixture.requests().thumbnails).size===4');
+        const requests=await js('window.fixture.requests().thumbnails.length');
+        await js('document.querySelector(".main-content").scrollTop=80');await delay(60);await js('document.querySelector(".main-content").scrollTop=0');await delay(60);
+        assert.equal(await js('window.fixture.requests().thumbnails.length'),requests,'Scrolling must not request completed thumbnails again');
+        await capture('library-1200-files');
+        await js('window.fixture.resetRequests();document.querySelector(".library-page-next").click()');
+        await wait('document.querySelector(".library-page-number").textContent.includes("2 of 300")&&window.fixture.requests().checks.length>0');
+        assert.ok((await js('window.fixture.requests().checks')).every(ids=>ids.length===4&&ids.every(id=>!['large-1199','large-1198','large-1197','large-1196'].includes(id))),'Changing pages must validate the new page only');
         win.destroy();app.quit();
       }).catch(e=>{console.error(e);app.exit(1)});
     `)

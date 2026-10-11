@@ -546,7 +546,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     </div>}
     {createPortal(
     <div
-      className={`media-player-overlay ${mediaType === 'audio' ? 'audio-player-overlay' : ''} ${isMiniMode ? 'mini-mode-overlay' : ''} ${floatingWindow ? 'floating-player-overlay' : ''}`}
+      className={`media-player-overlay ${window.cortexDl.customTitleBar && !floatingWindow ? 'below-titlebar' : ''} ${mediaType === 'audio' ? 'audio-player-overlay' : ''} ${isMiniMode ? 'mini-mode-overlay' : ''} ${floatingWindow ? 'floating-player-overlay' : ''}`}
       onClick={e => { if (e.target === e.currentTarget && !isMiniMode) handleClose() }}
       dir={dir}
     >

@@ -16,6 +16,7 @@ export class LibraryThumbnails {
   private active = 0
   private stopped = false
   private lastCleanup = 0
+  private cleanupPending: Promise<void> | undefined
   constructor(private directory: string, private ffmpeg: () => Promise<string>) {}
 
   async prepareArtwork(file: string): Promise<Buffer> {
@@ -65,7 +66,9 @@ export class LibraryThumbnails {
   private create(item: LibraryMediaItem, cover: string | undefined, key: string, coverStream?: number): Promise<string | null> {
     return this.inSlot(async () => {
       await fs.mkdir(this.directory, { recursive: true })
-      await this.cleanup()
+      if (!this.cleanupPending) {
+        this.cleanupPending = this.cleanup().catch(() => {}).finally(() => { this.cleanupPending = undefined })
+      }
       const cached = path.join(this.directory, `${key}.jpg`), absent = path.join(this.directory, `${key}.none`)
       const bytes = await this.readImage(cached)
       if (bytes) return `data:image/jpeg;base64,${bytes.toString('base64')}`
@@ -118,14 +121,18 @@ export class LibraryThumbnails {
     if (Date.now() - this.lastCleanup < 1800000) return
     this.lastCleanup = Date.now()
     const files = await fs.readdir(this.directory), entries = []
-    for (const name of files) {
-      if (!/^[a-f0-9]{64}\.(jpg|none)$/.test(name)) continue
-      const file = path.join(this.directory, name), stat = await fs.stat(file).catch(() => null)
-      if (stat?.isFile()) entries.push({ file, name, size: stat.size, mtime: stat.mtimeMs })
+    const names = files.filter(name => /^[a-f0-9]{64}\.(jpg|none)$/.test(name))
+    for (let offset = 0; offset < names.length && !this.stopped; offset += 32) {
+      const batch = await Promise.all(names.slice(offset, offset + 32).map(async name => {
+        const file = path.join(this.directory, name), stat = await fs.stat(file).catch(() => null)
+        return stat?.isFile() ? { file, name, size: stat.size, mtime: stat.mtimeMs } : null
+      }))
+      for (const entry of batch) if (entry) entries.push(entry)
     }
     entries.sort((a, b) => b.mtime - a.mtime)
     let bytes = 0
     for (const entry of entries) {
+      if (this.stopped) break
       bytes += entry.size
       if ((bytes > 64 * MAX_IMAGE || Date.now() - entry.mtime > 7 * 86400000) && !this.pending.has(entry.name.slice(0, 64))) await fs.unlink(entry.file).catch(() => {})
     }
@@ -136,5 +143,6 @@ export class LibraryThumbnails {
     this.waiting.splice(0).forEach(resolve => resolve())
     for (const child of this.children) child.kill()
     await Promise.allSettled([...this.pending.values(), ...this.importing])
+    await this.cleanupPending
   }
 }

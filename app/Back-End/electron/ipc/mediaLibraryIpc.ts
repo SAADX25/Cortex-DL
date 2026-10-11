@@ -36,8 +36,8 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
     }
     return artwork
   }
-  const saveArtwork = async (id: string, image: Buffer | null) => library().setArtwork(id, image, async (file, persist) => {
-    if (canEmbedLibraryArtwork(file)) await editor().write(file, image, () => persist(true))
+  const saveArtwork = async (id: string, image: Buffer | null, refreshPlayer = false) => library().setArtwork(id, image, async (file, persist) => {
+    if (canEmbedLibraryArtwork(file)) await editor().write(file, image, () => persist(true), refreshPlayer)
     else await persist()
   })
   const images = () => {
@@ -51,15 +51,17 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
     return thumbnails
   }
   const artworkInfo = async (id: string) => {
-    const item = await library().get(id)
+    const item = await library().get(id, false)
     if (!item) return { thumbnail: null, embedded: false }
-    const stream = item.availability === 'available' ? await editor().coverStream(item.filePath).catch(() => null) : null
     const custom = await library().getArtwork(id)
-    return { thumbnail: custom ? `data:image/jpeg;base64,${custom.toString('base64')}` : await images().get(item, stream ?? undefined), embedded: stream !== null }
+    // A cover saved by Cortex is already normalized; display it without launching ffprobe.
+    if (custom) return { thumbnail: `data:image/jpeg;base64,${custom.toString('base64')}`, embedded: item.artworkEmbedded === true }
+    const stream = item.availability === 'available' ? await editor().coverStream(item.filePath).catch(() => null) : null
+    return { thumbnail: await images().get(item, stream ?? undefined), embedded: stream !== null }
   }
   ipcMain.handle('cortexdl:library:artwork-info', (_event, id: string) => artworkInfo(id))
   ipcMain.handle('cortexdl:library:thumbnail', async (_event, id: string) => (await artworkInfo(id)).thumbnail)
-  ipcMain.handle('cortexdl:library:artwork-select', async (_event, id: string) => {
+  ipcMain.handle('cortexdl:library:artwork-select', async (_event, id: string, refreshPlayer = false) => {
     const item = await library().get(id)
     if (!item) throw new Error('MEDIA_LIBRARY_NOT_FOUND')
     if (!canEditLibraryArtwork(item)) throw new Error('MEDIA_LIBRARY_ARTWORK_UNSUPPORTED')
@@ -71,19 +73,19 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
     })
     if (result.canceled || !result.filePaths.length) return null
     const image = await images().prepareArtwork(result.filePaths[0])
-    return saveArtwork(id, image)
+    return saveArtwork(id, image, refreshPlayer)
   })
-  ipcMain.handle('cortexdl:library:artwork-embed', async (_event, id: string) => {
+  ipcMain.handle('cortexdl:library:artwork-embed', async (_event, id: string, refreshPlayer = false) => {
     const item = await library().get(id)
     if (!item || !canEmbedLibraryArtwork(item.filePath)) throw new Error('MEDIA_LIBRARY_ARTWORK_UNSUPPORTED')
     const image = await library().getArtwork(id)
     if (!image) throw new Error('MEDIA_LIBRARY_ARTWORK_INVALID')
-    return saveArtwork(id, image)
+    return saveArtwork(id, image, refreshPlayer)
   })
-  ipcMain.handle('cortexdl:library:artwork-remove', async (_event, id: string) => {
+  ipcMain.handle('cortexdl:library:artwork-remove', async (_event, id: string, refreshPlayer = false) => {
     const item = await library().get(id)
     const embedded = item && canEmbedLibraryArtwork(item.filePath) && await editor().coverStream(item.filePath) !== null
-    return item?.artwork || embedded ? saveArtwork(id, null) : library().setArtwork(id, null)
+    return item?.artwork || embedded ? saveArtwork(id, null, refreshPlayer) : library().setArtwork(id, null)
   })
   const select = async (multiple: boolean) => {
     const win = getWin()
@@ -94,7 +96,8 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
     })
     return result.canceled ? [] : result.filePaths
   }
-  ipcMain.handle('cortexdl:library:list', () => library().list())
+  ipcMain.handle('cortexdl:library:list', () => library().catalog())
+  ipcMain.handle('cortexdl:library:check', (_event, ids: string[]) => library().check(ids))
   ipcMain.handle('cortexdl:library:select', async () => {
     const files = await select(true)
     return files.length ? library().add(files) : null

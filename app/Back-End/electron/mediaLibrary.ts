@@ -12,6 +12,8 @@ const key = (value: string) => process.platform === 'win32' ? path.normalize(val
 export class MediaLibrary {
   private entries: SavedItem[] | null = null
   private queue: Promise<unknown> = Promise.resolve()
+  private checkQueue: Promise<unknown> = Promise.resolve()
+  private statuses = new Map<string, { size: number; availability: LibraryMediaItem['availability'] }>()
   constructor(private readonly file: string) {}
 
   private serial<T>(action: () => Promise<T>): Promise<T> {
@@ -58,10 +60,23 @@ export class MediaLibrary {
       finally { await handle.close() }
       await fs.rename(temporary, this.file)
       this.entries = entries
+      const paths = new Set(entries.map(item => item.filePath))
+      for (const file of this.statuses.keys()) if (!paths.has(file)) this.statuses.delete(file)
     } finally { await fs.unlink(temporary).catch(() => {}) }
   }
 
   private async inspect(filePath: string): Promise<{ size: number; availability: LibraryMediaItem['availability'] }> {
+    const status = await this.inspectFile(filePath)
+    this.rememberStatus(filePath, status)
+    return status
+  }
+
+  private rememberStatus(filePath: string, status: { size: number; availability: LibraryMediaItem['availability'] }): void {
+    if (!this.statuses.has(filePath) && this.statuses.size >= 10000) this.statuses.delete(this.statuses.keys().next().value!)
+    this.statuses.set(filePath, status)
+  }
+
+  private async inspectFile(filePath: string): Promise<{ size: number; availability: LibraryMediaItem['availability'] }> {
     try {
       const stat = await fs.stat(filePath)
       if (!stat.isFile()) return { size: 0, availability: 'unreadable' }
@@ -85,10 +100,38 @@ export class MediaLibrary {
 
   list(): Promise<LibraryMediaItem[]> { return this.serial(async () => this.snapshot(await this.load())) }
 
-  get(id: string): Promise<LibraryMediaItem | null> {
+  private catalogItems(entries: SavedItem[]): LibraryMediaItem[] {
+    return entries.map(item => {
+      const status = this.statuses.get(item.filePath)
+      return { ...item, availability: status?.availability ?? 'available', size: status?.availability === 'available' ? status.size : item.size }
+    })
+  }
+
+  /** Return saved metadata immediately; the renderer checks only the current page. */
+  catalog(): Promise<LibraryMediaItem[]> { return this.serial(async () => this.catalogItems(await this.load())) }
+
+  async check(ids: string[]): Promise<LibraryMediaItem[]> {
+    if (!Array.isArray(ids) || ids.length > 32 || ids.some(id => typeof id !== 'string' || !/^[\w-]{1,128}$/.test(id))) throw new Error('MEDIA_LIBRARY_INVALID')
+    const entries = await this.serial(async () => {
+      const selected = new Set(ids)
+      return (await this.load()).filter(item => selected.has(item.id))
+    })
+    // Slow drives must not hold up saved metadata or cached covers. Serialize
+    // page checks separately to retain the 32-file concurrency bound.
+    const work = this.checkQueue.then(() => Promise.all(entries.map(async item => {
+      const status = await this.inspectFile(item.filePath)
+      if (this.entries?.includes(item)) this.rememberStatus(item.filePath, status)
+      return { ...item, ...status, size: status.availability === 'available' ? status.size : item.size }
+    })))
+    this.checkQueue = work.catch(() => {})
+    return work
+  }
+
+  get(id: string, inspect = true): Promise<LibraryMediaItem | null> {
     return this.serial(async () => {
       const item = (await this.load()).find(entry => entry.id === id)
       if (!item) return null
+      if (!inspect) return this.catalogItems([item])[0]
       return { ...item, ...await this.inspect(item.filePath) }
     })
   }
@@ -148,27 +191,35 @@ export class MediaLibrary {
       try { if (editMedia) await editMedia(item.filePath, persist); else await persist() }
       catch (error) { await this.discardArtwork(artwork); throw error }
       await this.discardArtwork(item.artwork)
-      return this.snapshot(this.entries!)
+      this.statuses.set(updated.filePath, { size: updated.size, availability: 'available' })
+      return this.catalogItems(this.entries!)
     })
   }
 
   add(filePaths: string[]): Promise<LibraryImportResult> {
     return this.serial(async () => {
-      if (!Array.isArray(filePaths) || filePaths.length > 500 || !filePaths.every(validPath)) throw new Error('MEDIA_LIBRARY_INVALID_PATH')
+      if (!Array.isArray(filePaths) || filePaths.length > 10000 || !filePaths.every(validPath)) throw new Error('MEDIA_LIBRARY_INVALID_PATH')
       const entries = [...await this.load()], known = new Set(entries.map(item => key(item.filePath)))
       const result: LibraryImportResult = { items: [], added: 0, duplicates: 0, rejected: [] }
-      for (const source of filePaths) {
-        const filePath = path.normalize(source), kind = libraryMediaKind(filePath)
-        if (!kind) { result.rejected.push({ filePath, reason: 'unsupported' }); continue }
-        if (known.has(key(filePath))) { result.duplicates++; continue }
-        const status = await this.inspect(filePath)
-        if (status.availability !== 'available') { result.rejected.push({ filePath, reason: status.availability }); continue }
-        if (entries.length >= 10000) throw new Error('MEDIA_LIBRARY_FULL')
-        entries.push({ id: randomUUID(), filePath, name: path.basename(filePath), kind, size: status.size, addedAt: Date.now(), lastPlayedAt: null })
-        known.add(key(filePath)); result.added++
+      // Bound filesystem work and save once; never decode media during import.
+      for (let offset = 0; offset < filePaths.length; offset += 32) {
+        const batch = await Promise.all(filePaths.slice(offset, offset + 32).map(async source => {
+          const filePath = path.normalize(source), kind = libraryMediaKind(filePath)
+          const status = kind && !known.has(key(filePath)) ? await this.inspect(filePath) : null
+          return { filePath, kind, status }
+        }))
+        for (const { filePath, kind, status } of batch) {
+          if (!kind) { result.rejected.push({ filePath, reason: 'unsupported' }); continue }
+          if (known.has(key(filePath))) { result.duplicates++; continue }
+          if (!status) { result.rejected.push({ filePath, reason: 'unreadable' }); continue }
+          if (status.availability !== 'available') { result.rejected.push({ filePath, reason: status.availability }); continue }
+          if (entries.length >= 10000) throw new Error('MEDIA_LIBRARY_FULL')
+          entries.push({ id: randomUUID(), filePath, name: path.basename(filePath), kind, size: status.size, addedAt: Date.now(), lastPlayedAt: null })
+          known.add(key(filePath)); result.added++
+        }
       }
       if (result.added) await this.save(entries)
-      result.items = await this.snapshot(entries)
+      result.items = this.catalogItems(entries)
       return result
     })
   }
@@ -178,7 +229,7 @@ export class MediaLibrary {
       const entries = await this.load()
       await this.save(entries.filter(item => item.id !== id))
       await this.discardArtwork(entries.find(item => item.id === id)?.artwork)
-      return this.snapshot(this.entries!)
+      return this.catalogItems(this.entries!)
     })
   }
 
@@ -205,7 +256,7 @@ export class MediaLibrary {
       const updated = { ...item, filePath: path.normalize(filePath), name: path.basename(filePath), kind: libraryMediaKind(filePath)!, size: status.size }
       delete updated.artworkEmbedded
       await this.save(entries.map(entry => entry.id === id ? updated : entry))
-      return this.snapshot(this.entries!)
+      return this.catalogItems(this.entries!)
     })
   }
 }

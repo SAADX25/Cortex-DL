@@ -85,13 +85,15 @@ declare global {
     __cortexSmokeArtwork?: (file: string, retain: boolean) => Promise<boolean>
     __cortexMediaDiagnostics?: () => Promise<unknown>
     cortexDl: {
+      readonly customTitleBar: boolean
       getDroppedMediaPaths: (files: File[]) => string[]
       listMediaLibrary: () => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      checkMediaLibraryFiles: (ids: string[]) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
       getMediaLibraryThumbnail: (id: string) => Promise<string | null>
       getMediaLibraryArtworkInfo: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryArtworkInfo>
-      selectMediaLibraryArtwork: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
-      removeMediaLibraryArtwork: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
-      embedMediaLibraryArtwork: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      selectMediaLibraryArtwork: (id: string, refreshPlayer?: boolean) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
+      removeMediaLibraryArtwork: (id: string, refreshPlayer?: boolean) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      embedMediaLibraryArtwork: (id: string, refreshPlayer?: boolean) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
       selectMediaLibraryFiles: () => Promise<import('../../Shared/mediaLibrary').LibraryImportResult | null>
       addMediaLibraryFiles: (files: string[]) => Promise<import('../../Shared/mediaLibrary').LibraryImportResult>
       removeMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>

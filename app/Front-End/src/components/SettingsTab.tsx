@@ -22,6 +22,8 @@ const SettingsTab: React.FC = () => {
   const onResetStats = useSettingsStore((s) => s.onResetStats)
   const useInAppPlayer = useSettingsStore((s) => s.useInAppPlayer)
   const setUseInAppPlayer = useSettingsStore((s) => s.setUseInAppPlayer)
+  const refreshWindowsArtwork = useSettingsStore((s) => s.refreshWindowsPlayerArtwork)
+  const setRefreshWindowsArtwork = useSettingsStore((s) => s.setRefreshWindowsPlayerArtwork)
   const healthCheck = useSettingsStore((s) => s.healthCheck)
   const healthChecking = useSettingsStore((s) => s.healthChecking)
   const refreshHealth = useSettingsStore((s) => s.refreshHealth)
@@ -127,7 +129,24 @@ const SettingsTab: React.FC = () => {
             </div>
           </div>
 
-          {}
+          <div className="minimal-row">
+            <div className="row-info">
+              <span className="row-title">{t.refresh_windows_artwork}</span>
+              <span className="row-subtitle">{t.refresh_windows_artwork_desc}</span>
+            </div>
+            <div className="row-control">
+              <button
+                type="button"
+                role="switch"
+                aria-label={t.refresh_windows_artwork}
+                aria-checked={refreshWindowsArtwork}
+                className={`toggle-switch ${refreshWindowsArtwork ? 'active' : ''}`}
+                onClick={() => setRefreshWindowsArtwork(!refreshWindowsArtwork)}
+              >
+                <span className="toggle-switch-thumb" />
+              </button>
+            </div>
+          </div>
 
           {}
           <div className="minimal-row">

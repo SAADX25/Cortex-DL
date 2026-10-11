@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import { useUIStore } from './useUIStore'
+import { useSettingsStore } from './useSettingsStore'
 import type { LibraryMediaItem, LibraryImportResult } from '../../../Shared/mediaLibrary'
 type ArtworkTask = { id: string; action: 'change' | 'remove' | 'embed' }
 
 interface LibraryState {
   items: LibraryMediaItem[]
   loaded: boolean
+  refreshVersion: number
   loading: boolean
   busy: boolean
   error: string | null
@@ -14,6 +16,7 @@ interface LibraryState {
   artworkTask: ArtworkTask | null
   setArtworkInfo: (id: string, embedded: boolean) => void
   refresh: () => Promise<void>
+  checkFiles: (ids: string[]) => Promise<void>
   importFiles: (paths?: string[]) => Promise<void>
   remove: (id: string) => Promise<void>
   play: (id: string) => Promise<void>
@@ -42,7 +45,7 @@ export const useMediaLibraryStore = create<LibraryState>((set, get) => {
     finally { set({ busy: false, artworkTask: null }) }
   }
   return {
-    items: [], loaded: false, loading: false, busy: false, error: null, imported: null, artworkInfo: {}, artworkTask: null,
+    items: [], loaded: false, refreshVersion: 0, loading: false, busy: false, error: null, imported: null, artworkInfo: {}, artworkTask: null,
     setArtworkInfo: (id, embedded) => set(state => state.artworkInfo[id] === embedded ? state : { artworkInfo: { ...state.artworkInfo, [id]: embedded } }),
     refresh: () => {
       if (get().busy) return Promise.resolve()
@@ -50,11 +53,25 @@ export const useMediaLibraryStore = create<LibraryState>((set, get) => {
       const current = revision
       set({ loading: true })
       refreshPending = window.cortexDl.listMediaLibrary().then(items => {
-        if (current === revision) set({ items, loaded: true, error: null, artworkInfo: {} })
+        if (current === revision) set(state => ({ items, loaded: true, error: null, refreshVersion: state.refreshVersion + 1 }))
       }).catch(error => {
         if (current === revision) set({ error: errorMessage(error) })
       }).finally(() => { refreshPending = null; set({ loading: false }) })
       return refreshPending
+    },
+    checkFiles: async ids => {
+      if (get().busy || !ids.length) return
+      const current = revision, version = get().refreshVersion
+      try {
+        const checked = await window.cortexDl.checkMediaLibraryFiles(ids)
+        if (current !== revision || version !== get().refreshVersion) return
+        const statuses = new Map(checked.map(item => [item.id, item]))
+        set(state => ({ items: state.items.map(item => {
+          const fresh = statuses.get(item.id)
+          return fresh && fresh.filePath === item.filePath && (fresh.availability !== item.availability || fresh.size !== item.size)
+            ? { ...item, availability: fresh.availability, size: fresh.size } : item
+        }) }))
+      } catch { /* Playback validates availability again; a failed check is retryable. */ }
     },
     importFiles: paths => perform(async () => {
       const result = paths ? await window.cortexDl.addMediaLibraryFiles(paths) : await window.cortexDl.selectMediaLibraryFiles()
@@ -68,23 +85,30 @@ export const useMediaLibraryStore = create<LibraryState>((set, get) => {
     }),
     relocate: id => perform(async () => {
       const items = await window.cortexDl.relocateMediaLibraryItem(id)
-      if (items) set({ items, artworkInfo: {} })
+      if (items) set(state => ({ items, artworkInfo: {}, refreshVersion: state.refreshVersion + 1 }))
     }),
     selectArtwork: (id, suspend) => perform(async () => {
       if (!suspend) checkCoverEdit(id)
       const resume = await suspend?.()
       try {
-        const items = await window.cortexDl.selectMediaLibraryArtwork(id)
-        if (items) set({ items, artworkInfo: {} })
+        const items = await window.cortexDl.selectMediaLibraryArtwork(id, useSettingsStore.getState().refreshWindowsPlayerArtwork)
+        if (items) set(state => ({ items, artworkInfo: {}, refreshVersion: state.refreshVersion + 1 }))
       } finally { resume?.() }
     }, { id, action: 'change' }),
     removeArtwork: (id, suspend) => perform(async () => {
       if (!suspend) checkCoverEdit(id)
       const resume = await suspend?.()
-      try { set({ items: await window.cortexDl.removeMediaLibraryArtwork(id), artworkInfo: {} }) }
+      try {
+        const items = await window.cortexDl.removeMediaLibraryArtwork(id, useSettingsStore.getState().refreshWindowsPlayerArtwork)
+        set(state => ({ items, artworkInfo: {}, refreshVersion: state.refreshVersion + 1 }))
+      }
       finally { resume?.() }
     }, { id, action: 'remove' }),
-    embedArtwork: id => perform(async () => { checkCoverEdit(id); set({ items: await window.cortexDl.embedMediaLibraryArtwork(id), artworkInfo: {} }) }, { id, action: 'embed' }),
+    embedArtwork: id => perform(async () => {
+      checkCoverEdit(id)
+      const items = await window.cortexDl.embedMediaLibraryArtwork(id, useSettingsStore.getState().refreshWindowsPlayerArtwork)
+      set(state => ({ items, artworkInfo: {}, refreshVersion: state.refreshVersion + 1 }))
+    }, { id, action: 'embed' }),
     dismissNotice: () => set({ imported: null, error: null }),
   }
 })

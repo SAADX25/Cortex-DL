@@ -14,6 +14,7 @@ useUIStore.setState({ activeTab: 'downloads' })
 let entries = [], canceled = false, failed = false, artworkFailed = false, covers = [], embedded = [], played = [], removed = [], dropped = [], folders = [], pendingRefresh
 const nativeCovers = { audio: true, video: false }
 let pendingArtwork
+let checks = [], thumbnails = [], pendingCheck
 const awaitArtwork = async () => { if (pendingArtwork) await new Promise(resolve => { pendingArtwork.resolve = resolve }) }
 const samples = [
   { id: 'video', filePath: 'C:/Videos/رحلة إلى عمّان.mp4', name: 'رحلة إلى عمّان.mp4', kind: 'video', size: 482344960, addedAt: 1, lastPlayedAt: null, availability: 'available' },
@@ -21,9 +22,18 @@ const samples = [
   { id: 'missing', filePath: 'D:/Archive/Old recording.wav', name: 'Old recording.wav', kind: 'audio', size: 500000, addedAt: 3, lastPlayedAt: null, availability: 'missing' },
 ]
 window.cortexDl = {
+  checkMediaLibraryFiles: async ids => {
+    checks.push(ids)
+    const result = entries.filter(item => ids.includes(item.id)).map(item => ({ ...item }))
+    if (pendingCheck) await new Promise(resolve => { pendingCheck.resolve = resolve })
+    return result
+  },
   getMediaLibraryThumbnail: async id => entries.find(item => item.id === id)?.artwork ? __LIBRARY_VIDEO_ART__ : id === 'video' ? __LIBRARY_VIDEO_ART__ : id === 'audio' ? __LIBRARY_AUDIO_ART__ : null,
-  getMediaLibraryArtworkInfo: async id => ({ embedded: !!nativeCovers[id] || !!entries.find(item => item.id === id)?.artworkEmbedded,
-    thumbnail: entries.find(item => item.id === id)?.artwork ? __LIBRARY_VIDEO_ART__ : nativeCovers[id] ? __LIBRARY_AUDIO_ART__ : id === 'video' ? __LIBRARY_VIDEO_ART__ : null }),
+  getMediaLibraryArtworkInfo: async id => {
+    thumbnails.push(id)
+    return { embedded: !!nativeCovers[id] || !!entries.find(item => item.id === id)?.artworkEmbedded,
+      thumbnail: entries.find(item => item.id === id)?.artwork ? __LIBRARY_VIDEO_ART__ : nativeCovers[id] ? __LIBRARY_AUDIO_ART__ : id === 'video' ? __LIBRARY_VIDEO_ART__ : null }
+  },
   selectMediaLibraryArtwork: async id => {
     await awaitArtwork()
     if (canceled) return null
@@ -66,6 +76,14 @@ window.cortexDl = {
   openFolder: async path => { folders.push(path) },
 }
 window.fixture = {
+  requests: () => ({ checks, thumbnails }),
+  resetRequests: () => { checks = []; thumbnails = [] },
+  holdCheck: () => { pendingCheck = {} },
+  releaseCheck: () => { pendingCheck.resolve(); pendingCheck = null },
+  large: () => {
+    entries = Array.from({ length: 1200 }, (_, i) => ({ ...samples[1], id: 'large-' + i, name: 'Track ' + i + '.mp3', filePath: 'C:/Music/Track ' + i + '.mp3', addedAt: i + 4 }))
+    return useMediaLibraryStore.getState().refresh()
+  },
   result: () => ({ covers, embedded, played, removed, dropped, folders, player: useUIStore.getState().mediaPlayerFile, count: entries.length }),
   legacyCover: () => { entries = entries.map(item => { const copy = { ...item }; delete copy.artworkEmbedded; return copy }); return useMediaLibraryStore.getState().refresh() },
   nativeVideoCover: () => { nativeCovers.video = true; return useMediaLibraryStore.getState().refresh() },

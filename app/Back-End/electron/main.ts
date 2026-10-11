@@ -36,6 +36,7 @@ import { engineReceipts, onEngineFailure, ensureEnginesReady, engineExecutionFai
 import { MediaRequestRegistry } from './mediaRequestRegistry'
 import { parseMediaRange } from './mediaRange'
 import { installFloatingPlayerWindow } from './floatingPlayer'
+import { mainWindowChrome } from './windowChrome'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -176,6 +177,7 @@ function createWindow() {
     : path.join(RENDERER_DIST, 'CortexDL.ico');
 
   win = new BrowserWindow({
+    ...mainWindowChrome,
     width: 1100,
     height: 720,
     minWidth: 850,
