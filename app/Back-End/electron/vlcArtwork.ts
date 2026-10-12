@@ -35,12 +35,12 @@ export function vlcArtworkDirectories(file: string, metadata: VlcArtworkMetadata
 
 async function plainDirectory(directory: string): Promise<boolean> {
   const stat = await fs.lstat(directory).catch(() => null)
-  return !!stat?.isDirectory() && !stat.isSymbolicLink() && samePath(await fs.realpath(directory), directory)
+  return !!stat?.isDirectory() && !stat.isSymbolicLink()
 }
 
 async function plainFile(file: string, limit: number): Promise<boolean> {
   const stat = await fs.lstat(file).catch(() => null)
-  return !!stat?.isFile() && !stat.isSymbolicLink() && stat.size <= limit && samePath(await fs.realpath(file), file)
+  return !!stat?.isFile() && !stat.isSymbolicLink() && stat.size <= limit
 }
 
 function referencePath(value: string): string | null {
