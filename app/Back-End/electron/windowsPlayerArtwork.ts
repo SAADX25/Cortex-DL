@@ -35,10 +35,9 @@ export async function closeWindowsMediaPlayer(): Promise<boolean> {
     { windowsHide: true, timeout: 7000, maxBuffer: 8192 }, error => resolve(!error)))
 }
 
-const samePath = (a: string, b: string) => path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase()
 async function plainDirectory(directory: string): Promise<boolean> {
   const stat = await fs.lstat(directory)
-  return stat.isDirectory() && !stat.isSymbolicLink() && samePath(await fs.realpath(directory), directory)
+  return stat.isDirectory() && !stat.isSymbolicLink()
 }
 
 /** Retain one backup per cached image, and leave the media library database untouched. */
@@ -62,7 +61,6 @@ export async function refreshWindowsPlayerArtwork(file: string, localAppData = p
       // Recheck both files after closing the player. Never follow a cache link.
       const sourceStat = await fs.lstat(source).catch(() => null), targetStat = await fs.lstat(target).catch(() => null)
       if (!sourceStat?.isFile() || sourceStat.isSymbolicLink() || targetStat && (!targetStat.isFile() || targetStat.isSymbolicLink())) continue
-      if (!samePath(await fs.realpath(source), source)) continue
       await fs.rename(source, target)
       refreshed++
     }

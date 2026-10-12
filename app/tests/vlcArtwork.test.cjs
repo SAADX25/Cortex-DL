@@ -66,6 +66,18 @@ test('cache links, redirected backup directories and oversized images are skippe
   assert.equal(await refreshVlcArtwork(song, metadata, appData), 0); assert.equal((await fs.stat(image)).size, 8 * 1024 * 1024 + 1)
 }))
 
+test('VLC refresh tolerates realpath alias differences while validating cache files', () => fixture(async ({ appData, image, backups, song, metadata }) => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  const originalRealpath = fs.realpath
+  fs.realpath = async () => { throw new Error('short-name alias unavailable') }
+  try {
+    assert.equal(await refreshVlcArtwork(song, metadata, appData), 1)
+    assert.equal((await fs.readdir(backups)).length, 1)
+    await assert.rejects(fs.stat(image), { code: 'ENOENT' })
+  } finally { fs.realpath = originalRealpath; Object.defineProperty(process, 'platform', platform) }
+}))
+
 test('invalid cache roots and paths are ignored without resetting VLC', () => fixture(async ({ appData, song, metadata, image }) => {
   for (const [file, cache] of [['relative.mp3', appData], [song + '\0', appData], [song, 'relative'], [song, undefined]]) {
     assert.equal(await refreshVlcArtwork(file, metadata, cache === undefined ? path.join(appData, 'absent') : cache), 0)
