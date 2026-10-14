@@ -48,6 +48,13 @@ test('library IPC validates bounded arguments, handles native dialog cancellatio
     const existingId = (await invoke('add', [existing])).items.find(entry => entry.filePath === existing).id
     const existingInfo = await invoke('artwork-info', existingId)
     assert.equal(existingInfo.embedded, true); assert.match(existingInfo.thumbnail, /^data:image\/jpeg/)
+    const attached = path.join(userData, 'attached.mkv')
+    require('node:child_process').execFileSync(ffmpeg, ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=160x90:duration=0.3', '-c:v', 'libx264', '-preset', 'ultrafast', '-attach', picture, '-metadata:s:t:0', 'mimetype=image/png', attached], { windowsHide: true, timeout: 10000 })
+    const attachedId = (await invoke('add', [attached])).items.find(entry => entry.filePath === attached).id
+    const attachedInfo = await invoke('artwork-info', attachedId)
+    assert.equal(attachedInfo.embedded, true, 'Non-editable video formats must retain attached-cover discovery')
+    assert.match(attachedInfo.thumbnail, /^data:image\/jpeg/)
+    await invoke('remove', attachedId)
     assert.equal((await invoke('list')).find(entry => entry.id === existingId).artwork, undefined, 'Detect covers already in files without copying them into custom storage')
     await invoke('artwork-remove', existingId)
     assert.equal((await invoke('artwork-info', existingId)).embedded, false, 'Removing a preexisting cover must strip it from the source file')

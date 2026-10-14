@@ -73,3 +73,73 @@ test('unavailable thumbnail engines remain retryable and stopping drains queued 
   await new Promise(resolve => setTimeout(resolve, 10)); await blocked.stop()
   assert.deepEqual(await Promise.all(requests), Array(5).fill(null))
 }))
+
+test('thumbnail cache remembers embedded discovery across restarts, deduplicates misses and repairs corrupt cache data', () => fixture(async directory => {
+  const audio = path.join(directory, 'song.mp3'); await fs.writeFile(audio, 'read-only source sentinel')
+  const image = Buffer.from([255, 216, ...Array(20).fill(1), 255, 217]), cacheDirectory = path.join(directory, 'cache')
+  let probes = 0, extracts = 0
+  const create = () => {
+    const cache = new LibraryThumbnails(cacheDirectory, async () => 'unused', async () => { probes++; return 1 })
+    cache.extract = async () => { extracts++; return image }
+    return cache
+  }
+  const cache = create()
+  try {
+    const [first, duplicate] = await Promise.all([cache.getInfo(item(audio, 'audio')), cache.getInfo(item(audio, 'audio'))])
+    assert.deepEqual(first, duplicate); assert.equal(first.embedded, true); assert.match(first.thumbnail, /^data:image\/jpeg/)
+    assert.equal(probes, 1); assert.equal(extracts, 1)
+    await cache.stop()
+    const reopened = create()
+    try {
+      assert.deepEqual(await reopened.getInfo(item(audio, 'audio')), first)
+      assert.equal(probes, 1, 'A cache hit after restart must not launch discovery'); assert.equal(extracts, 1)
+      const files = await fs.readdir(cacheDirectory), jpeg = files.find(name => name.endsWith('.jpg')), info = files.find(name => name.endsWith('.info'))
+      await fs.writeFile(path.join(cacheDirectory, info), '{bad metadata')
+      assert.deepEqual(await reopened.getInfo(item(audio, 'audio')), first)
+      assert.equal(probes, 2); assert.equal(extracts, 1, 'Legacy/corrupt metadata can be repaired without decoding a valid image')
+      await fs.writeFile(path.join(cacheDirectory, jpeg), 'not a JPEG')
+      assert.deepEqual(await reopened.getInfo(item(audio, 'audio')), first)
+      assert.equal(extracts, 2, 'A corrupt JPEG must be regenerated')
+      await fs.utimes(audio, new Date(), new Date(Date.now() + 10000))
+      assert.equal((await reopened.getInfo(item(audio, 'audio'))).embedded, true)
+      assert.equal(extracts, 3, 'Source changes must invalidate image and embedded metadata together')
+      assert.equal(await fs.readFile(audio, 'utf8'), 'read-only source sentinel')
+    } finally { await reopened.stop() }
+  } finally { await cache.stop() }
+}))
+
+test('discovery and extraction share two worker slots, failed discovery retries and shutdown drains waiting discoveries', () => fixture(async directory => {
+  const files = Array.from({ length: 5 }, (_, i) => path.join(directory, i + '.mp3'))
+  await Promise.all(files.map(file => fs.writeFile(file, 'source')))
+  let active = 0, peak = 0, probes = 0
+  const cache = new LibraryThumbnails(path.join(directory, 'cache'), async () => 'unused', async () => {
+    probes++; active++; peak = Math.max(peak, active)
+    try { await new Promise(resolve => setTimeout(resolve, 10)); return null } finally { active-- }
+  })
+  cache.extract = async () => {
+    active++; peak = Math.max(peak, active)
+    try { await new Promise(resolve => setTimeout(resolve, 10)); return null } finally { active-- }
+  }
+  try {
+    const results = await Promise.all(files.map(file => cache.getInfo(item(file, 'audio'))))
+    assert.ok(results.every(info => info.thumbnail === null && !info.embedded)); assert.equal(peak, 2)
+    await cache.getInfo(item(files[0], 'audio')); assert.equal(probes, 5, 'Negative cache hits must skip discovery too')
+  } finally { await cache.stop() }
+  let ready = false, attempts = 0
+  const retry = new LibraryThumbnails(path.join(directory, 'retry'), async () => 'unused', async () => { attempts++; if (!ready) throw Error('Missing ffprobe'); return 1 })
+  retry.extract = async () => null
+  try {
+    assert.equal((await retry.getInfo(item(files[0], 'audio'))).thumbnail, null)
+    ready = true
+    assert.equal((await retry.getInfo(item(files[0], 'audio'))).embedded, true); assert.equal(attempts, 2, 'Failed discovery must not publish a permanent negative cache')
+    assert.equal((await retry.getInfo(item(files[0], 'audio'))).embedded, true, 'A failed image extraction must retain embedded-cover controls on cache hits')
+  } finally { await retry.stop() }
+  let started, release
+  const entered = new Promise(resolve => { started = resolve }), gate = new Promise(resolve => { release = resolve })
+  const stopped = new LibraryThumbnails(path.join(directory, 'stopped'), async () => 'unused', async () => { started(); await gate; return 1 })
+  const pending = files.map(file => stopped.getInfo(item(file, 'audio')))
+  await entered
+  const stopping = stopped.stop(); release(); await stopping
+  assert.ok((await Promise.all(pending)).every(info => info.thumbnail === null))
+  assert.equal((await fs.readdir(path.join(directory, 'stopped'))).filter(name => /\.(jpg|none|info)$/.test(name)).length, 0)
+}))

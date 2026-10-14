@@ -45,7 +45,7 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
       thumbnails = new LibraryThumbnails(path.join(app.getPath('userData'), 'library-thumbnails'), async () => {
         if (!(await engineReceipts.ensure('ffmpeg')).available) throw new Error('Thumbnail engine unavailable')
         return getBinaryPath('ffmpeg')
-      })
+      }, file => editor().coverStream(file))
       thumbnailCaches.add(thumbnails)
     }
     return thumbnails
@@ -56,8 +56,7 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
     const custom = await library().getArtwork(id)
     // A cover saved by Cortex is already normalized; display it without launching ffprobe.
     if (custom) return { thumbnail: `data:image/jpeg;base64,${custom.toString('base64')}`, embedded: item.artworkEmbedded === true }
-    const stream = item.availability === 'available' ? await editor().coverStream(item.filePath).catch(() => null) : null
-    return { thumbnail: await images().get(item, stream ?? undefined), embedded: stream !== null }
+    return images().getInfo(item)
   }
   ipcMain.handle('cortexdl:library:artwork-info', (_event, id: string) => artworkInfo(id))
   ipcMain.handle('cortexdl:library:thumbnail', async (_event, id: string) => (await artworkInfo(id)).thumbnail)

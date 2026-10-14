@@ -14,6 +14,7 @@ useUIStore.setState({ activeTab: 'downloads' })
 let entries = [], canceled = false, failed = false, artworkFailed = false, covers = [], embedded = [], played = [], removed = [], dropped = [], folders = [], pendingRefresh
 const nativeCovers = { audio: true, video: false }
 let pendingArtwork
+let pendingThumbnails, pendingImport
 let checks = [], thumbnails = [], pendingCheck
 const awaitArtwork = async () => { if (pendingArtwork) await new Promise(resolve => { pendingArtwork.resolve = resolve }) }
 const samples = [
@@ -31,6 +32,7 @@ window.cortexDl = {
   getMediaLibraryThumbnail: async id => entries.find(item => item.id === id)?.artwork ? __LIBRARY_VIDEO_ART__ : id === 'video' ? __LIBRARY_VIDEO_ART__ : id === 'audio' ? __LIBRARY_AUDIO_ART__ : null,
   getMediaLibraryArtworkInfo: async id => {
     thumbnails.push(id)
+    if (pendingThumbnails) await pendingThumbnails.promise
     return { embedded: !!nativeCovers[id] || !!entries.find(item => item.id === id)?.artworkEmbedded,
       thumbnail: entries.find(item => item.id === id)?.artwork ? __LIBRARY_VIDEO_ART__ : nativeCovers[id] ? __LIBRARY_AUDIO_ART__ : id === 'video' ? __LIBRARY_VIDEO_ART__ : null }
   },
@@ -65,6 +67,7 @@ window.cortexDl = {
   },
   getDroppedMediaPaths: files => files.map(file => 'C:/Dropped/' + file.name),
   addMediaLibraryFiles: async paths => {
+    if (pendingImport) await pendingImport.promise
     dropped = paths
     const item = { id: 'dropped', filePath: paths[0], name: paths[0].split('/').pop(), kind: 'audio', size: 2500, addedAt: 4, lastPlayedAt: null, availability: 'available' }
     entries = [...entries, item]
@@ -76,6 +79,11 @@ window.cortexDl = {
   openFolder: async path => { folders.push(path) },
 }
 window.fixture = {
+  holdThumbnails: () => { let resolve; const promise = new Promise(done => { resolve = done }); pendingThumbnails = { promise, resolve } },
+  releaseThumbnails: () => { pendingThumbnails.resolve(); pendingThumbnails = null },
+  holdImport: () => { let resolve; const promise = new Promise(done => { resolve = done }); pendingImport = { promise, resolve } },
+  releaseImport: () => { pendingImport.resolve(); pendingImport = null },
+  importMany: () => useMediaLibraryStore.getState().importFiles(Array.from({ length: 1200 }, (_, i) => 'C:/Dropped/import-' + i + '.mp3')),
   requests: () => ({ checks, thumbnails }),
   resetRequests: () => { checks = []; thumbnails = [] },
   holdCheck: () => { pendingCheck = {} },

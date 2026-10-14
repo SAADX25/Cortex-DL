@@ -27,6 +27,7 @@ const labels = {
     missingError: 'This file is no longer available. Refresh the library, then locate the file.', duplicateError: 'That file is already in your library.',
     fullError: 'Your library has reached its limit of 10,000 files.', tooMany: 'Add up to 10,000 files at a time.',
     dropActive: 'Drop to add video & audio', count: 'items', loading: 'Loading your library…',
+    adding: 'Adding', files: 'files…', addingMedia: 'Adding media…',
     previous: 'Previous', next: 'Next', pages: 'Media library pages', perPage: 'Items per page', page: 'Page', of: 'of',
   },
   ar: {
@@ -47,6 +48,7 @@ const labels = {
     missingError: 'هذا الملف غير متاح. حدّث المكتبة ثم حدد موقع الملف.', duplicateError: 'هذا الملف موجود في المكتبة بالفعل.',
     fullError: 'وصلت مكتبتك إلى الحد الأقصى: 10,000 ملف.', tooMany: 'يمكن إضافة 10,000 ملف في المرة الواحدة.',
     dropActive: 'أفلت لإضافة الفيديو والصوت', count: 'عنصر', loading: 'جارٍ تحميل المكتبة…',
+    adding: 'جارٍ إضافة', files: 'ملف…', addingMedia: 'جارٍ إضافة الوسائط…',
     previous: 'السابق', next: 'التالي', pages: 'صفحات مكتبة الوسائط', perPage: 'عدد الملفات في الصفحة', page: 'صفحة', of: 'من',
   },
 }
@@ -54,6 +56,24 @@ function formatSize(bytes: number): string {
   if (!bytes) return '0 B'
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3)
   return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${['B', 'KB', 'MB', 'GB'][index]}`
+}
+
+function LibraryCoverSaved({ item, t }: { item: LibraryMediaItem; t: typeof labels.en }) {
+  const embedded = useMediaLibraryStore(state => !!state.artworkInfo[item.id])
+  return item.artworkEmbedded || !item.artwork && canEmbedLibraryArtwork(item.filePath) && embedded
+    ? <div className="library-cover-saved"><CheckCircle2 size={13} />{t.coverSaved}</div> : null
+}
+
+function LibraryCoverActions({ item, t, busy }: { item: LibraryMediaItem; t: typeof labels.en; busy: boolean }) {
+  const embedded = useMediaLibraryStore(state => !!state.artworkInfo[item.id])
+  const selectArtwork = useMediaLibraryStore(state => state.selectArtwork), removeArtwork = useMediaLibraryStore(state => state.removeArtwork)
+  const embedArtwork = useMediaLibraryStore(state => state.embedArtwork)
+  const hasCover = !!item.artwork || canEmbedLibraryArtwork(item.filePath) && embedded
+  return <div className="library-cover-actions">
+    <button className="library-cover-button" disabled={busy} onClick={() => void selectArtwork(item.id)} title={canEmbedLibraryArtwork(item.filePath) ? t.coverHint : t.libraryCoverHint} aria-label={`${hasCover ? t.changeCover : t.addCover}: ${item.name}`}><ImagePlus size={16} />{hasCover ? t.changeCover : t.addCover}</button>
+    {item.artwork && !item.artworkEmbedded && canEmbedLibraryArtwork(item.filePath) && <button className="library-cover-button library-cover-embed" disabled={busy || item.availability !== 'available'} onClick={() => void embedArtwork(item.id)}><CheckCircle2 size={15} />{t.embedCover}</button>}
+    {hasCover && <button className="library-icon-button library-cover-remove" disabled={busy} onClick={() => void removeArtwork(item.id)} title={canEmbedLibraryArtwork(item.filePath) ? t.removeCover : t.removeLibraryCover} aria-label={`${canEmbedLibraryArtwork(item.filePath) ? t.removeCover : t.removeLibraryCover}: ${item.name}`}><X size={15} /></button>}
+  </div>
 }
 
 export default function MediaLibrary() {
@@ -67,10 +87,7 @@ export default function MediaLibrary() {
   const checkFiles = useMediaLibraryStore(state => state.checkFiles), refreshVersion = useMediaLibraryStore(state => state.refreshVersion)
   const play = useMediaLibraryStore(state => state.play), remove = useMediaLibraryStore(state => state.remove)
   const relocate = useMediaLibraryStore(state => state.relocate), dismissNotice = useMediaLibraryStore(state => state.dismissNotice)
-  const selectArtwork = useMediaLibraryStore(state => state.selectArtwork), removeArtwork = useMediaLibraryStore(state => state.removeArtwork)
-  const embedArtwork = useMediaLibraryStore(state => state.embedArtwork)
-  const artworkInfo = useMediaLibraryStore(state => state.artworkInfo)
-  const hasCover = (item: LibraryMediaItem) => !!item.artwork || canEmbedLibraryArtwork(item.filePath) && !!artworkInfo[item.id]
+  const importCount = useMediaLibraryStore(state => state.importCount)
   const [query, setQuery] = useState(''), [filter, setFilter] = useState<'all' | 'video' | 'audio'>('all')
   const [sort, setSort] = useState<'newest' | 'name' | 'played'>('newest'), [dragging, setDragging] = useState(false)
   const [dropError, setDropError] = useState('')
@@ -170,6 +187,7 @@ export default function MediaLibrary() {
 
     {(error || dropError) && <div className="library-notice is-error" role="alert"><AlertCircle size={18} /><span>{dropError || errorText}</span><button disabled={busy} onClick={() => { setDropError(''); void refresh() }}>{t.retry}</button><button className="library-icon-button" aria-label={t.dismiss} onClick={() => { setDropError(''); dismissNotice() }}><X size={16} /></button></div>}
     {notices && <div className={`library-notice ${imported?.rejected.length ? 'is-warning' : ''}`} role="status"><CheckCircle2 size={18} /><span>{notices}</span><button className="library-icon-button" aria-label={t.dismiss} onClick={dismissNotice}><X size={16} /></button></div>}
+    {importCount !== null && <div className="library-notice" role="status"><Loader2 size={16} className="spin" /><span>{importCount ? `${t.adding} ${importCount.toLocaleString(lang)} ${t.files}` : t.addingMedia}</span></div>}
 
     {!loaded && loading ? <div className="library-loading" role="status"><Loader2 className="spin" size={24} />{t.loading}</div> : <>
       {!items.length && <div className="library-drop">
@@ -194,17 +212,13 @@ export default function MediaLibrary() {
           <div className="library-card-header"><h3 title={item.name} dir="auto">{item.name.replace(/\.[^.]+$/, '')}</h3><span className="library-format">{item.name.split('.').pop()?.toUpperCase()}</span></div>
           <p className="library-file-path" title={item.filePath} dir="auto">{item.filePath}</p>
           <div className="library-card-meta"><span>{item.kind === 'video' ? t.video : t.audio}</span><span aria-hidden="true">·</span><span dir="ltr">{formatSize(item.size)}</span></div>
-          {(item.artworkEmbedded || !item.artwork && canEmbedLibraryArtwork(item.filePath) && artworkInfo[item.id]) && <div className="library-cover-saved"><CheckCircle2 size={13} />{t.coverSaved}</div>}
+          <LibraryCoverSaved item={item} t={t} />
           {item.availability !== 'available' && <div className="library-unavailable"><AlertCircle size={14} />{item.availability === 'missing' ? t.missing : t.unreadable}</div>}
           <ArtworkProgress itemId={item.id} />
           </div>
           <div className="library-card-actions"><button className="library-play" disabled={busy} onClick={() => item.availability === 'available' ? void play(item.id) : void relocate(item.id)} aria-label={`${item.availability === 'available' ? t.play : t.locate}: ${item.name}`}>{item.availability === 'available' ? <Play size={16} /> : <FolderOpen size={16} />}{item.availability === 'available' ? t.play : t.locate}</button>
             <button className="library-icon-button library-folder" disabled={busy || item.availability !== 'available'} title={t.folder} aria-label={`${t.folder}: ${item.name}`} onClick={() => void window.cortexDl.openFolder(item.filePath).catch(() => setDropError(t.error))}><FolderOpen size={17} /></button>
-            {canEditLibraryArtwork(item) && <div className="library-cover-actions">
-              <button className="library-cover-button" disabled={busy} onClick={() => void selectArtwork(item.id)} title={canEmbedLibraryArtwork(item.filePath) ? t.coverHint : t.libraryCoverHint} aria-label={`${hasCover(item) ? t.changeCover : t.addCover}: ${item.name}`}><ImagePlus size={16} />{hasCover(item) ? t.changeCover : t.addCover}</button>
-              {item.artwork && !item.artworkEmbedded && canEmbedLibraryArtwork(item.filePath) && <button className="library-cover-button library-cover-embed" disabled={busy || item.availability !== 'available'} onClick={() => void embedArtwork(item.id)}><CheckCircle2 size={15} />{t.embedCover}</button>}
-              {hasCover(item) && <button className="library-icon-button library-cover-remove" disabled={busy} onClick={() => void removeArtwork(item.id)} title={canEmbedLibraryArtwork(item.filePath) ? t.removeCover : t.removeLibraryCover} aria-label={`${canEmbedLibraryArtwork(item.filePath) ? t.removeCover : t.removeLibraryCover}: ${item.name}`}><X size={15} /></button>}
-            </div>}
+            {canEditLibraryArtwork(item) && <LibraryCoverActions item={item} t={t} busy={busy} />}
             <button className="library-icon-button library-remove" disabled={busy} title={t.remove} aria-label={`${t.remove}: ${item.name}`} onClick={() => requestRemove(item)}><Trash2 size={16} /></button>
           </div>
           </div>
