@@ -22,7 +22,11 @@ test('media library UI imports, filters, plays, relocates, confirms removal and 
         assert.equal(await js('document.querySelectorAll(".library-card").length'),0);assert.equal(await js('!!document.querySelector(".library-drop")'),true);await capture('library-empty');
         await js('window.fixture.canceled(true);document.querySelector(".library-header .library-add").click()');await delay(80);
         assert.equal(await js('document.querySelectorAll(".library-card").length'),0,'Canceled file picker must not change the library');
-        await js('window.fixture.canceled(false);document.querySelector(".library-header .library-add").click()');await wait('document.querySelectorAll(".library-card").length===3');await capture('library-en');
+        await js('window.fixture.canceled(false);window.fixture.holdThumbnails();document.querySelector(".library-header .library-add").click()');await wait('document.querySelectorAll(".library-card").length===3');
+        await wait('window.fixture.requests().thumbnails.length>0');
+        assert.equal(await js('document.querySelectorAll(".library-thumbnail img").length'),0,'Cards must appear with placeholders before optional artwork resolves');
+        assert.equal(await js('document.querySelector(".library-card .library-play").disabled'),false,'Background artwork must not disable playback');
+        await js('window.fixture.releaseThumbnails()');await capture('library-en');
         assert.equal(await js('!!document.querySelector(".library-drop")'),false,'Populated library must not waste space on the drop banner');
         // Artwork loads only near the viewport; row heights vary with runner fonts/DPI.
         for(const selector of ['.library-card.video','.library-card.audio:not(.is-unavailable)']) {
@@ -163,6 +167,11 @@ test('media library UI imports, filters, plays, relocates, confirms removal and 
         await js('window.fixture.many()');await selectSize(12);await wait('document.querySelectorAll(".library-card").length===9');
         await assertSticky();await capture('library-sticky-ar-narrow');await assertSticky(100000);
         win.setContentSize(1080,850);await js('window.fixture.language("en")');await selectSize(4);
+        const priorCount = await js('window.fixture.result().count');
+        await js('window.fixture.holdImport();void window.fixture.importMany()');
+        await wait('Array.from(document.querySelectorAll(".library-notice")).some(notice=>notice.textContent.includes("Adding 1,200 files"))');
+        assert.equal(await js('Number(document.querySelector(".library-count").textContent)'),priorCount,'Pending imports must not publish uncommitted cards');
+        await js('window.fixture.releaseImport()');await wait('!Array.from(document.querySelectorAll(".library-notice")).some(notice=>notice.textContent.includes("Adding"))');
         await js('window.fixture.resetRequests();window.fixture.holdCheck();window.fixture.large()');
         await wait('document.querySelector(".library-count").textContent==="1200"&&document.querySelectorAll(".library-card").length===4');
         await wait('window.fixture.requests().checks.length>0');

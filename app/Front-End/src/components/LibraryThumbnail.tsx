@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Film, Music2 } from 'lucide-react'
 import type { LibraryMediaItem } from '../../../Shared/mediaLibrary'
 import { useMediaLibraryStore } from '../stores/useMediaLibraryStore'
 
-export default function LibraryThumbnail({ item, active }: { item: LibraryMediaItem; active: boolean }) {
+export default memo(function LibraryThumbnail({ item, active }: { item: LibraryMediaItem; active: boolean }) {
   const { id, filePath, availability, size, artwork, artworkEmbedded } = item
   const refreshVersion = useMediaLibraryStore(state => state.refreshVersion)
   const root = useRef<HTMLDivElement>(null)
@@ -37,4 +37,4 @@ export default function LibraryThumbnail({ item, active }: { item: LibraryMediaI
   return <div ref={root} className={`library-thumbnail ${url ? 'has-image' : ''} ${item.artwork || image?.embedded ? 'has-cover' : ''}`} aria-hidden="true">
     {url ? <img src={url} alt="" decoding="async" onError={() => setFailed(url)} /> : <div className="library-media-icon">{item.kind === 'video' ? <Film size={29} strokeWidth={1.5} /> : <Music2 size={29} strokeWidth={1.5} />}</div>}
   </div>
-}
+})

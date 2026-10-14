@@ -2,14 +2,14 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
-import type { LibraryMediaItem } from '../../Shared/mediaLibrary'
+import type { LibraryArtworkInfo, LibraryMediaItem } from '../../Shared/mediaLibrary'
 
 const MAX_IMAGE = 1024 * 1024
 const jpeg = (bytes: Buffer) => bytes.length > 16 && bytes.length <= MAX_IMAGE && bytes[0] === 255 && bytes[1] === 216 && bytes.at(-2) === 255 && bytes.at(-1) === 217
 
 /** Optional artwork is generated off the UI thread, two processes at a time. */
 export class LibraryThumbnails {
-  private pending = new Map<string, Promise<string | null>>()
+  private pending = new Map<string, Promise<LibraryArtworkInfo>>()
   private importing = new Set<Promise<Buffer | null>>()
   private children = new Set<ChildProcess>()
   private waiting: (() => void)[] = []
@@ -17,7 +17,7 @@ export class LibraryThumbnails {
   private stopped = false
   private lastCleanup = 0
   private cleanupPending: Promise<void> | undefined
-  constructor(private directory: string, private ffmpeg: () => Promise<string>) {}
+  constructor(private directory: string, private ffmpeg: () => Promise<string>, private discoverCover?: (file: string) => Promise<number | null>) {}
 
   async prepareArtwork(file: string): Promise<Buffer> {
     const stat = await fs.stat(file).catch(() => null)
@@ -30,9 +30,14 @@ export class LibraryThumbnails {
   }
 
   async get(item: LibraryMediaItem, coverStream?: number): Promise<string | null> {
-    if (this.stopped || item.availability !== 'available') return null
+    return (await this.getInfo(item, coverStream)).thumbnail
+  }
+
+  async getInfo(item: LibraryMediaItem, coverStream?: number): Promise<LibraryArtworkInfo> {
+    const empty = { thumbnail: null, embedded: false }
+    if (this.stopped || item.availability !== 'available') return empty
     const source = await fs.stat(item.filePath).catch(() => null)
-    if (!source?.isFile()) return null
+    if (!source?.isFile()) return empty
     const stem = path.join(path.dirname(item.filePath), path.parse(item.filePath).name)
     const candidates = ['jpg', 'jpeg', 'png', 'webp'].flatMap(extension => [
       `${stem}.${extension}`,
@@ -46,7 +51,7 @@ export class LibraryThumbnails {
     const key = createHash('sha256').update(JSON.stringify([item.filePath, item.kind, source.size, source.mtimeMs, cover, coverStream])).digest('hex')
     const existing = this.pending.get(key)
     if (existing) return existing
-    const work = this.create(item, cover?.file, key, coverStream).catch(() => null).finally(() => this.pending.delete(key))
+    const work = this.create(item, cover?.file, key, coverStream).catch(() => empty).finally(() => this.pending.delete(key))
     this.pending.set(key, work)
     return work
   }
@@ -63,31 +68,65 @@ export class LibraryThumbnails {
     }
   }
 
-  private create(item: LibraryMediaItem, cover: string | undefined, key: string, coverStream?: number): Promise<string | null> {
+  private create(item: LibraryMediaItem, cover: string | undefined, key: string, coverStream?: number): Promise<LibraryArtworkInfo> {
+    const empty = { thumbnail: null, embedded: false }
     return this.inSlot(async () => {
       await fs.mkdir(this.directory, { recursive: true })
       if (!this.cleanupPending) {
         this.cleanupPending = this.cleanup().catch(() => {}).finally(() => { this.cleanupPending = undefined })
       }
-      const cached = path.join(this.directory, `${key}.jpg`), absent = path.join(this.directory, `${key}.none`)
+      const cached = path.join(this.directory, `${key}.jpg`), absent = path.join(this.directory, `${key}.none`), infoFile = path.join(this.directory, `${key}.info`)
       const bytes = await this.readImage(cached)
-      if (bytes) return `data:image/jpeg;base64,${bytes.toString('base64')}`
-      if (await fs.access(absent).then(() => true, () => false)) return null
+      const savedInfo = await this.readInfo(infoFile)
+      if (bytes && savedInfo !== null) return { thumbnail: `data:image/jpeg;base64,${bytes.toString('base64')}`, embedded: savedInfo }
+      if (!bytes && savedInfo !== null && await fs.access(absent).then(() => true, () => false)) return { thumbnail: null, embedded: savedInfo }
+      // Discover only on a cache miss, inside the same two-worker bound as extraction.
+      // Failed discovery stays retryable, including when a legacy image is available.
+      let discovered = true
+      if (coverStream === undefined && this.discoverCover) {
+        try { coverStream = (await this.discoverCover(item.filePath)) ?? undefined }
+        catch { discovered = false }
+      }
+      const embedded = coverStream !== undefined
+      if (this.stopped) return empty
+      if (bytes) {
+        if (discovered) await this.writeCache(infoFile, JSON.stringify({ embedded })).catch(() => {})
+        return { thumbnail: `data:image/jpeg;base64,${bytes.toString('base64')}`, embedded }
+      }
       // An unavailable engine is retryable; do not cache it as missing artwork.
       const binary = await this.ffmpeg()
-      if (this.stopped) return null
+      if (this.stopped) return empty
       let image: Buffer | null = null
       if (coverStream !== undefined) image = await this.extract(binary, item.filePath, undefined, '320:180', `0:${coverStream}`)
       if (!image && item.kind === 'video' && cover) image = await this.extract(binary, cover)
       if (!image) image = await this.extract(binary, item.filePath, item.kind === 'video' ? 1 : undefined)
       if (!image && item.kind === 'video') image = await this.extract(binary, item.filePath)
       if (!image && item.kind === 'audio' && cover) image = await this.extract(binary, cover)
-      if (this.stopped) return null
+      if (this.stopped) return empty
       const target = image ? cached : absent, temporary = path.join(this.directory, `${key}.${randomUUID()}.tmp`)
-      try { await fs.writeFile(temporary, image ?? ''); await fs.rename(temporary, target) }
+      // Publish the metadata before the image/missing marker. Neither is library data.
+      if (discovered) await this.writeCache(infoFile, JSON.stringify({ embedded }))
+      try {
+        if (image || discovered) { await fs.writeFile(temporary, image ?? ''); await fs.rename(temporary, target) }
+      }
       finally { await fs.unlink(temporary).catch(() => {}) }
-      return image ? `data:image/jpeg;base64,${image.toString('base64')}` : null
-    }, null)
+      return { thumbnail: image ? `data:image/jpeg;base64,${image.toString('base64')}` : null, embedded }
+    }, empty)
+  }
+
+  private async readInfo(file: string): Promise<boolean | null> {
+    const stat = await fs.lstat(file).catch(() => null)
+    if (!stat?.isFile() || stat.size > 64) return null
+    try {
+      const info = JSON.parse(await fs.readFile(file, 'utf8')) as { embedded?: unknown }
+      return typeof info?.embedded === 'boolean' ? info.embedded : null
+    } catch { return null }
+  }
+
+  private async writeCache(file: string, data: string): Promise<void> {
+    const temporary = `${file}.${randomUUID()}.tmp`
+    try { await fs.writeFile(temporary, data, { flag: 'wx' }); await fs.rename(temporary, file) }
+    finally { await fs.unlink(temporary).catch(() => {}) }
   }
 
   private async readImage(file: string): Promise<Buffer | null> {
@@ -121,7 +160,7 @@ export class LibraryThumbnails {
     if (Date.now() - this.lastCleanup < 1800000) return
     this.lastCleanup = Date.now()
     const files = await fs.readdir(this.directory), entries = []
-    const names = files.filter(name => /^[a-f0-9]{64}\.(jpg|none)$/.test(name))
+    const names = files.filter(name => /^[a-f0-9]{64}\.(jpg|none|info)$/.test(name))
     for (let offset = 0; offset < names.length && !this.stopped; offset += 32) {
       const batch = await Promise.all(names.slice(offset, offset + 32).map(async name => {
         const file = path.join(this.directory, name), stat = await fs.stat(file).catch(() => null)

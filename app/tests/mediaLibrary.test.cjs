@@ -111,6 +111,30 @@ test('malformed saved libraries and untrusted paths are rejected without overwri
   for (const paths of [['relative.mp4'], ['C:\\bad\0.mp4'], Array(10001).fill(source)]) await assert.rejects(valid.add(paths), /MEDIA_LIBRARY_INVALID_PATH/)
 }))
 
+test('mixed imports isolate inaccessible and disconnected sources and rapid repeats retain durable successes', () => fixture(async (directory, saved) => {
+  const good = path.join(directory, 'good.mp3'), denied = path.join(directory, 'denied.wav'), disconnected = path.join(directory, 'offline.mp4')
+  await Promise.all([good, denied, disconnected].map(file => fs.writeFile(file, 'unchanged')))
+  const access = fs.access, stat = fs.stat
+  fs.access = async (file, ...args) => { if (file === denied) throw Object.assign(Error('Denied'), { code: 'EACCES' }); return access(file, ...args) }
+  fs.stat = async (file, ...args) => {
+    if (file === disconnected) { await new Promise(resolve => setTimeout(resolve, 20)); throw Object.assign(Error('Disconnected'), { code: 'ENODEV' }) }
+    return stat(file, ...args)
+  }
+  try {
+    const library = new MediaLibrary(saved), batch = [good, denied, disconnected]
+    const results = await Promise.all([library.add(batch), library.add(batch), library.add(batch)])
+    assert.deepEqual(results.map(result => result.added), [1, 0, 0])
+    assert.deepEqual(results.map(result => result.duplicates), [0, 1, 1])
+    for (const result of results) {
+      assert.deepEqual(result.rejected.map(item => item.reason), ['unreadable', 'unreadable'])
+      assert.equal(result.items.length, 1)
+    }
+    assert.equal((await new MediaLibrary(saved).catalog())[0].filePath, good)
+    assert.equal((await library.play(results[0].items[0].id)).availability, 'available', 'Playback must work immediately without any thumbnail')
+    assert.deepEqual(await Promise.all(batch.map(file => fs.readFile(file, 'utf8'))), ['unchanged', 'unchanged', 'unchanged'])
+  } finally { fs.access = access; fs.stat = stat }
+}))
+
 test('1200-file libraries import with bounded concurrency and open without scanning offline or hidden files', { timeout: 20000 }, () => fixture(async (directory, saved) => {
   const files = Array.from({ length: 1200 }, (_, index) => path.join(directory, `track-${index}.mp3`))
   for (let offset = 0; offset < files.length; offset += 64) await Promise.all(files.slice(offset, offset + 64).map(file => fs.writeFile(file, 'source sentinel')))

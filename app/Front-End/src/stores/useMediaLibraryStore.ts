@@ -12,6 +12,7 @@ interface LibraryState {
   busy: boolean
   error: string | null
   imported: LibraryImportResult | null
+  importCount: number | null
   artworkInfo: Record<string, boolean>
   artworkTask: ArtworkTask | null
   setArtworkInfo: (id: string, embedded: boolean) => void
@@ -42,10 +43,10 @@ export const useMediaLibraryStore = create<LibraryState>((set, get) => {
     set({ busy: true, error: null, imported: null, artworkTask })
     try { await action() }
     catch (error) { set({ error: errorMessage(error) }) }
-    finally { set({ busy: false, artworkTask: null }) }
+    finally { set({ busy: false, artworkTask: null, importCount: null }) }
   }
   return {
-    items: [], loaded: false, refreshVersion: 0, loading: false, busy: false, error: null, imported: null, artworkInfo: {}, artworkTask: null,
+    items: [], loaded: false, refreshVersion: 0, loading: false, busy: false, error: null, imported: null, importCount: null, artworkInfo: {}, artworkTask: null,
     setArtworkInfo: (id, embedded) => set(state => state.artworkInfo[id] === embedded ? state : { artworkInfo: { ...state.artworkInfo, [id]: embedded } }),
     refresh: () => {
       if (get().busy) return Promise.resolve()
@@ -74,6 +75,7 @@ export const useMediaLibraryStore = create<LibraryState>((set, get) => {
       } catch { /* Playback validates availability again; a failed check is retryable. */ }
     },
     importFiles: paths => perform(async () => {
+      if (!paths || paths.length >= 100) set({ importCount: paths?.length ?? 0 })
       const result = paths ? await window.cortexDl.addMediaLibraryFiles(paths) : await window.cortexDl.selectMediaLibraryFiles()
       if (result) set({ items: result.items, loaded: true, imported: result })
     }),
