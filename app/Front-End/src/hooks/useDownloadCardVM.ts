@@ -1,9 +1,8 @@
 import { useMemo, useCallback } from 'react'
 import { useTask } from '../stores/downloadStore'
-import type { Language } from '../translations'
-import { translations } from '../translations'
+import { type Language, translations } from '../translations'
 import { getProgressView } from '../../../Shared/progressModel'
-import type { DownloadPhase } from '../../../Shared/types'
+import { type DownloadPhase } from '../../../Shared/types'
 import { youtubeErrorMessage } from '../lib/downloadHelpers'
 
 export function formatBytes(bytes: number): string {
@@ -37,47 +36,43 @@ function formatEta(remainingBytes: number, speedBps: number): string {
 
 export type DisplayPhase = DownloadPhase
 
-export interface DownloadCardVM {
-  
+interface DownloadCardData {
   id: string
   title: string
   sourceUrl: string
   thumbnail: string | null
   formatTag: string
 
-  
   phase: DisplayPhase
   phaseLabel: string
   phaseColor: string
 
-  
-  percent: number          
-  percentLabel: string     
-  isIndeterminate: boolean 
-  sizeLabel: string        
-  speedLabel: string       
-  etaLabel: string         
+  percent: number
+  percentLabel: string
+  isIndeterminate: boolean
+  sizeLabel: string
+  speedLabel: string
+  etaLabel: string
 
-  
   errorMessage: string | null
 
-  
   showPause: boolean
   showResume: boolean
   showCancel: boolean
   showPlay: boolean
   showOpenFolder: boolean
 
-  
+
+  filePath: string
+}
+
+export interface DownloadCardVM extends DownloadCardData {
   onPause: () => void
   onResume: () => void
   onCancel: () => void
   onPlay: () => void
   onOpenFolder: () => void
   onDelete: (deleteFile: boolean) => void
-
-  
-  filePath: string
 }
 
 interface UseDownloadCardVMOptions {
@@ -94,15 +89,9 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
   const task = useTask(id)
   const t = translations[lang]
 
-  
-
-  const vm = useMemo<DownloadCardVM | null>(() => {
+  const vm = useMemo<DownloadCardData | null>(() => {
     if (!task) return null
 
-    
-    
-    
-    
     const progress = getProgressView(task)
     const phase = progress.phase
 
@@ -123,7 +112,6 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       canceled: t.status_canceled,
     }
 
-    
     const phaseColors: Record<DisplayPhase, string> = {
       queued: 'var(--text-muted)',
       starting: 'var(--accent-primary)',
@@ -141,15 +129,6 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       canceled: 'var(--text-muted)',
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
     const isPostProcessing = phase === 'merging' || phase === 'converting' || phase === 'trimming'
     const convPct = isPostProcessing ? progress.phaseProgress : null
     const percent = progress.overallProgress ?? 0
@@ -166,7 +145,6 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       if (knownTotal) {
         sizeLabel = `${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes!)}`
       } else if (task.downloadedBytes > 0) {
-        
         sizeLabel = formatBytes(task.downloadedBytes)
       }
     }
@@ -179,15 +157,12 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       ? formatEta(remaining, 1)
       : ''
 
-    
-    
     const phaseEmoji = phase === 'merging' ? '⚙️' : phase === 'trimming' ? '✂️' : phase === 'converting' ? '🔄' : ''
     const phaseBadge = isPostProcessing
       ? `${phaseEmoji} ${convPct !== null ? `${phaseLabels[phase]} ${Math.round(convPct)}%` : phaseLabels[phase]}`
       : ''
     const finalPhaseLabel = isPostProcessing ? phaseBadge : phaseLabels[phase]
 
-    
     const showPause = task.status === 'downloading' || task.status === 'queued' || task.status === 'merging' || task.status === 'converting'
     const showResume = task.status === 'paused' || task.status === 'error'
     const showCancel = task.status !== 'completed' && task.status !== 'canceled'
@@ -216,17 +191,13 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       showPlay,
       showOpenFolder,
       filePath: task.filePath,
-      
-      onPause: () => {},
-      onResume: () => {},
-      onCancel: () => {},
-      onPlay: () => {},
-      onOpenFolder: () => {},
-      onDelete: () => {},
+
+
+
+
+
     }
   }, [task, lang, t])
-
-  
 
   const handlePause = useCallback(async () => {
     try { await window.cortexDl.pauseDownload(id) }
@@ -256,7 +227,6 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     [id, onDelete],
   )
 
-  
   if (!vm) return null
 
   return {

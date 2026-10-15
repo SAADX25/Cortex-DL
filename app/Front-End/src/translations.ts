@@ -1,4 +1,3 @@
-
 export type Language = 'ar' | 'en';
 
 export interface Translations {

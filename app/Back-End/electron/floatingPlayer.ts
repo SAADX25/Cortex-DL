@@ -1,6 +1,5 @@
 import { type BrowserWindow, screen, shell } from 'electron'
 
-/** Only the player's empty, same-origin surface may become an app window. */
 export function installFloatingPlayerWindow(owner: BrowserWindow): void {
   let floating: BrowserWindow | null = null
   owner.webContents.setWindowOpenHandler(({ url, frameName }) => {

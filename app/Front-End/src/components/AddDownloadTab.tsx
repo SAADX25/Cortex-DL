@@ -4,8 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { translations } from '../translations'
 import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud, AlertCircle } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
-import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer'
-import { getTrimPreviewSource } from './trimSource'
+import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer/AdvancedTrimmer'
+import { getTrimPreviewSource } from './AdvancedTrimmer/trimSource'
 import UrlInputBar from './UrlInputBar'
 import SmartImage from './SmartImage'
 import { YouTubeMusicIcon } from './icons/YouTubeMusicIcon'
@@ -48,20 +48,11 @@ export type BatchItem = {
   errorMessage?: string
 }
 
-/**
- * No props: every field this tab renders now comes straight from the
- * `useFormStore`/`useUIStore`/`useSettingsStore` slices, and every callback
- * comes from the stable `downloadActions` module. This is what used to be
- * ~30 props threaded down from `App` via the `useAppController` god hook —
- * any one of which changing forced this entire tab (and everything inside
- * it) to re-render.
- */
 const AddDownloadTab: React.FC = () => {
   useEffect(() => () => { primaryAnalysis.cancel(); useUIStore.getState().setAnalyzing(false) }, [])
   const lang = useLang()
   const t = translations[lang]
 
-  
   const url = useUIStore((s) => s.url)
   const setUrl = useUIStore((s) => s.setUrl)
   const directory = useUIStore((s) => s.directory)
@@ -72,7 +63,6 @@ const AddDownloadTab: React.FC = () => {
   const analyzing = useUIStore((s) => s.analyzing)
   const showToast = useUIStore((s) => s.showToast)
 
-  
   const subfolderName = useFormStore((s) => s.subfolderName)
   const setSubfolderName = useFormStore((s) => s.setSubfolderName)
   const speedLimit = useFormStore((s) => s.speedLimit)
@@ -90,7 +80,6 @@ const AddDownloadTab: React.FC = () => {
   const endTime = useFormStore((s) => s.endTime)
   const setEndTime = useFormStore((s) => s.setEndTime)
   const setSelectedYtdlpFormatId = useFormStore((s) => s.setSelectedYtdlpFormatId)
-  const setTargetResolution = useFormStore((s) => s.setTargetResolution)
   const availableVideoQualities = useAvailableVideoQualities()
 
   const setCommentsSuccessPath = useCommentsStore((s) => s.setCommentsSuccessPath)
@@ -146,7 +135,7 @@ const AddDownloadTab: React.FC = () => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* ── Interactive Drag & Drop Visual Zone Overlay ── */}
+
       <AnimatePresence>
         {isDraggingOver && (
           <motion.div
@@ -184,7 +173,6 @@ const AddDownloadTab: React.FC = () => {
       <section className="minimal-panel">
         <div className="input-group">
 
-          {}
           <div className="w-full">
             <UrlInputBar
               analyzing={analyzing}
@@ -199,9 +187,8 @@ const AddDownloadTab: React.FC = () => {
              />
           </div>
 
-          {}
           <div className="modern-chips-grid flex flex-row justify-between items-center w-full">
-            {}
+
             <div className="chip-group flex flex-row items-center gap-2">
               <button
                 className={`modern-chip transition-all duration-300 ease-in-out transform hover:scale-105 hover:-translate-y-1 ${!isAudioMode ? 'chip-active-blue hover:shadow-[0_8px_30px_rgba(34,211,238,0.4)]' : ''}`}
@@ -219,14 +206,12 @@ const AddDownloadTab: React.FC = () => {
                   setTargetFormat('mp3')
                   setSelectedQuality('')
                   setSelectedYtdlpFormatId(null)
-                  setTargetResolution(null)
                 }}
               >
                 {t.btn_audio}
               </button>
             </div>
 
-            {/* Save folder & speed limit controls */}
             <div className="chip-group flex flex-row items-center gap-3">
               <div className="cortex-pill cursor-pointer" onClick={onPickFolder}>
                 <span className="text-lg">📁</span>
@@ -260,7 +245,6 @@ const AddDownloadTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Analysis View */}
           {analyzeResult && (
             <div className="fade-in">
               {analyzeResult.kind === 'playlist' ? (
@@ -287,10 +271,9 @@ const AddDownloadTab: React.FC = () => {
                 />
               )}
 
-              {/* Advanced Options */}
               <div className="advanced-options">
                 <div className="format-quality-row">
-                  {/* Format Selection */}
+
                   <div className="option-box">
                     <label className="option-label">{t.format_label || 'File Format'}</label>
                     <div className="flex flex-wrap gap-2" style={{ padding: 6 }}>
@@ -323,7 +306,6 @@ const AddDownloadTab: React.FC = () => {
                     </div>
                   </div>
 
-                  {}
                   {!isAudioMode && (
                     <div className="option-box">
                       <label className="option-label">{t.quality_label}</label>
@@ -333,7 +315,6 @@ const AddDownloadTab: React.FC = () => {
                         onChange={(e) => {
                           setSelectedQuality(e.target.value)
                           setSelectedYtdlpFormatId(e.target.value || null)
-                          setTargetResolution(null)
                         }}
                       >
                         <option value="">
@@ -359,7 +340,6 @@ const AddDownloadTab: React.FC = () => {
                   )}
                 </div>
 
-                {}
                 {trimmerSource ? (
                   <>
                     <button
@@ -369,7 +349,6 @@ const AddDownloadTab: React.FC = () => {
                         const next = !isTrimmerOpen
                         setIsTrimmerOpen(next)
                         if (!next) {
-                          
                           setStartTime('')
                           setEndTime('')
                         }
@@ -399,7 +378,6 @@ const AddDownloadTab: React.FC = () => {
                   </>
                 ) : null}
 
-                {}
                 {analyzeResult.kind === 'hls-master' && (
                   <div className="option-box">
                     <label className="option-label">{t.quality_label}</label>
@@ -416,14 +394,13 @@ const AddDownloadTab: React.FC = () => {
                 )}
               </div>
 
-              {}
               <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
                 <button
                   className="download-main-btn-large"
-                  style={{ 
-                    flex: 1, 
-                    opacity: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 0.4 : 1, 
-                    cursor: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 'not-allowed' : 'pointer' 
+                  style={{
+                    flex: 1,
+                    opacity: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 0.4 : 1,
+                    cursor: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 'not-allowed' : 'pointer'
                   }}
                   onClick={onDownloadNow}
                   disabled={analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0)}
@@ -431,18 +408,18 @@ const AddDownloadTab: React.FC = () => {
                   🚀 Download Now
                 </button>
                 <button
-                  style={{ 
-                    flex: 1, 
-                    padding: '14px 20px', 
-                    borderRadius: 12, 
-                    border: '1px solid rgba(255,255,255,0.12)', 
-                    background: 'rgba(255,255,255,0.05)', 
-                    color: '#d1d5db', 
-                    fontWeight: 600, 
-                    fontSize: 15, 
-                    cursor: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 'not-allowed' : 'pointer', 
-                    opacity: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 0.4 : 1, 
-                    transition: 'background 0.2s' 
+                  style={{
+                    flex: 1,
+                    padding: '14px 20px',
+                    borderRadius: 12,
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#d1d5db',
+                    fontWeight: 600,
+                    fontSize: 15,
+                    cursor: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 'not-allowed' : 'pointer',
+                    opacity: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 0.4 : 1,
+                    transition: 'background 0.2s'
                   }}
                   onClick={onAddToList}
                   disabled={batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))}
@@ -455,12 +432,11 @@ const AddDownloadTab: React.FC = () => {
             </div>
           )}
 
-          {}
           <div className="flex-1 overflow-y-auto pr-2">
-            <BatchListView 
-              batchItems={batchItems} 
-              setBatchItems={setBatchItems} 
-              SmartImage={SmartImage} 
+            <BatchListView
+              batchItems={batchItems}
+              setBatchItems={setBatchItems}
+              SmartImage={SmartImage}
             />
           </div>
 
@@ -469,7 +445,6 @@ const AddDownloadTab: React.FC = () => {
         {globalError ? <div className="global-error-banner" role="alert" dir={lang === 'ar' ? 'rtl' : 'ltr'}><AlertCircle size={19} /><span>{globalError}</span></div> : null}
       </section>
 
-      {}
       {batchItems.length > 0 && <div className="w-full mt-auto pt-4 flex-none">
         <div className="w-full max-w-full mx-auto px-2">
           {(() => {
@@ -526,7 +501,7 @@ const AddDownloadTab: React.FC = () => {
             <Clapperboard size={20} />
           </button>
           <button className="brand-icon-btn kick" onClick={() => onOpenExternal('https://kick.com')} title="Kick">
-            {}
+
             <svg width="20" height="20" viewBox="0 0 200 200" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
               <path d="M30 20 H90 V80 H120 L150 20 H200 L160 100 L200 180 H150 L120 120 H90 V180 H30 V20Z" />
             </svg>

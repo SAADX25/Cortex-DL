@@ -3,32 +3,18 @@ import { initDownloadStore } from '../stores/downloadStore'
 import { useUIStore } from '../stores/useUIStore'
 import { useFormStore } from '../stores/useFormStore'
 
-/**
- * One-time side-effect wiring for the download workflow: starts the
- * high-frequency IPC listeners backing the download store, resets the
- * per-analysis form fields whenever the URL changes, and wires up global
- * drag & drop. Call exactly once, near the app root (see `App.tsx`).
- */
 export function useDownloadInit(): void {
-  const url = useUIStore((s) => s.url)
-  const setAnalyzeResult = useUIStore((s) => s.setAnalyzeResult)
   const setUrl = useUIStore((s) => s.setUrl)
   const setActiveTab = useUIStore((s) => s.setActiveTab)
-  const resetForNewUrl = useFormStore((s) => s.resetForNewUrl)
 
   useEffect(() => {
     const disposeStore = initDownloadStore()
-    return () => { disposeStore() }
+    const unsubscribe = useUIStore.subscribe((state, previous) => {
+      if (state.url !== previous.url) useFormStore.getState().resetForNewUrl()
+    })
+    return () => { unsubscribe(); disposeStore() }
   }, [])
 
-  
-  useEffect(() => {
-    setAnalyzeResult(null)
-    resetForNewUrl()
-    
-  }, [setAnalyzeResult, resetForNewUrl, url])
-
-  
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => { e.preventDefault(); e.stopPropagation() }
     const handleDrop = (e: DragEvent) => {
@@ -45,6 +31,6 @@ export function useDownloadInit(): void {
       window.removeEventListener('dragover', handleDragOver)
       window.removeEventListener('drop', handleDrop)
     }
-    
+
   }, [setActiveTab, setUrl])
 }

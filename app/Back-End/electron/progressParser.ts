@@ -1,4 +1,4 @@
-import type { DownloadTask } from './types'
+import { type DownloadTask } from './types'
 import { parseTimeToSeconds } from './utils'
 import log from 'electron-log'
 
@@ -25,8 +25,6 @@ export function logRawProgressChunk(taskId: string, source: string, chunk: strin
 export function parseDownloadProgress(line: string, task: DownloadTask): boolean {
   let changed = false
 
-  
-  
   const tplMatch = /CORTEX_DL\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|\s]+)/.exec(line)
   if (tplMatch) {
     const [, formatId, filename, downloadedText, totalText, speedText] = tplMatch
@@ -34,8 +32,7 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
     const total = Number(totalText)
     const speed = Number(speedText)
     if (!Number.isFinite(downloaded) || downloaded < 0) return false
-    // A reconnect or resume can reset the counter for the *same* stream.
-    // The stream key, rather than a counter drop, identifies a new format.
+
     const key = `${formatId}|${filename}`
     const streams = task.ytdlpStreams ?? (task.ytdlpStreams = {})
     const previous = streams[key]
@@ -106,7 +103,6 @@ export function parseFfmpegProgress(
 ): boolean {
   let changed = false
 
-  
   if (state.totalDuration === null) {
     const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
     if (durMatch) {
@@ -114,12 +110,9 @@ export function parseFfmpegProgress(
     }
   }
 
-  // FFmpeg output size/bitrate describe encoded media, not downloaded bytes or network speed.
   const timeMatch = /\b(?:out_)?time=(-?\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
   const outTimeUnitsMatch = /^out_time_(?:ms|us)=(\d+)$/.exec(line.trim())
   if (timeMatch || outTimeUnitsMatch) {
-    
-    
     const currentSec = timeMatch
       ? parseTimeToSeconds(timeMatch[1])
       : parseInt(outTimeUnitsMatch![1], 10) / 1_000_000
@@ -130,11 +123,9 @@ export function parseFfmpegProgress(
     if (totalDuration && totalDuration > 0) {
       const pct = Math.min(99, Math.round((currentSec / totalDuration) * 100))
       if (task.status === 'downloading') {
-        
         task.downloadPercent = pct
         changed = true
       } else if (task.status === 'converting' || task.status === 'merging') {
-        
         task.convertingPercent = pct
         changed = true
       }
@@ -160,7 +151,6 @@ export function parseStateTransition(
     return { transitioned: false, detectedPath }
   }
 
-  
   const destMatch = /Destination:\s*(.+)$/.exec(line)
     ?? /Merging formats into "(.+)"/.exec(line)
   if (destMatch) {
@@ -168,14 +158,12 @@ export function parseStateTransition(
     if (possiblePath) detectedPath = possiblePath
   }
 
-  
   const ppMatch = /CORTEX_PP:(.+)$/.exec(line)
   if (ppMatch) {
     const ppPath = ppMatch[1].trim()
     if (ppPath && ppPath !== 'NA') detectedPath = ppPath
   }
 
-  
   if (line.includes('[Merger]') || line.includes('Merging formats')) {
     task.downloadPercent = 100
     task.status = 'merging'
@@ -188,7 +176,6 @@ export function parseStateTransition(
     return { transitioned: true, detectedPath }
   }
 
-  
   if (
     line.includes('[VideoConvertor]') ||
     line.includes('[FFmpegVideoConvertor]') ||

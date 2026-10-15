@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { useUIStore } from './useUIStore'
 import { useSettingsStore } from './useSettingsStore'
-import type { LibraryMediaItem, LibraryImportResult } from '../../../Shared/mediaLibrary'
+import { type LibraryMediaItem, type LibraryImportResult } from '../../../Shared/mediaLibrary'
+
 type ArtworkTask = { id: string; action: 'change' | 'remove' | 'embed' }
 
 interface LibraryState {
@@ -27,8 +28,11 @@ interface LibraryState {
   embedArtwork: (id: string) => Promise<void>
   dismissNotice: () => void
 }
+
 let revision = 0
+
 let refreshPending: Promise<void> | null = null
+
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'MEDIA_LIBRARY_REQUEST_FAILED'
 
 export const useMediaLibraryStore = create<LibraryState>((set, get) => {
@@ -72,7 +76,7 @@ export const useMediaLibraryStore = create<LibraryState>((set, get) => {
           return fresh && fresh.filePath === item.filePath && (fresh.availability !== item.availability || fresh.size !== item.size)
             ? { ...item, availability: fresh.availability, size: fresh.size } : item
         }) }))
-      } catch { /* Playback validates availability again; a failed check is retryable. */ }
+      } catch (error) { console.warn('[Library availability]', error) }
     },
     importFiles: paths => perform(async () => {
       if (!paths || paths.length >= 100) set({ importCount: paths?.length ?? 0 })

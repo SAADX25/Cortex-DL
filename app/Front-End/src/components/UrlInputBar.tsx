@@ -3,12 +3,6 @@ import { useUIStore } from '../stores/useUIStore'
 import React, { useState, useEffect } from 'react'
 import { X, ClipboardPaste } from 'lucide-react'
 
-/**
- * URL input bar — paste & go, or type a URL and analyze.
- * Memoized to avoid unnecessary re-renders from parent state changes.
- * Keeps its own local draft state so keystrokes never bounce through the
- * global store (and therefore never trigger unrelated re-renders elsewhere).
- */
 export const UrlInputBar = React.memo((
   {
     analyzing,

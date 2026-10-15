@@ -1,7 +1,7 @@
 require('../tests/register-ts.cjs')
 const fs = require('node:fs/promises')
 const path = require('node:path')
-const { downloadEngine, extractEngineZip, sha256, verifyEngine, promoteEngine } = require('../Back-End/electron/engineIntegrity.ts')
+const { downloadEngine, extractEngineZip, sha256, verifyEngine, promoteEngine } = require('../Back-End/electron/engines/engineManager.ts')
 const lock = require('../engines.lock.json')
 async function cachedStage(root) {
   try {

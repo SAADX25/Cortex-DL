@@ -1,11 +1,11 @@
-import { app, dialog, ipcMain } from 'electron'
+import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
 import path from 'node:path'
-import type { BrowserWindow } from 'electron'
-import type { SpeechModel, TranslationModel, SubtitleRequest, SubtitleCue } from '../../../Shared/localSubtitles'
+import { type SpeechModel, type TranslationModel, type SubtitleRequest, type SubtitleCue } from '../../../Shared/localSubtitles'
 import { SubtitleAssets } from './assets'
 import { LocalSubtitleService } from './service'
 
 let service: LocalSubtitleService | null = null
+
 export function registerLocalSubtitleIpc(getWin: () => BrowserWindow | null): void {
   const get = () => service ??= new LocalSubtitleService(new SubtitleAssets(path.join(app.getPath('userData'), 'local-subtitles')))
   ipcMain.handle('cortexdl:subtitles:state', () => get().state)
@@ -37,4 +37,5 @@ export function registerLocalSubtitleIpc(getWin: () => BrowserWindow | null): vo
     return get().embedDocument(id, cues, result.filePath)
   })
 }
+
 export async function stopLocalSubtitles(): Promise<void> { await service?.dispose() }

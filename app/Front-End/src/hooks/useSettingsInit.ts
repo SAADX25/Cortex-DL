@@ -1,12 +1,6 @@
 import { useEffect } from 'react'
 import { useSettingsStore } from '../stores/useSettingsStore'
 
-/**
- * One-time side-effect wiring for the settings slice: IPC subscriptions,
- * localStorage persistence, and initial data fetches. Call exactly once,
- * near the app root (see `App.tsx`) — this replaces the effects that used
- * to live inline in the old `useSettingsController` god hook.
- */
 export function useSettingsInit(): void {
   const lang = useSettingsStore((s) => s.lang)
   const concurrentDownloads = useSettingsStore((s) => s.concurrentDownloads)
@@ -20,31 +14,26 @@ export function useSettingsInit(): void {
   const setPassword = useSettingsStore((s) => s.setPassword)
   const setTotalDownloadedBytes = useSettingsStore((s) => s.setTotalDownloadedBytes)
 
-  
   useEffect(() => {
     window.cortexDl.getConcurrency().then((val) => {
       if ([3, 5, 10].includes(val)) setConcurrentDownloads(val)
     }).catch(() => {})
-    
+
   }, [setConcurrentDownloads])
 
-
-  
   useEffect(() => {
     (async () => {
       try { setEngineVersion(await window.cortexDl.getEngineVersion()) }
       catch { setEngineVersion('Error') }
     })()
-    
+
   }, [setEngineVersion])
 
-  
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
     localStorage.setItem('language', lang)
   }, [lang])
 
-  
   useEffect(() => {
     return window.cortexDl.onUpdateStatus((status) => {
       setUpdateStatus(status)
@@ -54,7 +43,6 @@ export function useSettingsInit(): void {
     })
   }, [setUpdateStatus])
 
-  
   useEffect(() => { localStorage.setItem('cortex-notifications', 'true') }, [])
 
   useEffect(() => {
@@ -80,12 +68,11 @@ export function useSettingsInit(): void {
         localStorage.removeItem('cortex-password')
       } catch (err) { console.error('Failed to load secure credentials', err) }
     })()
-    
+
   }, [setUsername, setPassword])
   useEffect(() => { if (username !== '') window.cortexDl.saveSecureData('cortex-username', username) }, [username])
   useEffect(() => { if (password !== '') window.cortexDl.saveSecureData('cortex-password', password) }, [password])
 
-  
   useEffect(() => {
     const statsDispose = window.cortexDl.onStatsUpdated(({ addedBytes }) => {
       setTotalDownloadedBytes((current) => current + addedBytes)

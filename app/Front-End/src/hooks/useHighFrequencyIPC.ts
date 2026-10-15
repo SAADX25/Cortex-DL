@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import type { DownloadTask } from '../../../Shared/types'
+import { type DownloadTask } from '../../../Shared/types'
 import { getProgressView } from '../../../Shared/progressModel'
 
 interface RegisteredDom {
@@ -9,10 +9,15 @@ interface RegisteredDom {
 }
 
 const domRegistry = new Map<string, RegisteredDom>()
-const lastZustandSentAtMs = new Map<string, number>()
-const lastStructuralKeyById = new Map<string, string>()
+
+const lastSent = new Map<string, number>()
+
+const lastStructure = new Map<string, string>()
+
 let ipcListenersStarted = false
+
 const ZUSTAND_THROTTLE_MS = 250
+
 const TERMINAL = new Set(['completed', 'error', 'canceled', 'paused'])
 
 export function startHighFrequencyIPCListeners(opts: {
@@ -22,15 +27,15 @@ export function startHighFrequencyIPCListeners(opts: {
   ipcListenersStarted = true
   const receive = (task: DownloadTask) => {
     if (!task?.id) return
-    updateDomForTask(task)
-    maybeUpsertToZustand(task, opts)
+    updateTaskDom(task)
+    publishTask(task, opts)
   }
   const disposeUpdated = window.cortexDl.onDownloadUpdated(receive)
   return () => {
     disposeUpdated()
     ipcListenersStarted = false
-    lastZustandSentAtMs.clear()
-    lastStructuralKeyById.clear()
+    lastSent.clear()
+    lastStructure.clear()
   }
 }
 
@@ -39,7 +44,7 @@ export function useHighFrequencyIPC(taskId: string | undefined, options: Registe
   optionsRef.current = options
   useEffect(() => {
     if (!taskId) return
-    // The registry object stays stable across structural React renders.
+
     const refs: RegisteredDom = {
       get progressBarRef() { return optionsRef.current.progressBarRef },
       get speedTextRef() { return optionsRef.current.speedTextRef },
@@ -51,7 +56,8 @@ export function useHighFrequencyIPC(taskId: string | undefined, options: Registe
 }
 
 const PHASE_CLASSES = ['downloading', 'merging', 'converting', 'completed', 'error', 'paused', 'queued']
-function updateDomForTask(task: DownloadTask): void {
+
+function updateTaskDom(task: DownloadTask): void {
   const refs = domRegistry.get(task.id)
   if (!refs) return
   const progress = getProgressView(task)
@@ -72,14 +78,14 @@ function structuralKey(task: DownloadTask): string {
   return `${progress.phase}|${task.errorMessage ?? ''}|speed=${(task.speedBytesPerSec ?? 0) > 0}|total=${(task.totalBytes ?? 0) > 0}|known=${progress.overallProgress !== null}`
 }
 
-function maybeUpsertToZustand(task: DownloadTask, opts: { upsertTask: (task: DownloadTask) => void }): void {
+function publishTask(task: DownloadTask, opts: { upsertTask: (task: DownloadTask) => void }): void {
   const now = Date.now()
   const key = structuralKey(task)
-  const previous = lastStructuralKeyById.get(task.id)
-  const last = lastZustandSentAtMs.get(task.id) ?? 0
+  const previous = lastStructure.get(task.id)
+  const last = lastSent.get(task.id) ?? 0
   if (!TERMINAL.has(task.status) && key === previous && last !== 0 && now - last < ZUSTAND_THROTTLE_MS) return
-  lastStructuralKeyById.set(task.id, key)
-  lastZustandSentAtMs.set(task.id, now)
+  lastStructure.set(task.id, key)
+  lastSent.set(task.id, now)
   opts.upsertTask({ ...task })
 }
 

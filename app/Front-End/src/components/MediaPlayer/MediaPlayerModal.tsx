@@ -89,9 +89,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   const displayTitle = title || '';
 
   const isMiniModeRef = useRef(isMiniMode);
-  useEffect(() => {
-    isMiniModeRef.current = isMiniMode;
-  }, [isMiniMode]);
+  isMiniModeRef.current = isMiniMode;
 
   const toggleMiniMode = () => {
     clearHideTimer();
@@ -110,7 +108,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     });
   };
 
-
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
@@ -126,8 +123,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
       setShowSettings(false);
     }, 2000);
   }, [clearHideTimer]);
-
-
 
   useEffect(() => {
     if (!isOpen || mediaType !== 'audio' || safeMode) return;
@@ -304,7 +299,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     onClose();
   }, [releasePlayerSession, onClose, restoreFloating]);
 
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -354,7 +348,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-
   useEffect(() => {
     markMediaSession(sessionIdRef.current, true);
     const generationRef = effectGenerationRef;
@@ -366,14 +359,11 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
       visualizer: canvasRef.current,
     };
     return () => {
-      // React StrictMode replays effects without removing the DOM. The next
-      // setup invalidates this microtask; a real unmount releases the session.
       queueMicrotask(() => {
         if (generationRef.current === generation) void releasePlayerSession(captured);
       });
     };
   }, [releasePlayerSession]);
-
 
   useEffect(() => {
     mediaRef.current = mediaType === 'video' ? videoRef.current : audioRef.current;
@@ -391,7 +381,6 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     clearHideTimer();
     startHideTimer();
   }, [isPlaying, clearHideTimer, startHideTimer]);
-
 
   useEffect(() => {
     if (mediaType !== 'video' || safeMode || floatingWindow) return;
@@ -417,13 +406,10 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
             }
             const ctx = canvas.getContext('2d');
             if (ctx) {
-
-
-
               if (video.videoWidth <= 2560) {
                 try {
                   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                } catch (_) { /* Keep the previous frame if drawing fails. */ }
+                } catch (error) { console.debug('[Player canvas]', error); }
               }
             }
           }
@@ -451,10 +437,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     };
   }, [floatingWindow, safeMode, isPlaying, mediaType]);
 
-
-
   const handleTimeUpdate = () => {
-
   };
 
   const handleLoadedMetadata = () => {

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/useUIStore'
 
-/** Move a stable portal host, preserving the video, cues and React event root. */
 export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
   const [host] = useState(() => document.createElement('div'))
   const [floatingWindow, setFloatingWindow] = useState<Window | null>(null)
@@ -16,7 +15,7 @@ export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
     const modes = video ? [...video.textTracks].map(track => track.mode) : []
     target.appendChild(host)
     if (!video) return
-    // Chromium reloads a media element when it is adopted by another document.
+
     let cancelled = false
     const cancel = () => { cancelled = true; video.removeEventListener('loadedmetadata', resume) }
     const resume = () => {
@@ -28,7 +27,7 @@ export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
     }
     pendingMove.current = { cancel, time, playing }
     video.addEventListener('loadedmetadata', resume)
-    // Adoption resets resource selection asynchronously; wait for that reset.
+
     queueMicrotask(resume)
   }, [host])
   const restore = useCallback(() => {
@@ -45,7 +44,7 @@ export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
     return () => {
       detach.current?.(); detach.current = null
       const child = popup.current; popup.current = null
-      // Adopt back before Chromium destroys the child document.
+
       document.body.appendChild(host)
       pendingMove.current?.cancel(); pendingMove.current = null
       if (child && !child.closed) child.close()

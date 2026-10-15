@@ -6,15 +6,17 @@ import { SubtitleProcesses } from './process'
 
 export function translationPrompt(text: string, source: SubtitleLanguage, target: SubtitleLanguage): string {
   const from = SUBTITLE_LANGUAGES[source], to = SUBTITLE_LANGUAGES[target]
-  // TranslateGemma's documented single-user-turn format. No cloud/API dependency.
+
   return `<bos><start_of_turn>user\nYou are a professional ${from} (${source}) to ${to} (${target}) translator. Your goal is to accurately convey the meaning and nuances of the original ${from} text while adhering to ${to} grammar, vocabulary, and cultural sensitivities.\nProduce only the ${to} translation, without any additional explanations or commentary. Please translate the following ${from} text into ${to}:\n\n\n${text}<end_of_turn>\n<start_of_turn>model\n`
 }
+
 export function validateTranslation(value: unknown, source: string): string {
   if (typeof value !== 'string') throw new Error('Invalid translation engine response')
   const text = value.trim().replace(/\s+/g, ' ')
   if (!text || text.length > Math.max(1000, source.length * 12) || /<\|?|```|-->|\[_/.test(text)) throw new Error('Translation output needs review; original transcript retained')
   return text
 }
+
 export async function startTranslator(binary: string, model: string, processes: SubtitleProcesses, gpu?: { layers: number; device: string }): Promise<(text: string, source: string, target: SubtitleLanguage) => Promise<string>> {
   const port = await new Promise<number>((resolve, reject) => {
     const server = net.createServer(); server.once('error', reject)

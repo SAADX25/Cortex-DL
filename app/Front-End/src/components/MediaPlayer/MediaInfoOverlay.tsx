@@ -44,7 +44,7 @@ export function MediaInfoOverlay({ filePath, videoWidth, videoHeight, mediaType,
     const read = async () => {
       let value: number | null = null
       try { value = parseFrameRate(await window.cortexDl?.getMediaFps?.(filePath, sessionId)) }
-      catch { /* A failed read is retryable when the panel is reopened. */ }
+      catch { value = null }
       if (cancelled) return
       if (value !== null) cachedFps.current = { key, value }
       setResult({ key, status: value === null ? 'unavailable' : 'ready', value })

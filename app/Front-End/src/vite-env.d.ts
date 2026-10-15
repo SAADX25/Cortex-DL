@@ -81,8 +81,6 @@ declare global {
     | { success: boolean; canceled?: boolean; error?: string; filePath?: string }
 
   interface Window {
-    __cortexSmokeLifecycle?: (file: string, audioFile?: string, previewUrl?: string) => Promise<boolean>
-    __cortexSmokeArtwork?: (file: string, retain: boolean) => Promise<boolean>
     __cortexMediaDiagnostics?: () => Promise<unknown>
     cortexDl: {
       readonly customTitleBar: boolean
@@ -101,7 +99,6 @@ declare global {
       relocateMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
       reportFirstUiRender(): void
       analysisDebug: boolean
-      smokeMode: boolean
 
       saveSecureData(key: string, value: string): Promise<boolean>
       getSecureData(key: string): Promise<string>

@@ -1,28 +1,15 @@
 import { BrowserWindow } from 'electron'
 import log from 'electron-log'
-import { existsSync } from 'node:fs'
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { db, taskDb } from './db'
-import type {
-  DownloadTask, TaskRuntime, AttemptRuntime, EngineResult, StartInput, EngineContext,
-  DownloadEngine, AudioFormat, TargetFormat,
-} from './types'
-import { STATS_CHANNEL, AUDIO_FORMATS } from './types'
+import { type DownloadTask, type TaskRuntime, type AttemptRuntime, type EngineResult, type StartInput, type EngineContext, type DownloadEngine, type AudioFormat, type TargetFormat, STATS_CHANNEL, AUDIO_FORMATS } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
-import { retireDownloadCaptions } from '../../Shared/retiredDownloadCaptions'
-import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion } from './mediaFormatRegistry'
-import { runMediaProcess, trimBounds, validateMediaOutput } from './mediaPipeline'
-import { probeMediaFile } from './mediaFiles'
-import { youtubeDiagnostic } from './youtubeDiagnostics'
-import {
-  sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl,
-  withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate,
-  killProcessTree, clearPendingTrailing, sendNotification,
-} from './utils'
-
-import type { IEngine } from './engines/IEngine'
+import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion, runMediaProcess, trimBounds, validateMediaOutput, probeMediaFile } from './services/mediaService'
+import { youtubeDiagnostic } from './engines/ytdlpService'
+import { sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl, withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate, killProcessTree, clearPendingTrailing, sendNotification } from './utils'
+import { type IEngine } from './engines/IEngine'
 import { DirectEngine } from './engines/DirectEngine'
 import { YoutubeEngine } from './engines/YoutubeEngine'
 import { FfmpegEngine } from './engines/FfmpegEngine'
@@ -46,12 +33,12 @@ export class DownloadManager {
   private tasks = new Map<string, DownloadTask>()
   private runtime = new Map<string, TaskRuntime>()
   private attempts = new Map<string, AttemptRuntime>()
-  private engines = new Map<string, IEngine>() 
+  private engines = new Map<string, IEngine>()
   private win: BrowserWindow | null = null
   private maxConcurrent = 3
   private active = new Set<string>()
   private pausingAll = false
-  /** Pending retry-backoff timers, keyed by task id. */
+
   private retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private countedStats = new Set<string>()
 
@@ -68,7 +55,7 @@ export class DownloadManager {
         if ([3, 5, 10].includes(parsed)) this.maxConcurrent = parsed
       }
     } catch {
-      // Keep the default concurrency when settings are unavailable.
+      this.maxConcurrent = 3
     }
   }
 
@@ -88,17 +75,14 @@ export class DownloadManager {
     return this.maxConcurrent
   }
 
-  
   private loadState(): void {
     try {
-      
       const rows = taskDb.getAllTasks.all() as { full_payload: string }[]
       for (const row of rows) {
         try {
           const task: DownloadTask = JSON.parse(row.full_payload)
           if (!task.id || !task.url) continue
-          retireDownloadCaptions(task)
-          
+
           if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting' || task.status === 'pausing' || task.status === 'queued') {
             task.status = 'paused'
             task.speedBytesPerSec = null
@@ -120,8 +104,6 @@ export class DownloadManager {
       log.error('Error loading tasks from DB:', err)
     }
   }
-
-  
 
   private saveStateImmediate(taskId?: string): void {
     try {
@@ -154,9 +136,6 @@ export class DownloadManager {
     })
   }
 
-  
-
-  /** Progress writes are batched; lifecycle transitions are persisted immediately. */
   private static readonly WRITE_BEHIND_INTERVAL_MS = 1000
   private dirtyIds = new Set<string>()
   private writeBehindTimer: ReturnType<typeof setInterval> | null = null
@@ -168,7 +147,7 @@ export class DownloadManager {
         () => this.flushDirty(),
         DownloadManager.WRITE_BEHIND_INTERVAL_MS,
       )
-      // Never keep the process alive just for this housekeeping timer.
+
       this.writeBehindTimer.unref?.()
     }
   }
@@ -195,15 +174,12 @@ export class DownloadManager {
       trans(ids)
     } catch (err) {
       log.error('[DM] Write-behind flush failed, re-queuing dirty ids:', err)
-      // Don't drop the update on a transient failure — retry on the next tick.
+
       for (const id of ids) this.dirtyIds.add(id)
     }
   }
 
   flushPendingSave(): void {
-    // saveStateImmediate() below persists the full in-memory state of every
-    // task unconditionally, which is a superset of anything still pending
-    // in the write-behind queue, so the queue can simply be dropped.
     if (this.writeBehindTimer) {
       clearInterval(this.writeBehindTimer)
       this.writeBehindTimer = null
@@ -225,7 +201,6 @@ export class DownloadManager {
     }
   }
 
-  
   getActiveCount(): number {
     return this.active.size
   }
@@ -246,9 +221,9 @@ export class DownloadManager {
     if (!isHttpUrl(input.url)) {
       throw new Error('URL must be http or https')
     }
-    
+
     const rawSubfolder = (input.subfolderName ?? '').trim()
-    
+
     const safeSubfolder = rawSubfolder.replace(/[/\\:*?"<>|]/g, '').trim()
     const finalDirectory = safeSubfolder
       ? path.join(input.directory, safeSubfolder)
@@ -263,7 +238,6 @@ export class DownloadManager {
         ? this.detectEngine(input.url, targetFormat)
         : requestedEngine
 
-    
     let filename = sanitizeFilename(input.filename || input.title || getDefaultFilename(input.url))
     filename = filenameTransforms[engine]?.(filename) ?? filename
     filename = withExtension(filename, targetFormat)
@@ -315,7 +289,7 @@ export class DownloadManager {
       if (!isHttpUrl(input.url)) continue
 
       const rawSubfolder = (input.subfolderName ?? '').trim()
-      
+
       const safeSubfolder = rawSubfolder.replace(/[/\\:*?"<>|]/g, '').trim()
       const finalDirectory = safeSubfolder
         ? path.join(input.directory, safeSubfolder)
@@ -373,8 +347,7 @@ export class DownloadManager {
     if (created.length > 0) {
       this.saveStateImmediate()
       for (const task of created) sendUpdate(this.win, task)
-      
-      
+
       this.schedule()
     }
     return created
@@ -485,7 +458,6 @@ export class DownloadManager {
     try { taskDb.clearCompleted.run() } catch { log.error('DB clearCompleted failed') }
   }
 
-  /** Retry cleanup after shutdown interrupted a completed/canceled task's cleanup. */
   async cleanupSettledFragments(): Promise<void> {
     for (const task of this.tasks.values()) {
       if (task.status !== 'completed' && task.status !== 'canceled') continue
@@ -515,8 +487,6 @@ export class DownloadManager {
       await this.resume(id)
     }
   }
-
-  
 
   private detectEngine(url: string, targetFormat?: TargetFormat): DownloadEngine {
     const low = url.toLowerCase()
@@ -558,7 +528,7 @@ export class DownloadManager {
         if (!current() || t !== draft) return
         const task = this.mustGet(taskId)
         const previousPhase = task.phase
-        // Engines work on isolated drafts. Only this projection can reach authoritative state.
+
         for (const key of ['totalBytes', 'downloadedBytes', 'speedBytesPerSec', 'downloadPercent', 'convertingPercent', 'resumeChunks', 'supportsRanges', 'etag', 'lastModified', 'title', 'thumbnail', 'ytdlpStreams', 'ytdlpExpectedBytes', 'ytdlpExpectedStreamCount'] as const) {
           Object.assign(task, { [key]: t[key] })
         }
@@ -591,7 +561,6 @@ export class DownloadManager {
     if (!this.isCurrent(id, attempt)) throw new Error('Attempt stopped or superseded')
   }
 
-  /** Cancel task retry eligibility without touching an attempt's resources. */
   private clearRetryTimer(id: string): void {
     const timer = this.retryTimers.get(id)
     if (timer) {
@@ -602,7 +571,6 @@ export class DownloadManager {
     if (runtime) runtime.retryAt = undefined
   }
 
-  /** Backoff never occupies a download slot; engines return an outcome immediately. */
   private scheduleRetry(id: string, delayMs: number): void {
     if (this.tasks.get(id)?.status !== 'queued') return
     this.clearRetryTimer(id)
@@ -629,8 +597,7 @@ export class DownloadManager {
     const candidates = Array.from(this.tasks.values())
       .filter(t => {
         if (t.status !== 'queued' || this.active.has(t.id) || this.attempts.has(t.id)) return false
-        // Tasks awaiting a retry backoff are not eligible until it elapses
-        // (see scheduleRetry) — they must not consume a concurrency slot.
+
         const retryAt = this.runtime.get(t.id)?.retryAt
         if (retryAt && retryAt > now) return false
         return true
@@ -668,7 +635,7 @@ export class DownloadManager {
     clearPendingTrailing(id)
     sendUpdate(this.win, task)
     this.saveStateImmediate(id)
-    // Publish the settlement promise before invoking any engine or async hook.
+
     attempt.done = Promise.resolve().then(() => this.runAttempt(task, attempt))
     return attempt.done
   }
@@ -683,7 +650,7 @@ export class DownloadManager {
     try {
       await fs.mkdir(path.dirname(attempt.directory), { recursive: true })
       this.assertCurrent(id, attempt)
-      // Transfer partial ownership only after the previous attempt has settled.
+
       const prior = task.resumeDirectory
       if (prior && path.dirname(path.resolve(prior)) === path.dirname(path.resolve(attempt.directory))) {
         await fs.rename(prior, attempt.directory).catch((error: NodeJS.ErrnoException) => {
@@ -721,7 +688,6 @@ export class DownloadManager {
         log.error('[DM] Attempt failed:', error)
       }
     } finally {
-      // Sockets/descriptors have settled in the engine before this point.
       await killProcessTree(attempt.child)
       attempt.child = null
       if (task.status === 'completed' || task.status === 'canceled') {
@@ -811,11 +777,11 @@ export class DownloadManager {
     const size = (await fs.stat(candidate)).size
     check()
     phase('finalizing')
-    // Reserve again immediately before promotion; no overwrite of an unrelated file.
+
     const target = this.reserveOutputPath(task.directory, task.filename, task.id)
     check()
-    // A hard-link promotion atomically publishes the validated bytes and refuses
-    // an existing destination (rename can replace it). Candidate stays for rollback.
+    // link() refuses an existing destination; rename() can overwrite it.
+
     await fs.link(candidate, target)
     const promoted = [target]
     try {
@@ -838,7 +804,7 @@ export class DownloadManager {
       for (const file of promoted) await fs.unlink(file).catch(e => log.error('[DM] Promotion rollback failed:', e))
       throw error
     }
-    // No await between this guard and the authoritative commit.
+
     check()
     task.filePath = target
     task.filename = path.basename(target)
@@ -869,7 +835,7 @@ export class DownloadManager {
     const root = path.resolve(task.directory, '.cortex_temp')
     const owned = path.resolve(root, task.id)
     if (path.dirname(owned) !== root) throw new Error('Unsafe task temp directory')
-    // Never follow a replaced temp root/junction into another directory.
+
     const rootStat = await fs.lstat(root).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
       throw error
@@ -880,7 +846,7 @@ export class DownloadManager {
     const realDirectory = await fs.realpath(task.directory)
     if (path.relative(realDirectory, realRoot) !== '.cortex_temp') throw new Error('Unsafe temp root')
     await fs.rm(owned, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-    // Only remove the shared parent when empty; paused/active tasks keep it.
+
     await fs.rmdir(root).catch((error: NodeJS.ErrnoException) => {
       if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code || '')) throw error
     })

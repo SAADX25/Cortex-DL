@@ -1,26 +1,16 @@
-import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { spawn } from 'node:child_process'
+import { ensureEnginesReady, engineExecutionFailed } from './engineManager'
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import log from 'electron-log'
-import type { DownloadTask, EngineContext, TaskRuntime, VideoFormat, EngineResult } from '../types'
-import { VIDEO_FORMATS } from '../types'
-import { AUDIO_SPECS, isAudioFormat } from '../audioFormats'
-import { findTaskMediaFile } from '../mediaFiles'
+import { type DownloadTask, type EngineContext, type TaskRuntime, type VideoFormat, type EngineResult, VIDEO_FORMATS } from '../types'
+import { AUDIO_SPECS, isAudioFormat, findTaskMediaFile } from '../services/mediaService'
 import { getBinaryPath } from '../paths'
 import { nowMs, killProcessTree } from '../utils'
-import {
-  parseDownloadProgress,
-  parseFfmpegProgress,
-  parseStateTransition,
-  flushLines,
-} from '../progressParser'
-import type { FfmpegState } from '../progressParser'
-import type { IEngine } from './IEngine'
-import { checkJsRuntime, getJsRuntimeArgs, YOUTUBE_EXTRACTOR_ARGS } from '../ytdlp'
+import { parseDownloadProgress, parseFfmpegProgress, parseStateTransition, flushLines, type FfmpegState } from '../progressParser'
+import { type IEngine } from './IEngine'
+import { checkJsRuntime, getJsRuntimeArgs, diagnosticCategories, youtubeDiagnostic } from './ytdlpService'
 import { isYouTubeUrl, youtubeErrorCode } from '../../../Shared/youtubeErrors'
-import { diagnosticCategories, youtubeDiagnostic } from '../youtubeDiagnostics'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -31,7 +21,6 @@ interface YtdlpRunResult {
   detectedFinalPath: string | null
   stderr: string
 }
-
 
 export class YoutubeEngine implements IEngine {
   private runtime: TaskRuntime | null = null
@@ -58,8 +47,7 @@ export class YoutubeEngine implements IEngine {
     const args = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
     let result = await this.runYtdlpAttempt(task, context, runtime, args, profile)
     runtime.abortController.signal.throwIfAborted()
-    // Some public HTTPS formats are listed but denied by YouTube. Try its HLS
-    // formats once, preserving the quality cap.
+
     if (publicFirst && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
       && !youtubeErrorCode(result.stderr)) {
       const hlsArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, true)
@@ -79,13 +67,11 @@ export class YoutubeEngine implements IEngine {
   }
 
   pause(): void {
-    // Signal abort — actual process tree kill is handled by DownloadManager.
     log.info(`[YoutubeEngine] Pausing — aborting child process...`)
     this.runtime?.abortController?.abort()
   }
 
   stop(): void {
-    // Signal abort — actual process tree kill is handled by DownloadManager.
     log.info(`[YoutubeEngine] Stopping — aborting child process...`)
     this.runtime?.abortController?.abort()
   }
@@ -113,7 +99,7 @@ export class YoutubeEngine implements IEngine {
       '--no-playlist',
       '--no-mtime',
       '--geo-bypass',
-      ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
+
       ...this.buildAuthArgs(task, runtime),
       ...getJsRuntimeArgs(),
       task.url,
@@ -121,8 +107,6 @@ export class YoutubeEngine implements IEngine {
 
     const proc = spawn(ytDlpPath, metaArgs, { windowsHide: true, detached: process.platform !== 'win32', env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' } })
 
-
-    // Track metadata prefetch in the same attempt as the download.
     this.childProcess = proc
     runtime.child = proc
     const onAbort = () => { void killProcessTree(proc) }
@@ -155,7 +139,6 @@ export class YoutubeEngine implements IEngine {
       try {
         info = JSON.parse(metaOut.trim())
       } catch {
-
         const start = metaOut.indexOf('{')
         const end = metaOut.lastIndexOf('}')
         if (start >= 0 && end > start) info = JSON.parse(metaOut.slice(start, end + 1))
@@ -173,7 +156,6 @@ export class YoutubeEngine implements IEngine {
       }
 
       if (info.title) task.title = String(info.title)
-
 
       if (typeof info.duration === 'number') {
         log.info(`[YoutubeEngine] Duration for ${task.id}: ${info.duration}s`)
@@ -242,7 +224,6 @@ export class YoutubeEngine implements IEngine {
       if (runtime.abortController?.signal.aborted) return
       lastActivity = nowMs()
       const chunk = data.toString()
-      // Extractor output can contain signed URLs; retain categories only.
 
       ffmpegState.stderr += chunk
       if (ffmpegState.stderr.length > MAX_STDERR_BYTES) {
@@ -254,7 +235,6 @@ export class YoutubeEngine implements IEngine {
 
       for (const line of lines) {
         if (!line.trim()) continue
-
 
         if (/subtitle|sub|embed|caption|WARNING|ERROR/i.test(line)) {
           youtubeDiagnostic('extractor', { categories: diagnosticCategories(line) })
@@ -282,7 +262,6 @@ export class YoutubeEngine implements IEngine {
       if (runtime.abortController?.signal.aborted) return
       lastActivity = nowMs()
       const chunk = data.toString()
-      // Parse progress without logging signed extractor URLs.
 
       let lines: string[]
       ;[lines, stdoutBuf] = flushLines(stdoutBuf, chunk)
@@ -317,7 +296,6 @@ export class YoutubeEngine implements IEngine {
     proc.on('error', () => resolve(1))
     })
 
-    // Retire handles and callbacks only after process settlement.
     clearInterval(watchdog)
     await killProcessTree(proc)
     runtime.abortController?.signal.removeEventListener('abort', onAbort)
@@ -332,7 +310,6 @@ export class YoutubeEngine implements IEngine {
   private buildAuthArgs(task: DownloadTask, _runtime: TaskRuntime): string[] {
     const args: string[] = []
 
-    // Generic provider credentials never apply to public YouTube requests.
     if (!isYouTubeUrl(task.url)) {
       if (task.username) args.push('--username', task.username)
       if (task.password) args.push('--password', task.password)
@@ -358,7 +335,6 @@ export class YoutubeEngine implements IEngine {
     runtime: TaskRuntime,
     preferHls = false,
   ): string[] {
-
     const ytArgs: string[] = [
       '--newline',
       '--progress',
@@ -369,7 +345,7 @@ export class YoutubeEngine implements IEngine {
       '--ignore-config',
       '--retries', '0', '--extractor-retries', '0', '--fragment-retries', '1',
       '--continue',
-      ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
+
       '--throttled-rate', YOUTUBE_THROTTLED_RATE,
       '--progress-template', 'download:CORTEX_DL|%(info.format_id)s|%(progress.filename)s|%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s',
       '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
@@ -393,7 +369,6 @@ export class YoutubeEngine implements IEngine {
     const ffmpegExePath = getBinaryPath('ffmpeg')
     if (existsSync(ffmpegExePath)) ytArgs.push('--ffmpeg-location', opts.ffmpegDir)
 
-
     const heightConstraint = this.parseHeightFromFormatId(task.ytdlpFormatId)
     const protocolFilter = preferHls ? '[protocol^=m3u8]' : ''
 
@@ -415,7 +390,7 @@ export class YoutubeEngine implements IEngine {
         if (heightConstraint) {
           log.info(`[YoutubeEngine] Quality constraint applied: height<=${heightConstraint}`)
         }
-        // Preserve the best source codecs; the registry handles final MP4 conversion.
+
         ytArgs.push('--merge-output-format', 'mkv')
         break
       }
@@ -427,18 +402,15 @@ export class YoutubeEngine implements IEngine {
             log.info(`[YoutubeEngine] Quality constraint applied (default): height<=${heightConstraint}`)
           }
 
-          // MKV accepts downloaded codecs; the registry decides the final conversion.
           ytArgs.push('--merge-output-format', task.targetFormat === 'm4v' ? 'mp4' : 'mkv')
         }
         break
       }
     }
 
-
     const tempDir = task.directory
     ytArgs.push('--paths', `temp:${tempDir}`)
     ytArgs.push('--paths', `home:${task.directory}`)
-
 
     ytArgs.push('-o', `${task.id}.%(ext)s`)
     ytArgs.push(task.url)

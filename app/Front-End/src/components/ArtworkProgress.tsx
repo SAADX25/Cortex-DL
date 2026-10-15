@@ -2,7 +2,6 @@ import { useMediaLibraryStore } from '../stores/useMediaLibraryStore'
 import { useLang } from '../stores/useSettingsStore'
 import './ArtworkProgress.css'
 
-/** Indeterminate: file rewriting exposes completion, not a byte percentage. */
 export default function ArtworkProgress({ itemId }: { itemId?: string }) {
   const task = useMediaLibraryStore(state => state.artworkTask), ar = useLang() === 'ar'
   if (!task || itemId && task.id !== itemId) return null

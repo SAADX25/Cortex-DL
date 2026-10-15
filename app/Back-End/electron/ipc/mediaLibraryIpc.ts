@@ -2,14 +2,17 @@ import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
 import path from 'node:path'
 import { MediaLibrary } from '../mediaLibrary'
 import { LIBRARY_EXTENSIONS, canEmbedLibraryArtwork, canEditLibraryArtwork } from '../../../Shared/mediaLibrary'
-import { LibraryThumbnails } from '../libraryThumbnails'
-import { AudioArtwork } from '../audioArtwork'
-import { engineReceipts } from '../engineReadiness'
+import { LibraryThumbnails } from '../services/thumbnailService'
+import { AudioArtwork } from '../services/artworkService'
+import { engineReceipts } from '../engines/engineManager'
 import { getBinaryPath } from '../paths'
 
 const thumbnailCaches = new Set<LibraryThumbnails>()
+
 const artworkEditors = new Set<AudioArtwork>()
+
 let instance: MediaLibrary | undefined
+
 const library = () => instance ??= new MediaLibrary(path.join(app.getPath('userData'), 'media-library.json'))
 
 export function isLibraryMediaPath(requestedPath: string, resolvedPath: string): Promise<boolean> {
@@ -23,7 +26,6 @@ export async function stopLibraryThumbnails(): Promise<void> {
 }
 
 export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): void {
-  // Loading is deferred until the library is opened, independent of engine setup.
   let thumbnails: LibraryThumbnails | undefined
   let artwork: AudioArtwork | undefined
   const editor = () => {
@@ -54,7 +56,7 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
     const item = await library().get(id, false)
     if (!item) return { thumbnail: null, embedded: false }
     const custom = await library().getArtwork(id)
-    // A cover saved by Cortex is already normalized; display it without launching ffprobe.
+
     if (custom) return { thumbnail: `data:image/jpeg;base64,${custom.toString('base64')}`, embedded: item.artworkEmbedded === true }
     return images().getInfo(item)
   }

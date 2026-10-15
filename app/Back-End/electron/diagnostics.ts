@@ -4,17 +4,18 @@ import path from 'node:path'
 import os from 'node:os'
 import log from 'electron-log'
 
-/** Redact all HTTP URLs, authorization/cookie lines and named secrets at the logging boundary. */
 export function redact(text: string): string {
   return text.replace(/https?:\/\/[^\s"'<>]+/gi, '[URL redacted]')
     .replace(/(?:authorization|cookie|set-cookie|password|oauth|access_token|refresh_token)[^\r\n]*/gi, '[secret redacted]')
 }
+
 export function buildInfo(): { version: string; commit: string; dirty?: boolean; buildDate?: string } {
   try {
     const file = app.isPackaged ? path.join(process.resourcesPath, 'build-manifest.json') : path.join(process.env.APP_ROOT || process.cwd(), 'build-manifest.json')
     return JSON.parse(fs.readFileSync(file, 'utf8'))
   } catch { return { version: app.getVersion(), commit: 'development' } }
 }
+
 export function initializeDiagnostics(): void {
   log.transports.file.maxSize = 2 * 1024 * 1024
   log.hooks.push(message => ({ ...message, data: message.data.map(value => redact(value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value))) }))
@@ -24,8 +25,11 @@ export function initializeDiagnostics(): void {
   process.on('unhandledRejection', reason => crash('main rejection', reason instanceof Error ? reason.stack : String(reason)))
   app.on('child-process-gone', (_event, details) => crash(details.type, details))
 }
+
 export function logFolder(): string { return path.dirname(log.transports.file.getFile().path) }
+
 export async function openLogs(): Promise<void> { await shell.openPath(logFolder()) }
+
 export async function exportDiagnostics(win: BrowserWindow, health: unknown): Promise<boolean> {
   const result = await dialog.showSaveDialog(win, { title: 'Export Diagnostics', defaultPath: `Cortex-DL-${app.getVersion()}-diagnostics.txt`, filters: [{ name: 'Text', extensions: ['txt'] }] })
   if (result.canceled || !result.filePath) return false

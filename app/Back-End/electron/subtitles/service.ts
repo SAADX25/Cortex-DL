@@ -2,18 +2,16 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { randomUUID } from 'node:crypto'
-import type { SubtitleCue, SubtitleDocument, SubtitleRequest, SubtitleState, SpeechModel, TranslationModel } from '../../../Shared/localSubtitles'
-import { isSubtitleLanguage, validateSubtitleRequest } from '../../../Shared/localSubtitles'
+import { type SubtitleCue, type SubtitleDocument, type SubtitleRequest, type SubtitleState, type SpeechModel, type TranslationModel, isSubtitleLanguage, validateSubtitleRequest } from '../../../Shared/localSubtitles'
 import { getBinaryPath } from '../paths'
-import { ensureEnginesReady } from '../engineReadiness'
-import { getJsRuntimeArgs, checkJsRuntime } from '../ytdlp'
-import { probeMediaFile } from '../mediaFiles'
+import { ensureEnginesReady } from '../engines/engineManager'
+import { getJsRuntimeArgs, checkJsRuntime } from '../engines/ytdlpService'
+import { probeMediaFile, validateSubtitleMedia, subtitleLanguageTag } from '../services/mediaService'
 import { SubtitleAssets } from './assets'
 import { SubtitleProcesses } from './process'
 import { parseSpeechRecognition, serializeSubtitles, validateCues } from '../../../Shared/subtitleCues'
 import { startTranslator } from './translator'
 import { youtubeErrorCode } from '../../../Shared/youtubeErrors'
-import { validateSubtitleMedia, subtitleLanguageTag } from '../mediaFormatRegistry'
 import { detectNvidiaGpu, selectVulkanDevice, translationGpuLayers } from './gpu'
 
 export class LocalSubtitleService {
@@ -110,9 +108,6 @@ export class LocalSubtitleService {
           this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'cpu', compact: useGpu && request.speechModel === 'accurate' } }
           let backendOutput = '', gpuConfirmed = false
           try {
-          // Keep natural segment timestamps: forced word splitting can repeat VAD offsets.
-          // Turbo uses a smaller multi-candidate search; the accuracy model keeps beam 5.
-          // Earlier decoded text can amplify repetition across noisy audio windows.
           await processes.run(useGpu ? gpuExecutable! : executable, ['-m', useGpu ? gpuModel! : model, '-f', wav, '-l', request.sourceLanguage, '-ojf', '-of', output,
             '-bs', request.speechModel === 'fast' ? '3' : '5', '-bo', request.speechModel === 'fast' ? '3' : '5', '-mc', '0',
             ...(useGpu ? ['--device', String(gpu!.index)] : []),
@@ -122,7 +117,7 @@ export class LocalSubtitleService {
             if (useGpu && /CUDA\d*\s+total size|CUDA\d*\s+model buffer/i.test(backendOutput)) {
               gpuConfirmed = true; this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'gpu' } }
             }
-            // Silero's CPU-only VAD emits this too, after Whisper has confirmed CUDA.
+
             if (useGpu && !gpuConfirmed && /no GPU found/.test(text)) this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'cpu', compact: false }, detail: 'gpu-fallback' }
             const match = /progress\s*=\s*(\d+)%/.exec(text)
             if (match) this.state = { ...this.state, progress: Math.min(99, Number(match[1])) }
@@ -186,7 +181,7 @@ export class LocalSubtitleService {
           }
         }
         translator ??= await startTranslator((await this.assets.locate('llama'))!, translationModel, processes)
-        // Commit a translated document only after every cue succeeds. Source captions survive failures.
+
         const translated: SubtitleCue[] = []
         const memo = new Map<string, string>()
         for (const cue of document.cues) {
@@ -203,7 +198,7 @@ export class LocalSubtitleService {
       this.state = { ...this.state, stage: 'ready', progress: 100, document }
     } finally {
       await processes.stop()
-      // mkdtemp produces an owned absolute child of OS temp; no user input enters this path.
+
       if (path.dirname(directory) === path.resolve(os.tmpdir()) && path.basename(directory).startsWith('cortex-subtitles-')) await fs.rm(directory, { recursive: true, force: true })
     }
   }
@@ -214,7 +209,7 @@ export class LocalSubtitleService {
     const temp = path.join(path.dirname(file), `.cortex-subtitles-${randomUUID()}.tmp`)
     try { await fs.writeFile(temp, content, { flag: 'wx' }); await fs.rename(temp, file) }
     finally { await fs.rm(temp, { force: true }) }
-    // A save already in progress must not restore a session cleared while writing.
+
     if (this.state.document?.id === id) this.state = { ...this.state, document: { ...document, cues: cues.map(c => ({ ...c })) } }
   }
   embedDocument(id: string, cues: SubtitleCue[], file: string): string {

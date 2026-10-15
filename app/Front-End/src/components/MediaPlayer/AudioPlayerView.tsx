@@ -163,7 +163,7 @@ export function AudioPlayerView({
         />
       </div>
 
-      <div 
+      <div
         className="player-footer"
         style={{
           opacity: showControls ? 1 : 0,
@@ -175,15 +175,15 @@ export function AudioPlayerView({
           artworkControl={artworkControl}
           mediaRef={mediaRef}
           mediaType="audio"
-          isPlaying={isPlaying} 
+          isPlaying={isPlaying}
           duration={duration}
-          volume={volume} 
+          volume={volume}
           isMuted={isMuted}
           playbackSpeed={playbackSpeed}
           showSettings={showSettings}
-          togglePlay={togglePlay} 
+          togglePlay={togglePlay}
           onSeek={onSeek}
-          onVolumeChange={onVolumeChange} 
+          onVolumeChange={onVolumeChange}
           toggleMute={toggleMute}
           onSpeedChange={onSpeedChange}
           toggleSettings={toggleSettings}

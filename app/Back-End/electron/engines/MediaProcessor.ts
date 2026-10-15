@@ -1,7 +1,6 @@
-import { probeMediaFile } from '../mediaFiles'
+import { probeMediaFile } from '../services/mediaService'
 import { videoFrameRate } from '../../../Shared/frameRate'
 
-/** Session-owned probes stop on player close and settle before releasing ownership. */
 export class MediaProcessor {
   private readonly activeProbes = new Set<AbortController>()
 

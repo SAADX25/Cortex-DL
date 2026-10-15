@@ -1,27 +1,21 @@
 import { app, dialog, ipcMain, shell, safeStorage } from 'electron'
-import { existsSync } from 'node:fs'
+import { existsSync, promises as fsPromises } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import log from 'electron-log'
 import { spawn } from 'node:child_process'
-import type { DownloadManager } from '../downloadManager'
-import type { StartInput } from '../types'
-import { isDirectMedia } from '../directAnalysis'
+import { type DownloadManager } from '../downloadManager'
+import { type StartInput, type AppHealthCheck } from '../types'
+import { isDirectMedia, analysisTiming, fetchBoundedJson } from '../services/analysisService'
 import { randomUUID } from 'node:crypto'
-import { analysisTiming } from '../analysisTiming'
-import { ThumbnailCache } from '../thumbnailCache'
+import { ThumbnailCache } from '../services/thumbnailService'
 import { normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
-import { fetchBoundedJson } from '../analysisNetwork'
 import { analyzeUrlForHls } from '../hls'
-import { analyzeWithYtdlp, assertAnalysisAllowed, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams } from '../ytdlp'
+import { analyzeWithYtdlp, assertAnalysisAllowed, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams, checkJsRuntime } from '../engines/ytdlpService'
 import { extractAndSaveComments } from '../commentsExtractor'
 import { db } from '../db'
-import { promises as fsPromises } from 'node:fs'
 import { getBinaryPath } from '../paths'
-import type { AppHealthCheck } from '../types'
-import { checkJsRuntime } from '../ytdlp'
-import { ensureEnginesReady, engineExecutionFailed } from '../engineReadiness'
-import { engineHealth } from '../setup'
+import { ensureEnginesReady, engineExecutionFailed, engineHealth } from '../engines/engineManager'
 import { buildInfo } from '../diagnostics'
 import { registerDownloadSubtitleIpc } from '../subtitles/downloadMergeIpc'
 import { registerMediaLibraryIpc } from './mediaLibraryIpc'
@@ -31,7 +25,7 @@ export interface IpcDependencies {
   getDownloads: () => DownloadManager | null
   getAutoUpdater: () => typeof import('electron-updater').autoUpdater | null
   getMediaPort: () => number
-  /** Per-launch capability token required by every local media-server request. */
+
   getMediaToken: () => string
   closeMediaSession: (session: string) => Promise<void>
   getMediaRequestStats: () => { streams: number; ffmpegProcesses: number; probeProcesses: number; sessions: number }
@@ -102,6 +96,7 @@ function validateDownloadInput(input: StartInput): void {
   if (typeof input.directory !== 'string' || !path.isAbsolute(input.directory) || input.directory.includes('\0')) throw new Error('Invalid download directory')
   if (input.filename && (typeof input.filename !== 'string' || (/[/\\]/.test(input.filename) || input.filename.includes('\0')) || input.filename === '..')) throw new Error('Invalid filename')
 }
+
 export function registerIpcHandlers(deps: IpcDependencies) {
   registerDownloadSubtitleIpc(deps)
   registerMediaLibraryIpc(deps.getWin)
@@ -122,7 +117,6 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   ipcMain.on('log-message', (_event, level, message) => {
     if (_event.sender !== getWin()?.webContents || !['info', 'warn', 'error', 'debug'].includes(level) || typeof message !== 'string' || message.length > 8192) return
     if (log && log[level as keyof typeof log]) {
-      
       (log as any)[level](`[Renderer] ${message}`)
     } else {
       log?.info(`[Renderer] ${message}`)
@@ -509,13 +503,11 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
       const subtitles: import('../../../Shared/types').PlayerSubtitleTrack[] = []
 
-      
       for (const file of files) {
         if (file.startsWith(baseName + '.') && (file.endsWith('.vtt') || file.endsWith('.srt'))) {
-          
           const namePart = file.slice(baseName.length, -path.extname(file).length)
           const langCode = namePart.replace(/^\./, '') || 'Unknown'
-          
+
           subtitles.push({
             label: langCode.toUpperCase(),
             language: langCode,
@@ -525,7 +517,6 @@ export function registerIpcHandlers(deps: IpcDependencies) {
         }
       }
 
-      
       try {
         await ensureEnginesReady(['ffprobe'])
         const ffprobePath = getBinaryPath('ffprobe')
@@ -542,7 +533,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
             ], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
             const untrack = trackMediaProcess(playerSession, 'probe', () => p.kill())
             const timer = setTimeout(() => p.kill(), 15_000)
-            
+
             p.stdout.on('data', d => {
               output += d.toString()
               if (output.length > 1024 * 1024) p.kill()

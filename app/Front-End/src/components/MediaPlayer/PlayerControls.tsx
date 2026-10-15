@@ -67,7 +67,7 @@ export function PlayerControls({
     };
 
     media.addEventListener('timeupdate', updateTime);
-    updateTime(); 
+    updateTime();
 
     return () => media.removeEventListener('timeupdate', updateTime);
   }, [mediaRef, duration]);
@@ -96,7 +96,7 @@ export function PlayerControls({
           <button className="control-btn play-btn" onClick={togglePlay} title={isPlaying ? "Pause (Space)" : "Play (Space)"}>
             {isPlaying ? <Pause size={24} /> : <Play size={24} />}
           </button>
-          
+
           <div className="volume-group">
              <button className="control-btn" onClick={toggleMute} title={isMuted ? "Unmute (m)" : "Mute (m)"}>
                {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
@@ -128,8 +128,8 @@ export function PlayerControls({
              {showSettings && (
                <div className="speed-menu">
                   {[0.5, 1, 1.5, 2].map((speed) => (
-                    <button 
-                      key={speed} 
+                    <button
+                      key={speed}
                       className={`speed-option ${playbackSpeed === speed ? 'selected' : ''}`}
                       onClick={() => onSpeedChange(speed)}
                     >

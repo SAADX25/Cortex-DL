@@ -2,16 +2,6 @@ import { create } from 'zustand'
 import { useMemo } from 'react'
 import { useUIStore } from './useUIStore'
 
-/**
- * "Add Download" form slice — everything the AddDownloadTab form reads/writes
- * while the user is configuring a download (trim range, format, quality,
- * speed limit, destination sub-folder, etc).
- *
- * Split out of the old `useAppController` god hook so leaf components (the
- * format picker, the quality picker, the trimmer toggle, ...) can subscribe
- * to just the one field they render instead of receiving the entire form as
- * a prop bag that changes identity on every keystroke.
- */
 interface FormStoreState {
   startTime: string
   setStartTime: (v: string) => void
@@ -33,22 +23,12 @@ interface FormStoreState {
   selectedYtdlpFormatId: string | null
   setSelectedYtdlpFormatId: (v: string | null) => void
 
-
-  /**
-   * Currently write-only (reserved for a future resolution-based picker) —
-   * kept as a real field for parity with the pre-refactor behavior rather
-   * than silently dropping the setter that several UI handlers already call.
-   */
-  targetResolution: number | null
-  setTargetResolution: (v: number | null) => void
-
   speedLimit: string
   setSpeedLimit: (v: string) => void
 
   subfolderName: string
   setSubfolderName: (v: string) => void
 
-  /** Resets every per-analysis field back to its default (new URL / cleared input). */
   resetForNewUrl: () => void
 }
 
@@ -73,9 +53,6 @@ export const useFormStore = create<FormStoreState>((set) => ({
   selectedYtdlpFormatId: null,
   setSelectedYtdlpFormatId: (v) => set({ selectedYtdlpFormatId: v }),
 
-  targetResolution: null,
-  setTargetResolution: (v) => set({ targetResolution: v }),
-
   speedLimit: localStorage.getItem('cortex-speed-limit') || 'auto',
   setSpeedLimit: (v) => {
     localStorage.setItem('cortex-speed-limit', v)
@@ -88,17 +65,11 @@ export const useFormStore = create<FormStoreState>((set) => ({
   resetForNewUrl: () =>
     set({
       selectedVariantUrl: null,
-      targetResolution: null,
       selectedQuality: '',
       selectedYtdlpFormatId: null,
     }),
 }))
 
-/**
- * Height/fps buckets available for the currently analyzed yt-dlp source.
- * Cross-store derived value (depends on `useUIStore`'s `analyzeResult`), so
- * it lives as a selector hook rather than inside either store directly.
- */
 export function useAvailableVideoQualities(): { height: number; fps: number }[] | null {
   const analyzeResult = useUIStore((s) => s.analyzeResult)
 

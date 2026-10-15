@@ -1,5 +1,4 @@
-import { translations } from '../translations'
-import type { Language } from '../translations'
+import { translations, type Language } from '../translations'
 
 export function variantLabel(v: HlsVariant, lang: Language): string {
   const res = v.resolution ? `${v.resolution.height}p` : null

@@ -1,4 +1,4 @@
-/** FFprobe exposes frame rates as rational strings, including invalid 0/0. */
+
 export function parseFrameRate(value: unknown): number | null {
   if (typeof value !== 'number' && typeof value !== 'string') return null
   const text = String(value).trim()

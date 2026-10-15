@@ -1,6 +1,5 @@
 import React from 'react'
 
-/** YouTube Music icon — a play button inside a circle */
 export const YouTubeMusicIcon: React.FC<{ size?: number } & React.SVGProps<SVGSVGElement>> = ({ size = 22, ...props }) => {
   return (
     <svg

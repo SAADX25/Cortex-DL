@@ -39,10 +39,10 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
         style={{
           width: '100%',
           maxWidth: '480px',
-          background: 'rgba(30, 41, 59, 0.7)', // Slightly transparent --bg-main or --bg-sidebar
+          background: 'rgba(30, 41, 59, 0.7)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          border: '1px solid rgba(56, 189, 248, 0.15)', // Cyan border hint
+          border: '1px solid rgba(56, 189, 248, 0.15)',
           borderRadius: '24px',
           padding: '40px',
           boxShadow: '0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05)',
@@ -53,7 +53,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
         }}
       >
         <div style={{ position: 'relative', marginBottom: '24px' }}>
-          {/* Animated Glow Behind Icon */}
+
           <motion.div
             animate={{
               scale: [1, 1.2, 1],
@@ -67,19 +67,19 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
             style={{
               position: 'absolute',
               inset: '-20px',
-              background: isError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(56, 189, 248, 0.3)', // Red or Cyan
+              background: isError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(56, 189, 248, 0.3)',
               filter: 'blur(24px)',
               borderRadius: '50%',
               zIndex: 0
             }}
           />
-          
-          <div style={{ 
-            position: 'relative', 
-            zIndex: 1, 
-            width: '72px', 
-            height: '72px', 
-            borderRadius: '50%', 
+
+          <div style={{
+            position: 'relative',
+            zIndex: 1,
+            width: '72px',
+            height: '72px',
+            borderRadius: '50%',
             background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02))',
             border: '1px solid rgba(255,255,255,0.1)',
             display: 'flex',
@@ -108,10 +108,10 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           </div>
         </div>
 
-        <motion.h2 
-          style={{ 
-            fontSize: '1.5rem', 
-            fontWeight: 600, 
+        <motion.h2
+          style={{
+            fontSize: '1.5rem',
+            fontWeight: 600,
             margin: '0 0 8px 0',
             background: 'linear-gradient(to right, #fff, #a1a1aa)',
             WebkitBackgroundClip: 'text',
@@ -131,29 +131,29 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           <button onClick={() => void window.cortexDl.openLogs()}>Open Log Folder</button>
           <button onClick={() => void window.cortexDl.exitApp()}>Exit</button>
         </div>}
-        {/* Progress Bar Container */}
-        <div style={{ 
-          width: '100%', 
-          height: '6px', 
-          background: 'rgba(255,255,255,0.05)', 
+
+        <div style={{
+          width: '100%',
+          height: '6px',
+          background: 'rgba(255,255,255,0.05)',
           borderRadius: '99px',
           overflow: 'hidden',
           position: 'relative'
         }} role="progressbar" aria-label="Engine setup" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}>
-          {/* Progress Fill */}
+
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ type: 'spring', damping: 20, stiffness: 100 }}
             style={{
               height: '100%',
-              background: isError 
-                ? 'var(--error)' 
+              background: isError
+                ? 'var(--error)'
                 : 'linear-gradient(90deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%)',
               borderRadius: '99px',
               position: 'relative',
-              boxShadow: isError 
-                ? '0 0 10px rgba(239,68,68,0.5)' 
+              boxShadow: isError
+                ? '0 0 10px rgba(239,68,68,0.5)'
                 : '0 0 12px rgba(56,189,248,0.6)'
             }}
           />
@@ -164,10 +164,9 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           }} />}
         </div>
 
-        {/* Percentage Text */}
-        <div style={{ 
-          width: '100%', 
-          display: 'flex', 
+        <div style={{
+          width: '100%',
+          display: 'flex',
           justifyContent: 'space-between',
           marginTop: '12px',
           fontSize: '0.8rem',

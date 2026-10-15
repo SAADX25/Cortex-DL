@@ -2,9 +2,8 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'node:path'
 
-import { startupMark, startupDuration } from './startupTiming'
-const dbStarted = performance.now()
 const userDataPath = app.getPath('userData')
+
 const dbPath = path.join(userDataPath, 'tasks.sqlite')
 
 export const db = new Database(dbPath)
@@ -13,12 +12,6 @@ db.pragma('journal_mode = WAL')
 
 db.pragma('auto_vacuum = INCREMENTAL')
 
-// NORMAL is the recommended pairing with WAL: it skips the fsync on every
-// transaction commit (only checkpointing needs one), which is safe here
-// because WAL already guarantees the database file itself can never be
-// corrupted by a crash — at worst a handful of milliseconds of the most
-// recent writes could be lost, which is an explicit, accepted trade-off of
-// the write-behind persistence model in `downloadManager.ts` (Priority 3).
 db.pragma('synchronous = NORMAL')
 
 db.exec(`
@@ -40,11 +33,7 @@ db.exec(`
   );
 `)
 
-// Remove the retired credential setting; the exported user file is never deleted.
 db.prepare('DELETE FROM settings WHERE key = ?').run('cookieFilePath')
-
-startupDuration('dbOpenDurationMs', dbStarted)
-startupMark('dbOpenMs')
 
 export const taskDb = {
   upsertTask: db.prepare(`
@@ -68,7 +57,7 @@ export const taskDb = {
   getAllTasks: db.prepare(`
     SELECT full_payload FROM tasks
   `),
-  
+
   clearCompleted: db.prepare(`
     DELETE FROM tasks WHERE status = 'completed' OR status = 'canceled'
   `)

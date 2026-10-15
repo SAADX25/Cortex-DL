@@ -18,7 +18,7 @@
 .library-drop-copy p { color: var(--text-muted); font-size: 13px; max-width: 420px; line-height: 1.8; }
 .library-drop-copy small { display: block; color: #8a9aaf; font-size: 12px; margin-top: 6px; }
 .library-formats { font-size: 11px; color: #77899f; }
-/* Offset the main scroll area's 2rem top padding so rows cannot peek above the pinned controls. */
+
 .library-controls { position: sticky; top: -2rem; z-index: 3; padding-block: 12px 16px; margin-top: -12px; background: linear-gradient(110deg, #0b1120, #0e2031); }
 .library-toolbar { display: flex; gap: 10px; margin-top: 0; }
 .library-search { display: flex; gap: 10px; align-items: center; min-width: 0; flex: 1; padding: 0 13px; min-height: 43px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; color: #8092aa; }

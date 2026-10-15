@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+
 export type NvidiaGpu = { index: number; name: string; memoryMB: number; freeMB: number; capability: number }
+
 export function parseNvidiaDevices(output: string): NvidiaGpu[] {
   return output.trim().split(/\r?\n/).flatMap(line => {
     const [index, name, memory, free, capability] = line.split(',').map(s => s.trim())
@@ -10,7 +12,7 @@ export function parseNvidiaDevices(output: string): NvidiaGpu[] {
       && gpu.freeMB >= 0 && gpu.freeMB <= gpu.memoryMB && gpu.capability >= 5.2 && gpu.capability <= 9 ? [gpu] : []
   }).sort((a, b) => b.freeMB - a.freeMB)
 }
-/** Query only the driver's known install paths, never a workspace-provided executable. */
+
 export async function detectNvidiaGpu(signal?: AbortSignal): Promise<NvidiaGpu | null> {
   if (process.platform !== 'win32') return null
   const candidates = [path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'nvidia-smi.exe'),
@@ -26,12 +28,13 @@ export async function detectNvidiaGpu(signal?: AbortSignal): Promise<NvidiaGpu |
   }
   return null
 }
+
 export function translationGpuLayers(model: 'standard' | 'quality', freeMB: number): number {
-  // Leave room for display memory, KV cache and Vulkan working buffers. Partial offload is supported.
   const weightsMB = model === 'standard' ? 2375 : 6963
   const layers = model === 'standard' ? 34 : 49
   return Math.max(0, Math.min(layers, Math.floor((freeMB - 768) / (weightsMB / layers))))
 }
+
 export function selectVulkanDevice(output: string, name: string): string | null {
   for (const line of output.split(/\r?\n/)) {
     const match = /^\s*(Vulkan\d+):\s*(.+?)\s*\(/.exec(line)

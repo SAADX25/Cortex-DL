@@ -2,19 +2,10 @@ import React from 'react'
 import { Plus, DownloadCloud, Settings, Github, Captions, Library, Coffee, ArrowUpRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { translations } from '../translations'
-import { useUIStore } from '../stores/useUIStore'
-import type { ActiveTab } from '../stores/useUIStore'
+import { useUIStore, type ActiveTab } from '../stores/useUIStore'
 import { useLang } from '../stores/useSettingsStore'
 import { useActiveDownloadCount, useTotalDownloadCount } from '../stores/downloadStore'
 
-/**
- * No props: Sidebar sources everything it renders directly from the
- * relevant Zustand slices instead of receiving a `lang` prop threaded down
- * from `App` — one fewer link in the god-hook prop chain, and this
- * component now only re-renders when `activeTab`, `lang`, or the derived
- * download counts actually change (see `useActiveDownloadCount` /
- * `useTotalDownloadCount`, which avoid subscribing to the raw task Map).
- */
 const Sidebar: React.FC = () => {
   const lang = useLang()
   const t = translations[lang]
@@ -61,12 +52,11 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className="sidebar" role="complementary" aria-label={lang === 'ar' ? 'الشريط الجانبي' : 'Sidebar'}>
-      {/* Brand */}
+
       <div className="brand">
         <h1 className="cortex-logo-text">Cortex DL</h1>
       </div>
 
-      {/* Navigation */}
       <nav className="nav-menu" role="navigation" aria-label={lang === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}>
         {navItems.map((item) => {
           const Icon = item.icon

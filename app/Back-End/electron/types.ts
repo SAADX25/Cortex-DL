@@ -1,19 +1,5 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-
-import type {
-  DownloadTask,
-  DownloadStatus,
-  DownloadEngine,
-  VideoFormat,
-  AudioFormat,
-  TargetFormat,
-  ThumbnailDataUrl,
-  HlsVariant,
-  YtdlpFormat,
-  AnalyzeResult,
-  JsRuntimeStatus,
-  AppHealthCheck,
-} from '../../Shared/types'
+import { type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { type DownloadTask, type DownloadStatus, type DownloadEngine, type VideoFormat, type AudioFormat, type TargetFormat, type ThumbnailDataUrl, type HlsVariant, type YtdlpFormat, type AnalyzeResult, type JsRuntimeStatus, type AppHealthCheck } from '../../Shared/types'
 
 export type {
   DownloadTask,
@@ -29,6 +15,7 @@ export type {
   JsRuntimeStatus,
   AppHealthCheck,
 }
+
 export { UPDATE_CHANNEL, PROGRESS_CHANNEL, STATS_CHANNEL, VIDEO_FORMATS, AUDIO_FORMATS } from '../../Shared/types'
 
 export type StartInput = {
@@ -56,12 +43,7 @@ export type TaskRuntime = {
   lastSpeedSampleBytes: number | null
   lastIpcAtMs: number
   retries: number
-  /**
-   * Timestamp (ms) before which this task must not be picked up by
-   * `DownloadManager.schedule()`. Set by `scheduleRetry()` while a
-   * task-level retry backoff is pending, so the backoff never occupies an
-   * active concurrency slot (owned by DownloadManager).
-   */
+
   retryAt?: number
 }
 

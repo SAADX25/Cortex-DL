@@ -7,17 +7,7 @@ import { useUIStore } from '../stores/useUIStore'
 import { useFormStore } from '../stores/useFormStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
 import { useDownloadStore, getTasksSnapshot, getActiveDownloadCount } from '../stores/downloadStore'
-import type { BatchItem } from '../components/AddDownloadTab'
-
-/**
- * Plain, dependency-free action functions for the download workflow — no
- * hooks involved. Every function reads the state it needs from the Zustand
- * stores at *call time* (`getState()`), so these exports are stable forever:
- * components can pass `onDeleteTask`, `onOpenFile`, etc. straight down as
- * props without ever breaking `React.memo` on the receiving end (the
- * previous `useAppController`/`useDownloadController` chain re-created most
- * of these as fresh closures on every render).
- */
+import { type BatchItem } from '../components/AddDownloadTab'
 
 function t() {
   return translations[useSettingsStore.getState().lang]
@@ -49,7 +39,7 @@ export async function onPickFolder(): Promise<string | null> {
 async function performAnalysis(urlToAnalyze: string): Promise<void> {
   const ui = useUIStore.getState()
   if (ui.analyzing) {
-    try { if (normalizeAnalysisUrl(ui.url) === normalizeAnalysisUrl(urlToAnalyze)) return } catch { /* Invalid input follows the normal error path. */ }
+    try { if (normalizeAnalysisUrl(ui.url) === normalizeAnalysisUrl(urlToAnalyze)) return } catch { primaryAnalysis.cancel() }
   }
   const form = useFormStore.getState()
 
@@ -146,7 +136,7 @@ export async function handleAnalyzeUrlDirectly(inputUrl: string): Promise<void> 
       return
     }
   } catch {
-    // Not a valid absolute URL — fall through and analyze it as-is.
+    return performAnalysis(inputUrl)
   }
 
   await performAnalysis(inputUrl)

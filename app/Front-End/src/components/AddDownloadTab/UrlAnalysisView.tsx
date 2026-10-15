@@ -37,7 +37,6 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
           {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : analyzeResult.kind === 'direct' ? 'Direct media' : 'HLS Stream'}
         </div>
 
-        {}
         {analyzeResult.kind === 'ytdlp' && (
           <div className="preview-metadata">
             <div className="preview-metadata-row">
@@ -56,7 +55,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
                       const h = Math.floor(d / 3600);
                       const m = Math.floor((d % 3600) / 60);
                       const s = d % 60;
-                      return h > 0 
+                      return h > 0
                         ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
                         : `${m}:${s.toString().padStart(2, '0')}`;
                     })()
@@ -78,8 +77,8 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
             </div>
             <div className="preview-metadata-row" style={{ marginTop: '2px' }}>
               {(url.includes('youtube.com') || url.includes('youtu.be')) && (
-                <div 
-                  className="metadata-badge" 
+                <div
+                  className="metadata-badge"
                   style={{ cursor: 'pointer', backgroundColor: '#3b82f6', color: '#fff', border: 'none' }}
                   title={lang === 'ar' ? 'تحميل جميع التعليقات بملف نصي' : 'Download all comments to text file'}
                   onClick={async (e) => {

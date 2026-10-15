@@ -8,7 +8,7 @@ function trackName(track: PlayerSubtitleTrack, lang: string): string {
   try {
     const name = new Intl.DisplayNames([lang], { type: 'language' }).of(code)
     if (name && name !== code && !['und', 'unknown'].includes(code)) return name
-  } catch { /* Custom track labels need not be language codes. */ }
+  } catch { return track.label || code }
   return track.label || code
 }
 

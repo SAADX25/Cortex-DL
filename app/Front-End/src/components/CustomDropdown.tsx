@@ -21,7 +21,6 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; minWidth?: number } | null>(null)
 
-  
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const t = e.target as Node
@@ -38,7 +37,7 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
     if (!btn) return
     const rect = btn.getBoundingClientRect()
     const menuWidth = 144
-    
+
     let left = rect.left
     if (left + menuWidth > window.innerWidth - 8) {
       left = Math.max(8, window.innerWidth - menuWidth - 8)

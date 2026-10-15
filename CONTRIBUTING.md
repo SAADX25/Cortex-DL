@@ -21,7 +21,7 @@ The root npm commands forward to the package in `app`. You can run app-specific 
 
 See [the development guide](app/docs/development.md) for the module map, extension points and validation workflow. Follow the existing component, store and service boundaries. Update shared types and both Arabic and English translations when a feature changes the renderer contract or visible UI text.
 
-For download changes, preserve attempt ownership, cancellation, pause/resume and final-file validation. Add regression coverage for the behavior you change. Read [the downloader lifecycle guide](app/docs/downloader-core-v2.md) before changing execution or recovery.
+For download changes, preserve attempt ownership, cancellation, pause/resume and final-file validation. Add regression coverage for the behavior you change. Read [the downloader lifecycle guide](app/docs/development.md#download-and-media-processing) before changing execution or recovery.
 
 ## Validation
 
@@ -39,7 +39,6 @@ For packaging, installer or release changes, run from `app` on Windows:
 
 ```powershell
 npm run build
-npm run test:packaged
 npm run test:installer
 npm run release:verify
 ```

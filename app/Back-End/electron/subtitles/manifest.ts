@@ -1,5 +1,7 @@
 export type SubtitleAsset = { id: string; url: string; sha256: string; bytes: number; file: string; archive?: boolean; executable?: string; expandedLimit?: number }
+
 const whisperRepo = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/'
+
 export const SUBTITLE_ASSETS: Record<string, SubtitleAsset> = {
   whisper: { id: 'whisper-b5454', file: 'whisper', archive: true, executable: 'whisper-cli.exe', bytes: 8928640, sha256: '6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb', url: 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip' },
   llama: { id: 'llama-b11541', file: 'llama', archive: true, executable: 'llama-server.exe', bytes: 19518702, sha256: 'cdc0535d11038bb337dfba3c15682050eaa9c07aedd0f915b4c09e8a8e8c0a5c', url: 'https://github.com/ggml-org/llama.cpp/releases/download/b11541/llama-b11541-bin-win-cpu-x64.zip' },

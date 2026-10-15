@@ -1,14 +1,7 @@
 import { create } from 'zustand'
-import { translations } from '../translations'
-import type { Language } from '../translations'
+import { translations, type Language } from '../translations'
 import { useUIStore } from './useUIStore'
 
-/**
- * App settings / health / update-status slice. Pulled out of the old
- * `useAppController` → `useSettingsController` god-hook chain so components
- * like Sidebar/SettingsTab/AddDownloadTab can read just `lang`, or just
- * `healthCheck`, etc. without depending on (or re-rendering for) the rest.
- */
 interface SettingsStoreState {
   lang: Language
   setLang: (lang: Language) => void
@@ -45,7 +38,6 @@ interface SettingsStoreState {
   password: string
   setPassword: (v: string) => void
 
-  
   refreshHealth: () => Promise<void>
   onCheckForUpdates: () => Promise<void>
   onUpdateEngine: () => Promise<void>
@@ -193,4 +185,5 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
 }))
 
 export const useLang = () => useSettingsStore((s) => s.lang)
+
 export const useTranslations = () => translations[useSettingsStore((s) => s.lang)]

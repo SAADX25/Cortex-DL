@@ -22,7 +22,7 @@ export default memo(function LibraryThumbnail({ item, active }: { item: LibraryM
           setImage(info.thumbnail ? { path: filePath, url: info.thumbnail, embedded: info.embedded } : null); setFailed(null)
           useMediaLibraryStore.getState().setArtworkInfo(id, info.embedded)
         }
-      } catch { /* Artwork is optional; retain the media icon. */ }
+      } catch { completed = false }
       finally { inFlight = false }
     }
     const observer = new IntersectionObserver(entries => {

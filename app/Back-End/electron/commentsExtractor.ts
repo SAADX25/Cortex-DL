@@ -1,9 +1,9 @@
-import { ensureEnginesReady, engineExecutionFailed } from './engineReadiness'
+import { ensureEnginesReady, engineExecutionFailed } from './engines/engineManager'
 import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
 import log from 'electron-log'
 import { getBinaryPath } from './paths'
-import { checkJsRuntime, getJsRuntimeArgs, YOUTUBE_EXTRACTOR_ARGS } from './ytdlp'
+import { checkJsRuntime, getJsRuntimeArgs } from './engines/ytdlpService'
 
 export async function extractAndSaveComments(url: string, outputPath: string, onProgress?: (current: number, total: number) => void): Promise<boolean> {
   await ensureEnginesReady(['yt-dlp', 'deno'])
@@ -12,21 +12,19 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
     log.info(`[CommentsExtractor] Starting comment extraction for ${url}`)
     const ytDlpPath = getBinaryPath('yt-dlp')
 
-
     const args = [
       '--dump-json',
       '--write-comments',
       '--skip-download',
       '--playlist-items', '0',
       '--ignore-config',
-      ...(YOUTUBE_EXTRACTOR_ARGS ? ['--extractor-args', YOUTUBE_EXTRACTOR_ARGS] : []),
+
       ...getJsRuntimeArgs(),
       url
     ]
 
     const proc = spawn(ytDlpPath, args, { windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
     proc.on('error', error => engineExecutionFailed('yt-dlp', error))
-
 
     const stdoutChunks: Buffer[] = []
 
@@ -37,13 +35,11 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
     proc.stderr.on('data', (chunk) => {
       const text = chunk.toString()
 
-
       if (text.includes('Downloading 1 format(s)') || text.includes('[download] Destination:')) {
         proc.kill()
 
         return
       }
-
 
       if (text.includes('No supported JavaScript runtime could be found')) {
         proc.kill()
@@ -51,9 +47,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
         return
       }
 
-
       if (onProgress) {
-
         const finalMatch = text.match(/Extracted\s+(\d+)\s+comments/i)
         if (finalMatch && finalMatch[1]) {
           const finalCount = parseInt(finalMatch[1], 10)
@@ -61,8 +55,6 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
             onProgress(finalCount, finalCount)
           }
         } else {
-
-
           const match = text.match(/\((\d+)\/~?(\d+)\)/)
 
           if (match && match[1] && match[2]) {
@@ -77,10 +69,6 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
     })
 
     proc.on('close', async (code) => {
-
-
-
-
       try {
         const stdoutData = Buffer.concat(stdoutChunks).toString('utf-8')
         if (!stdoutData.trim()) {
@@ -99,12 +87,11 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
 
         log.info(`[CommentsExtractor] Found ${info.comments.length} comments. Formatting...`)
 
-
         const formattedComments = info.comments.map((c: any) => {
           const author = c.author || 'Unknown'
           const text = c.text || ''
           const likes = c.like_count ? `(👍 ${c.like_count})` : ''
-          const date = c.time_text || '' 
+          const date = c.time_text || ''
 
           return `👤 ${author} ${likes} ${date}\n📝 ${text}`
         }).join('\n\n---------------------------------------\n\n')

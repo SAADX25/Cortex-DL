@@ -1,4 +1,4 @@
-/** All asynchronous UI writes must retain the currently owned generation. */
+
 export class AnalysisSession {
   private generation = 0
   private dispose?: () => void

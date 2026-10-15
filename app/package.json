@@ -21,17 +21,15 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint && npm test",
-    "test:unit": "node --test --test-name-pattern=\"^(analysis |batch analysis |optional JSON |thumbnail streams |codec decisions |renderer stale |IPC progressive |direct analysis |last analysis |Visual Trim validates|Visual Trim suppresses|fast Pause|retry backoff|recovery never|active delete|Direct backend progress|unknown-length progress|YouTube video/audio progress|all shared media formats|yt-dlp continuation|Pause All|SQLite progress|resume broadcasts|terminal IPC|yt-dlp repeated|progress preserves|progress replaces)\" tests/coreV2.test.cjs tests/reliability.test.cjs tests/trimPreview.test.cjs tests/analysisPerformance.test.cjs && node --test tests/productionHardening.test.cjs && node --test tests/engineReceipts.test.cjs tests/engineSetup.test.cjs tests/startupHealth.test.cjs && node --test tests/youtubeAccess.test.cjs tests/localSubtitles.test.cjs tests/localSubtitleLifecycle.test.cjs tests/localSubtitlesMedia.test.cjs",
-    "test:integration": "node --test tests/coreV2.test.cjs tests/reliability.test.cjs tests/mediaLifecycle.test.cjs tests/trimPreview.test.cjs tests/analysisPerformance.test.cjs tests/engineReceipts.test.cjs tests/engineSetup.test.cjs tests/startupHealth.test.cjs tests/youtubeAccess.test.cjs tests/localSubtitles.test.cjs tests/localSubtitleLifecycle.test.cjs tests/localSubtitlesMedia.test.cjs",
+    "test:unit": "node --test --test-concurrency=2 tests/artwork.test.cjs tests/downloader.test.cjs tests/engines.test.cjs",
+    "test:integration": "node --test --test-concurrency=2 tests/subtitles.test.cjs tests/mediaLibrary.test.cjs tests/playerAndUi.test.cjs",
     "engines:stage": "node scripts/stage-engines.cjs && node scripts/third-party-notices.cjs",
     "version:verify": "node scripts/verify-release.cjs",
     "build:manifest": "node scripts/build-manifest.cjs",
     "build:candidate": "npm run version:verify && node scripts/third-party-notices.cjs && npm run build:manifest && tsc && vite build && electron-builder --win --publish never",
     "release:build": "node scripts/verify-release.cjs --release && npm run build:candidate && node scripts/verify-release.cjs --release --artifacts",
-    "test:packaged": "node scripts/packaged-smoke.cjs",
     "release:verify": "node scripts/verify-release.cjs --artifacts",
-    "test:installer": "node scripts/stage-legacy.cjs && node scripts/installer-upgrade.cjs",
-    "benchmark:startup": "node scripts/startup-benchmark.cjs"
+    "test:installer": "node scripts/installer-upgrade.cjs"
   },
   "dependencies": {
     "axios": "^1.14.0",

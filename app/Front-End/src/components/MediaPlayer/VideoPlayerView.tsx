@@ -84,7 +84,6 @@ export function VideoPlayerView({
     }
   }, [filePath, sessionId, subtitlePreview]);
 
-  
   React.useEffect(() => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -95,8 +94,7 @@ export function VideoPlayerView({
       }
     };
     apply();
-    // Reloading the file after a cover edit resets Chromium's track modes.
-    // Restore the selection as the media and asynchronous tracks become ready.
+
     video.addEventListener('loadedmetadata', apply);
     video.textTracks.addEventListener('addtrack', apply);
     const elements = Array.from(video.querySelectorAll('track'));
@@ -123,7 +121,7 @@ export function VideoPlayerView({
       <div className="player-body">
         <div className="video-wrapper">
           <canvas ref={ambilightRef} className="ambilight-video" />
-          
+
           <video
             ref={videoRef}
             className="main-video"
@@ -195,9 +193,9 @@ export function VideoPlayerView({
           artworkControl={artworkControl}
           mediaRef={mediaRef}
           mediaType="video"
-          isPlaying={isPlaying} 
+          isPlaying={isPlaying}
           duration={duration}
-          volume={volume} 
+          volume={volume}
           isMuted={isMuted}
           playbackSpeed={playbackSpeed}
           showSettings={showSettings}
@@ -206,9 +204,9 @@ export function VideoPlayerView({
           activeSubtitle={activeSubtitle}
           onSubtitleChange={setActiveSubtitle}
           onSubtitleMenuChange={setSubtitleMenuOpen}
-          togglePlay={togglePlay} 
+          togglePlay={togglePlay}
           onSeek={onSeek}
-          onVolumeChange={onVolumeChange} 
+          onVolumeChange={onVolumeChange}
           toggleMute={toggleMute}
           onSpeedChange={onSpeedChange}
           toggleSettings={toggleSettings}

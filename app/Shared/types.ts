@@ -71,11 +71,11 @@ export type DownloadTask = {
   fps?: number | string
   ytdlpExpectedBytes?: number
   ytdlpExpectedStreamCount?: number
-  /** Per-stream snapshots belong to the current attempt. */
+
   ytdlpStreams?: Record<string, { downloaded: number; total: number | null }>
-  /** Persisted chunk state for DirectEngine pause/resume. Cleared on completion. */
+
   resumeChunks?: { start: number; end: number; downloaded: number; completed: boolean }[]
-  /** Revalidated on each attempt; false remembers a server that ignored Range. */
+
   supportsRanges?: boolean
 }
 

@@ -1,6 +1,6 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import SubtitleStudio from '../../Front-End/src/components/SubtitleStudio'
+import SubtitleStudio from '../../Front-End/src/components/Subtitles/SubtitleStudio'
 import { useUIStore } from '../../Front-End/src/stores/useUIStore'
 import { useSubtitleStudioStore } from '../../Front-End/src/stores/useSubtitleStudioStore'
 import { useSettingsStore } from '../../Front-End/src/stores/useSettingsStore'

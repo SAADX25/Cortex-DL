@@ -31,11 +31,11 @@ A modern, high-performance Windows desktop video and audio downloader built with
 - Play downloaded video and audio inside the app.
 - Build a local media library with multi-file import, drag and drop, search, video/audio filters and recent-play sorting. Files stay in place; library references survive restarts, and moved files can be located again.
 - Edit covers in the media library, including images already embedded in imported files. Choose a local JPG, PNG or WEBP image up to 8 MB; no specific dimensions are required. MP3, FLAC, M4A and MP4 covers are embedded in the file without re-encoding media, and also retained in the library. MP4 edits preserve video, audio, subtitles and chapters. Use **Save to file** for covers saved by an earlier version, or **Change cover** and the adjacent remove button to replace or remove them. Removing an MP4 cover restores its ordinary video-frame preview. Other audio formats retain custom covers in the library. File replacement is verified first and rolled back if saving fails.
-- After a successful embedded cover edit or removal, Cortex DL notifies Windows that the file changed so the shell can refresh its thumbnail. **Refresh Media Player and VLC cover caches** backs up matching Media Player images and VLC artwork cache entries. It is enabled by default and can be disabled in Settings. Media Player is closed gracefully when necessary; VLC is left running and may need a restart to discard an image already in memory. See [cover troubleshooting](app/docs/cover-artwork.md).
+- After a successful embedded cover edit or removal, Cortex DL notifies Windows that the file changed so the shell can refresh its thumbnail. **Refresh Media Player and VLC cover caches** backs up matching Media Player images and VLC artwork cache entries. It is enabled by default and can be disabled in Settings. Media Player is closed gracefully when necessary; VLC is left running and may need a restart to discard an image already in memory. See [cover troubleshooting](app/docs/development.md#media-library-and-artwork).
 - The audio and MP4 player control bars also have a **File cover** menu with preview, add/change and remove actions. Editing briefly unloads the file, closes its old streaming session, and restores the playback position, volume, speed, pause/play state and selected subtitles afterward. Canceling or failing an edit restores playback as well. Songs show their cover on the record; the compact audio dock keeps its existing controls.
 - Media Library keeps search, filters and a single set of page controls above the list, visible while scrolling. It shows two files by default; choose 2, 4, 8 or 12 per page, and the app remembers that setting. Search, filters and sort start at page one, and removing a page's final item returns to a valid page. Cover changes, saves and removals show an indeterminate loading bar on the affected file and in the player until the operation finishes.
 - Opening Media Library loads saved metadata first and checks availability only for the current page. Playback checks the selected file again. Imports accept up to 10,000 paths, check at most 32 files concurrently and save once, without decoding media. Covers load near the viewport; saved custom covers bypass media probing, and thumbnail cache cleanup runs in the background.
-- Generate, translate, review and export speech subtitles locally. See [local subtitle setup](LOCAL-SUBTITLES.md).
+- Generate, translate, review and export speech subtitles locally. See [development guide](app/docs/development.md).
 - Use English or Arabic, notifications, and the system tray.
 - Check engine health and repair missing or damaged engines.
 
@@ -70,17 +70,17 @@ Cortex-DL/
 │   │       ├── engines/           # Specialized download, processing & streaming engines
 │   │       │   ├── YoutubeEngine.ts    # yt-dlp wrapper, format resolver & quality selection
 │   │       │   ├── DirectEngine.ts     # Multi-chunk HTTP/HTTPS range downloader
+│   │       │   ├── engineManager.ts    # Verification, receipts and engine provisioning
+│   │       │   ├── ytdlpService.ts     # Extraction, previews and yt-dlp updates
 │   │       │   └── MediaProcessor.ts   # FFmpeg audio/video muxing, trimming & transcoding
 │   │       ├── ipc/               # Strongly-typed IPC handlers & security validation
 │   │       │   └── handlers.ts         # Renderer-to-Main IPC invocation endpoints
 │   │       ├── downloadManager.ts # Core queue orchestrator, attempt lifecycle & state machine
 │   │       ├── db.ts              # SQLite database layer (tasks, history & user settings)
-│   │       ├── engineIntegrity.ts # Engine hashing, SHA-256 verification & binary security
-│   │       ├── engineReceipts.ts  # Authoritative startup receipts & instant-migration cache
-│   │       ├── engineReadiness.ts # Non-blocking background verification & readiness tracking
-│   │       ├── youtubeSubtitles.ts# Subtitle extraction, VTT parsing & soft-sub embedding
+│   │       ├── services/          # Artwork, analysis, media and thumbnail services
+│   │       ├── subtitles/         # Local subtitle models, processing and merge operations
 │   │       ├── diagnostics.ts     # Health checks, log redaction & diagnostic bundles
-│   │       ├── entrypoint.ts      # Early Electron bootstrap & startup benchmark probe
+│   │       ├── bootstrap.ts       # Early Electron setup and deferred backend loading
 │   │       ├── main.ts            # Electron app lifecycle, window manager & tray integration
 │   │       └── preload.ts         # Secure context bridge exposing sanitized APIs to renderer
 │   ├── Front-End/                 # Modern React 18 user interface (Vite + Custom CSS)
@@ -101,20 +101,19 @@ Cortex-DL/
 │   ├── build/                     # NSIS Windows installer assets & upgrade scripts
 │   │   └── installer.nsh          # Custom NSIS script for zero-data-loss upgrade migrations
 │   ├── docs/                      # Architectural specifications & release documentation
-│   │   ├── downloader-core-v2.md  # State machine, attempt ownership & lifecycle guide
-│   │   ├── startup-architecture.md# Instant startup benchmark & receipt verification specs
-│   │   ├── analysis-performance.md# URL analysis optimizations & caching mechanisms
 │   │   └── development.md         # Developer guide, module map & extension points
 │   ├── scripts/                   # Production build, validation & maintenance utilities
 │   │   ├── build-manifest.cjs     # Injects git commit, engine hashes & build timestamps
 │   │   ├── verify-release.cjs     # Automated release gate verifying tags, versions & hashes
 │   │   ├── stage-engines.cjs      # Development engine provisioning & local baseline cache
 │   │   └── clean.cjs              # Safe output cleaner preserving configs & partial downloads
-│   ├── tests/                     # Automated test suites (Unit, Integration & Packaged smoke)
-│   │   ├── coreV2.test.cjs        # Download manager lifecycle, retry backoff & pause/resume tests
-│   │   ├── engineReceipts.test.cjs# Instant startup receipt validation & migration tests
-│   │   ├── cleanup.test.cjs       # Artifact cleanup & junction traversal protection tests
-│   │   └── productionHardening.test.cjs # Release gate, IPC security & argument sanitization
+│   ├── tests/                     # Domain regression suites
+│   │   ├── artwork.test.cjs       # Embedded covers and external player caches
+│   │   ├── downloader.test.cjs    # Attempts, history, quality and provider access
+│   │   ├── engines.test.cjs       # Provisioning, receipts, timeouts and packaging
+│   │   ├── subtitles.test.cjs     # Local subtitles and merge workflows
+│   │   ├── mediaLibrary.test.cjs  # Catalog, IPC, thumbnails and media information
+│   │   └── playerAndUi.test.cjs   # Playback, chrome, floating windows and trim previews
 │   ├── electron-builder.json5     # NSIS installer packaging & auto-update specifications
 │   ├── engines.lock.json          # Cryptographically pinned engine hashes (yt-dlp, FFmpeg, Deno)
 │   ├── package.json               # Desktop application dependencies & script definitions (v2.2.0)
@@ -150,11 +149,9 @@ Tests that run real media tools require `npm run engines:stage` first. Packaged 
 
 ```powershell
 npm run build
-npm run test:packaged
 npm run test:installer
 ```
 
-The isolated uninstall cleanup check is available as `node scripts/test-uninstall-data.cjs <path-to-makensis.exe>`. It uses disposable directories under `app/installer-validation`.
 
 ## Build for Windows
 
@@ -200,12 +197,4 @@ Run these commands from the repository root. Standard cleanup removes `dist-elec
 
 Use **Settings → App readiness** or **Repair Engines** for missing or damaged tools, and **Open Logs** for diagnostics. Public video requests use no sign-in credentials. For restricted content, use a local media file in the subtitle workspace.
 
-Feature and architecture documentation:
-
-- [Downloader lifecycle, ownership and recovery](app/docs/downloader-core-v2.md)
-- [Startup architecture and instant engine receipts](app/docs/startup-architecture.md)
-- [URL analysis performance & optimizations](app/docs/analysis-performance.md)
-- [Media processing & FFmpeg pipeline](app/docs/media-processing-performance.md)
-- [Visual Trim preview & media playback](app/docs/visual-trim-preview.md)
-- [Media player diagnostics](app/docs/media-player-diagnostics.md)
-- [Developer guide & module map](app/docs/development.md)
+Architecture and extension guidance are in the [development guide](app/docs/development.md). Historical release changes are in the [changelog](CHANGELOG.md).

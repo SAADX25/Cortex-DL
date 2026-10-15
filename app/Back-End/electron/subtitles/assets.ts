@@ -4,16 +4,18 @@ import { createHash, randomUUID } from 'node:crypto'
 import os from 'node:os'
 import AdmZip from 'adm-zip'
 import { SUBTITLE_ASSETS, type SubtitleAsset } from './manifest'
-import type { SpeechModel, TranslationModel, SubtitleReadiness } from '../../../Shared/localSubtitles'
+import { type SpeechModel, type TranslationModel, type SubtitleReadiness } from '../../../Shared/localSubtitles'
 import { detectNvidiaGpu } from './gpu'
 import { SubtitleProcesses } from './process'
 
 type Receipt = { id: string; sha256: string; executable?: string; files: { name: string; size: number; mtimeMs: number }[] }
+
 export async function sha256(file: string): Promise<string> {
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(file)) hash.update(chunk)
   return hash.digest('hex')
 }
+
 export class SubtitleAssets {
   constructor(readonly root: string) {}
   private receiptPath(asset: SubtitleAsset): string { return path.join(this.root, `${asset.id}.receipt.json`) }
@@ -52,7 +54,7 @@ export class SubtitleAssets {
     const missing: SubtitleAsset[] = []
     for (const key of selected) { signal.throwIfAborted(); if (!await this.locate(key)) missing.push(SUBTITLE_ASSETS[key]) }
     const total = missing.reduce((n, a) => n + a.bytes, 0)
-    // Archives are tiny compared with model weights; reserve space for extraction too.
+
     const space = await fs.statfs(this.root)
     const extraction = missing.reduce((n, a) => n + (a.archive ? a.expandedLimit ?? 200 * 1024 * 1024 : 0), 0)
     if (Number(space.bavail) * Number(space.bsize) < total + extraction + 100 * 1024 * 1024) throw new Error('LOCAL_SUBTITLES_DISK_SPACE')
@@ -126,7 +128,7 @@ export class SubtitleAssets {
         }
         if (!executable) throw new Error('Engine executable missing from archive')
         const destination = path.join(this.root, asset.file)
-        // Root and names are fixed in the checked-in manifest, never supplied by renderer.
+
         await fs.rm(destination, { recursive: true, force: true })
         await fs.rename(stage, destination)
       } finally { await fs.rm(stage, { recursive: true, force: true }) }

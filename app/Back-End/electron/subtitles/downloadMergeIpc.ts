@@ -1,11 +1,13 @@
 import { dialog, ipcMain } from 'electron'
 import path from 'node:path'
-import type { IpcDependencies } from '../ipc/handlers'
-import type { SubtitleMergeFormat } from '../../../Shared/downloadSubtitles'
+import { type IpcDependencies } from '../ipc/handlers'
+import { type SubtitleMergeFormat } from '../../../Shared/downloadSubtitles'
 import { listDownloadSubtitles, mergeDownloadSubtitle } from './downloadMerge'
 
 const jobs = new Map<string, { controller: AbortController; done: Promise<unknown>; processing: boolean }>()
+
 let stopping = false
+
 export function registerDownloadSubtitleIpc({ getWin, getDownloads }: IpcDependencies): void {
   const getVideo = (id: string) => {
     const task = getDownloads()?.get(id)
@@ -35,6 +37,7 @@ export function registerDownloadSubtitleIpc({ getWin, getDownloads }: IpcDepende
     finally { if (jobs.get(id) === job) jobs.delete(id); event.sender.removeListener('destroyed', onDestroyed) }
   })
 }
+
 export async function stopDownloadSubtitleMerges(): Promise<void> {
   stopping = true
   for (const job of jobs.values()) job.controller.abort()

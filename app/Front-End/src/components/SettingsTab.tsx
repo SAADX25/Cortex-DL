@@ -1,18 +1,11 @@
 import React from 'react'
 import { RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react'
-import { translations } from '../translations'
-import type { Language } from '../translations'
+import { translations, type Language } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 import { useLang, useSettingsStore } from '../stores/useSettingsStore'
 
 declare const __APP_VERSION__: string
 
-/**
- * No props: every value/action this tab needs comes straight from
- * `useSettingsStore`, so changing e.g. `engineVersion` no longer forces
- * `App` (and therefore every other tab) to re-render — only this component
- * re-renders, and only when a field it actually reads changes.
- */
 const SettingsTab: React.FC = () => {
   const lang = useLang()
   const t = translations[lang]
@@ -37,7 +30,6 @@ const SettingsTab: React.FC = () => {
   const onUpdateEngine = useSettingsStore((s) => s.onUpdateEngine)
   const onUninstall = useSettingsStore((s) => s.onUninstall)
 
-  
   const healthRows = healthCheck
     ? [
         {
@@ -73,7 +65,6 @@ const SettingsTab: React.FC = () => {
 
       <section className="minimal-panel" style={{ gap: '3rem' }}>
 
-        {}
         <div className="settings-hero-stats">
           <div className="hero-stat-value gradient-text-large">
             {formatBytes(totalDownloadedBytes)}
@@ -89,7 +80,6 @@ const SettingsTab: React.FC = () => {
         <div className="settings-section">
           <h3 className="section-header">{t.settings_general}</h3>
 
-          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.language_label}</span>
@@ -113,7 +103,6 @@ const SettingsTab: React.FC = () => {
             </div>
           </div>
 
-          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.use_inapp_player}</span>
@@ -148,7 +137,6 @@ const SettingsTab: React.FC = () => {
             </div>
           </div>
 
-          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.concurrent_title}</span>
@@ -174,7 +162,6 @@ const SettingsTab: React.FC = () => {
             </div>
           </div>
 
-          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">{t.check_for_updates}</span>
@@ -205,7 +192,6 @@ const SettingsTab: React.FC = () => {
             </div>
           </div>
 
-          {}
           <div className="minimal-row">
             <div className="row-info">
               <span className="row-title">Engine (yt-dlp)</span>
@@ -297,7 +283,6 @@ const SettingsTab: React.FC = () => {
           </div>
         </div>
 
-        {}
         <div className="settings-section danger-zone">
           <h3 className="section-header danger-text">
             <AlertTriangle size={18} />

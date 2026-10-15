@@ -1,15 +1,8 @@
-import { markStartup, previousStartupFailed, safeMode, smokeDirectory, gotTheLock, startupProbe } from './bootstrap'
+import { markStartup, previousStartupFailed, safeMode, gotTheLock, afterUiReady, startupTimings, startupMark, startupDuration, checkCachedEngines, reportEngineFailure, stopSetup, runSetup, setupState } from './bootstrap'
 import log from 'electron-log'
 import * as dotenv from 'dotenv'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
-const __dirname_env = path.dirname(fileURLToPath(import.meta.url))
-dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
-
-log.initialize({ preload: true })
-log.transports.file.level = 'info'
-
 import { app, BrowserWindow, dialog, session, ipcMain } from 'electron'
 import { existsSync, createReadStream, promises as fsPromises } from 'node:fs'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
@@ -17,32 +10,36 @@ import http from 'node:http'
 import os from 'node:os'
 import { DownloadManager } from './downloadManager'
 import { installIpcBoundary } from './ipcSecurity'
-import { checkCachedEngines, reportEngineFailure, stopSetup, runSetup, setupState, engineHealth } from './setup'
 import { openLogs, exportDiagnostics, buildInfo } from './diagnostics'
 import { registerLocalSubtitleIpc, stopLocalSubtitles } from './subtitles/ipc'
 import { stopDownloadSubtitleMerges } from './subtitles/downloadMergeIpc'
-
-export let downloads: DownloadManager | null = null
 import { registerIpcHandlers } from './ipc/handlers'
 import { isLibraryMediaPath, stopLibraryThumbnails } from './ipc/mediaLibraryIpc'
 import { createTray, destroyTray } from './tray'
 import { db } from './db'
 import { spawn } from 'node:child_process'
 import { getBinaryPath } from './paths'
-import { afterUiReady } from './startupWork'
-import { startupTimings, startupWallTimes, startupMark, startupDuration } from './startupTiming'
-import { verificationMetrics } from './engineIntegrity'
-import { engineReceipts, onEngineFailure, ensureEnginesReady, engineExecutionFailed } from './engineReadiness'
-import { MediaRequestRegistry } from './mediaRequestRegistry'
-import { parseMediaRange } from './mediaRange'
+import { verificationMetrics, engineReceipts, onEngineFailure, ensureEnginesReady, engineExecutionFailed, engineHealth } from './engines/engineManager'
+import { MediaRequestRegistry, parseMediaRange } from './services/mediaService'
 import { installFloatingPlayerWindow } from './floatingPlayer'
 import { mainWindowChrome } from './windowChrome'
+
+const __dirname_env = path.dirname(fileURLToPath(import.meta.url))
+
+dotenv.config({ path: path.join(__dirname_env, '..', '.env') })
+
+log.initialize({ preload: true })
+
+log.transports.file.level = 'info'
+
+export let downloads: DownloadManager | null = null
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
 
 let serviceReadyResolve: () => void
+
 const serviceReadyPromise = new Promise<void>(resolve => {
   serviceReadyResolve = resolve
 })
@@ -54,18 +51,14 @@ async function loadBackendServices() {
   const updaterStarted = performance.now()
   const { autoUpdater: electronUpdater } = await import('electron-updater')
 
-
-
   autoUpdater = electronUpdater
-
 
   autoUpdater.logger = log
   autoUpdater.autoDownload = false
   autoUpdater.allowDowngrade = false
 
-
   autoUpdater.on('update-downloaded', async () => {
-    log?.info('Update downloaded. Prompting for install...')
+    log.info('Update downloaded. Prompting for install...')
     if (win) win.webContents.send('update-status', { status: 'downloaded' })
 
     if (win) {
@@ -124,40 +117,38 @@ async function loadBackendServices() {
     if (win) win.webContents.send('update-status', { status: 'progress', percent: progressObj.percent })
   })
 
-
   startupDuration('updaterInitializationMs', updaterStarted)
-
 
   log.info('Backend services loaded. Running startup checks...')
 
-
-  try {
-    if (app.isPackaged && !smokeDirectory) autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      log.error('Deferred update check failed:', err)
-    })
-  } catch (err) {
-    log.error('Deferred update check failed:', err)
+  if (app.isPackaged) {
+    void autoUpdater.checkForUpdatesAndNotify().catch(error => log.error('Deferred update check failed:', error))
   }
 }
 
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
+
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
+
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'Front-End', 'dist')
 
 let win: BrowserWindow | null = null
-let isQuitting = false
-let shutdownPromise: Promise<void> | null = null
-let shutdownFinished = false
-let uiSnapshotPromise: Promise<unknown> = Promise.resolve(null)
-let verificationBeforeUi: typeof verificationMetrics | null = null
-let windowShownMs: number | null = null
-let shownResolve: () => void
-const shownPromise = new Promise<void>(resolve => { shownResolve = resolve })
-let firstRenderResolve: () => void
-const firstRenderPromise = new Promise<void>(resolve => { firstRenderResolve = resolve })
 
+let isQuitting = false
+
+let shutdownPromise: Promise<void> | null = null
+
+let shutdownFinished = false
+
+let shownResolve: () => void
+
+const shownPromise = new Promise<void>(resolve => { shownResolve = resolve })
+
+let firstRenderResolve: () => void
+
+const firstRenderPromise = new Promise<void>(resolve => { firstRenderResolve = resolve })
 
 function initTray() {
   const iconPath = VITE_DEV_SERVER_URL
@@ -191,13 +182,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      // Desktop/CI hosts may cover the window while smoke tests inspect animations.
-      backgroundThrottling: !smokeDirectory,
-      additionalArguments: smokeDirectory ? ['--cortex-smoke'] : [],
     },
   })
 
-  // History is local data and must be available before engine checks/downloads.
   if (!downloads) {
     const managerStarted = performance.now()
     downloads = new DownloadManager()
@@ -206,23 +193,19 @@ function createWindow() {
   }
   downloads.attachWindow(win)
 
-
   try {
     win.setMenu(null)
   } catch (err) {
     log.warn('Failed to remove menu:', err)
   }
 
-
   win.once('ready-to-show', () => {
     startupMark('readyToShowMs')
     win?.show()
     startupMark('windowShownMs')
-    windowShownMs = startupTimings.windowShownMs
     shownResolve()
     initTray()
   })
-
 
   win.on('close', (event) => {
     if (!isQuitting) {
@@ -250,7 +233,6 @@ function createWindow() {
   } else {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
-
 
   const MEDIA_CORS_WHITELIST = [
     /(^|\.)googlevideo\.com$/i,
@@ -285,27 +267,25 @@ function createWindow() {
 }
 
 const MEDIA_SERVER_PORT_BASE = Number(process.env.MEDIA_SERVER_PORT) || 3345
+
 const MEDIA_SERVER_PORT_MAX_TRIES = 10
+
 export let MEDIA_SERVER_PORT = MEDIA_SERVER_PORT_BASE
+
 let mediaServer: http.Server | null = null
+
 let mediaReadyResolve: () => void
+
 let mediaReadyReject: (error: unknown) => void
+
 const mediaReadyPromise = new Promise<void>((resolve, reject) => { mediaReadyResolve = resolve; mediaReadyReject = reject })
+
 void mediaReadyPromise.catch(error => log.error('[MediaServer unavailable]', error))
+
 const mediaRequests = new MediaRequestRegistry()
 
-/**
- * Per-launch capability token for the local media server.
- *
- * The server reads files off the user's disk, so it must be unreachable by any
- * other process or web page on the machine. Request origin cannot be that
- * boundary: Chromium sends `Origin: null` for `file://` documents (our packaged
- * renderer) and omits the header entirely for plain <img>/<video> loads, so any
- * local client can trivially reproduce an "allowed" origin. Instead every
- * request must present `?token=<MEDIA_SERVER_TOKEN>`; the value is regenerated
- * on each launch and handed to the renderer over IPC only.
- */
 export const MEDIA_SERVER_TOKEN = randomBytes(32).toString('hex')
+
 const MEDIA_TOKEN_BUFFER = Buffer.from(MEDIA_SERVER_TOKEN, 'utf8')
 
 function isValidMediaToken(candidate: string | null): boolean {
@@ -341,10 +321,6 @@ const MIME_TYPES: Record<string, string> = {
   '.srt':  'text/plain',
 }
 
-/**
- * Compiled once and reused. The media server touches settings on every request,
- * and `db.prepare()` recompiles SQL synchronously on the main thread.
- */
 let settingsValueStmt: ReturnType<typeof db.prepare> | null = null
 
 function readSettingValue(key: string): string | null {
@@ -361,6 +337,7 @@ function readSettingValue(key: string): string | null {
 }
 
 const MEDIA_ROOTS_TTL_MS = 5_000
+
 let mediaRootsCache: { roots: string[]; builtAtMs: number } | null = null
 
 async function buildMediaRoots(): Promise<string[]> {
@@ -376,8 +353,7 @@ async function buildMediaRoots(): Promise<string[]> {
     if (task.directory) candidates.add(task.directory)
   }
 
-  // Roots are symlink-resolved as well, so they can be compared against the
-  // resolved request path. (On macOS os.tmpdir() is itself a symlink.)
+  // macOS os.tmpdir() can be a symlink; resolve roots before comparing paths.
   const roots: string[] = []
   for (const candidate of candidates) {
     try {
@@ -405,11 +381,6 @@ function isUnderRoot(target: string, root: string): boolean {
   return !rel.startsWith('..') && !path.isAbsolute(rel)
 }
 
-/**
- * True when `target` sits inside a directory the app is allowed to serve.
- * A miss forces a single cache rebuild, so a file in a brand-new task folder is
- * never rejected merely because the cached root list is a few seconds stale.
- */
 async function isServablePath(target: string): Promise<boolean> {
   const resolved = path.resolve(target)
 
@@ -420,18 +391,12 @@ async function isServablePath(target: string): Promise<boolean> {
   return freshRoots.some((root) => isUnderRoot(resolved, root))
 }
 
-/** Blocks DNS-rebinding: only loopback Host headers are accepted. */
 function isLoopbackHost(hostHeader: string | undefined): boolean {
   if (!hostHeader) return false
   const withoutPort = hostHeader.replace(/:\d+$/, '').toLowerCase()
   return withoutPort === '127.0.0.1' || withoutPort === 'localhost' || withoutPort === '[::1]'
 }
 
-/**
- * Defence in depth only — the capability token is the real gate. A missing
- * Origin (plain <img>/<video> load) and the literal `null` (a `file://`
- * document using `crossOrigin="anonymous"`) are both legitimate for us.
- */
 function isAllowedOrigin(origin: string | undefined, appOrigin: string): boolean {
   if (!origin || origin === 'null') return true
   return origin === appOrigin
@@ -448,8 +413,7 @@ async function streamEmbeddedSubtitle(
   playerSession: string | null,
 ): Promise<void> {
   await ensureEnginesReady(['ffmpeg'])
-  // Only a bare stream number is accepted; anything else could select an
-  // unintended (e.g. video) stream and produce a huge conversion.
+
   const streamIndex = rawStreamIndex && /^\d{1,3}$/.test(rawStreamIndex) ? rawStreamIndex : '0'
 
   res.writeHead(200, {
@@ -488,7 +452,7 @@ async function streamEmbeddedSubtitle(
     clearTimeout(timer)
     res.off('close', finish)
     req.off('aborted', finish)
-    try { child.kill('SIGKILL') } catch { /* already exited */ }
+    child.kill('SIGKILL')
     if (!res.writableEnded) res.end()
   }
 
@@ -497,8 +461,8 @@ async function streamEmbeddedSubtitle(
     finish()
   }, SUBTITLE_EXTRACT_TIMEOUT_MS)
 
-  // stderr MUST be drained. ffmpeg blocks once the OS pipe buffer fills, which
-  // would hang this request (and leak the process) forever.
+  // Drain stderr to keep FFmpeg from blocking on a full pipe.
+
   let stderrTail = ''
   child.stderr.on('data', (chunk: Buffer) => {
     stderrTail = (stderrTail + chunk.toString()).slice(-8192)
@@ -636,8 +600,6 @@ async function handleMediaRequest(
       return
     }
 
-    // Resolve symlinks *before* the allow-list check so a link planted inside a
-    // served directory cannot point at an arbitrary location on disk.
     let filePath: string
     try {
       filePath = await fsPromises.realpath(requestedPath)
@@ -756,11 +718,11 @@ function startMediaStreamingServer(): void {
       const nextPort = MEDIA_SERVER_PORT_BASE + attempt
       if (attempt < MEDIA_SERVER_PORT_MAX_TRIES) {
         log.warn(`[MediaServer] Port ${MEDIA_SERVER_PORT} in use, trying ${nextPort}…`)
-        // A failed listen never opened a handle, so calling close() here would
-        // itself emit ERR_SERVER_NOT_RUNNING and mask the retry.
+        // Failed listen creates no handle; close() would mask EADDRINUSE.
+
         tryListen(nextPort)
       } else if (attempt === MEDIA_SERVER_PORT_MAX_TRIES) {
-        tryListen(0) // An OS-assigned loopback port avoids conflicts with every preferred port.
+        tryListen(0)
       } else {
         log.error(`[MediaServer] All ports ${MEDIA_SERVER_PORT_BASE}–${nextPort} are in use. Media server could not start.`)
         mediaServer = null
@@ -830,7 +792,7 @@ if (!gotTheLock) {
       await stopSetup()
       await stopMediaStreamingServer()
       destroyTray()
-      // pauseAll() terminates active download children before the final quit.
+
       try {
         if (downloads && downloads.getActiveCount() > 0) {
           log.info(`[Shutdown] Pausing ${downloads.getActiveCount()} active downloads before quit...`)
@@ -862,13 +824,10 @@ if (!gotTheLock) {
     }
   })
 
-
   installIpcBoundary(() => win)
   ipcMain.on('cortexdl:first-ui-render', () => {
     if (startupTimings.firstUiRenderMs !== undefined) return
     startupMark('firstUiRenderMs')
-    verificationBeforeUi = { ...verificationMetrics }
-    if (startupProbe) uiSnapshotPromise = win!.webContents.executeJavaScript("({ shell: !!document.querySelector('.app-container'), overlay: !!document.querySelector('[data-setup-overlay]'), buttons: document.querySelectorAll('.app-container button').length })").catch(error => ({ error: String(error) }))
     firstRenderResolve()
   })
   onEngineFailure(message => { if (win && !isQuitting) reportEngineFailure(win, message) })
@@ -892,8 +851,8 @@ if (!gotTheLock) {
     registerLocalSubtitleIpc(() => win)
 
     markStartup('starting')
-    if (previousStartupFailed && !safeMode && !smokeDirectory) void offerSafeMode()
-    // Register before setup, and let late renderer subscribers retrieve current state.
+    if (previousStartupFailed && !safeMode) void offerSafeMode()
+
     ipcMain.handle('cortexdl:setup-state', () => setupState)
     ipcMain.handle('cortexdl:repair-engines', async () => {
       if (downloads?.getActiveCount()) return { ...setupState, message: 'Wait for active downloads to finish before repair.' }
@@ -904,40 +863,27 @@ if (!gotTheLock) {
     ipcMain.handle('cortexdl:export-diagnostics', async () => win ? exportDiagnostics(win, { engines: await engineHealth(), database: db.pragma('quick_check', { simple: true }), mediaServer: !!mediaServer, runtimeState: setupState.status }) : false)
     ipcMain.handle('cortexdl:build-info', () => ({ ...buildInfo(), safeMode }))
     const cachedCheck = checkCachedEngines(win!).catch(error => log.error('[Engine cache]', error))
-    // Both Chromium's ready-to-show and React's first paint precede optional work.
+
     const uiReady = Promise.all([shownPromise, firstRenderPromise])
-    const updaterInitialization = afterUiReady(uiReady, loadBackendServices, error => log.error('[Updater initialization]', error))
+    void afterUiReady(uiReady, loadBackendServices, error => log.error('[Updater initialization]', error))
     await uiReady
     if (isQuitting) return
     await cachedCheck
     markStartup('ready')
     startMediaStreamingServer()
-    const fragmentCleanup = afterUiReady(uiReady, async () => {
+    void afterUiReady(uiReady, async () => {
       const started = performance.now()
       await downloads?.cleanupSettledFragments()
       startupDuration('fragmentCleanupMs', started)
     }, error => log.error('[Fragment cleanup]', error))
-    await afterUiReady(uiReady, () => initializeRuntime(!process.argv.includes('--smoke-offline')), error => log.error('[Background setup]', error))
+    await afterUiReady(uiReady, () => initializeRuntime(), error => log.error('[Background setup]', error))
     log.info('[Startup timings]', startupTimings, verificationMetrics)
-    if (smokeDirectory && startupProbe) {
-      await Promise.all([updaterInitialization, fragmentCleanup])
-      const uiSnapshot = await uiSnapshotPromise
-      await fsPromises.writeFile(path.join(smokeDirectory, 'startup-timing.json'), JSON.stringify({ packaged: app.isPackaged, uiMs: windowShownMs, readyMs: Math.round(process.uptime() * 1000), state: setupState.status, timings: startupTimings, wallTimes: startupWallTimes, verification: verificationMetrics, verificationBeforeUi, uiSnapshot, version: app.getVersion(), build: buildInfo() }, null, 2))
-      app.quit()
-    } else if (smokeDirectory) {
-      const { runPackagedSmoke } = await import('./packagedSmoke')
-      try {
-        if (!downloads || !win) throw new Error('Mandatory runtime unavailable')
-        await runPackagedSmoke(win, downloads, smokeDirectory, MEDIA_SERVER_PORT, MEDIA_SERVER_TOKEN, () => mediaRequests.snapshot())
-      } catch (error) {
-        await fsPromises.writeFile(path.join(smokeDirectory, 'failure.txt'), String(error))
-        process.exitCode = 1
-      } finally { app.quit() }
-    }
+
   }).catch(error => { log.error('[Startup fatal]', error); app.exit(1) })
 }
 
 let initialization: Promise<void> | null = null
+
 async function initializeRuntime(allowNetwork = true, force = false): Promise<void> {
   if (isQuitting) return
   if (initialization) return initialization
@@ -954,13 +900,16 @@ async function initializeRuntime(allowNetwork = true, force = false): Promise<vo
   })().finally(() => { initialization = null })
   return initialization
 }
+
 async function offerSafeMode(): Promise<void> {
   if (!win) return
   const result = await dialog.showMessageBox(win, { type: 'warning', title: 'Crash recovery', message: 'The previous startup did not finish or a renderer/GPU failed repeatedly. You can restart in Safe Mode or open diagnostics.', buttons: ['Continue', 'Restart in Safe Mode', 'Open Logs'], defaultId: 0, cancelId: 0 })
   if (result.response === 1) { app.relaunch({ args: [...process.argv.slice(1).filter(arg => arg !== '--safe-mode'), '--safe-mode'] }); app.quit() }
   if (result.response === 2) await openLogs()
 }
+
 let gpuCrashes = 0
+
 app.on('child-process-gone', (_event, details) => {
   if (details.type === 'GPU' && ++gpuCrashes >= 2 && !safeMode) void offerSafeMode()
 })

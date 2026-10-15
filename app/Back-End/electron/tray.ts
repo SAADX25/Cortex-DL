@@ -12,8 +12,8 @@ export function destroyTray(): void {
 }
 
 export function createTray(
-  iconPath: string, 
-  getWin: () => BrowserWindow | null, 
+  iconPath: string,
+  getWin: () => BrowserWindow | null,
   onQuit: () => void
 ): Tray {
   if (tray) return tray
@@ -23,24 +23,23 @@ export function createTray(
   tray.setToolTip('Cortex DL')
 
   const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: 'Open Cortex DL', 
-      click: () => getWin()?.show() 
-    }, 
-    { type: 'separator' }, 
-    { 
-      label: 'Quit / Exit', 
-      click: () => { 
+    {
+      label: 'Open Cortex DL',
+      click: () => getWin()?.show()
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit / Exit',
+      click: () => {
         onQuit()
-        app.quit() 
-      } 
-    } 
+        app.quit()
+      }
+    }
   ])
 
   tray.setContextMenu(contextMenu)
 
-  
-  tray.on('click', () => { 
+  tray.on('click', () => {
     getWin()?.show()
   })
 

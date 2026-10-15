@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { X, Trash2, DownloadCloud, Search, Plus, CheckCheck } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useTaskIds, useTasksVersion, getTasksSnapshot, useDownloadStore } from '../stores/downloadStore'
+import { useDownloadSnapshot, useDownloadStore } from '../stores/downloadStore'
 import { useUIStore } from '../stores/useUIStore'
 import { useLang } from '../stores/useSettingsStore'
 import { useDebounce } from '../hooks/useDebounce'
@@ -13,28 +13,14 @@ import './DownloadList.css'
 
 type DownloadFilter = 'all' | 'active' | 'completed' | 'paused' | 'error'
 
-/**
- * No props — sources `lang` from the settings store and its callbacks
- * directly from the stable `downloadActions` module, so `App` no longer
- * needs to thread any of this down (see Priority 3/5 of the front-end
- * audit).
- */
 const DownloadList: React.FC = () => {
   const lang = useLang()
   const activeTab = useUIStore((s) => s.activeTab)
   const playerOpen = useUIStore((s) => !!s.mediaPlayerFile && !s.mediaPlayerFloating)
   const onError = useUIStore((s) => s.setGlobalError)
   const t = translations[lang]
-  const taskIds = useTaskIds()
-
-  // ── Priority 4: search staleness fix ──────────────────────────────────
-  // `taskIds` only changes reference when tasks are added/removed, but a
-  // task's title/url can change in place (e.g. batch items resolve their
-  // real title asynchronously after being added). Without depending on the
-  // store's version counter, the memo below would keep filtering against a
-  // stale snapshot of task titles taken the last time a task was added or
-  // removed, even while the user is actively typing in the search box.
-  const tasksVersion = useTasksVersion()
+  const snapshot = useDownloadSnapshot()
+  const taskIds = snapshot.ids
 
   const [searchInput, setSearchInput] = useState('')
   const [filter, setFilter] = useState<DownloadFilter>('all')
@@ -43,7 +29,6 @@ const DownloadList: React.FC = () => {
   const [showClearModal, setShowClearModal] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Keyboard shortcuts: Ctrl+F / Ctrl+K to focus search, Esc to clear & blur
   useEffect(() => {
     if (activeTab !== 'downloads' || playerOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,7 +60,7 @@ const DownloadList: React.FC = () => {
 
   const { filteredIds, counts } = useMemo(() => {
     const q = debouncedSearchQuery.trim().toLowerCase()
-    const tasks = getTasksSnapshot()
+    const { tasks, ids: taskIds } = snapshot
     const counts: Record<DownloadFilter, number> = { all: taskIds.length, active: 0, completed: 0, paused: 0, error: 0 }
     const filteredIds = taskIds.filter((id) => {
       const task = tasks.get(id)
@@ -90,12 +75,7 @@ const DownloadList: React.FC = () => {
       ))
     })
     return { filteredIds, counts }
-    // `tasksVersion` is intentionally in the dependency list even though
-    // it's unused in the body — it's what makes this memo re-run whenever
-    // any task's fields are updated in place, not just when tasks are
-    // added/removed (see the comment on `tasksVersion` above).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskIds, debouncedSearchQuery, tasksVersion, filter])
+  }, [snapshot, debouncedSearchQuery, filter])
 
   const totalCount = taskIds.length
   const filterLabels: Record<DownloadFilter, string> = lang === 'ar'
@@ -105,9 +85,9 @@ const DownloadList: React.FC = () => {
 
   return (
     <div className="tab-content downloads-page fade-in" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      {/* ── Professional Sticky Header & Interactive Search Toolbar ── */}
+
       <header className="dl-header-pro">
-        {/* Top: Title and Subtitle under each other */}
+
         <div className="dl-heading-row">
           <div className="dl-title-section">
             <h1 className="dl-main-title">{lang === 'ar' ? 'التنزيلات' : 'Downloads'} <span className="dl-total-count">{totalCount}</span></h1>
@@ -115,9 +95,8 @@ const DownloadList: React.FC = () => {
           </div>
         </div>
 
-        {/* Bottom: Search Bar + Clear All Button Row */}
         <div className="dl-toolbar-row">
-          {/* Interactive Glassmorphic Search Bar */}
+
           <div className="dl-search-box">
             <Search size={18} className="dl-search-icon" aria-hidden="true" />
             <input
@@ -154,7 +133,6 @@ const DownloadList: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* Clear All Button */}
           <AnimatePresence>
             {totalCount > 0 && (
               <motion.button
@@ -179,7 +157,6 @@ const DownloadList: React.FC = () => {
         </div>
       </header>
 
-      {/* Clear All Modal */}
       <AnimatePresence>
         {showClearModal && (
           <motion.div
@@ -269,7 +246,6 @@ const DownloadList: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Downloads list */}
       <section className="downloads-list">
         <div className="task-grid">
           {filteredIds.map((id) => (
@@ -284,7 +260,6 @@ const DownloadList: React.FC = () => {
           ))}
         </div>
 
-        {/* Empty state: No downloads exist */}
         {filteredIds.length === 0 && (
           <motion.div
             className="dl-empty-state"

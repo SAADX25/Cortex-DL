@@ -6,7 +6,7 @@ import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
 import { useLang } from '../stores/useSettingsStore'
 import { translations } from '../translations'
 import SmartImage from './SmartImage'
-import DownloadSubtitleMerge from './DownloadSubtitleMerge'
+import DownloadSubtitleMerge from './Subtitles/DownloadSubtitleMerge'
 import { AUDIO_FORMATS } from '../../../Shared/types'
 import './DownloadCard.css'
 
@@ -82,7 +82,7 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
 
   return (
     <div className={`dc-card ${vm.phase}`}>
-      {/* Thumbnail */}
+
       <div className={`dc-thumb${isPortrait ? ' portrait' : ''}${isShort && aspect !== null && aspect >= 1 ? ' short-letterboxed' : ''}`}>
         {vm.thumbnail ? (
           <SmartImage
@@ -104,15 +104,13 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
         )}
       </div>
 
-      {/* Body */}
       <div className="dc-body">
-        {/* Header */}
+
         <div className="dc-header">
           <h4 className="dc-title" title={vm.title} dir="auto">{vm.title}</h4>
           <span className={`dc-format-tag ${vm.formatTag}`}>{vm.formatTag}</span>
         </div>
 
-        {/* Meta row */}
         <div className="dc-meta">
           {isPostProcessing ? (
             <span className="dc-phase-badge processing" style={{ color: vm.phaseColor }}>
@@ -143,7 +141,6 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           )}
         </div>
 
-        {/* Progress bar */}
         <div className="dc-progress">
           <ProgressBar
             percent={vm.percent}
@@ -156,10 +153,8 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           </div>
         </div>
 
-        {/* Error message */}
         {vm.errorMessage && <div className="dc-error">{vm.errorMessage}</div>}
 
-        {/* Action buttons */}
         <div className="dc-actions">
           <div className="dc-action-group">
             {vm.showPause && (

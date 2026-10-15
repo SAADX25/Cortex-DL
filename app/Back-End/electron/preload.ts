@@ -1,6 +1,5 @@
 import { ipcRenderer, contextBridge, webUtils } from 'electron'
-import type { AppHealthCheck, DownloadTask, AnalyzeResult, JsRuntimeStatus, StartInput } from './types'
-import { UPDATE_CHANNEL } from './types'
+import { type AppHealthCheck, type DownloadTask, type AnalyzeResult, type JsRuntimeStatus, type StartInput, UPDATE_CHANNEL } from './types'
 import { customTitleBar } from './windowChrome'
 
 function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> {
@@ -19,6 +18,7 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
     throw new Error(cleanMessage || 'The request could not be completed.')
   })
 }
+
 contextBridge.exposeInMainWorld('cortexDl', {
   customTitleBar,
   getDroppedMediaPaths: (files: File[]): string[] => files.map(file => webUtils.getPathForFile(file)).filter(Boolean),
@@ -38,7 +38,6 @@ contextBridge.exposeInMainWorld('cortexDl', {
   mergeDownloadSubtitle: (id: string, fileName: string, format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat) => invokeRendererSafe<string | null>('cortexdl:subtitle-files:merge', id, fileName, format),
   cancelDownloadSubtitleMerge: (id: string) => invokeRendererSafe<void>('cortexdl:subtitle-files:cancel', id),
   reportFirstUiRender(): void { ipcRenderer.send('cortexdl:first-ui-render') },
-  smokeMode: process.argv.includes('--cortex-smoke'),
   analysisDebug: process.env.CORTEX_ANALYSIS_DEBUG === '1',
   selectFolder(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-folder')

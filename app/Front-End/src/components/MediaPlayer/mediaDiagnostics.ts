@@ -1,4 +1,5 @@
 const sessions = new Set<string>()
+
 let audioContexts = 0
 
 export function markMediaSession(session: string, active: boolean): void {
@@ -10,7 +11,6 @@ export function markAudioContext(opened: boolean): void {
   audioContexts = Math.max(0, audioContexts + (opened ? 1 : -1))
 }
 
-/** Call from the developer console; packaged builds require the diagnostics env flag. */
 if (typeof window !== 'undefined') {
   window.__cortexMediaDiagnostics = async () => {
     const main = await window.cortexDl.getMediaDiagnostics()

@@ -21,7 +21,7 @@ export function getErrorText(value: unknown): string {
 
 export function youtubeErrorCode(value: unknown): string | null {
   const text = getErrorText(value)
-  // A 429 can include generic sign-in advice. It is not a video authentication failure.
+
   if (/YOUTUBE_RATE_LIMITED|HTTP (?:Error )?429|too many requests|rate[-_\s]?limit(?:ed|ing)?|requests?[^\r\n]{0,40}limit exceeded|temporarily blocked[^\r\n]{0,40}(?:request|traffic|youtube)/i.test(text)) {
     return YOUTUBE_RATE_LIMITED_CODE
   }

@@ -1,15 +1,15 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { DownloadSubtitleFile, SubtitleMergeFormat } from '../../../Shared/downloadSubtitles'
+import { type DownloadSubtitleFile, type SubtitleMergeFormat } from '../../../Shared/downloadSubtitles'
 import { SUBTITLE_LANGUAGES } from '../../../Shared/localSubtitles'
-import { ensureEnginesReady } from '../engineReadiness'
+import { ensureEnginesReady } from '../engines/engineManager'
 import { getBinaryPath } from '../paths'
-import { probeMediaFile } from '../mediaFiles'
-import { subtitleLanguageTag, validateSubtitleMedia } from '../mediaFormatRegistry'
+import { probeMediaFile, subtitleLanguageTag, validateSubtitleMedia } from '../services/mediaService'
 import { SubtitleProcesses } from './process'
 
 const directoryReads = new Map<string, Promise<string[]>>()
+
 async function readDirectory(directory: string): Promise<string[]> {
   const existing = directoryReads.get(directory)
   if (existing) return existing
@@ -18,7 +18,6 @@ async function readDirectory(directory: string): Promise<string[]> {
   try { return await reading } finally { directoryReads.delete(directory) }
 }
 
-/** Only matching, nonempty timed sidecars next to this video are offered. */
 export async function listDownloadSubtitles(media: string): Promise<DownloadSubtitleFile[]> {
   const directory = path.dirname(media), base = path.parse(media).name
   const files = await readDirectory(directory)
@@ -38,7 +37,6 @@ export async function listDownloadSubtitles(media: string): Promise<DownloadSubt
   return matches.filter((file): file is DownloadSubtitleFile => file !== null).sort((a, b) => a.fileName.localeCompare(b.fileName))
 }
 
-/** Saves a separate, switchable subtitle track; audio/video packets are copied. */
 export async function mergeDownloadSubtitle(media: string, fileName: string, output: string, format: SubtitleMergeFormat, signal: AbortSignal): Promise<void> {
   if (!['mp4', 'mkv'].includes(format) || path.extname(output).toLowerCase() !== `.${format}`) throw new Error('INVALID_SUBTITLE_OUTPUT')
   const track = (await listDownloadSubtitles(media)).find(file => file.fileName === fileName)

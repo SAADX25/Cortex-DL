@@ -1,4 +1,4 @@
-import type { HlsVariant, AnalyzeResult } from './types'
+import { type HlsVariant, type AnalyzeResult } from './types'
 
 function isLikelyM3u8(url: string): boolean {
   return /\.m3u8(\?|#|$)/i.test(url)
@@ -86,4 +86,3 @@ export async function analyzeUrlForHls(inputUrl: string, signal?: AbortSignal): 
   variants.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))
   return { kind: 'hls-master', variants }
 }
-

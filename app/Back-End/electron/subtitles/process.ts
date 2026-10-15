@@ -2,7 +2,6 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { killProcessTree } from '../utils'
 import path from 'node:path'
 
-/** Each operation owns its processes; cancellation waits for their exit. */
 export class SubtitleProcesses {
   private children = new Map<ChildProcessWithoutNullStreams, Promise<void>>()
   constructor(readonly signal: AbortSignal) {}
@@ -25,7 +24,7 @@ export class SubtitleProcesses {
         else resolve()
       })
     })
-    // The translation server remains alive while requests run; attach immediately.
+
     void settled.catch(() => {})
     this.children.set(child, settled)
     return { child, settled }

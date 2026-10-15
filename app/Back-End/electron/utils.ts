@@ -1,14 +1,11 @@
 import log from 'electron-log'
 import { Notification, BrowserWindow } from 'electron'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { promises as fs } from 'node:fs'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import type { DownloadTask, TaskRuntime } from './types'
+import { type DownloadTask, type TaskRuntime, UPDATE_CHANNEL } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
-import { UPDATE_CHANNEL } from './types'
 
 export function sanitizeFilename(name: string): string {
-  // Control characters are intentionally invalid in output filenames.
   // eslint-disable-next-line no-control-regex
   let sanitized = name.replace(/[/\\:*?"<>|\x00-\x1f]/g, '').trim()
   sanitized = sanitized.replace(/[\s_]+/g, '_')
@@ -107,34 +104,16 @@ export function sendUpdate(win: BrowserWindow | null, task: DownloadTask): void 
   win.webContents.send(UPDATE_CHANNEL, task)
 }
 
-/**
- * IPC throttle interval. 100ms ≈ 10 updates/sec — smooth enough for
- * progress bars without flooding the renderer's event loop.
- */
 const IPC_THROTTLE_MS = 100
 
-/** Terminal statuses that must ALWAYS be sent immediately, never throttled. */
 const TERMINAL_STATUSES = new Set(['completed', 'error', 'canceled', 'paused'])
 
-/** Pending trailing update per task, keyed by task id. */
 const pendingTrailing = new Map<string, {
   timer: ReturnType<typeof setTimeout>
   task: DownloadTask
   win: BrowserWindow
 }>()
 
-/**
- * Throttled IPC sender with leading + trailing edge guarantee.
- *
- * - **Leading edge**: the first call in each `IPC_THROTTLE_MS` window fires immediately.
- * - **Trailing edge**: if further calls arrive within the window, the *last* one
- *   is scheduled to fire when the window expires. This ensures the final progress
- *   tick (e.g. 99.8% → 100%) is never silently dropped.
- * - **Terminal states** (completed/error/canceled/paused) always bypass the throttle
- *   entirely and fire immediately, flushing any pending trailing update first.
- *
- * Returns `true` if an IPC message was actually sent (for DB write decisions).
- */
 export function throttledSendUpdate(
   win: BrowserWindow | null,
   task: DownloadTask,
@@ -143,7 +122,6 @@ export function throttledSendUpdate(
   updateTaskProgress(task)
   if (!win || win.isDestroyed()) return false
 
-  // Terminal states: flush any pending trailing, then send immediately.
   if (TERMINAL_STATUSES.has(task.status)) {
     clearPendingTrailing(task.id)
     runtime.lastIpcAtMs = Date.now()
@@ -154,7 +132,6 @@ export function throttledSendUpdate(
   const now = Date.now()
   const elapsed = now - runtime.lastIpcAtMs
 
-  // Leading edge: enough time has passed, send immediately.
   if (elapsed >= IPC_THROTTLE_MS) {
     clearPendingTrailing(task.id)
     runtime.lastIpcAtMs = now
@@ -162,17 +139,10 @@ export function throttledSendUpdate(
     return true
   }
 
-  // Within throttle window: schedule a trailing update.
-  // Each new call replaces the previous pending update with fresh data.
   schedulePendingTrailing(task, win, runtime)
   return false
 }
 
-/**
- * Flush any pending trailing IPC update for a specific task.
- * Call this before setting terminal status to ensure the last
- * progress snapshot reaches the renderer.
- */
 export function flushPendingIpc(taskId: string): void {
   const pending = pendingTrailing.get(taskId)
   if (!pending) return
@@ -186,11 +156,9 @@ export function flushPendingIpc(taskId: string): void {
 }
 
 function schedulePendingTrailing(task: DownloadTask, win: BrowserWindow, runtime: TaskRuntime): void {
-  // Cancel any existing trailing timer for this task.
   const existing = pendingTrailing.get(task.id)
   if (existing) clearTimeout(existing.timer)
 
-  // Snapshot the task data so the trailing fire has the latest values.
   const snapshot = { ...task }
   const remainingMs = Math.max(1, IPC_THROTTLE_MS - (Date.now() - runtime.lastIpcAtMs))
 
@@ -218,20 +186,9 @@ export function sendNotification(title: string, body: string): void {
   }
 }
 
-/**
- * Forcefully kills a child process and its entire process tree.
- *
- * On Windows: uses `taskkill /F /T /PID` to terminate the tree,
- * with a 5-second safety timeout so a hung taskkill never blocks the app.
- * Falls back to `child.kill('SIGKILL')` if taskkill fails.
- *
- * On POSIX: sends SIGKILL to the process group via `process.kill(-pid)`.
- *
- * All errors are swallowed — the caller will never throw.
- */
+// Windows needs taskkill /T; POSIX children run in their own process group.
 const pendingKills = new WeakMap<ChildProcessWithoutNullStreams, Promise<void>>()
 
-/** Concurrent abort/manager cleanup callers await the same process-tree teardown. */
 export function killProcessTree(child: ChildProcessWithoutNullStreams | null): Promise<void> {
   if (!child) return Promise.resolve()
   const existing = pendingKills.get(child)
@@ -247,14 +204,10 @@ async function terminateProcessTree(child: ChildProcessWithoutNullStreams): Prom
 
   const pid = child.pid
   if (!pid) {
-    // Process was spawned but no PID was assigned (e.g. spawn error).
-    // Last-resort: attempt a direct kill on the child handle itself.
-    try { child.kill('SIGKILL') } catch { /* already dead */ }
+    child.kill('SIGKILL')
     return
   }
 
-  // A PID existence probe can miss a just-spawned child. Its owning handle is
-  // authoritative; do not mistake that startup race for successful teardown.
   if (process.platform === 'win32' && (typeof child.exitCode === 'number' || child.signalCode)) return
 
   if (process.platform === 'win32') {
@@ -262,31 +215,27 @@ async function terminateProcessTree(child: ChildProcessWithoutNullStreams): Prom
       const exitCode = await spawnTaskkill(pid)
       log.info(`[killProcessTree] taskkill PID ${pid} exited with code ${exitCode}`)
       if (exitCode !== 0) {
-        try { child.kill('SIGKILL') } catch { /* already dead */ }
+        child.kill('SIGKILL')
       }
     } catch (err) {
       // taskkill itself failed or timed out — fall back to direct kill.
       log.warn(`[killProcessTree] taskkill failed for PID ${pid}, falling back to SIGKILL:`, err)
-      try { child.kill('SIGKILL') } catch { /* swallow */ }
+      child.kill('SIGKILL')
     }
   } else {
-    // POSIX: kill the entire process group (negative PID).
     try {
       process.kill(-pid, 'SIGKILL')
       log.info(`[killProcessTree] Sent SIGKILL to process group ${pid}`)
     } catch {
-      try { child.kill('SIGKILL') } catch { /* swallow */ }
+      child.kill('SIGKILL')
     }
   }
 }
 
-/** Maximum time to wait for `taskkill` before giving up (ms). */
+
 const TASKKILL_TIMEOUT_MS = 5_000
 
-/**
- * Spawns `taskkill /F /T /PID <pid>` and returns a promise that resolves
- * with the exit code, or rejects on spawn error / timeout.
- */
+
 function spawnTaskkill(pid: number): Promise<number> {
   return new Promise<number>((resolve, reject) => {
     const killer = spawn('taskkill', ['/F', '/T', '/PID', String(pid)], {
@@ -296,7 +245,7 @@ function spawnTaskkill(pid: number): Promise<number> {
     })
 
     const timer = setTimeout(() => {
-      try { killer.kill() } catch { /* swallow */ }
+      killer.kill()
       reject(new Error(`taskkill timed out after ${TASKKILL_TIMEOUT_MS}ms for PID ${pid}`))
     }, TASKKILL_TIMEOUT_MS)
 

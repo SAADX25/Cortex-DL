@@ -1,18 +1,16 @@
-import type { IEngine } from './IEngine';
-import type { DownloadTask, EngineContext, EngineResult } from '../types';
-import log from 'electron-log';
-import axios from 'axios';
-import { Agent as HttpAgent } from 'node:http';
-import { Agent as HttpsAgent } from 'node:https';
-import { createWriteStream } from 'node:fs';
-import { promises as fsPromises } from 'node:fs';
-import type { FileHandle } from 'node:fs/promises';
-import { pipeline } from 'node:stream/promises';
-import { Transform } from 'node:stream';
-import type { Readable } from 'node:stream';
-import { nowMs, computeSpeed } from '../utils';
-import { setTimeout as delay } from 'node:timers/promises';
-import { db } from '../db';
+import { type IEngine } from './IEngine'
+import { type DownloadTask, type EngineContext, type EngineResult } from '../types'
+import log from 'electron-log'
+import axios from 'axios'
+import { Agent as HttpAgent } from 'node:http'
+import { Agent as HttpsAgent } from 'node:https'
+import { createWriteStream, promises as fsPromises } from 'node:fs'
+import { type FileHandle } from 'node:fs/promises'
+import { pipeline } from 'node:stream/promises'
+import { Transform, type Readable } from 'node:stream'
+import { nowMs, computeSpeed } from '../utils'
+import { setTimeout as delay } from 'node:timers/promises'
+import { db } from '../db'
 
 interface ChunkInfo {
   index: number;
@@ -23,24 +21,16 @@ interface ChunkInfo {
   completed: boolean;
 }
 
-/** Time allowed for the response headers to arrive. */
 const RESPONSE_TIMEOUT_MS = 60_000;
 
-/**
- * Time a connection may deliver zero bytes before we consider it dead.
- * axios' `timeout` only covers the header phase, so a socket that opens and
- * then goes silent would otherwise hang the whole download forever.
- */
 const STALL_TIMEOUT_MS = 60_000;
+
 const STALL_CHECK_INTERVAL_MS = 5_000;
 
-/** Minimum interval between progress IPC/DB notifications. */
 const PROGRESS_INTERVAL_MS = 150;
 
-/** Interval between chunk-state snapshots while a chunk is streaming. */
 const CHUNK_PERSIST_INTERVAL_MS = 5_000;
 
-/** Raised when a server answers a Range request with a full 200 body. */
 class RangeUnsupportedError extends Error {
   constructor(message: string) {
     super(message);
@@ -48,7 +38,6 @@ class RangeUnsupportedError extends Error {
   }
 }
 
-/** Raised when the download was torn down deliberately (pause/cancel/failure). */
 class DownloadAbortedError extends Error {
   constructor() {
     super('Download aborted');
@@ -56,16 +45,8 @@ class DownloadAbortedError extends Error {
   }
 }
 
-/**
- * Prepared once instead of on every download — `db.prepare()` compiles SQL
- * synchronously on the main thread.
- */
 let directConnectionsStmt: ReturnType<typeof db.prepare> | null = null;
 
-/**
- * Read the user-configurable number of parallel connections from the DB.
- * Falls back to 8 if not set or invalid.
- */
 function getNumChunksFromSettings(): number {
   try {
     if (!directConnectionsStmt) {
@@ -76,7 +57,7 @@ function getNumChunksFromSettings(): number {
       const parsed = parseInt(row.value, 10);
       if (parsed >= 1 && parsed <= 32) return parsed;
     }
-  } catch { /* use default */ }
+  } catch { return 8; }
   return 8;
 }
 
@@ -85,14 +66,14 @@ export class DirectEngine implements IEngine {
   private readonly httpsAgent = new HttpsAgent({ keepAlive: false });
   private abortController: AbortController | null = null;
   private readonly MAX_RETRIES = 3;
-  private readonly MIN_FILE_SIZE_FOR_CHUNKING = 5 * 1024 * 1024; // 5 MB
+  private readonly MIN_FILE_SIZE_FOR_CHUNKING = 5 * 1024 * 1024;
   private chunks: ChunkInfo[] = [];
   private lastProgressUpdate = 0;
   private lastProgressUpdateBytes = 0;
   private numChunks = 8;
-  /** First real (non-abort) failure across all parallel chunks. */
+
   private failure: unknown = null;
-  /** Set only when the user paused or cancelled, never by an internal abort. */
+
   private stopRequested = false;
 
   async download(task: DownloadTask, context?: EngineContext): Promise<EngineResult> {
@@ -113,11 +94,9 @@ export class DirectEngine implements IEngine {
     task.speedBytesPerSec = null;
 
     try {
-      // ── HEAD request to probe server capabilities ──────────────────
       let supportsRanges = task.supportsRanges ?? false;
       let totalBytes: number | null = task.totalBytes ?? null;
 
-      // Revalidate identity and size on every attempt before reusing any bytes.
       {
         try {
           const headResponse = await axios.head(task.url, {
@@ -142,7 +121,6 @@ export class DirectEngine implements IEngine {
               task.supportsRanges !== false && (String(headResponse.headers['accept-ranges'] ?? '').toLowerCase() === 'bytes') &&
               contentLength >= this.MIN_FILE_SIZE_FOR_CHUNKING;
 
-            // Cache for future resume attempts
             task.supportsRanges = supportsRanges;
 
             log.info(
@@ -162,22 +140,17 @@ export class DirectEngine implements IEngine {
         }
       }
 
-      // Propagate total bytes to the UI
       if (totalBytes) {
         task.totalBytes = totalBytes;
         if (context?.sendUpdate) context.sendUpdate(task);
       }
 
-      // ── Route to chunked or single-stream download ─────────────────
       if (supportsRanges && totalBytes && totalBytes > 0) {
         try {
           await this.downloadWithChunking(task, totalBytes, context);
         } catch (error) {
           if (!(error instanceof RangeUnsupportedError) || this.stopRequested) throw error;
 
-          // The server advertised Range support but did not honour it. Every
-          // chunk is now suspect, so discard the output and restart as a plain
-          // single stream on a fresh controller (the old one is aborted).
           log.warn(
             `[DirectEngine] Task ${task.id}: ${error.message} — restarting as a single stream`
           );
@@ -191,7 +164,6 @@ export class DirectEngine implements IEngine {
         await this.downloadSingleStream(task, context);
       }
 
-      // ── Cleanup resume state on success ────────────────────────────
       parentSignal?.throwIfAborted();
       const finalSize = (await fsPromises.stat(task.filePath)).size;
       if (task.totalBytes && finalSize !== task.totalBytes) {
@@ -206,7 +178,6 @@ export class DirectEngine implements IEngine {
 
     } catch (error) {
       if (this.stopRequested || this.isAbort(error)) {
-        // User paused — persist chunk state for resume
         this.persistChunkState(task);
         log.warn(`[DirectEngine] Task ${task.id} download aborted — chunk state saved`);
         return { kind: 'paused' };
@@ -215,9 +186,6 @@ export class DirectEngine implements IEngine {
       log.error(`[DirectEngine] Task ${task.id} failed:`, error);
       return { kind: 'retryable-error', message: error instanceof Error ? error.message : String(error), delayMs: 1000 * 2 ** (context?.runtime.retries ?? 0) };
     } finally {
-      // Unconditionally tear down anything still in flight. A partially failed
-      // chunked download must never leave sibling sockets writing to the file
-      // after the task has been reported as finished.
       parentSignal?.removeEventListener('abort', onAbort);
       const controller = this.abortController;
       controller?.abort();
@@ -227,30 +195,22 @@ export class DirectEngine implements IEngine {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // SINGLE STREAM (no Range support or small files)
-  // ═══════════════════════════════════════════════════════════════════
-
   private async downloadSingleStream(
     task: DownloadTask,
     context?: EngineContext
   ): Promise<void> {
-    // ── Resume support for single-stream downloads ───────────────
-    // If the file already exists and we have partial progress,
-    // use a Range header to continue from where we left off.
     let startByte = 0;
-    let writeFlags: string = 'w'; // default: overwrite
+    let writeFlags: string = 'w';
 
     if (task.downloadedBytes > 0) {
       try {
         const stat = await fsPromises.stat(task.filePath);
         if (stat.size > 0 && stat.size === task.downloadedBytes) {
           startByte = stat.size;
-          writeFlags = 'a'; // append to existing file
+          writeFlags = 'a';
           log.info(`[DirectEngine] Task ${task.id}: Resuming single-stream from byte ${startByte}`);
         }
       } catch {
-        // File stat failed — start fresh
         startByte = 0;
         writeFlags = 'w';
       }
@@ -279,7 +239,7 @@ export class DirectEngine implements IEngine {
       response.data.destroy();
       throw new RangeUnsupportedError('Remote identity changed during single-stream resume');
     }
-    // If server doesn't honor Range (returns 200 instead of 206), start fresh
+
     if (startByte > 0 && response.status !== 206) {
       log.warn(`[DirectEngine] Task ${task.id}: Server returned ${response.status} instead of 206 — restarting from scratch`);
       startByte = 0;
@@ -296,7 +256,6 @@ export class DirectEngine implements IEngine {
     task.lastModified = response.headers['last-modified'] as string | undefined ?? task.lastModified;
     const contentLength = parseInt(String(response.headers['content-length'] ?? '0'), 10);
     if (contentLength > 0) {
-      // Content-Length in a 206 response counts only the remaining bytes.
       task.totalBytes = startByte > 0 ? startByte + contentLength : contentLength;
     }
 
@@ -338,16 +297,11 @@ export class DirectEngine implements IEngine {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // CHUNKED DOWNLOAD (parallel multi-connection with resume)
-  // ═══════════════════════════════════════════════════════════════════
-
   private async downloadWithChunking(
     task: DownloadTask,
     totalBytes: number,
     context?: EngineContext
   ): Promise<void> {
-    // ── Decide: Resume existing chunks OR start fresh ─────────────
     const resumed = await this.buildResumeChunks(task, totalBytes);
 
     if (resumed) {
@@ -359,7 +313,6 @@ export class DirectEngine implements IEngine {
       this.chunks = resumed;
       task.downloadedBytes = this.calculateTotalProgress();
     } else {
-      // FRESH path — preallocate the file and create chunks
       log.info(
         `[DirectEngine] Task ${task.id}: Starting FRESH ${this.numChunks}-chunk parallel download`
       );
@@ -381,7 +334,6 @@ export class DirectEngine implements IEngine {
     this.lastProgressUpdate = nowMs();
     this.lastProgressUpdateBytes = task.downloadedBytes;
 
-    // Persist initial chunk state
     this.persistChunkState(task);
 
     const pending = this.chunks.filter(c => !c.completed);
@@ -390,25 +342,18 @@ export class DirectEngine implements IEngine {
       return;
     }
 
-    // One shared descriptor for every chunk. Each chunk writes at an explicit
-    // offset (pwrite), so there is no shared file cursor and no need for N
-    // independent write streams contending over the same output file.
     const handle = await fsPromises.open(task.filePath, 'r+');
     let outcomes: PromiseSettledResult<void>[] = [];
 
     try {
       const inFlight = pending.map((chunk) =>
         this.downloadChunkWithRetry(task, chunk, handle, context).catch((err: unknown) => {
-          // The first genuine failure immediately tears down every sibling
-          // request so nothing keeps streaming behind a reported error.
           if (this.failure == null && !this.isAbort(err)) this.failure = err;
           this.abortController?.abort();
           throw err;
         })
       );
 
-      // allSettled (not all): we must wait for every socket to finish before
-      // closing the descriptor or touching the file on disk.
       outcomes = await Promise.allSettled(inFlight);
     } finally {
       await handle.close().catch((err) => {
@@ -419,8 +364,6 @@ export class DirectEngine implements IEngine {
     if (this.failure != null) {
       const failure = this.failure;
       if (!(failure instanceof RangeUnsupportedError)) {
-        // Every write has settled and the descriptor is closed, so the partial
-        // output can now be removed safely.
         await this.discardOutput(task);
       }
       throw failure;
@@ -445,10 +388,6 @@ export class DirectEngine implements IEngine {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // CHUNK DOWNLOAD WITH RETRY
-  // ═══════════════════════════════════════════════════════════════════
-
   private async downloadChunkWithRetry(
     task: DownloadTask,
     chunk: ChunkInfo,
@@ -460,7 +399,6 @@ export class DirectEngine implements IEngine {
         await this.downloadChunk(task, chunk, handle, context);
         chunk.completed = true;
 
-        // Persist chunk completion immediately
         this.persistChunkState(task);
 
         log.info(
@@ -469,7 +407,6 @@ export class DirectEngine implements IEngine {
         );
         return;
       } catch (error: unknown) {
-        // Don't retry on abort, and never retry a server that ignores Range.
         if (this.isAbort(error) || error instanceof RangeUnsupportedError) {
           throw error;
         }
@@ -486,15 +423,10 @@ export class DirectEngine implements IEngine {
           );
         }
 
-        // Exponential backoff
         await delay(Math.pow(2, chunk.retries) * 100, undefined, { signal: this.abortController?.signal });
       }
     }
   }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // INDIVIDUAL CHUNK DOWNLOAD
-  // ═══════════════════════════════════════════════════════════════════
 
   private async downloadChunk(
     task: DownloadTask,
@@ -505,12 +437,10 @@ export class DirectEngine implements IEngine {
     const signal = this.abortController?.signal;
     if (signal?.aborted) throw new DownloadAbortedError();
 
-    // Calculate the actual start position (resume within a chunk)
     const resumeStart = chunk.start + chunk.downloadedBytes;
     const expectedBytes = chunk.end - resumeStart + 1;
 
     if (expectedBytes <= 0) {
-      // Chunk already fully downloaded
       chunk.completed = true;
       return;
     }
@@ -535,8 +465,7 @@ export class DirectEngine implements IEngine {
       response.data.destroy();
       throw new RangeUnsupportedError('Remote identity changed during chunk download');
     }
-    // A 200 here means the body is the *whole* file, not our slice. Writing it
-    // at `resumeStart` would silently corrupt the output.
+
     if (response.status !== 206) {
       response.data.destroy();
       throw new RangeUnsupportedError(
@@ -564,9 +493,6 @@ export class DirectEngine implements IEngine {
         const buffer = piece as Buffer;
         if (signal?.aborted) throw new DownloadAbortedError();
 
-        // Positional write against the shared descriptor. Awaiting each write
-        // gives natural backpressure and keeps `chunk.downloadedBytes` exactly
-        // in step with the bytes actually on disk, which is what resume needs.
         if (position + buffer.length > chunk.end + 1) throw new RangeUnsupportedError('Range response exceeds requested size');
         let written = 0;
         while (written < buffer.length) {
@@ -579,7 +505,6 @@ export class DirectEngine implements IEngine {
         chunk.downloadedBytes += buffer.length;
         lastActivityAtMs = nowMs();
 
-        // Update total progress
         task.downloadedBytes = this.calculateTotalProgress();
 
         const now = nowMs();
@@ -587,7 +512,6 @@ export class DirectEngine implements IEngine {
           this.reportProgress(task, context);
         }
 
-        // Periodically persist chunk state
         if (now - lastChunkSaveAt > CHUNK_PERSIST_INTERVAL_MS) {
           this.persistChunkState(task);
           if (context?.saveState) context.saveState();
@@ -599,7 +523,6 @@ export class DirectEngine implements IEngine {
       if (!stream.destroyed) stream.destroy();
     }
 
-    // Verify downloaded size
     const totalChunkExpected = chunk.end - chunk.start + 1;
     if (chunk.downloadedBytes !== totalChunkExpected) {
       throw new Error(
@@ -609,19 +532,10 @@ export class DirectEngine implements IEngine {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // HELPERS
-  // ═══════════════════════════════════════════════════════════════════
-
-  /** Internal request-group controller; the attempt controller is never replaced. */
   private adoptController(controller: AbortController): void {
     this.abortController = controller;
   }
 
-  /**
-   * Destroys `stream` once it has been silent for longer than STALL_TIMEOUT_MS.
-   * Returns the interval handle, which the caller must clear.
-   */
   private startStallWatchdog(
     stream: Readable,
     getLastActivityAtMs: () => number,
@@ -666,13 +580,11 @@ export class DirectEngine implements IEngine {
     return name === 'CanceledError' || name === 'AbortError' || code === 'ERR_CANCELED' || code === 'ABORT_ERR';
   }
 
-  /** Removes the partial output file and clears any resume state. */
   private async discardOutput(task: DownloadTask): Promise<void> {
     this.chunks = [];
     task.resumeChunks = undefined;
     task.downloadedBytes = 0;
     await fsPromises.unlink(task.filePath).catch(() => {
-      // File may not exist yet
     });
   }
 
@@ -699,14 +611,6 @@ export class DirectEngine implements IEngine {
     return chunks;
   }
 
-  /**
-   * Rebuilds chunk state from `task.resumeChunks`, but only when it is provably
-   * still valid for this file: the preallocated output must exist at exactly
-   * `totalBytes`, and the saved ranges must tile that size without gaps or
-   * overlaps. Anything else means the remote file changed (or the state is
-   * corrupt), in which case resuming would produce a broken output — so we
-   * return null and let the caller start fresh.
-   */
   private async buildResumeChunks(
     task: DownloadTask,
     totalBytes: number
@@ -768,10 +672,6 @@ export class DirectEngine implements IEngine {
     });
   }
 
-  /**
-   * Persist current chunk state into `task.resumeChunks` so it survives
-   * pause/resume cycles via the DownloadManager's SQLite serialization.
-   */
   private persistChunkState(task: DownloadTask): void {
     if (this.chunks.length === 0) return;
     task.resumeChunks = this.chunks.map(c => ({

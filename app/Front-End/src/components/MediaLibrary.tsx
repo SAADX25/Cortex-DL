@@ -97,7 +97,7 @@ export default function MediaLibrary() {
     catch { return 2 }
   })
   const depth = useRef(0), search = useRef<HTMLInputElement>(null), toolbar = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null)
-  useEffect(() => { try { localStorage.setItem('cortexdl_library_page_size', String(pageSize)) } catch { /* Keep this session's choice. */ } }, [pageSize])
+  useEffect(() => { try { localStorage.setItem('cortexdl_library_page_size', String(pageSize)) } catch (error) { console.warn('[Library page size]', error) } }, [pageSize])
 
   useEffect(() => {
     if (activeTab !== 'library') return

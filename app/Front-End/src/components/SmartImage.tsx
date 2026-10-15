@@ -1,11 +1,4 @@
-/**
- * SmartImage — Shared thumbnail component
- *
- * Handles:
- * - Instagram CDN thumbnails via local proxy (fetchThumbnail IPC)
- * - Fallback SVG when image fails to load
- * - Resolves the token-protected local media endpoint on its own
- */
+
 import React, { useState, useEffect, useRef } from 'react'
 import { buildMediaUrl, useMediaEndpoint } from '../lib/mediaEndpoint'
 
@@ -13,20 +6,13 @@ const THUMB_FALLBACK_DATA_URI =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='90'><rect width='100%' height='100%' fill='%23081126'/><text x='50%' y='50%' font-size='12' fill='%239ca3af' dominant-baseline='middle' text-anchor='middle'>No image</text></svg>"
 
 interface SmartImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
-  /** Remote URL of the thumbnail (can be Instagram CDN) */
   src?: string
-  /** Whether to render a blurred background layer (used in DownloadCard) */
+
   withBlurBg?: boolean
-  /** CSS class for the blurred background layer */
+
   bgClassName?: string
 }
 
-/**
- * A drop-in <img> replacement that:
- * - Falls back to the local proxy only after a remote CDN load fails
- * - Shows a fallback SVG on error
- * - Optionally renders a blurred background copy of the image
- */
 const SmartImage: React.FC<SmartImageProps> = ({
   src,
   withBlurBg = false,
@@ -66,7 +52,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
   if (withBlurBg) {
     return (
       <>
-        {/* Blurred background layer */}
+
         <img
           src={finalSrc}
           alt=""
@@ -78,7 +64,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
             e.currentTarget.style.display = 'none'
           }}
         />
-        {/* Foreground image */}
+
         <img
           src={finalSrc}
           alt={alt}

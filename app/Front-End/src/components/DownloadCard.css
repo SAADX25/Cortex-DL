@@ -18,8 +18,6 @@
   border-color: rgba(56, 189, 248, 0.3);
 }
 
-/* ── Thumbnail ─────────────────────────────────────────────────────────────── */
-
 .dc-thumb {
   width: 200px;
   height: 132px;
@@ -47,7 +45,7 @@
   filter: blur(14px) brightness(0.7);
   opacity: 0.85 !important;
   z-index: 1 !important;
-  transform: scale(1.2); /* keep blurred edges inside the frame */
+  transform: scale(1.2);
 }
 
 .dc-thumb img:not(.dc-thumb-bg) {
@@ -87,18 +85,14 @@
   background: linear-gradient(145deg, #1d2d45, #101b2c);
 }
 
-/* ── Body ──────────────────────────────────────────────────────────────────── */
-
 .dc-body {
   flex: 1;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-width: 0; /* allows text truncation to work */
+  min-width: 0;
 }
-
-/* ── Header ────────────────────────────────────────────────────────────────── */
 
 .dc-header {
   display: flex;
@@ -148,8 +142,6 @@
 .dc-format-tag.opus { background: rgba(163, 230, 53, 0.15); color: #a3e635; }
 .dc-format-tag.wma { background: rgba(248, 113, 113, 0.15); color: #f87171; }
 
-/* ── Meta row (phase badge + stats) ────────────────────────────────────────── */
-
 .dc-meta {
   display: flex;
   align-items: center;
@@ -175,7 +167,6 @@
   50% { opacity: 0.6; }
 }
 
-/* Pulse dot for active downloads */
 .dc-pulse-dot {
   width: 8px;
   height: 8px;
@@ -189,7 +180,6 @@
   50% { opacity: 0.5; transform: scale(1.2); }
 }
 
-/* Stats container */
 .dc-stats {
   display: flex;
   align-items: center;
@@ -210,8 +200,6 @@
   color: var(--accent-primary);
   animation: dc-pulse-text 1s infinite;
 }
-
-/* ── Progress bar ──────────────────────────────────────────────────────────── */
 
 .dc-progress {
   margin-top: 12px;
@@ -236,7 +224,6 @@
   overflow: hidden;
 }
 
-/* Shimmer overlay for active bars */
 .dc-bar-fill::after {
   content: "";
   position: absolute;
@@ -249,8 +236,6 @@
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
-
-/* ─ Phase-specific bar colors ─ */
 
 .dc-bar-fill.downloading {
   background: linear-gradient(90deg, #3b82f6, #60a5fa);
@@ -288,8 +273,6 @@
   animation: dc-shimmer 1.5s infinite;
 }
 
-/* ─ Indeterminate animation (full width, animated striped/shimmer) ─ */
-
 .dc-bar-fill.indeterminate {
   width: 100% !important;
   transition: none !important;
@@ -304,7 +287,7 @@
     #60a5fa 10px,
     #60a5fa 20px
   );
-  background-size: 28.28px 100%; /* sqrt(2)*20 for 45° stripe tile */
+  background-size: 28.28px 100%;
   animation: dc-stripe-scroll 0.8s linear infinite;
 }
 
@@ -326,7 +309,6 @@
   100% { background-position: 28.28px 0; }
 }
 
-/* Progress info row */
 .dc-progress-info {
   display: flex;
   justify-content: space-between;
@@ -340,14 +322,11 @@
   transition: color 0.3s ease;
 }
 
-/* Purple percent text during merging/converting */
 .dc-card.merging .dc-percent,
 .dc-card.converting .dc-percent,
 .dc-card.trimming .dc-percent {
   color: #a78bfa;
 }
-
-/* ── Error message ─────────────────────────────────────────────────────────── */
 
 .dc-error {
   margin-top: 0.5rem;
@@ -358,8 +337,6 @@
   border-radius: 8px;
   border: 1px solid rgba(239, 68, 68, 0.15);
 }
-
-/* ── Actions ───────────────────────────────────────────────────────────────── */
 
 .dc-actions {
   display: flex;
@@ -380,7 +357,6 @@
   align-items: center;
 }
 
-/* Text buttons */
 .dc-btn {
   height: 32px;
   padding: 0 12px;
@@ -450,7 +426,6 @@
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Icon-only buttons */
 .dc-btn-icon {
   width: 32px;
   height: 32px;

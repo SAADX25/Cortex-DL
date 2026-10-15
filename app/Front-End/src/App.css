@@ -1,7 +1,4 @@
-/* ╔══════════════════════════════════════════════════════════════════════════╗
-   ║                         CORTEX DL — App.css                            ║
-   ║          Organized into sections for easy navigation & editing          ║
-   ╚══════════════════════════════════════════════════════════════════════════╝ */
+
 
 .global-error-banner {
   display: flex;
@@ -21,7 +18,6 @@
 .global-error-banner > span { min-width: 0; overflow-wrap: anywhere; }
 
 :root {
-  /* ── Colors ─────────────────────────────── */
   --bg-sidebar: #0f172a;
   --bg-main: #1e293b;
   --bg-card: #334155;
@@ -33,13 +29,10 @@
   --error: #ef4444;
   --warning: #f59e0b;
 
-  /* ── Layout ─────────────────────────────── */
   --sidebar-width: 260px;
 
-  /* ── Transitions ────────────────────────── */
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ── Typography ─────────────────────────── */
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -47,12 +40,6 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §2  GLOBAL RESET & BASE
-   — Box model, body, scrollbars, utility classes
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 * {
   box-sizing: border-box;
@@ -82,9 +69,6 @@ body {
   animation: spin 1s linear infinite;
 }
 
-
-/* ── Scrollbar ────────────────────────────── */
-
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -102,18 +86,12 @@ body {
   background: #475569;
 }
 
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §3  APP SHELL — Container, Main Content, Tabs
-   — The outer flex layout (sidebar + main)
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 .app-container {
   display: flex;
   height: 100vh;
   width: 100vw;
   background-color: #0b1120;
-  background-image: 
+  background-image:
     radial-gradient(circle at 90% 10%, rgba(56, 189, 248, 0.12) 0%, transparent 45%),
     radial-gradient(circle at 15% 90%, rgba(129, 140, 248, 0.10) 0%, transparent 45%);
   position: relative;
@@ -175,9 +153,6 @@ body {
   gap: 0.5rem;
 }
 
-
-/* ── Content Header (page titles) ─────────── */
-
 .content-header {
   margin-bottom: 2.5rem;
   display: flex;
@@ -222,14 +197,6 @@ body {
   align-items: flex-start;
 }
 
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §4  SIDEBAR
-   — Logo, navigation items, badges, dev badge, footer
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Sidebar Container ────────────────────── */
-
 .sidebar {
   width: var(--sidebar-width);
   background: rgba(15, 23, 42, 0.75);
@@ -243,20 +210,15 @@ body {
   z-index: 10;
 }
 
-
-/* ── Brand / Logo ─────────────────────────── */
-
 .brand {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* center text in sidebar header */
+
   gap: 0;
   margin-bottom: 2.25rem;
   padding: 0 0.5rem;
 }
-
-
 
 .cortex-logo-text {
   font-size: 32px !important;
@@ -272,9 +234,6 @@ body {
   padding: 20px 0;
   text-align: center;
 }
-
-
-/* ── Navigation Menu ──────────────────────── */
 
 .nav-menu {
   display: flex;
@@ -294,34 +253,31 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  /* Smooth and elegant animation transition */
+
   font-size: 0.95rem;
   font-weight: 500;
   text-align: right;
   position: relative;
   overflow: hidden;
-  /* Prevent shine overflow effects */
+
 }
 
-/* Hover effect: subtle bounce and shine */
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-main);
   transform: translateY(-2px) scale(1.02);
-  /* Slight elevation on hover */
+
   box-shadow: 0 4px 15px rgba(255, 255, 255, 0.03);
 }
 
-/* Pulse element for active menu item */
 .nav-item.active {
   background: rgba(56, 189, 248, 0.1);
   color: var(--accent-primary);
-  /* Vibrant pulsing animation for active item */
+
   animation: pulse-active 3s infinite ease-in-out;
   box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
 }
 
-/* Icon glows when active */
 .nav-item.active .nav-icon {
   animation: float-icon 3s infinite ease-in-out;
   filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
@@ -331,12 +287,6 @@ body {
   font-size: 1.2rem;
   transition: all 0.3s ease;
 }
-
-
-
-
-
-/* ── Nav Badge Pill (new inline counter) ──── */
 
 .nav-badge-pill {
   margin-left: auto;
@@ -362,12 +312,6 @@ body {
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
   animation: pulse-badge-glow 2s infinite ease-in-out;
 }
-
-
-
-
-
-/* ── Support & Developer Links ────────────── */
 
 .sidebar-links {
   display: flex;
@@ -453,17 +397,11 @@ body {
   .sidebar-link::before { display: none; }
 }
 
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §5  TYPOGRAPHY & GRADIENT TEXT
-   — Heading gradients, large text
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 .gradient-text {
   font-size: 2.8rem;
   font-weight: 800;
   background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
-  /* Cyan to Blue */
+
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -477,12 +415,6 @@ body {
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §6  PANELS & CARDS (generic containers)
-   — .panel, .minimal-panel, .settings-panel
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 .minimal-panel {
   width: 100%;
@@ -500,14 +432,6 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §7  BUTTONS
-   — Primary, ghost, danger, icon buttons
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Primary Action Button ────────────────── */
 
 .primary-btn {
   background: var(--accent-primary);
@@ -535,9 +459,6 @@ body {
   transform: translateY(-2px);
   filter: brightness(1.1);
 }
-
-
-/* ── Ghost / Outlined Buttons ─────────────── */
 
 .btn-ghost-primary {
   background: rgba(56, 189, 248, 0.1);
@@ -577,9 +498,6 @@ body {
   transition: all 0.2s;
 }
 
-
-/* ── Danger Buttons ───────────────────────── */
-
 .btn-danger-outline {
   background: transparent;
   border: 1px solid rgba(239, 68, 68, 0.4);
@@ -601,9 +519,6 @@ body {
   border-color: var(--error);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
-
-
-/* ── Icon Buttons (.btn-icon) ─────────────── */
 
 .btn-icon {
   width: 38px;
@@ -689,7 +604,7 @@ body {
 .btn-icon.ghost-warning {
   background: transparent;
   color: #facc15;
-  /* Amber/Yellow */
+
   border-color: transparent;
 }
 
@@ -724,9 +639,6 @@ body {
   opacity: 1;
   transform: scale(1.1);
 }
-
-
-/* ── Icon + Text Buttons (.btn-icon-text) ─── */
 
 .btn-icon-text {
   height: 38px;
@@ -807,14 +719,6 @@ body {
   border-color: rgba(239, 68, 68, 0.2);
 }
 
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §8  ADD DOWNLOAD TAB — Hero Input, Chips, Quick Access
-   — URL input bar, format/quality chips, brand icons, folder picker
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Hero URL Input Bar ───────────────────── */
-
 .hero-input-container {
   position: relative;
   width: 100%;
@@ -861,7 +765,7 @@ body {
   color: rgba(255, 255, 255, 0.28);
   cursor: pointer;
   padding: 6px;
-  /* slightly smaller */
+
   display: flex;
   align-items: center;
   justify-content: center;
@@ -881,13 +785,13 @@ body {
   border: none;
   border-radius: 12px;
   height: 40px;
-  /* reduced */
+
   padding: 0 1rem;
-  /* narrower horizontal padding */
+
   color: white;
   font-weight: 700;
   font-size: 0.85rem;
-  /* slightly smaller text */
+
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -914,9 +818,6 @@ body {
   width: 16px;
   height: 16px;
 }
-
-
-/* ── Chips (format/quality toggle) ────────── */
 
 .modern-chips-grid {
   display: flex;
@@ -966,9 +867,6 @@ body {
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
-
-/* ── Cortex Pill Input ────────────────────── */
-
 .cortex-pill {
   display: flex;
   align-items: center;
@@ -1007,9 +905,6 @@ body {
   font-size: 0.85rem;
 }
 
-
-/* ── Speed Limit Select ───────────────────── */
-
 .speed-select {
   appearance: none;
   -webkit-appearance: none;
@@ -1036,9 +931,6 @@ body {
   background: #1a1a2e;
   color: var(--text-main);
 }
-
-
-/* ── Folder Picker ────────────────────────── */
 
 .smart-folder-container {
   display: flex;
@@ -1104,15 +996,12 @@ body {
   border-right: 4px solid var(--accent-primary);
 }
 
-
-/* ── Quick Access Bar (brand shortcut icons) ─ */
-
 .quick-access-bar-minimal {
   margin-top: 3.5rem;
   display: flex;
   justify-content: center;
   opacity: 1;
-  /* Make icons fully visible by default */
+
 }
 
 .brand-icon-btn {
@@ -1193,25 +1082,21 @@ body {
 }
 
 .brand-icon-btn.ytmusic {
-  /* Dynamic YouTube Music Pink-to-Red Gradient */
   background: linear-gradient(135deg, #e91e63 0%, #ff0000 100%) !important;
   border-color: rgba(255, 0, 80, 0.4) !important;
   color: #ffffff;
-  /* Add a matching subtle colored glow to emphasize distinction */
+
   box-shadow: 0 6px 18px rgba(233, 30, 99, 0.2) !important;
 }
 
 .brand-icon-btn.ytmusic:hover {
   background: linear-gradient(135deg, #f43f5e 0%, #ef4444 100%) !important;
-  /* Slightly brighter on hover */
+
   border-color: rgba(244, 63, 94, 0.6) !important;
   transform: translateY(-4px) scale(1.06);
-  /* Intensify the glowing fire effect on hover */
+
   box-shadow: 0 10px 30px rgba(233, 30, 99, 0.5) !important;
 }
-
-
-/* ── Quick Access Pill Buttons ────────────── */
 
 .quick-access-bar {
   display: flex;
@@ -1279,9 +1164,6 @@ body {
   color: #00f2ea;
 }
 
-
-/* ── Batch Remove Button ──────────────────── */
-
 .batch-remove-btn {
   margin-left: 8px;
   background: transparent;
@@ -1289,7 +1171,7 @@ body {
   color: #f87171;
   cursor: pointer;
   font-size: 0.95rem;
-  /* slightly smaller */
+
   padding: 6px;
   border-radius: 6px;
 }
@@ -1297,14 +1179,6 @@ body {
 .batch-remove-btn:hover {
   background: rgba(255, 255, 255, 0.02);
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §9  VIDEO PREVIEW & METADATA
-   — Thumbnail, title, metadata badges, comments, subtitle controls
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Video Preview Card ───────────────────── */
 
 .video-preview-large {
   display: flex;
@@ -1330,9 +1204,6 @@ body {
   font-size: 1.1rem;
   line-height: 1.4;
 }
-
-
-/* ── Metadata Badges ──────────────────────── */
 
 .preview-metadata {
   display: flex;
@@ -1366,8 +1237,6 @@ body {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.08);
 }
-
-/* ── Comments Section ─────────────────────── */
 
 .preview-comments {
   margin-top: 14px;
@@ -1421,12 +1290,6 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §10  FORMAT & QUALITY OPTIONS
-   — Format selector, quality select, time trim, download button
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 .input-group {
   display: flex;
@@ -1523,9 +1386,6 @@ body {
   cursor: pointer;
 }
 
-
-/* ── Time Trim Controls ───────────────────── */
-
 .time-trim-box {
   margin-top: 0.5rem;
 }
@@ -1578,9 +1438,6 @@ body {
 .time-trim-input::placeholder {
   color: rgba(255, 255, 255, 0.25);
 }
-
-
-/* ── Main Download Button ─────────────────── */
 
 .download-main-btn-large {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
@@ -1637,14 +1494,6 @@ body {
   transform: none;
 }
 
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §11  DOWNLOAD LIST — Task Cards, Progress, Actions
-   — Download card grid, thumbnails, progress bars, status labels
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Search Bar ───────────────────────────── */
-
 .search-container {
   position: relative;
   width: 320px;
@@ -1681,13 +1530,13 @@ body {
 
 .search-input-centered {
   width: 100%;
-  /* Clearer, higher-contrast background to improve readability */
+
   background: rgba(15, 23, 42, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #ffffff;
   padding: 0.9rem 3rem 0.9rem 1.25rem;
   border-radius: 50px;
-  /* Pill shape */
+
   outline: none;
   font-size: 1.05rem;
   font-weight: 600;
@@ -1708,7 +1557,7 @@ body {
   background: rgba(10, 18, 30, 0.8);
   border-color: var(--accent-primary);
   box-shadow: 0 14px 40px rgba(8, 20, 40, 0.6), 0 0 0 4px rgba(56, 189, 248, 0.12);
-  /* Avoid transforms on focus to prevent subpixel text blurring */
+
 }
 
 .clear-search-btn:hover {
@@ -1716,18 +1565,12 @@ body {
   transform: translateY(-50%) scale(1.08) !important;
 }
 
-
-/* ── Task Grid ────────────────────────────── */
-
 .task-grid {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   padding-bottom: 2rem;
 }
-
-
-/* ── Download Card ────────────────────────── */
 
 .modern-task-card {
   background: var(--bg-card);
@@ -1747,9 +1590,6 @@ body {
   border-color: var(--accent-primary);
   box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
 }
-
-
-/* ── Card Thumbnail ───────────────────────── */
 
 .card-thumb {
   width: 260px;
@@ -1771,9 +1611,6 @@ body {
 .modern-task-card:hover .card-thumb img {
   transform: scale(1.05);
 }
-
-
-/* ── Card Body ────────────────────────────── */
 
 .card-body {
   flex: 1;
@@ -1804,9 +1641,6 @@ body {
   margin: 0;
   line-height: 1.3;
 }
-
-
-/* ── Format Tags ──────────────────────────── */
 
 .format-tag {
   font-size: 0.75rem;
@@ -1896,9 +1730,6 @@ body {
   color: #f87171;
 }
 
-
-/* ── Status Labels ────────────────────────── */
-
 .card-meta-row {
   display: flex;
   align-items: center;
@@ -1951,9 +1782,6 @@ body {
   animation: pulse-animation 1.2s ease-in-out infinite;
 }
 
-
-/* ── Stats Container (speed, size) ────────── */
-
 .stats-container {
   display: flex;
   align-items: center;
@@ -1980,9 +1808,6 @@ body {
 .stat-sep {
   color: rgba(255, 255, 255, 0.1);
 }
-
-
-/* ── Progress Bar ─────────────────────────── */
 
 .card-progress-area {
   margin-top: 1rem;
@@ -2101,9 +1926,6 @@ body {
   color: var(--accent-primary);
 }
 
-
-/* ── Card Action Buttons ──────────────────── */
-
 .card-actions-area {
   display: flex;
   justify-content: space-between;
@@ -2121,28 +1943,24 @@ body {
   align-items: center;
 }
 
-
-/* ── Empty State ──────────────────────────── */
-
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 4rem 2rem;
-  /* Optimized height for a balanced layout */
+
   text-align: center;
   background: linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
   border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.03);
-  /* Soft subtle border instead of dashed */
+
   box-shadow: inset 0 2px 20px rgba(255, 255, 255, 0.02), 0 10px 30px rgba(0, 0, 0, 0.2);
   margin: 2rem auto;
   max-width: 500px;
-  /* Medium card width */
+
 }
 
-/* Icon Container */
 .empty-icon-container {
   width: 90px;
   height: 90px;
@@ -2178,14 +1996,6 @@ body {
   line-height: 1.6;
   margin: 0;
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §12  SETTINGS TAB
-   — Hero stats, sections, rows, selects, toggles, auth, health, danger zone
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Hero Download Stats ──────────────────── */
 
 .settings-hero-stats {
   display: flex;
@@ -2236,9 +2046,6 @@ body {
   transform: rotate(180deg);
 }
 
-
-/* ── Settings Sections & Rows ─────────────── */
-
 .settings-section {
   width: 100%;
   display: flex;
@@ -2287,9 +2094,6 @@ body {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
-
-
-/* ── Settings Custom Select ───────────────── */
 
 .custom-select-wrapper {
   position: relative;
@@ -2345,7 +2149,6 @@ body {
   color: var(--text-main);
 }
 
-/* RTL Custom Select */
 [dir="rtl"] .custom-select {
   padding: 0.75rem 1rem 0.75rem 2.5rem;
 }
@@ -2356,9 +2159,6 @@ body {
   padding-right: 0;
   padding-left: 1rem;
 }
-
-
-/* ── Minimal Select (simple dropdown) ─────── */
 
 .minimal-select {
   background: transparent;
@@ -2376,9 +2176,6 @@ body {
   border-color: var(--accent-primary);
   background: rgba(255, 255, 255, 0.03);
 }
-
-
-/* ── Toggle Switch ────────────────────────── */
 
 .toggle-switch {
   width: 44px;
@@ -2416,7 +2213,6 @@ button.toggle-switch {
   transform: translateX(20px);
 }
 
-/* RTL Support for Toggle Switch */
 [dir="rtl"] .toggle-switch-thumb {
   left: auto;
   right: 2px;
@@ -2425,12 +2221,6 @@ button.toggle-switch {
 [dir="rtl"] .toggle-switch.active .toggle-switch-thumb {
   transform: translateX(-20px);
 }
-
-
-
-
-
-/* ── Danger Zone ──────────────────────────── */
 
 .danger-zone {
   margin-top: 2rem;
@@ -2441,12 +2231,6 @@ button.toggle-switch {
 .danger-text {
   color: var(--error);
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §13  MODALS — Confirm, Delete, etc.
-   — Overlay, container, header, body, footer
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 .modal-overlay {
   position: fixed;
@@ -2553,17 +2337,6 @@ button.toggle-switch {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §14  PLAYLIST PREVIEW
-   — Playlist header, items list, thumbnails
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §15  SPINNER & LOADING
-   — Small spinners, loading indicators
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 .spinner-sm {
   width: 20px;
   height: 20px;
@@ -2572,12 +2345,6 @@ button.toggle-switch {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §16  KEYFRAME ANIMATIONS
-   — All @keyframes in one place
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 @keyframes spin {
   to {
@@ -2628,7 +2395,6 @@ button.toggle-switch {
 }
 
 @keyframes pulse-animation {
-
   0%,
   100% {
     opacity: 1;
@@ -2659,7 +2425,6 @@ button.toggle-switch {
 }
 
 @keyframes float-icon {
-
   0%,
   100% {
     transform: translateY(0) scale(1);
@@ -2671,7 +2436,6 @@ button.toggle-switch {
 }
 
 @keyframes float {
-
   0%,
   100% {
     transform: translateY(0);
@@ -2703,7 +2467,6 @@ button.toggle-switch {
 }
 
 @keyframes pulse-badge-glow {
-
   0%,
   100% {
     transform: scale(1);
@@ -2717,7 +2480,6 @@ button.toggle-switch {
 }
 
 @keyframes badge-float {
-
   0%,
   100% {
     transform: translateY(0px);
@@ -2739,7 +2501,6 @@ button.toggle-switch {
 }
 
 @keyframes badge-glow-pulse {
-
   0%,
   100% {
     box-shadow: 0 0 8px rgba(56, 189, 248, 0.15), inset 0 1px 0 rgba(56, 189, 248, 0.08);
@@ -2749,12 +2510,6 @@ button.toggle-switch {
     box-shadow: 0 0 20px rgba(56, 189, 248, 0.28), inset 0 1px 0 rgba(56, 189, 248, 0.15);
   }
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §17  TOAST NOTIFICATION
-   — Animated status toast (top-right corner)
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 .toast-notification {
   position: fixed;
@@ -2783,16 +2538,6 @@ button.toggle-switch {
   border-left: none;
   border-right: 3px solid var(--accent-primary);
 }
-
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §18  DOWNLOAD LIST TOOLBAR & MODAL BUTTONS
-   — Replaces inline styles in DownloadList.tsx
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   § DOWNLOAD LIST PRO HEADER & SEARCH TOOLBAR
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 .dl-header-pro {
   position: sticky;
@@ -2839,7 +2584,6 @@ button.toggle-switch {
   width: 100%;
 }
 
-/* Glassmorphic Interactive Search Box */
 .dl-search-box {
   position: relative;
   display: flex;
@@ -2943,7 +2687,6 @@ button.toggle-switch {
   left: 10px;
 }
 
-/* Clear All Button Pro */
 .dl-clear-all-btn-pro {
   display: flex;
   align-items: center;
@@ -2970,7 +2713,6 @@ button.toggle-switch {
   transform: translateY(-1px);
 }
 
-/* Modal option buttons (Clear History / Delete Files) */
 .dl-modal-option-btn {
   display: flex;
   align-items: flex-start;
@@ -3015,7 +2757,6 @@ button.toggle-switch {
   background-color: rgba(239, 68, 68, 0.18);
 }
 
-/* Icon inside modal option buttons */
 .dl-modal-option-icon {
   padding: 8px;
   border-radius: 8px;
@@ -3031,14 +2772,9 @@ button.toggle-switch {
   background-color: rgba(239, 68, 68, 0.2);
 }
 
-/* DownloadCard will-change hint for smoother hover transform */
 .dc-card {
   will-change: transform;
 }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   § drag and drop interactive zone
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 .drag-drop-overlay {
   position: absolute;

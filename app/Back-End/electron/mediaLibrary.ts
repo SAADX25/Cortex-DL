@@ -5,10 +5,11 @@ import { createHash, randomUUID } from 'node:crypto'
 import { canEditLibraryArtwork, libraryMediaKind, type LibraryMediaItem, type LibraryImportResult } from '../../Shared/mediaLibrary'
 
 type SavedItem = Omit<LibraryMediaItem, 'availability'>
+
 const validPath = (value: unknown): value is string => typeof value === 'string' && value.length <= 32767 && !value.includes('\0') && path.isAbsolute(value)
+
 const key = (value: string) => process.platform === 'win32' ? path.normalize(value).toLowerCase() : path.normalize(value)
 
-/** Owns library references and cover storage; explicit cover edits may update media tags. */
 export class MediaLibrary {
   private entries: SavedItem[] | null = null
   private queue: Promise<unknown> = Promise.resolve()
@@ -107,7 +108,6 @@ export class MediaLibrary {
     })
   }
 
-  /** Return saved metadata immediately; the renderer checks only the current page. */
   catalog(): Promise<LibraryMediaItem[]> { return this.serial(async () => this.catalogItems(await this.load())) }
 
   async check(ids: string[]): Promise<LibraryMediaItem[]> {
@@ -116,8 +116,7 @@ export class MediaLibrary {
       const selected = new Set(ids)
       return (await this.load()).filter(item => selected.has(item.id))
     })
-    // Slow drives must not hold up saved metadata or cached covers. Serialize
-    // page checks separately to retain the 32-file concurrency bound.
+
     const work = this.checkQueue.then(() => Promise.all(entries.map(async item => {
       const status = await this.inspectFile(item.filePath)
       if (this.entries?.includes(item)) this.rememberStatus(item.filePath, status)
@@ -136,7 +135,6 @@ export class MediaLibrary {
     })
   }
 
-  /** Grant the selected file itself, never its parent directory or siblings. */
   canServe(requestedPath: string, resolvedPath: string): Promise<boolean> {
     return this.serial(async () => {
       const item = (await this.load()).find(entry => key(entry.filePath) === key(requestedPath))
@@ -162,7 +160,6 @@ export class MediaLibrary {
     if (artwork && !this.entries?.some(item => item.artwork === artwork)) await fs.unlink(this.artworkFile(artwork)).catch(() => {})
   }
 
-  /** Store artwork and coordinate optional embedded metadata as one recoverable edit. */
   setArtwork(id: string, image: Buffer | null, editMedia?: (file: string, persist: (embedded?: boolean) => Promise<void>) => Promise<void>): Promise<LibraryMediaItem[]> {
     return this.serial(async () => {
       const entries = await this.load(), item = entries.find(entry => entry.id === id)
@@ -201,7 +198,7 @@ export class MediaLibrary {
       if (!Array.isArray(filePaths) || filePaths.length > 10000 || !filePaths.every(validPath)) throw new Error('MEDIA_LIBRARY_INVALID_PATH')
       const entries = [...await this.load()], known = new Set(entries.map(item => key(item.filePath)))
       const result: LibraryImportResult = { items: [], added: 0, duplicates: 0, rejected: [] }
-      // Bound filesystem work and save once; never decode media during import.
+
       for (let offset = 0; offset < filePaths.length; offset += 32) {
         const batch = await Promise.all(filePaths.slice(offset, offset + 32).map(async source => {
           const filePath = path.normalize(source), kind = libraryMediaKind(filePath)

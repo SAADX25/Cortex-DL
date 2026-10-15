@@ -1,8 +1,8 @@
 import { primaryAnalysis } from '../lib/analysisSession'
 import { create } from 'zustand'
-import type { BatchItem } from '../components/AddDownloadTab'
-import type { ModalConfig } from '../hooks/types'
-import type { SubtitlePreview } from '../../../Shared/localSubtitles'
+import { type BatchItem } from '../components/AddDownloadTab'
+import { type ModalConfig } from '../hooks/types'
+import { type SubtitlePreview } from '../../../Shared/localSubtitles'
 
 export type ActiveTab = 'add' | 'downloads' | 'library' | 'subtitles' | 'settings'
 
@@ -42,12 +42,10 @@ interface UIStoreState {
   analyzing: boolean
   setAnalyzing: (v: boolean) => void
 
-  
   modalConfig: ModalConfig
   setModalConfig: (updater: ModalConfig | ((prev: ModalConfig) => ModalConfig)) => void
   closeModal: () => void
 
-  
   mediaPlayerFile: MediaPlayerFile | null
   setMediaPlayerFile: (file: MediaPlayerFile | null) => void
   mediaPlayerFloating: boolean
@@ -55,36 +53,30 @@ interface UIStoreState {
 }
 
 export const useUIStore = create<UIStoreState>((set, get) => ({
-  
   activeTab: 'add',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  
   directory: localStorage.getItem('cortex-directory'),
   setDirectory: (dir) => {
     if (dir) localStorage.setItem('cortex-directory', dir)
     set({ directory: dir })
   },
 
-  
   globalError: null,
   setGlobalError: (err) => set({ globalError: err }),
 
-  
   batchItems: [],
   setBatchItems: (updater) =>
     set((state) => ({
       batchItems: typeof updater === 'function' ? updater(state.batchItems) : updater,
     })),
 
-  
   toastMsg: null,
   showToast: (msg) => {
     set({ toastMsg: msg })
     setTimeout(() => set({ toastMsg: null }), 2300)
   },
 
-  
   url: '',
   setUrl: (url) => {
     if (get().url !== url) {
@@ -93,13 +85,11 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     }
   },
 
-  
   analyzeResult: null,
   setAnalyzeResult: (result) => set({ analyzeResult: result }),
   analyzing: false,
   setAnalyzing: (v) => set({ analyzing: v }),
 
-  
   modalConfig: DEFAULT_MODAL_CONFIG,
   setModalConfig: (updater) =>
     set((state) => ({
@@ -107,7 +97,6 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     })),
   closeModal: () => set((state) => ({ modalConfig: { ...state.modalConfig, isOpen: false } })),
 
-  
   mediaPlayerFile: null,
   setMediaPlayerFile: (file) => set(state => ({ mediaPlayerFile: file, mediaPlayerFloating: !!file && file.filePath === state.mediaPlayerFile?.filePath && state.mediaPlayerFloating })),
   mediaPlayerFloating: false,
@@ -115,6 +104,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
 }))
 
 export const useActiveTab = () => useUIStore((s) => s.activeTab)
+
 export const useSetActiveTab = () => useUIStore((s) => s.setActiveTab)
 
 export const useDirectory = () => useUIStore((s) => s.directory)
@@ -128,7 +118,9 @@ export const useToast = () => useUIStore((s) => s.toastMsg)
 export const useUrl = () => useUIStore((s) => s.url)
 
 export const useAnalyzeResult = () => useUIStore((s) => s.analyzeResult)
+
 export const useAnalyzing = () => useUIStore((s) => s.analyzing)
 
 export const useModalConfig = () => useUIStore((s) => s.modalConfig)
+
 export const useMediaPlayerFile = () => useUIStore((s) => s.mediaPlayerFile)

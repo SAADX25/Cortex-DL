@@ -1,5 +1,5 @@
 import { getErrorText, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_RATE_LIMITED_CODE, YOUTUBE_BOT_VERIFICATION_CODE } from '../../../Shared/youtubeErrors'
-import type { Translations } from '../translations'
+import { type Translations } from '../translations'
 
 export function isYtdlpUrl(url: string): boolean {
   const lowUrl = url.toLowerCase()
@@ -23,7 +23,6 @@ export function isYtdlpUrl(url: string): boolean {
   }
   return true
 }
-
 
 type YouTubeMessages = Pick<Translations, 'youtube_auth_required' | 'youtube_rate_limited' | 'youtube_bot_verification' | 'download_retry_required' | 'youtube_formats_restricted' | 'youtube_po_token_required' | 'youtube_network_error'>
 

@@ -44,7 +44,7 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
     if (!['http:', 'https:'].includes(url.protocol)) throw new Error('URL must be HTTP or HTTPS')
   }
 }
-/** All invoke handlers, including startup/recovery handlers, share sender and schema checks. */
+
 export function installIpcBoundary(getWin: () => BrowserWindow | null): void {
   const handle = ipcMain.handle.bind(ipcMain)
   ipcMain.handle = (channel, listener) => handle(channel, (event, ...args) => {
