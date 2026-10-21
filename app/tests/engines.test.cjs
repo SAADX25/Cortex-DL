@@ -311,6 +311,56 @@ suite('Engine provisioning', test => {
   }))
 })
 
+suite('Download HTTP failures', test => {
+  const assert = require('node:assert/strict')
+  const fs = require('node:fs/promises')
+  const path = require('node:path')
+  const os = require('node:os')
+  const crypto = require('node:crypto')
+  const { downloadEngine, EngineDownloadHttpError } = require('../Back-End/electron/engines/engineManager.ts')
+
+  test('removed assets fail once, release their body, explain the fix and leave no partial files', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-engine-http-'))
+    const originalFetch = globalThis.fetch
+    let requests = 0, cancellations = 0
+    globalThis.fetch = async () => {
+      requests++
+      return new Response(new ReadableStream({ cancel() { cancellations++ } }), { status: 404 })
+    }
+    try {
+      await assert.rejects(downloadEngine('https://fixture.invalid/removed.zip', path.join(dir, 'package')), error => error instanceof EngineDownloadHttpError && error.status === 404)
+      assert.equal(requests, 1)
+      assert.equal(cancellations, 1)
+      assert.deepEqual(await fs.readdir(dir), [])
+    } finally {
+      globalThis.fetch = originalFetch
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('temporary server failures retry and still require the pinned SHA-256', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-engine-retry-'))
+    const originalFetch = globalThis.fetch
+    const originalTimeout = globalThis.setTimeout
+    const bytes = Buffer.from('verified engine package')
+    let requests = 0
+    globalThis.setTimeout = (fn, ms, ...args) => originalTimeout(fn, ms === 500 || ms === 1000 ? 1 : ms, ...args)
+    globalThis.fetch = async () => ++requests === 1 ? new Response('unavailable', { status: 503 }) : new Response(bytes)
+    try {
+      const destination = path.join(dir, 'package')
+      await downloadEngine('https://fixture.invalid/package.zip', destination, crypto.createHash('sha256').update(bytes).digest('hex'))
+      assert.equal(requests, 2)
+      assert.deepEqual(await fs.readFile(destination), bytes)
+      await assert.rejects(downloadEngine('https://fixture.invalid/package.zip', path.join(dir, 'untrusted'), '0'.repeat(64)), /checksum mismatch/)
+      assert.deepEqual(await fs.readdir(dir), ['package'])
+    } finally {
+      globalThis.fetch = originalFetch
+      globalThis.setTimeout = originalTimeout
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
 suite('Download timeouts', test => {
   const assert = require('node:assert/strict')
   const fs = require('node:fs/promises')

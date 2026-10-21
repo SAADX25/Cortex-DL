@@ -1,0 +1,44 @@
+.analysis-activity { width: 100%; min-width: 0; padding: 15px 16px 13px; border: 1px solid rgba(56,189,248,.17); border-radius: 13px; background: linear-gradient(115deg,rgba(14,165,233,.07),rgba(129,140,248,.045)); }
+.analysis-activity-heading { display: flex; align-items: center; gap: 12px; }
+.analysis-radar { position: relative; display: grid; place-items: center; flex: 0 0 42px; height: 42px; overflow: hidden; border: 1px solid rgba(56,189,248,.2); border-radius: 50%; color: #7dd3fc; background: rgba(14,165,233,.07); }
+.analysis-radar::before { content: ''; position: absolute; inset: 3px; border: 1px solid rgba(125,211,252,.12); border-radius: 50%; }
+.analysis-radar > span { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg,transparent 45%,rgba(56,189,248,.28) 90%,transparent 100%); animation: analysis-orbit 2.5s linear infinite; }
+.analysis-radar > svg { position: relative; }
+.analysis-activity-copy { flex: 1; min-width: 0; }
+.analysis-activity-title { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; color: #e0f2fe; font-size: 13px; font-weight: 600; line-height: 1.6; margin: 0; }
+.analysis-activity-caption { color: #94a3b8; font-size: 11px; line-height: 1.6; margin: 3px 0 0; }
+.analysis-elapsed { align-self: flex-start; color: #94a3b8; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 3px; }
+.analysis-dots { display: inline-flex; align-items: center; gap: 3px; height: 12px; }
+.analysis-dots i { width: 3px; height: 3px; background: #7dd3fc; border-radius: 50%; animation: analysis-dot 1.4s ease-in-out infinite; }
+.analysis-dots i:nth-child(2) { animation-delay: .16s; }
+.analysis-dots i:nth-child(3) { animation-delay: .32s; }
+.analysis-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; list-style: none; margin: 13px 0 11px; padding: 0; }
+.analysis-step { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; line-height: 1.5; color: #64748b; }
+.analysis-step--done { color: #8ab8c9; }
+.analysis-step--done svg { color: #34d399; }
+.analysis-step--active { color: #7dd3fc; }
+.analysis-step-spinner { animation: analysis-orbit 1.6s linear infinite; }
+.analysis-scan-track { position: relative; height: 3px; overflow: hidden; border-radius: 9px; background: rgba(148,163,184,.1); }
+.analysis-scan-track > span { display: block; width: 38%; height: 100%; border-radius: inherit; background: linear-gradient(90deg,transparent,#38bdf8,#a5b4fc,transparent); animation: analysis-scan 1.9s cubic-bezier(.4,0,.2,1) infinite; will-change: transform; }
+.analysis-wait-hint { color: #a5b4c8; font-size: 11px; line-height: 1.6; margin: 10px 0 0; }
+.preview-info-large > .analysis-activity { margin-top: 8px; }
+.analysis-quality-loading { position: relative; display: flex; align-items: center; justify-content: space-between; height: 42px; padding: 0 14px; overflow: hidden; border-radius: 12px; background: rgba(15,23,42,.7); border: 1px solid rgba(148,163,184,.14); }
+.analysis-quality-loading > span { width: 50%; height: 8px; border-radius: 6px; background: rgba(148,163,184,.14); }
+.analysis-quality-loading > span:last-child { width: 16%; }
+.analysis-quality-loading::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg,transparent,rgba(125,211,252,.1),transparent); transform: translateX(-100%); animation: analysis-shimmer 2s ease-in-out infinite; }
+.video-preview-large.is-analyzing { border-color: rgba(56,189,248,.14); }
+@keyframes analysis-orbit { to { transform: rotate(360deg); } }
+@keyframes analysis-dot { 0%,70%,100% { opacity: .3; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-3px); } }
+@keyframes analysis-scan { from { transform: translateX(-105%); } to { transform: translateX(370%); } }
+@keyframes analysis-shimmer { to { transform: translateX(100%); } }
+@media (max-width: 640px) {
+  .video-preview-large.is-analyzing { flex-direction: column; gap: 15px; }
+  .video-preview-large.is-analyzing .preview-thumb-large { width: 100%; max-height: 180px; }
+  .analysis-activity { padding: 13px; }
+  .analysis-activity-heading { gap: 9px; }
+  .analysis-radar { flex-basis: 36px; height: 36px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .analysis-radar > span, .analysis-step-spinner, .analysis-dots i, .analysis-scan-track > span, .analysis-quality-loading::after { animation: none; will-change: auto; }
+  .analysis-scan-track > span { width: 100%; opacity: .65; }
+}

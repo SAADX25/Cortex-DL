@@ -1,9 +1,13 @@
 import React, { useEffect } from 'react'
 import { primaryAnalysis } from '../../lib/analysisSession'
+import AnalysisActivity from './AnalysisActivity'
+import { type AnalysisStage } from '../../lib/analysisSession'
 import { Language } from '../../translations'
 
 interface UrlAnalysisViewProps {
   analyzeResult: any
+  analyzing: boolean
+  analysisStage: AnalysisStage
   url: string
   lang: Language
   SmartImage: React.FC<any>
@@ -14,6 +18,8 @@ interface UrlAnalysisViewProps {
 
 const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
   analyzeResult,
+  analyzing,
+  analysisStage,
   url,
   lang,
   SmartImage,
@@ -27,7 +33,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
   if (!analyzeResult || analyzeResult.kind === 'playlist') return null
 
   return (
-    <div className="video-preview-large" style={{ alignItems: 'stretch' }}>
+    <div className={`video-preview-large${analyzing ? ' is-analyzing' : ''}`} style={{ alignItems: 'stretch' }}>
       {analyzeResult.kind === 'ytdlp' && analyzeResult.thumbnail && (
         <SmartImage src={analyzeResult.thumbnail} alt="thumb" loading="eager" fetchPriority="high" decoding="async" className="preview-thumb-large"
           onLoad={() => { if (window.cortexDl.analysisDebug) console.debug('[analysis timing] thumbnailAvailableMs=', primaryAnalysis.elapsed()) }} />
@@ -37,7 +43,9 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
           {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : analyzeResult.kind === 'direct' ? 'Direct media' : 'HLS Stream'}
         </div>
 
-        {analyzeResult.kind === 'ytdlp' && (
+        {analyzing && <AnalysisActivity stage={analysisStage} lang={lang} />}
+
+        {analyzeResult.kind === 'ytdlp' && !analyzing && (
           <div className="preview-metadata">
             <div className="preview-metadata-row">
               {analyzeResult.views != null && (

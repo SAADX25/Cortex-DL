@@ -6,6 +6,7 @@ import { X, ClipboardPaste } from 'lucide-react'
 export const UrlInputBar = React.memo((
   {
     analyzing,
+    analyzingText,
     batchCount,
     maxBatchItems,
     placeholderText,
@@ -16,6 +17,7 @@ export const UrlInputBar = React.memo((
     initialUrl = '',
   }: {
     analyzing: boolean
+    analyzingText: string
     batchCount: number
     maxBatchItems: number
     placeholderText: string
@@ -61,10 +63,10 @@ export const UrlInputBar = React.memo((
         className="hero-action-btn"
         onClick={localUrl.trim().length === 0 ? onPasteAndAnalyze : () => onAnalyze(localUrl)}
         disabled={analyzing}
-        aria-label={localUrl.trim().length === 0 ? pasteAndGoText : 'Analyze URL'}
+        aria-label={analyzing ? analyzingText : localUrl.trim().length === 0 ? pasteAndGoText : 'Analyze URL'}
       >
         {analyzing ? (
-          <div className="spinner-sm"></div>
+          <><div className="spinner-sm" aria-hidden="true"></div><span>{analyzingText}</span></>
         ) : localUrl.trim().length === 0 ? (
           <>
             <ClipboardPaste size={20} />

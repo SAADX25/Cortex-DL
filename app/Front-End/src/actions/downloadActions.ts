@@ -58,6 +58,7 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
     const state = useUIStore.getState()
     if (state.analyzeResult?.kind !== 'ytdlp') return
     if (update.stage === 'preview' && detailed) return
+    if (update.stage === 'preview' && typeof update.data.title === 'string') state.setAnalysisStage('formats')
     state.setAnalyzeResult({ ...state.analyzeResult, ...update.data })
   })
   const generation = primaryAnalysis.begin(() => {

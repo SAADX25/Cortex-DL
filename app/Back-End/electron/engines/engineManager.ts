@@ -71,6 +71,13 @@ export async function verifyEngine(file: string, spec: EngineSpec, signal?: Abor
   }
 }
 
+export class EngineDownloadHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Engine download HTTP ${status}`)
+    this.name = 'EngineDownloadHttpError'
+  }
+}
+
 export async function downloadEngine(url: string, destination: string, expectedHash?: string, signal?: AbortSignal, onProgress?: (received: number, total: number | null) => void): Promise<void> {
   const tmp = `${destination}.${randomUUID()}.tmp`
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -97,7 +104,12 @@ export async function downloadEngine(url: string, destination: string, expectedH
         if (!location || redirects === 5) throw new Error('Too many engine download redirects')
         next = new URL(location, next).href
       }
-      if (!response?.ok || !response.body) throw new Error(`Engine download HTTP ${response?.status}`)
+      if (!response) throw new Error('Engine download returned no response')
+      if (!response.ok) {
+        await response.body?.cancel()
+        throw new EngineDownloadHttpError(response.status)
+      }
+      if (!response.body) throw new Error('Engine download returned an empty body')
       const maximum = 350 * 1024 * 1024
       if (Number(response.headers.get('content-length')) > maximum) { await response.body.cancel(); throw new Error('Engine download is too large') }
       const length = Number(response.headers.get('content-length'))
@@ -119,7 +131,7 @@ export async function downloadEngine(url: string, destination: string, expectedH
       return
     } catch (error) {
       await fs.promises.rm(tmp, { force: true })
-      if (signal?.aborted || attempt === 2) throw error
+      if (signal?.aborted || attempt === 2 || (error instanceof EngineDownloadHttpError && ![408, 429].includes(error.status) && error.status < 500)) throw error
     } finally { clearTimeout(timer); clearTimeout(idleTimer); signal?.removeEventListener('abort', abort) }
     await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt))
   }

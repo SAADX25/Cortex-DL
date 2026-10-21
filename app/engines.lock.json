@@ -21,22 +21,24 @@
     },
     {
       "name": "FFmpeg",
-      "version": "N-127203-ga35c879992",
-      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-05-13-07/ffmpeg-N-127203-ga35c879992-win64-gpl.zip",
-      "sha256": "34517bf39addbcfcdf01236074491e3ba94d6d137801f88803903a87cb76d1aa",
+      "version": "9.0.2",
+      "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-full_build.zip",
+      "sha256": "759d0a9831c436a0eb331ad36f236c06cb04aaa0005da46571f0e9d3d9206f6b",
       "license": "GPL-3.0-or-later; corresponding sources required before distribution",
       "engines": [
         {
           "name": "ffmpeg",
           "filename": "ffmpeg.exe",
           "minimum": "6.0.0",
-          "architecture": "x64"
+          "architecture": "x64",
+          "version": "9.0.2"
         },
         {
           "name": "ffprobe",
           "filename": "ffprobe.exe",
           "minimum": "6.0.0",
-          "architecture": "x64"
+          "architecture": "x64",
+          "version": "9.0.2"
         }
       ]
     },

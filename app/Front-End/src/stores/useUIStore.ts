@@ -1,4 +1,4 @@
-import { primaryAnalysis } from '../lib/analysisSession'
+import { primaryAnalysis, type AnalysisStage } from '../lib/analysisSession'
 import { create } from 'zustand'
 import { type BatchItem } from '../components/AddDownloadTab'
 import { type ModalConfig } from '../hooks/types'
@@ -39,6 +39,8 @@ interface UIStoreState {
 
   analyzeResult: AnalyzeResult | null
   setAnalyzeResult: (result: AnalyzeResult | null) => void
+  analysisStage: AnalysisStage
+  setAnalysisStage: (stage: AnalysisStage) => void
   analyzing: boolean
   setAnalyzing: (v: boolean) => void
 
@@ -81,14 +83,16 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
   setUrl: (url) => {
     if (get().url !== url) {
       primaryAnalysis.cancel()
-      set({ url, analyzeResult: null, analyzing: false })
+      set({ url, analyzeResult: null, analyzing: false, analysisStage: 'details' })
     }
   },
 
   analyzeResult: null,
   setAnalyzeResult: (result) => set({ analyzeResult: result }),
+  analysisStage: 'details',
+  setAnalysisStage: (analysisStage) => set({ analysisStage }),
   analyzing: false,
-  setAnalyzing: (v) => set({ analyzing: v }),
+  setAnalyzing: (v) => set({ analyzing: v, analysisStage: 'details' }),
 
   modalConfig: DEFAULT_MODAL_CONFIG,
   setModalConfig: (updater) =>

@@ -30,6 +30,7 @@ import {
 } from '../actions/downloadActions'
 import { useCommentsStore } from '../stores/useCommentsStore'
 
+import AnalysisActivity from './AddDownloadTab/AnalysisActivity'
 import UrlAnalysisView from './AddDownloadTab/UrlAnalysisView'
 import PlaylistView from './AddDownloadTab/PlaylistView'
 import BatchListView from './AddDownloadTab/BatchListView'
@@ -61,6 +62,7 @@ const AddDownloadTab: React.FC = () => {
   const globalError = useUIStore((s) => s.globalError)
   const analyzeResult = useUIStore((s) => s.analyzeResult)
   const analyzing = useUIStore((s) => s.analyzing)
+  const analysisStage = useUIStore((s) => s.analysisStage)
   const showToast = useUIStore((s) => s.showToast)
 
   const subfolderName = useFormStore((s) => s.subfolderName)
@@ -176,6 +178,7 @@ const AddDownloadTab: React.FC = () => {
           <div className="w-full">
             <UrlInputBar
               analyzing={analyzing}
+              analyzingText={t.analyzing}
               batchCount={batchItems.length}
               maxBatchItems={MAX_BATCH_ITEMS}
               placeholderText={t.url_placeholder}
@@ -245,6 +248,8 @@ const AddDownloadTab: React.FC = () => {
             </div>
           </div>
 
+          {analyzing && !analyzeResult && <AnalysisActivity key={url} stage={analysisStage} lang={lang} />}
+
           {analyzeResult && (
             <div className="fade-in">
               {analyzeResult.kind === 'playlist' ? (
@@ -261,7 +266,10 @@ const AddDownloadTab: React.FC = () => {
                 />
               ) : (
                 <UrlAnalysisView
+                  key={url}
                   analyzeResult={analyzeResult}
+                  analyzing={analyzing}
+                  analysisStage={analysisStage}
                   url={url}
                   lang={lang}
                   SmartImage={SmartImage}
@@ -309,7 +317,7 @@ const AddDownloadTab: React.FC = () => {
                   {!isAudioMode && (
                     <div className="option-box">
                       <label className="option-label">{t.quality_label}</label>
-                      <select
+                      {analyzing ? <div className="analysis-quality-loading" aria-hidden="true"><span /><span /></div> : <select
                         className="quality-select"
                         value={selectedQuality}
                         onChange={(e) => {
@@ -335,7 +343,7 @@ const AddDownloadTab: React.FC = () => {
                             <option value="720p">{t.quality_720p || '720p'}</option>
                           </>
                         )}
-                      </select>
+                      </select>}
                     </div>
                   )}
                 </div>

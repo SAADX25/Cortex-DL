@@ -175,7 +175,7 @@ async function setup(win: BrowserWindow, allowNetwork: boolean, force: boolean, 
     log.error('[Setup]', component, error)
     const code = (error as NodeJS.ErrnoException).code || (error as { cause?: NodeJS.ErrnoException }).cause?.code
     const http = /HTTP (\d{3})/.exec(String(error))
-    const reason = http ? `Network download failed (HTTP ${http[1]}). Retry later.` : code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' ? 'Network unavailable. Check your connection and retry.' : code === 'ENOSPC' ? 'Disk is full.' : code === 'EACCES' || code === 'EPERM' ? 'Folder is not writable or security software blocked access.' : 'Engine installation failed. Check your internet connection and retry.'
+    const reason = http?.[1] === '404' || http?.[1] === '410' ? 'The engine download is no longer available. Install the latest Cortex DL version, then retry setup.' : http ? `The download server returned HTTP ${http[1]}. Retry setup in a moment.` : code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' ? 'Network unavailable. Check your connection and retry.' : code === 'ENOSPC' ? 'Disk is full.' : code === 'EACCES' || code === 'EPERM' ? 'Folder is not writable or security software blocked access.' : 'Engine installation failed. Check your internet connection and retry.'
     send({ status: 'repair-required', progress: 0, message: `${component}: ${reason} Retry repair or open diagnostics.` })
     throw error
   }

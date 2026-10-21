@@ -1,3 +1,4 @@
+export type AnalysisStage = 'details' | 'formats'
 
 export class AnalysisSession {
   private generation = 0

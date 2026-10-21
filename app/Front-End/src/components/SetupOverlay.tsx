@@ -1,5 +1,7 @@
+import { useState } from 'react'
+import './SetupOverlay.css'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { CheckCircle2, AlertCircle, Loader2, RefreshCw, FolderOpen, X } from 'lucide-react'
 
 interface SetupState {
   status: string
@@ -12,13 +14,34 @@ interface SetupOverlayProps {
 }
 
 export default function SetupOverlay({ setupState }: SetupOverlayProps) {
-  const { status, progress, message } = setupState
+  const { status, message } = setupState
+  const progress = Math.min(100, Math.max(0, Number.isFinite(setupState.progress) ? setupState.progress : 0))
+  const [retrying, setRetrying] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const retrySetup = async () => {
+    if (retrying) return
+    setRetrying(true)
+    setActionError('')
+    try { await window.cortexDl.repairEngines() }
+    catch { setActionError('Could not restart setup. Open the log folder for details.') }
+    finally { setRetrying(false) }
+  }
+  const openLogs = async () => {
+    setActionError('')
+    try { await window.cortexDl.openLogs() }
+    catch { setActionError('Could not open the log folder. Try again.') }
+  }
+  const exitApp = async () => {
+    try { await window.cortexDl.exitApp() }
+    catch { setActionError('Could not close the app. Use the window close button.') }
+  }
   const isError = status === 'repair-required' || status === 'degraded' || status === 'fatal'
   const isDone = status === 'ready'
 
   return (
     <div
       data-setup-overlay
+      aria-busy={!isError && !isDone || retrying}
       style={{
         position: 'fixed',
         inset: 0,
@@ -38,13 +61,16 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         style={{
           width: '100%',
-          maxWidth: '480px',
+          maxWidth: '560px',
+          margin: '20px',
+          maxHeight: 'calc(100% - 40px)',
+          overflowY: 'auto',
           background: 'rgba(30, 41, 59, 0.7)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           border: '1px solid rgba(56, 189, 248, 0.15)',
           borderRadius: '24px',
-          padding: '40px',
+          padding: 'clamp(24px, 5vw, 40px)',
           boxShadow: '0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05)',
           display: 'flex',
           flexDirection: 'column',
@@ -121,15 +147,25 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           {isError ? 'Setup Failed' : isDone ? 'Ready to Go' : status === 'checking' ? 'Checking Local Engines' : 'Preparing Engines'}
         </motion.h2>
 
-        <div role="status" aria-live="polite" style={{ minHeight: '24px', marginBottom: '32px', display: 'flex', alignItems: 'center' }}>
+        <div role={isError ? 'alert' : 'status'} aria-live={isError ? 'assertive' : 'polite'} style={{ minHeight: '24px', marginBottom: '32px', display: 'flex', alignItems: 'center' }}>
           <p style={{ color: '#cbd5e1', fontSize: '0.95rem', margin: 0 }}>{message}</p>
         </div>
 
-        {isError && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-          <button onClick={() => void window.cortexDl.repairEngines()}>Retry Setup</button>
-          <button onClick={() => void window.cortexDl.repairEngines()}>Repair Engines</button>
-          <button onClick={() => void window.cortexDl.openLogs()}>Open Log Folder</button>
-          <button onClick={() => void window.cortexDl.exitApp()}>Exit</button>
+        {isError && <div className="setup-recovery">
+          <p className="setup-recovery-hint">Restore missing or damaged engines to continue.</p>
+          <div className="setup-actions">
+            <button type="button" className="setup-action setup-action-primary" onClick={() => void retrySetup()} disabled={retrying}>
+              <RefreshCw size={17} aria-hidden="true" className={retrying ? 'setup-action-spinning' : undefined} />
+              {retrying ? 'Retrying…' : 'Retry Setup'}
+            </button>
+            <button type="button" className="setup-action" onClick={() => void openLogs()}>
+              <FolderOpen size={17} aria-hidden="true" />Open Log Folder
+            </button>
+            <button type="button" className="setup-action setup-action-quiet" onClick={() => void exitApp()}>
+              <X size={17} aria-hidden="true" />Exit
+            </button>
+          </div>
+          {actionError && <p className="setup-action-error" role="alert">{actionError}</p>}
         </div>}
 
         <div style={{
@@ -170,7 +206,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           justifyContent: 'space-between',
           marginTop: '12px',
           fontSize: '0.8rem',
-          color: '#52525b',
+          color: '#94a3b8',
           fontWeight: 500
         }}>
           <span>{Math.round(progress)}%</span>
