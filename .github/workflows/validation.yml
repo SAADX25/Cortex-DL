@@ -23,6 +23,7 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npm run version:verify
+      - run: npm run test:release
       - run: npm run engines:stage
       - run: npm run typecheck
       - run: npm run lint
@@ -56,6 +57,9 @@ jobs:
           path: app/smoke-results/
           if-no-files-found: ignore
   release:
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     if: startsWith(github.ref, 'refs/tags/')
     needs: windows
     runs-on: windows-latest
@@ -77,5 +81,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          node scripts/release-tags.cjs verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $version = (Get-Content package.json | ConvertFrom-Json).version
-          gh release create "v$version" "release/$version/Cortex-DL-Setup-$version.exe" "release/$version/Cortex-DL-Setup-$version.exe.blockmap" "release/$version/latest.yml" --verify-tag --generate-notes --latest --title "Cortex DL v$version"
+          $tag = "v$version"
+          if ($tag -cne $env:GITHUB_REF_NAME) { throw 'Tag does not match the package version.' }
+          $publishedTags = @(gh api "repos/$env:GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name')
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify existing releases. Publication stopped.' }
+          if ($publishedTags -ccontains $tag) { throw "$tag is already published. Use a new version; existing releases are immutable." }
+          gh release create "$tag" "release/$version/Cortex-DL-Setup-$version.exe" "release/$version/Cortex-DL-Setup-$version.exe.blockmap" "release/$version/latest.yml" --verify-tag --generate-notes --latest --title "Cortex DL v$version"

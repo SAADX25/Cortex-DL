@@ -1,32 +1,19 @@
-# Security Policy for Cortex DL
+# Security
 
-We take the security of **Cortex DL** seriously. If you believe you have found a security vulnerability, please follow the guidelines below to report it to us.
+Security fixes target the latest stable release of Cortex DL.
 
----
+## Report privately
 
-## 🛡️ Supported Versions
+Send vulnerability reports to [seed.rabade@gmail.com](mailto:seed.rabade@gmail.com). Keep exploit details out of public issues until a fix is available.
 
-Only the latest version of Cortex DL receives security updates and bug fixes.
+Include:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 2.2.x   | :white_check_mark: |
-| < 2.2.0 | :x:                |
+- The app version, Windows version and affected feature.
+- Clear reproduction steps or a small, non-sensitive example.
+- The impact and any relevant error messages.
 
----
+Remove passwords, cookies, tokens and personal paths from attachments. The maintainer will review the report and coordinate a fix and disclosure.
 
-## 🚨 Reporting a Vulnerability
+For ordinary download or UI problems, use a [bug report](https://github.com/SAADX25/Cortex-DL/issues/new?template=bug_report.md).
 
-If you discover a security vulnerability or flaw in Cortex DL, **please do not open a public GitHub issue**. Instead, report it privately:
-
-1. Send an email describing the issue with reproduction steps to **[seed.rabade@gmail.com](mailto:seed.rabade@gmail.com)**.
-2. Provide a clear explanation of the potential impact and attack vector.
-
-### What to expect:
-- We will acknowledge receipt of your report within 48 hours.
-- We will validate the report and work on a fix as soon as possible.
-- Security fixes will be released in the subsequent point release.
-
----
-
-[README](README.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Contributing](CONTRIBUTING.md) · [MIT License](LICENSE)
+[README](README.md) · [Contributing](CONTRIBUTING.md)

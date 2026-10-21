@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc">
+<title id="title">The local subtitle workspace</title><desc id="desc">Speech recognition and optional translation run through locally installed tools and models.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#111e32"/><stop offset="1" stop-color="#090f1d"/></linearGradient><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="#7f94b2" stroke-width="1.3"/></marker></defs>
+<rect width="1200" height="780" rx="24" fill="url(#bg)"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="48" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600" fill="#7f94b2" text-anchor="start" letter-spacing="2">CORTEX DL   /   SOURCE ATLAS   /   05</text>
+<text x="48" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="36" font-weight="700" fill="#f3f7ff" text-anchor="start" letter-spacing="0">The local subtitle workspace</text>
+<text x="48" y="140" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="400" fill="#a7bad2" text-anchor="start" letter-spacing="0">Speech recognition and optional translation run through locally installed tools and models.</text>
+<path d="M48 166 H1152" stroke="#2a3b52"/>
+<text x="48" y="750" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#7f94b2" text-anchor="start" letter-spacing="0">Cortex DL  /  app/docs/project-map.md</text>
+<text x="1152" y="750" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="400" fill="#a7bad2" text-anchor="end" letter-spacing="0">05</text>
+<rect x="48" y="198" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="68" y="221" width="4" height="24" rx="2" fill="#39d4ee"/>
+<text x="84" y="241" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Request and readiness</text>
+<text x="72" y="276" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">SubtitleStudio.tsx</text>
+<text x="72" y="306" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">useSubtitleStudioStore.ts</text>
+<text x="72" y="336" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">subtitles/ipc.ts</text>
+<text x="72" y="366" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">service.ts owns each job</text>
+<rect x="424" y="198" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="444" y="221" width="4" height="24" rx="2" fill="#ab9bff"/>
+<text x="460" y="241" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Install and prepare</text>
+<text x="448" y="276" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">manifest.ts: versions / hashes</text>
+<text x="448" y="306" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">assets.ts: tools and models</text>
+<text x="448" y="336" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">gpu.ts: device selection</text>
+<text x="448" y="366" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">FFmpeg prepares audio</text>
+<rect x="800" y="198" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="820" y="221" width="4" height="24" rx="2" fill="#53dfb6"/>
+<text x="836" y="241" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Recognize and translate</text>
+<text x="824" y="276" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">process.ts: owned processes</text>
+<text x="824" y="306" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">whisper.cpp: speech to text</text>
+<text x="824" y="336" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">translator.ts: llama.cpp</text>
+<text x="824" y="366" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">TranslateGemma when needed</text>
+<path d="M400 305 H419" stroke="#7f94b2" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M776 305 H795" stroke="#7f94b2" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="48" y="466" width="540" height="196" rx="16" fill="#152238" stroke="#2b405b"/><rect x="68" y="489" width="4" height="24" rx="2" fill="#74abff"/>
+<text x="84" y="509" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Review and export</text>
+<text x="72" y="544" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Shared/subtitleCues.ts: parse and validate cues</text>
+<text x="72" y="574" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">SubtitleStudio.tsx: edit and review</text>
+<text x="72" y="604" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Serialize SRT or VTT for saving</text>
+<rect x="612" y="466" width="540" height="196" rx="16" fill="#152238" stroke="#2b405b"/><rect x="632" y="489" width="4" height="24" rx="2" fill="#ffc375"/>
+<text x="648" y="509" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Merge a subtitle file</text>
+<text x="636" y="544" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">DownloadSubtitleMerge.tsx → downloadMergeIpc.ts</text>
+<text x="636" y="574" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">downloadMerge.ts finds sidecar subtitles</text>
+<text x="636" y="604" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">FFmpeg merges into MP4 or MKV</text>
+<path d="M976 416 V440 H318 V461" stroke="#7f94b2" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<text x="48" y="704" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#a7bad2" text-anchor="start" letter-spacing="0">Each job supports cancellation; model installation is separate from first-run media engines.</text>
+</g></svg>

@@ -1,200 +1,95 @@
-<div align="center">
-  <img src="assets/logo.png" alt="Cortex DL" width="160" />
+<p align="center">
+  <img src="assets/logo.png" alt="Cortex DL" width="88" />
+</p>
 
 # Cortex DL
 
-A modern, high-performance Windows desktop video and audio downloader built with Electron, React, TypeScript, yt-dlp, FFmpeg, and SQLite.
+A Windows desktop app for downloading video and audio, managing local media, and creating subtitles. Built with Electron, React and TypeScript, with English and Arabic interfaces.
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue?style=flat-square)](https://github.com/SAADX25/Cortex-DL/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6?style=flat-square&logo=windows)](https://github.com/SAADX25/Cortex-DL/releases)
-[![Tests](https://img.shields.io/badge/tests-159%20passed-success?style=flat-square)](#validation)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
-[![Node](https://img.shields.io/badge/node-24.x-339933?style=flat-square&logo=node.js)](https://nodejs.org)
-[![Electron](https://img.shields.io/badge/electron-44.x-47848F?style=flat-square&logo=electron)](https://www.electronjs.org)
-[![React](https://img.shields.io/badge/react-18.x-61DAFB?style=flat-square&logo=react)](https://react.dev)
+[![Build](https://github.com/SAADX25/Cortex-DL/actions/workflows/validation.yml/badge.svg?branch=master)](https://github.com/SAADX25/Cortex-DL/actions/workflows/validation.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
----
+[Download](https://github.com/SAADX25/Cortex-DL/releases/latest) · [Code map](app/docs/project-map.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
-| 📖 [README](README.md) | 🤝 [Code of Conduct](CODE_OF_CONDUCT.md) | 👥 [Contributing](CONTRIBUTING.md) | ⚖️ [MIT License](LICENSE) | 🛡️ [Security](SECURITY.md) | 🚀 [Releases](https://github.com/SAADX25/Cortex-DL/releases) |
-| :---: | :---: | :---: | :---: | :---: | :---: |
+## What it does
 
----
+- Downloads from yt-dlp-supported sites, direct URLs and HLS streams.
+- Offers video quality, audio formats, trimming, playlists and batch queues.
+- Keeps download history, pause/resume state and settings across restarts.
+- Plays local media in the app or a floating window, with cover editing.
+- Organizes a media library without moving the original files.
+- Generates, translates, reviews and exports subtitles with local models.
 
-</div>
+## Source layout
 
-## Features
-
-- Download from yt-dlp-supported sites, direct HTTP/HTTPS URLs and HLS streams.
-- Choose video quality and media format, extract audio, and trim media.
-- Queue downloads, process playlists and batches, pause/resume, and control concurrency.
-- Keep download history and queue state across restarts using SQLite.
-- Play downloaded video and audio inside the app.
-- Build a local media library with multi-file import, drag and drop, search, video/audio filters and recent-play sorting. Files stay in place; library references survive restarts, and moved files can be located again.
-- Edit covers in the media library, including images already embedded in imported files. Choose a local JPG, PNG or WEBP image up to 8 MB; no specific dimensions are required. MP3, FLAC, M4A and MP4 covers are embedded in the file without re-encoding media, and also retained in the library. MP4 edits preserve video, audio, subtitles and chapters. Use **Save to file** for covers saved by an earlier version, or **Change cover** and the adjacent remove button to replace or remove them. Removing an MP4 cover restores its ordinary video-frame preview. Other audio formats retain custom covers in the library. File replacement is verified first and rolled back if saving fails.
-- After a successful embedded cover edit or removal, Cortex DL notifies Windows that the file changed so the shell can refresh its thumbnail. **Refresh Media Player and VLC cover caches** backs up matching Media Player images and VLC artwork cache entries. It is enabled by default and can be disabled in Settings. Media Player is closed gracefully when necessary; VLC is left running and may need a restart to discard an image already in memory. See [cover troubleshooting](app/docs/development.md#media-library-and-artwork).
-- The audio and MP4 player control bars also have a **File cover** menu with preview, add/change and remove actions. Editing briefly unloads the file, closes its old streaming session, and restores the playback position, volume, speed, pause/play state and selected subtitles afterward. Canceling or failing an edit restores playback as well. Songs show their cover on the record; the compact audio dock keeps its existing controls.
-- Media Library keeps search, filters and a single set of page controls above the list, visible while scrolling. It shows two files by default; choose 2, 4, 8 or 12 per page, and the app remembers that setting. Search, filters and sort start at page one, and removing a page's final item returns to a valid page. Cover changes, saves and removals show an indeterminate loading bar on the affected file and in the player until the operation finishes.
-- Opening Media Library loads saved metadata first and checks availability only for the current page. Playback checks the selected file again. Imports accept up to 10,000 paths, check at most 32 files concurrently and save once, without decoding media. Covers load near the viewport; saved custom covers bypass media probing, and thumbnail cache cleanup runs in the background.
-- Generate, translate, review and export speech subtitles locally. See [development guide](app/docs/development.md).
-- Use English or Arabic, notifications, and the system tray.
-- Check engine health and repair missing or damaged engines.
-
-## Development
-
-The current development and validation workflows target Windows x64 and Node.js 24. Install Git and Node.js, then run:
-
-```powershell
-git clone https://github.com/SAADX25/Cortex-DL.git
-cd Cortex-DL\app
-npm ci
-npm run dev
-```
-
-You can also use `Cortex_Dev.bat` in the project root after installing dependencies. Root shortcuts are available: `npm run setup`, `npm run dev`, `npm run check` and `npm run build`. The `app` folder contains the application package and its dependency lockfile.
-
-The development startup stages verified engines in `app/engine-baseline`. Keep that directory for offline development and media integration tests. Its downloaded archives are reused by the staging script.
-
-## Project layout
+![Cortex DL source layout: renderer, Electron bridge, backend and shared contracts](app/docs/diagrams/01-system.svg)
 
 ```text
 Cortex-DL/
-├── .github/                       # GitHub CI/CD workflows, issue templates & automation
-│   ├── workflows/
-│   │   └── validation.yml         # Automated Windows validation, test suite & release pipeline
-│   └── ISSUE_TEMPLATE/            # Standardized bug report and feature request templates
-├── assets/                        # Repository assets and application branding
-│   └── logo.png                   # Official high-resolution project logo
-├── app/                           # Core desktop application workspace
-│   ├── Back-End/                  # Electron main process & native backend subsystems
-│   │   └── electron/
-│   │       ├── engines/           # Specialized download, processing & streaming engines
-│   │       │   ├── YoutubeEngine.ts    # yt-dlp wrapper, format resolver & quality selection
-│   │       │   ├── DirectEngine.ts     # Multi-chunk HTTP/HTTPS range downloader
-│   │       │   ├── engineManager.ts    # Verification, receipts and engine provisioning
-│   │       │   ├── ytdlpService.ts     # Extraction, previews and yt-dlp updates
-│   │       │   └── MediaProcessor.ts   # FFmpeg audio/video muxing, trimming & transcoding
-│   │       ├── ipc/               # Strongly-typed IPC handlers & security validation
-│   │       │   └── handlers.ts         # Renderer-to-Main IPC invocation endpoints
-│   │       ├── downloadManager.ts # Core queue orchestrator, attempt lifecycle & state machine
-│   │       ├── db.ts              # SQLite database layer (tasks, history & user settings)
-│   │       ├── services/          # Artwork, analysis, media and thumbnail services
-│   │       ├── subtitles/         # Local subtitle models, processing and merge operations
-│   │       ├── diagnostics.ts     # Health checks, log redaction & diagnostic bundles
-│   │       ├── bootstrap.ts       # Early Electron setup and deferred backend loading
-│   │       ├── main.ts            # Electron app lifecycle, window manager & tray integration
-│   │       └── preload.ts         # Secure context bridge exposing sanitized APIs to renderer
-│   ├── Front-End/                 # Modern React 18 user interface (Vite + Custom CSS)
-│   │   ├── public/                # Static assets & application Windows icon (CortexDL.ico)
-│   │   └── src/
-│   │       ├── components/        # UI components (DownloadList, SettingsTab, SetupOverlay, MediaPlayer)
-│   │       ├── stores/            # Zustand state management (downloadStore, useSettingsStore)
-│   │       ├── hooks/             # Custom React hooks (useDownloadCardVM, useSettingsInit)
-│   │       ├── actions/           # User action dispatchers & download event handlers
-│   │       ├── translations.ts    # Comprehensive bilingual localization (Arabic & English)
-│   │       ├── App.tsx            # Main application layout, sidebar navigation & modals
-│   │       └── main.tsx           # React DOM initialization & theme mounting
-│   ├── Shared/                    # Shared TypeScript models, contracts & progress schemas
-│   │   ├── types.ts               # Unified TypeScript interfaces between Main and Renderer
-│   │   ├── progressModel.ts       # Byte-accurate multi-engine progress calculation
-│   │   ├── analysisUrl.ts         # URL detection, protocol sanitization & playlist parsing
-│   │   └── youtubeErrors.ts       # Structured error classification & user-friendly messages
-│   ├── build/                     # NSIS Windows installer assets & upgrade scripts
-│   │   └── installer.nsh          # Custom NSIS script for zero-data-loss upgrade migrations
-│   ├── docs/                      # Architectural specifications & release documentation
-│   │   └── development.md         # Developer guide, module map & extension points
-│   ├── scripts/                   # Production build, validation & maintenance utilities
-│   │   ├── build-manifest.cjs     # Injects git commit, engine hashes & build timestamps
-│   │   ├── verify-release.cjs     # Automated release gate verifying tags, versions & hashes
-│   │   ├── stage-engines.cjs      # Development engine provisioning & local baseline cache
-│   │   └── clean.cjs              # Safe output cleaner preserving configs & partial downloads
-│   ├── tests/                     # Domain regression suites
-│   │   ├── artwork.test.cjs       # Embedded covers and external player caches
-│   │   ├── downloader.test.cjs    # Attempts, history, quality and provider access
-│   │   ├── engines.test.cjs       # Provisioning, receipts, timeouts and packaging
-│   │   ├── subtitles.test.cjs     # Local subtitles and merge workflows
-│   │   ├── mediaLibrary.test.cjs  # Catalog, IPC, thumbnails and media information
-│   │   └── playerAndUi.test.cjs   # Playback, chrome, floating windows and trim previews
-│   ├── electron-builder.json5     # NSIS installer packaging & auto-update specifications
-│   ├── engines.lock.json          # Cryptographically pinned engine hashes (yt-dlp, FFmpeg, Deno)
-│   ├── package.json               # Desktop application dependencies & script definitions (v2.2.0)
-│   └── vite.config.ts             # Vite configuration with embedded Electron compilation
-├── Cortex_Dev.bat                 # One-click Windows development launcher script
-├── CODE_OF_CONDUCT.md             # Community standards, expected behavior & enforcement
-├── CONTRIBUTING.md                # Development guidelines, setup & pull request procedures
-├── LICENSE                        # MIT Open-Source License
-├── package.json                   # Root monorepo proxy scripts (setup, dev, check, build)
-├── README.md                      # Comprehensive project documentation & user manual
-└── SECURITY.md                    # Security policy, supported versions & vulnerability reporting
+├── app/
+│   ├── Front-End/src/       React views, state and user actions
+│   ├── Back-End/electron/   Windows, IPC, downloads and native tools
+│   ├── Shared/              Types and rules used by both processes
+│   ├── scripts/             Build, engine, cleanup and release checks
+│   ├── tests/               Regression tests and Electron fixtures
+│   ├── build/               Windows installer source
+│   └── docs/                Code map and development guide
+├── .github/                 CI, issue templates and PR template
+├── assets/                  Repository branding
+├── Cortex_Dev.bat           Windows development launcher
+└── package.json             Commands forwarded to app/
 ```
 
-Generated build output, downloaded engines, dependencies and test results are ignored by Git. The repository root contains branding, contributor documents and the development launcher.
+Open the **[complete source layout](app/docs/project-map.md)** for every source file, eight visual diagrams and a feature-to-file index. The [development guide](app/docs/development.md) explains the rules behind those modules.
 
-See [the development guide](app/docs/development.md) for extension points and [Contributing](CONTRIBUTING.md) for the complete setup and validation workflow.
+## Run locally
 
-## Validation
-
-Run from `app`:
+Use Windows x64, Git and Node.js 24.
 
 ```powershell
-npm run typecheck
-npm run lint
-npm run test:unit
-npm run test:integration
-npm test
+git clone https://github.com/SAADX25/Cortex-DL.git
+cd Cortex-DL
+npm run setup
+npm run dev
 ```
 
-From the repository root, `npm run check` runs TypeScript, ESLint and the full regression suite together.
+Setup installs the locked dependencies and local Git tag guards. Development startup downloads and verifies media engines when needed. Subtitle models are downloaded separately from the subtitle workspace.
 
-Tests that run real media tools require `npm run engines:stage` first. Packaged and installer validation require a fresh Windows build:
+Run these commands from the repository root:
 
-```powershell
-npm run build
-npm run test:installer
-```
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start Vite and Electron. |
+| `npm run check` | Run TypeScript, ESLint and all tests. |
+| `npm run test:release` | Test release-tag safeguards in disposable Git repositories. |
+| `npm run build` | Build the Windows installer without publishing. |
+| `npm run clean:preview` | Preview generated files eligible for cleanup. |
+| `npm run clean` | Remove generated development output. |
 
+Media tests need staged engines: run `npm --prefix app run engines:stage` if they are missing. See [Contributing](CONTRIBUTING.md) for installer tests and release steps.
 
-## Build for Windows
+## Builds and local data
 
-```powershell
-cd app
-npm run build
-```
+Installers are written to `app/release/<version>/Cortex-DL-Setup-<version>.exe`, alongside update metadata. Published installers are available on [GitHub Releases](https://github.com/SAADX25/Cortex-DL/releases).
 
-The current installer is `app/release/2.2.0/Cortex-DL-Setup-2.2.0.exe`. The `.blockmap` and `latest.yml` files beside it describe the update artifact. Each production build clears obsolete Electron chunks before packaging.
+The installed app keeps its data in `%APPDATA%\cortex-dl`:
 
-Release validation is defined in `.github/workflows/validation.yml`. Tagged builds publish the exact installer that passed validation. Public release checks verify versions, artifact hashes, shipped notices and package contents. Builds containing engine binaries also require the source archive review in `app/license-compliance.json`; the current installer downloads engines separately.
+| Location | Contents |
+| --- | --- |
+| `tasks.sqlite` | Download history and settings. |
+| `media-library.json` | Saved references to local media. |
+| `bin/` | Verified media engines and integrity receipts. |
+| `local-subtitles/` | Subtitle tools and models. |
+| `logs/` | Diagnostic logs. |
 
-## Engines, history and temporary files
+First-run engine setup needs internet access. Healthy engines are reused on later launches. Use **Settings → Repair Engines** or **Open Logs** to troubleshoot setup.
 
-The Windows installer downloads and verifies yt-dlp, FFmpeg, ffprobe and Deno on first launch. Later launches check the installed engines and reuse healthy copies. An internet connection is needed for first-run provisioning, repairs, updates and media downloads.
+Download partials live under `.cortex_temp/<taskId>/<attemptId>` in the selected download folder. Paused or failed tasks keep partials for recovery; completed and canceled tasks clean them up.
 
-Application data is stored in `%APPDATA%\cortex-dl`:
+Closing the window hides the app in the tray. Use the tray's exit action to quit. App updates preserve application data; uninstalling offers a choice to keep or remove it. Downloaded media files stay in place.
 
-- `tasks.sqlite` stores download history and settings.
-- `bin` stores installed engines and integrity receipts.
-- `logs` stores diagnostic logs.
+## Help and license
 
-History loads independently of engine verification. A download uses `.cortex_temp/<taskId>/<attemptId>` under its selected destination. Completed and canceled downloads remove their temporary directories; paused or failed downloads retain partial files for retry/resume. Startup retries cleanup for completed and canceled records.
+Use the [bug report](https://github.com/SAADX25/Cortex-DL/issues/new?template=bug_report.md) for reproducible problems. Report vulnerabilities privately through the [security policy](SECURITY.md).
 
-Closing the window normally hides the app in the system tray. Use the tray's exit action to quit completely.
-
-Uninstalling offers a choice to keep or delete application data. Full removal includes engines, settings, cache and history in the current and legacy AppData folders. Downloaded video/audio files are preserved. Normal application updates preserve AppData.
-
-## Cleaning generated files
-
-```powershell
-npm run clean:preview
-npm run clean
-# Optional: also remove unpacked Windows builds
-npm run clean:packaged
-```
-
-Run these commands from the repository root. Standard cleanup removes `dist-electron`, `Front-End/dist`, generated smoke/installer validation folders, retired local `app/bin`, and generated metadata/configuration output. It preserves source (including `app/build` installer source), tests, installed dependencies, verified development engines, release installers, `.env` and `.cortex_temp` experiments/partial downloads. The cleaner refuses symbolic links and junctions before deleting files. Run it after test/development processes have stopped. The next development run or build recreates required output.
-
-`clean:packaged` also removes `app/release/<version>/win-unpacked`. Build again before packaged tests or release artifact verification. Installer `.exe`, `.blockmap` and `latest.yml` files are retained.
-
-## Troubleshooting and implementation notes
-
-Use **Settings → App readiness** or **Repair Engines** for missing or damaged tools, and **Open Logs** for diagnostics. Public video requests use no sign-in credentials. For restricted content, use a local media file in the subtitle workspace.
-
-Architecture and extension guidance are in the [development guide](app/docs/development.md). Historical release changes are in the [changelog](CHANGELOG.md).
+The application source uses the [MIT license](LICENSE). Downloaded engines and models retain their own licenses.

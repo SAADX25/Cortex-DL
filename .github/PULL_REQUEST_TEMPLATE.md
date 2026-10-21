@@ -1,12 +1,14 @@
-## Description
-Briefly describe the changes introduced in this pull request.
+## Change
 
-## Type of Change
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Refactoring / Code cleanup
-- [ ] Documentation update
+What changed, and why? Link the related issue if there is one.
 
-## Checklist
-- [ ] My code follows the code style of this project.
-- [ ] I have tested my changes locally on PC.
+## Validation
+
+List the commands or manual checks you ran and their results. Explain any check you could not run.
+
+## Review notes
+
+Add screenshots for UI changes and mention compatibility or migration details when relevant.
+
+- [ ] Arabic and English behavior checked where applicable.
+- [ ] Generated files, credentials and downloaded media excluded.

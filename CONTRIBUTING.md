@@ -1,41 +1,30 @@
-# Contributing to Cortex DL
+# Contributing
 
-Cortex DL is an Electron, React and TypeScript desktop app. Development and release validation target Windows x64 and Node.js 24.
+Start with [local setup](README.md#run-locally), then use the [code map](app/docs/project-map.md) to find the files for your change. Development and release validation target Windows x64 and Node.js 24.
 
-## Setup
+## Making a change
 
-Install Git and Node.js 24, then clone your fork:
+1. Keep the change focused and follow the existing module boundaries.
+2. Update shared types and both interface languages when behavior changes.
+3. Add regression coverage for changed behavior and describe what you checked.
 
-```powershell
-git clone https://github.com/YOUR_USERNAME/Cortex-DL.git
-cd Cortex-DL
-npm run setup
-npm run dev
-```
+The [development guide](app/docs/development.md) covers download ownership, cancellation, media validation and IPC. Keep filesystem, database and native-process work in the backend.
 
-`npm run setup` installs the locked dependencies in `app`. The first development startup stages the pinned media engines and needs internet access. Keep `app/engine-baseline` and its cached downloads for later offline development. `Cortex_Dev.bat` also starts development after setup.
+## Checks
 
-The root npm commands forward to the package in `app`. You can run app-specific commands directly from that folder.
+Run from the repository root:
 
-## Adding a feature
+| Command | Checks |
+| --- | --- |
+| `npm run typecheck` | TypeScript contracts. |
+| `npm run lint` | Source style and common errors. |
+| `npm test` | All regression suites. |
+| `npm run check` | All three checks above. |
+| `npm run test:release` | Tag, version and Git hook safeguards. |
 
-See [the development guide](app/docs/development.md) for the module map, extension points and validation workflow. Follow the existing component, store and service boundaries. Update shared types and both Arabic and English translations when a feature changes the renderer contract or visible UI text.
+Tests that run media tools need `npm --prefix app run engines:stage` first. Keep `app/engine-baseline` for later runs.
 
-For download changes, preserve attempt ownership, cancellation, pause/resume and final-file validation. Add regression coverage for the behavior you change. Read [the downloader lifecycle guide](app/docs/development.md#download-and-media-processing) before changing execution or recovery.
-
-## Validation
-
-From the repository root:
-
-```powershell
-npm run check
-```
-
-This runs TypeScript, ESLint and the full regression suite. Tests using actual media tools need the staged engines. If they are absent, run `npm run engines:stage` from `app` first.
-
-The full suite runs at most two test files concurrently to bound native media and Electron workloads. Player motion checks set their preference explicitly, and library checks scroll lazily loaded artwork into view. CI saves the full test log in `app/smoke-results/tests.log` and uploads available diagnostics as `windows-diagnostics` even when validation fails. Validated installers are uploaded separately as `windows-validation`; their artifact root is `app/release`.
-
-For packaging, installer or release changes, run from `app` on Windows:
+For packaging changes, run these from `app`:
 
 ```powershell
 npm run build
@@ -43,23 +32,34 @@ npm run test:installer
 npm run release:verify
 ```
 
-The installer test requires an isolated Windows user without an existing Cortex DL installation or application data. The production validation workflow defines the complete release checks.
+The installer test requires an isolated Windows user without an existing Cortex DL installation or profile. CI saves logs under `app/smoke-results` and uploads diagnostics separately from validated installer files.
 
-## Cleaning generated output
+## Release tags
 
-Stop development and test processes, then run from the root:
+A source update name such as `Update-107` is a commit label, not a new application version. Do not recreate `v2.2.0` for a source update. Existing release tags and published releases are immutable.
+
+For an explicitly intended release:
+
+1. Choose a version newer than published versions. Update `app/package.json` and both version fields in `app/package-lock.json`.
+2. Run the read-only `npm run release:check`, finish validation, and commit the intended source changes.
+3. From a clean checkout, run:
 
 ```powershell
-npm run clean:preview
-npm run clean
+npm run release:tag
+npm --prefix app run release:build
+npm run release:push
 ```
 
-`npm run clean:packaged` also removes generated `win-unpacked` directories under versioned releases. Rebuild before running packaged tests or release artifact verification afterward. Source, installer source, dependencies, development engines, release installers, `.env` and `.cortex_temp` are preserved.
+Tag creation checks local and remote duplicates, creates an annotated tag with a reflog, and never replaces an existing tag. The push command sends only that new tag. Remote inspection failures stop the operation.
 
-## Pull requests
+A tag push triggers CI validation and the production release job, which uses the `production-release` environment. CI compares exact tag objects and target commits, then rejects an already-published release. Ordinary builds and Git synchronization do not create tags or publish releases.
 
-Use a focused branch and describe the behavior that changes, the reason and the validation performed. Keep generated output, credentials and downloaded media out of commits. Include screenshots for visible UI changes. Follow the existing pull request template and [code of conduct](CODE_OF_CONDUCT.md).
+`npm run setup` installs local tag guards. Existing checkouts can run `npm run git:hooks` once. The guards block local tag movement/deletion and validate direct Git or GUI tag pushes. Custom hooks are preserved for manual integration.
 
----
+For a tag discrepancy, compare local and remote object IDs with the published release before any repair. Preserve the old object under a non-tag backup ref such as `refs/backups/tag-conflicts/...`. Any exception to the local guard needs an explicitly reviewed repair. Do not force-push, overwrite remote tags, or suppress the problem by disabling tag fetching.
 
-[README](README.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [MIT License](LICENSE)
+## Cleanup and pull requests
+
+Stop development and test processes before running `npm run clean:preview`, then `npm run clean`. Add `npm run clean:packaged` only when unpacked installer builds can be removed. Source, dependencies, staged engines, installers, `.env` and partial downloads are preserved.
+
+A pull request should explain the behavior change, link the issue when relevant, and list validation results. Add screenshots for UI changes. Keep generated files, credentials and downloaded media out of commits, and follow the [code of conduct](CODE_OF_CONDUCT.md).

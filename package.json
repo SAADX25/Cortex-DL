@@ -6,7 +6,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "setup": "npm --prefix app ci",
+    "setup": "npm --prefix app ci && npm --prefix app run git:hooks",
     "dev": "npm --prefix app run dev",
     "build": "npm --prefix app run build",
     "typecheck": "npm --prefix app run typecheck",
@@ -17,6 +17,11 @@
     "clean:preview": "npm --prefix app run clean -- --dry-run",
     "clean:packaged": "npm --prefix app run clean -- --packaged",
     "test:unit": "npm --prefix app run test:unit",
-    "test:integration": "npm --prefix app run test:integration"
+    "test:integration": "npm --prefix app run test:integration",
+    "release:check": "npm --prefix app run release:check",
+    "release:tag": "npm --prefix app run release:tag",
+    "release:push": "npm --prefix app run release:push",
+    "git:hooks": "npm --prefix app run git:hooks",
+    "test:release": "npm --prefix app run test:release"
   }
 }

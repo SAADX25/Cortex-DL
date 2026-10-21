@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc">
+<title id="title">Build, verify and package</title><desc id="desc">Configuration and scripts support development, installer checks and release safeguards.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#111e32"/><stop offset="1" stop-color="#090f1d"/></linearGradient><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="#7f94b2" stroke-width="1.3"/></marker></defs>
+<rect width="1200" height="780" rx="24" fill="url(#bg)"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="48" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600" fill="#7f94b2" text-anchor="start" letter-spacing="2">CORTEX DL   /   SOURCE ATLAS   /   07</text>
+<text x="48" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="36" font-weight="700" fill="#f3f7ff" text-anchor="start" letter-spacing="0">Build, verify and package</text>
+<text x="48" y="140" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="400" fill="#a7bad2" text-anchor="start" letter-spacing="0">Configuration and scripts support development, installer checks and release safeguards.</text>
+<path d="M48 166 H1152" stroke="#2a3b52"/>
+<text x="48" y="750" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#7f94b2" text-anchor="start" letter-spacing="0">Cortex DL  /  app/docs/project-map.md</text>
+<text x="1152" y="750" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="400" fill="#a7bad2" text-anchor="end" letter-spacing="0">07</text>
+<rect x="48" y="198" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="68" y="221" width="4" height="24" rx="2" fill="#39d4ee"/>
+<text x="84" y="241" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Install and run</text>
+<text x="72" y="276" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">package.json / package-lock</text>
+<text x="72" y="306" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">ensure-electron.cjs</text>
+<text x="72" y="336" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">stage-engines.cjs</text>
+<text x="72" y="366" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">engines.lock.json</text>
+<rect x="424" y="198" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="444" y="221" width="4" height="24" rx="2" fill="#ab9bff"/>
+<text x="460" y="241" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Compile and package</text>
+<text x="448" y="276" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">tsconfig*.json / .eslintrc.cjs</text>
+<text x="448" y="306" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">vite.config.ts</text>
+<text x="448" y="336" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">electron-builder.json5</text>
+<text x="448" y="366" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">build/installer.nsh</text>
+<rect x="800" y="198" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="820" y="221" width="4" height="24" rx="2" fill="#53dfb6"/>
+<text x="836" y="241" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Record and inspect</text>
+<text x="824" y="276" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">build-manifest.cjs</text>
+<text x="824" y="306" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">verify-release.cjs</text>
+<text x="824" y="336" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Commit and package versions</text>
+<text x="824" y="366" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Installer hashes and metadata</text>
+<rect x="48" y="440" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="68" y="463" width="4" height="24" rx="2" fill="#ffc375"/>
+<text x="84" y="483" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Distribution checks</text>
+<text x="72" y="518" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">third-party-notices.cjs</text>
+<text x="72" y="548" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">license-compliance.json</text>
+<text x="72" y="578" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">license-gate.cjs</text>
+<text x="72" y="608" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">installer-upgrade.cjs</text>
+<rect x="424" y="440" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="444" y="463" width="4" height="24" rx="2" fill="#74abff"/>
+<text x="460" y="483" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Immutable release tags</text>
+<text x="448" y="518" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">release-tags.cjs</text>
+<text x="448" y="548" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Check local and remote tags</text>
+<text x="448" y="578" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Reject duplicate versions</text>
+<text x="448" y="608" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Local Git guards + CI checks</text>
+<rect x="800" y="440" width="352" height="218" rx="16" fill="#152238" stroke="#2b405b"/><rect x="820" y="463" width="4" height="24" rx="2" fill="#f395c8"/>
+<text x="836" y="483" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Repository workflow</text>
+<text x="824" y="518" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">.github/workflows/validation.yml</text>
+<text x="824" y="548" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Checks and installer artifacts</text>
+<text x="824" y="578" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Guarded tag release job</text>
+<text x="824" y="608" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">clean.cjs: generated output</text>
+<text x="48" y="704" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#a7bad2" text-anchor="start" letter-spacing="0">Build commands create local installers; publication follows the separate guarded release workflow.</text>
+</g></svg>

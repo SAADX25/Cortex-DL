@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc">
+<title id="title">One application, three layers</title><desc id="desc">Read the interface, cross the bridge, follow the service that owns the work.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#111e32"/><stop offset="1" stop-color="#090f1d"/></linearGradient><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L7 4 L0 8" fill="none" stroke="#7f94b2" stroke-width="1.3"/></marker></defs>
+<rect width="1200" height="780" rx="24" fill="url(#bg)"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="48" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600" fill="#7f94b2" text-anchor="start" letter-spacing="2">CORTEX DL   /   SOURCE ATLAS   /   01</text>
+<text x="48" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="36" font-weight="700" fill="#f3f7ff" text-anchor="start" letter-spacing="0">One application, three layers</text>
+<text x="48" y="140" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="400" fill="#a7bad2" text-anchor="start" letter-spacing="0">Read the interface, cross the bridge, follow the service that owns the work.</text>
+<path d="M48 166 H1152" stroke="#2a3b52"/>
+<text x="48" y="750" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#7f94b2" text-anchor="start" letter-spacing="0">Cortex DL  /  app/docs/project-map.md</text>
+<text x="1152" y="750" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="400" fill="#a7bad2" text-anchor="end" letter-spacing="0">01</text>
+<rect x="48" y="218" width="352" height="268" rx="16" fill="#152238" stroke="#2b405b"/><rect x="68" y="241" width="4" height="24" rx="2" fill="#39d4ee"/>
+<text x="84" y="261" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">React renderer</text>
+<text x="72" y="296" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Front-End/src/</text>
+<text x="72" y="326" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Views and player controls</text>
+<text x="72" y="356" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Zustand feature stores</text>
+<text x="72" y="386" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Actions, hooks and UI state</text>
+<text x="72" y="416" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">English / Arabic interface</text>
+<rect x="424" y="218" width="352" height="268" rx="16" fill="#152238" stroke="#2b405b"/><rect x="444" y="241" width="4" height="24" rx="2" fill="#ab9bff"/>
+<text x="460" y="261" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Electron boundary</text>
+<text x="448" y="296" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">preload.ts</text>
+<text x="448" y="326" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">window.cortexDl bridge</text>
+<text x="448" y="356" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">ipcSecurity.ts + handlers</text>
+<text x="448" y="386" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Validated renderer requests</text>
+<text x="448" y="416" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Events return task updates</text>
+<rect x="800" y="218" width="352" height="268" rx="16" fill="#152238" stroke="#2b405b"/><rect x="820" y="241" width="4" height="24" rx="2" fill="#53dfb6"/>
+<text x="836" y="261" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Backend services</text>
+<text x="824" y="296" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Back-End/electron/</text>
+<text x="824" y="326" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">DownloadManager + engines</text>
+<text x="824" y="356" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Library, artwork and playback</text>
+<text x="824" y="386" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Local subtitle jobs</text>
+<text x="824" y="416" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Windows, logs and storage</text>
+<path d="M400 349 H419" stroke="#7f94b2" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M776 349 H795" stroke="#7f94b2" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="48" y="534" width="1104" height="126" rx="16" fill="#152238" stroke="#2b405b"/><rect x="68" y="557" width="4" height="24" rx="2" fill="#74abff"/>
+<text x="84" y="577" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600" fill="#eef5ff" text-anchor="start" letter-spacing="0">Shared TypeScript contracts</text>
+<text x="72" y="612" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Shared/ defines tasks, analysis results, progress, library items and subtitle cues.</text>
+<text x="72" y="642" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#bdcbe0" text-anchor="start" letter-spacing="0">Both processes import these contracts; request validation runs at the backend boundary.</text>
+<text x="48" y="704" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#a7bad2" text-anchor="start" letter-spacing="0">Tools: yt-dlp / FFmpeg / ffprobe / Deno     Data: SQLite / media-library.json / local media</text>
+</g></svg>

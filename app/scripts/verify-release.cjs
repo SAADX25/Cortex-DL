@@ -3,6 +3,7 @@ const path = require('node:path')
 const assert = require('node:assert/strict')
 const crypto = require('node:crypto')
 const { execFileSync } = require('node:child_process')
+const { createReleaseTools } = require('./release-tags.cjs')
 const root = path.resolve(__dirname, '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json')))
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json')))
@@ -18,7 +19,7 @@ async function main() {
   verifyVersion(process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME : undefined)
   if (strict) {
     assert.equal(git('status', '--porcelain'), '', 'Release build requires a clean committed tree')
-    verifyVersion(git('describe', '--tags', '--exact-match', 'HEAD'))
+    verifyVersion(createReleaseTools().verify({ allowUnpublished: true }))
   }
   if (process.argv.includes('--artifacts')) {
     const dir = path.join(root, 'release', pkg.version)

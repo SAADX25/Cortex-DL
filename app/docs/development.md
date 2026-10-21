@@ -1,43 +1,65 @@
 # Development guide
 
-## Layout and commands
+Use the [code map](project-map.md) to find files and [Contributing](../../CONTRIBUTING.md) for setup, checks and releases. This guide explains the behavior to preserve when changing a feature.
 
-The application package and lockfile live in `app`. The repository root provides npm shortcuts, the development launcher, branding and contributor documents. Run `npm run setup` to install locked dependencies, `npm run dev` to stage engines and launch development, `npm run check` for TypeScript, ESLint and tests, and `npm run build` to build the Windows installer. Tests that invoke media tools need `engine-baseline`; first-time installation and staging require network access.
+## Process boundaries
 
-React views live in `Front-End/src/components`; hooks, actions and renderer helpers live in their corresponding directories. Zustand stores own shared renderer state. Update Arabic and English translations together and check RTL layouts. Shared IPC types live in `Shared`. Keep filesystem, database and child-process work behind validated backend IPC handlers and the preload bridge.
+React views call `window.cortexDl` through `preload.ts`. Backend IPC handlers validate requests before touching files, SQLite or native processes. Add shared contracts in `Shared/` and update the bridge and handler together.
+
+Zustand stores own renderer state. Components display that state; actions submit requests. Keep database, filesystem and child-process work in the backend. Check both English and Arabic layouts, including RTL and reduced motion for animations.
 
 ## Download and media processing
 
-`downloadManager.ts` owns queue slots, retries, pause/resume, task transitions and final publication. Each attempt has an isolated runtime and output candidate. Callbacks must still own that attempt before mutating state; pausing waits for teardown before a replacement attempt starts. Engines return results to the manager instead of committing completion themselves. Persist lifecycle changes immediately and batch progress writes.
+`downloadManager.ts` owns queue slots, retries, attempts and final publication. Engines return a result; they do not mark a task complete on their own.
 
-The media format registry decides between direct output, remuxing, audio encoding, video encoding and full transcoding. Copy compatible streams; accurate trims and incompatible or unknown codecs require encoding. Validate output streams, container and duration before publishing a final file. Finalization must retain required subtitles and artwork and remain cancelable.
+Each attempt owns its callbacks, processes and output candidate. Check ownership before changing task state. Pause and cancellation wait for teardown before a replacement attempt starts. Persist lifecycle changes immediately and batch progress writes.
 
-Media requests own their streams, processes and preview sessions through a shared registry. Close streams, terminate owned process trees and drain work on cancellation or shutdown. Range responses must respect the requested bounds and actual file size. Playback waits for the media server's listening event and final port.
+`services/mediaService.ts` owns format rules, conversion decisions and output validation. Copy compatible streams when possible; trimming or incompatible codecs may require encoding. Validate streams, container and duration before publishing the final file. Preserve required subtitles and artwork.
+
+Temporary files belong to `.cortex_temp/<taskId>/<attemptId>` under the selected destination. Clean only files owned by that attempt. Paused and failed tasks retain partial data for recovery.
 
 ## Analysis and previews
 
-Normalize URLs without discarding provider identity or authentication parameters. Publish available thumbnail/title metadata early; full extraction and optional enrichment arrive independently. Each renderer generation and IPC request owns its updates, so input changes and disposal invalidate stale results. Identical analysis requests share bounded extraction work with independent cancellation; the final subscriber cancels the child process.
+Thumbnail/title previews can arrive before formats. Keep the analysis state active until the full request finishes, and show pending quality controls while it runs. Change the displayed stage on real results rather than a timer; show an indeterminate indicator instead of an invented percentage.
 
-Metadata caching is bounded and scoped to URL and cookie-file identity. Cache successful descriptive metadata without signed media URLs. Bound network bodies, extractor output and deadlines, and drain children before releasing concurrency slots. Cookie validation shares unchanged-file results without retaining or logging cookie contents.
+Each renderer generation and IPC request owns its updates. Changing or clearing a URL invalidates old results. Identical requests can share extraction work while keeping independent cancellation; the final subscriber stops the child process.
 
-Visual Trim extracts a fresh supported progressive resource, or a synchronized video/audio pair for adaptive media. Preserve the analyzed duration as the trim bound. Validate URLs and codec support, use the analyzed fallback once, and keep trim controls usable on preview failure. Closing a preview detaches media elements and cancels its extraction session.
+Normalize URLs without losing provider or access information. Bound caches, response bodies, extractor output and deadlines. Do not retain signed media URLs in descriptive metadata caches or log credential contents.
 
-Player diagnostics retain actual media errors and session context. Keep playback independent of optional artwork, diagnostics and external metadata requests.
+## Playback and trim previews
+
+Media sessions own their streams, native processes and preview requests. Close them on cancellation, player close or shutdown. Range responses must match the requested bounds and actual file size, and playback must wait for the media server to listen.
+
+Visual Trim uses a supported progressive stream or synchronized video/audio pair. Keep the analyzed duration as the trim bound, validate codec support, and leave controls usable when preview extraction fails.
+
+Cover edits temporarily release the file, then restore playback position, volume, speed, pause state and subtitle selection. Optional artwork or diagnostics must not block ordinary playback.
 
 ## Media library and artwork
 
-Library import validates paths and persists metadata in one durable catalog commit without probing or modifying source media. Reopening uses saved catalog data rather than scanning every source. Inspect availability for the current page. Thumbnail workers share bounded slots, deduplicate requests and look up a valid disk cache before probing. Cache identity includes source metadata; invalid entries are regenerated. Discovery still checks attached pictures on supported audio and video formats.
+Imports save catalog references without moving or probing every source file. Reopening uses saved metadata and checks availability for the visible page. Thumbnail workers share bounded slots, deduplicate work and reuse valid cached images.
 
-Explicit cover edits verify the source, preserve audio/video packets, tags, chapters and subtitles, replace existing attached pictures, and use backup/rollback before committing the catalog. Unsupported embedding formats retain library-only artwork. After a committed embedded edit, send a Windows shell update notification. Optional Media Player and VLC refresh touches only recognized matching cache entries and keeps backups; a cache failure must not roll back a saved cover. Media Player may close gracefully when a matching stale cache exists; VLC requires reopening to discard images held in memory. Unknown cache formats and redirected paths are skipped.
+Explicit cover edits preserve media packets, tags, chapters and subtitles. Verify the replacement before committing it, and roll back if the save fails. Formats without embedding support keep library-only artwork.
+
+After an embedded edit, notify Windows that the file changed. Optional Media Player/VLC cache refresh touches only matching entries and keeps backups; cache failure must not undo a saved cover. Media Player may close gracefully. VLC may need reopening to discard an image held in memory.
+
+## Local subtitles
+
+The subtitle service coordinates model readiness, transcription, translation and export. Downloads use the versions and hashes in `subtitles/manifest.ts`. GPU selection can fall back to CPU when needed.
+
+Preserve speech gaps and source timestamps. Keep reviewable transcripts when translation fails, and drain native work before canceling or clearing a session. Subtitle merging validates the result while preserving compatible audio/video streams.
 
 ## Startup and engine provisioning
 
-Bootstrap configures diagnostics, safe mode and the single-instance lock before loading native database/backend modules. Load the shell and history independently of engine provisioning. Defer updater checks, optional cleanup and required verification until the first usable UI. Keep the application mounted while showing actionable setup or repair state.
+`bootstrap.ts` sets up diagnostics and the single-instance lock before loading backend services. Show the shell and history independently of engine provisioning. Defer optional work until the first usable interface.
 
-Engine receipts bind the locked manifest, expected digest/version, executable size and modification time. Unchanged trusted receipts establish readiness through bounded metadata reads without hashing executables or launching version processes. Installation, repair, changed metadata and OS execution failures require deep digest, architecture and version checks. Serialize deep checks and share concurrent requests for the same engine; cached engines can proceed independently. Each workload checks only its required engines.
+Engine receipts bind the locked package, digest, version, file size and modification time. Healthy unchanged receipts avoid hashing or launching engines again. Installation, repair, changed files and execution failures require deeper verification. Share checks for the same engine and verify only the tools a workload needs.
 
-Shutdown aborts and drains provisioning, hashing, verification and media work before exiting. Development uses `engine-baseline`; mutable runtime engines live in user AppData. Keep `engines.lock.json`, third-party notices, build metadata and release checks consistent. Preserve `build/installer.nsh` during cleanup.
+Keep engine URLs, versions, hashes and notices consistent. Development uses `app/engine-baseline`; installed engines live in the app's user-data folder. Shutdown aborts and drains verification, downloads and media work before exiting.
 
 ## Generated files
 
-Use `npm run clean:preview` to inspect cleanup and `npm run clean` to remove generated development output. `npm run clean:packaged` also removes unpacked Windows builds in versioned release directories; rebuild before validating those artifacts. Cleanup preserves dependencies, staged engines, installers, `.env`, `.cortex_temp` and user history/settings. Stop development and validation processes before cleanup and inspect temporary media manually.
+Stop running development and validation processes, preview cleanup with `npm run clean:preview`, then use `npm run clean`. `clean:packaged` also removes unpacked Windows builds, which must be rebuilt before artifact checks.
+
+Cleanup preserves dependencies, staged engines, installers, `.env`, partial downloads and user data. `app/build/installer.nsh` is source, not generated output.
+
+[Code map](project-map.md) · [README](../../README.md)

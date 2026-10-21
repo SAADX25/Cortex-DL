@@ -1,29 +1,17 @@
 # Code of Conduct
 
-Our community is welcoming to everyone, regardless of their characteristics.
+Everyone is welcome to contribute. Treat people with respect, focus feedback on the work, and make room for different experience levels and viewpoints.
 
-As such, we expect you to treat everyone with respect and contribute to an open and welcoming community.
+## Expectations
 
-## DO
+- Give specific, constructive feedback and accept it in good faith.
+- Disagree respectfully; avoid personal attacks or insults.
+- Do not harass, discriminate, spam or share someone's private information.
 
-* Have empathy and be nice to others.
-* Be respectful of differing opinions, even if you disagree.
-* Give and accept constructive criticism.
+## Reporting and enforcement
 
-## DON'T
+Report concerns privately to [seed.rabade@gmail.com](mailto:seed.rabade@gmail.com). Include enough context to explain what happened without escalating the dispute publicly.
 
-* Use offensive or derogatory language.
-* Troll or spam.
-* Personally attack or harass others.
+Maintainers may remove inappropriate content or restrict participation when needed. This policy applies to repository discussions, issues, pull requests and other project spaces.
 
-Repetitive violations of these guidelines might get your access to the repository restricted.
-
-If you feel like a user is violating these guidelines or feel treated unfairly, please refrain from vigilantism and instead report the issue to a moderator.
-
-If you need to report an issue or contact the repository maintainers regarding the Code of Conduct, please contact:
-
-**Email:** [seed.rabade@gmail.com](mailto:seed.rabade@gmail.com)
-
----
-
-[README](README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT License](LICENSE)
+[README](README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

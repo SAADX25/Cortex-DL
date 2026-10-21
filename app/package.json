@@ -29,7 +29,12 @@
     "build:candidate": "npm run version:verify && node scripts/third-party-notices.cjs && npm run build:manifest && tsc && vite build && electron-builder --win --publish never",
     "release:build": "node scripts/verify-release.cjs --release && npm run build:candidate && node scripts/verify-release.cjs --release --artifacts",
     "release:verify": "node scripts/verify-release.cjs --artifacts",
-    "test:installer": "node scripts/installer-upgrade.cjs"
+    "test:installer": "node scripts/installer-upgrade.cjs",
+    "release:check": "node scripts/release-tags.cjs check",
+    "release:tag": "node scripts/release-tags.cjs create",
+    "release:push": "node scripts/release-tags.cjs push",
+    "git:hooks": "node scripts/release-tags.cjs install-hooks",
+    "test:release": "node --test tests/releaseTags.test.cjs"
   },
   "dependencies": {
     "axios": "^1.14.0",
