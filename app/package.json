@@ -1,7 +1,7 @@
 {
   "name": "cortex-dl",
   "private": true,
-  "version": "2.2.0",
+  "version": "2.2.5",
   "description": "Cortex DL - Advanced Video and Audio Downloader",
   "repository": {
     "type": "git",
@@ -21,7 +21,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint && npm test",
-    "test:unit": "node --test --test-concurrency=2 tests/artwork.test.cjs tests/downloader.test.cjs tests/engines.test.cjs",
+    "test:unit": "node --test --test-concurrency=2 tests/artwork.test.cjs tests/downloader.test.cjs tests/engines.test.cjs tests/threads.test.cjs",
     "test:integration": "node --test --test-concurrency=2 tests/subtitles.test.cjs tests/mediaLibrary.test.cjs tests/playerAndUi.test.cjs",
     "engines:stage": "node scripts/stage-engines.cjs && node scripts/third-party-notices.cjs",
     "version:verify": "node scripts/verify-release.cjs",

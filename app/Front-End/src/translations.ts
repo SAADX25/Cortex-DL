@@ -141,6 +141,9 @@ export interface Translations {
   youtube_formats_restricted: string;
   youtube_po_token_required: string;
   youtube_network_error: string;
+  threads_no_media: string;
+  threads_post_unavailable: string;
+  threads_invalid_url: string;
   health_title: string;
   health_desc: string;
   health_refresh: string;
@@ -168,7 +171,7 @@ export const translations: Record<Language, Translations> = {
     nav_downloads: "التنزيلات",
     nav_settings: "الإعدادات",
     add_title: "إضافة تنزيل جديد",
-    add_subtitle: "أدخل رابط الفيديو أو الصوت من يوتيوب، فيسبوك، أو إنستغرام",
+    add_subtitle: "أدخل رابط الفيديو أو الصوت من يوتيوب، فيسبوك، إنستغرام، أو ثريدز",
     url_placeholder: "الصق رابط أي فيديو أو مقطع صوتي هنا...",
     analyze_btn: "تحليل الرابط",
     analyzing: "جاري التحليل...",
@@ -304,6 +307,9 @@ export const translations: Record<Language, Translations> = {
     youtube_formats_restricted: "قيّد YouTube بعض الصيغ أو لم يوفر صيغة قابلة للتنزيل. حدّث الجودة لاحقاً.",
     youtube_po_token_required: "تشير بيانات الاستخراج إلى ضرورة رمز إثبات المصدر لبعض الطلبات. ملف الكوكيز وحده قد لا يحل ذلك.",
     youtube_network_error: "تعذر الاتصال بـ YouTube. تحقق من الشبكة ثم أعد المحاولة.",
+    threads_no_media: "هذا المنشور على Threads لا يحتوي على فيديو أو مقطع صوتي قابل للتنزيل.",
+    threads_post_unavailable: "تعذر الوصول إلى منشور Threads. قد يكون المنشور خاصًا أو محذوفًا أو يتطلب تسجيل الدخول.",
+    threads_invalid_url: "رابط Threads غير صالح. الصق رابط منشور مباشر من Threads.",
     health_title: "فحص جاهزية التطبيق",
     health_desc: "يتحقق من المكونات المطلوبة للتحليل والتنزيل على Windows.",
     health_refresh: "إعادة الفحص",
@@ -327,7 +333,7 @@ export const translations: Record<Language, Translations> = {
     nav_downloads: "Downloads",
     nav_settings: "Settings",
     add_title: "Add New Download",
-    add_subtitle: "Enter video or audio link from YouTube, Facebook, or Instagram",
+    add_subtitle: "Enter video or audio link from YouTube, Facebook, Instagram, or Threads",
     url_placeholder: "Drop any video or audio link here...",
     analyze_btn: "Analyze Link",
     analyzing: "Analyzing...",
@@ -463,6 +469,9 @@ export const translations: Record<Language, Translations> = {
     youtube_formats_restricted: "YouTube restricted some formats or reported no downloadable format. Refresh formats later.",
     youtube_po_token_required: "The video provider requires an additional access token. Select a local file to generate subtitles.",
     youtube_network_error: "YouTube could not be reached. Check your connection and retry.",
+    threads_no_media: "This Threads post does not contain a downloadable video or audio.",
+    threads_post_unavailable: "Could not access this Threads post. It may be private, deleted, or require login.",
+    threads_invalid_url: "Invalid Threads link. Please paste a direct Threads post URL.",
     health_title: "App readiness",
     health_desc: "Checks the components required for Windows analysis and downloads.",
     health_refresh: "Run again",

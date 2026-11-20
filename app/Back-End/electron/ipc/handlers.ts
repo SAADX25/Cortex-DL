@@ -9,7 +9,8 @@ import { type StartInput, type AppHealthCheck } from '../types'
 import { isDirectMedia, analysisTiming, fetchBoundedJson } from '../services/analysisService'
 import { randomUUID } from 'node:crypto'
 import { ThumbnailCache } from '../services/thumbnailService'
-import { normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
+import { isThreadsUrl, normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
+import { analyzeThreadsUrl, getThreadsDirectStreamUrl, getThreadsPreviewStreams } from '../services/threadsService'
 import { analyzeUrlForHls } from '../hls'
 import { analyzeWithYtdlp, assertAnalysisAllowed, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams, checkJsRuntime } from '../engines/ytdlpService'
 import { extractAndSaveComments } from '../commentsExtractor'
@@ -391,6 +392,11 @@ export function registerIpcHandlers(deps: IpcDependencies) {
         .then(data => { if (typeof data.title === 'string') send('preview', { title: data.title }) }).catch(() => {}))
     }
     try {
+      if (isThreadsUrl(url)) {
+        const result = await analyzeThreadsUrl(url, controller.signal)
+        analysisTiming('totalAnalysisMs', start)
+        return result
+      }
       if (await isDirectMedia(url, controller.signal)) return { kind: 'direct' }
       const hlsResult = await analyzeUrlForHls(url, controller.signal)
       if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') return hlsResult
@@ -423,19 +429,24 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.handle('cortexdl:get-trim-preview-streams', async (_event, url: string, previewSession: string) => {
     if (typeof previewSession !== 'string' || !/^trim-[\w-]{1,128}$/.test(previewSession)) throw new Error('Invalid trim session')
-    return getTrimPreviewStreams(url, {
+    const previewOptions = {
       isClosed: () => isMediaSessionClosed(previewSession),
-      track: stop => trackMediaProcess(previewSession, 'probe', stop),
-    })
+      track: (stop: () => void) => trackMediaProcess(previewSession, 'probe', stop),
+    }
+    if (isThreadsUrl(url)) return getThreadsPreviewStreams(url, previewOptions)
+    return getTrimPreviewStreams(url, previewOptions)
   })
 
   ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string, previewSession?: string) => {
     try {
       log.info(`[IPC] get-direct-stream-url called for: ${url.slice(0, 80)}...`)
-      const directUrl = await getDirectStreamUrl(url, previewSession ? {
+      const previewOptions = previewSession ? {
         isClosed: () => isMediaSessionClosed(previewSession),
-        track: stop => trackMediaProcess(previewSession, 'probe', stop),
-      } : {})
+        track: (stop: () => void) => trackMediaProcess(previewSession, 'probe', stop),
+      } : {}
+      const directUrl = isThreadsUrl(url)
+        ? await getThreadsDirectStreamUrl(url, previewOptions)
+        : await getDirectStreamUrl(url, previewOptions)
       return directUrl
     } catch (err) {
       log.error('[IPC] get-direct-stream-url error:', err)

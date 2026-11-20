@@ -9,8 +9,10 @@ import { getBinaryPath } from '../paths'
 import { nowMs, killProcessTree } from '../utils'
 import { parseDownloadProgress, parseFfmpegProgress, parseStateTransition, flushLines, type FfmpegState } from '../progressParser'
 import { type IEngine } from './IEngine'
+import { ThreadsEngine } from './ThreadsEngine'
 import { checkJsRuntime, getJsRuntimeArgs, diagnosticCategories, youtubeDiagnostic } from './ytdlpService'
 import { isYouTubeUrl, youtubeErrorCode } from '../../../Shared/youtubeErrors'
+import { isThreadsUrl } from '../../../Shared/analysisUrl'
 
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
@@ -25,8 +27,19 @@ interface YtdlpRunResult {
 export class YoutubeEngine implements IEngine {
   private runtime: TaskRuntime | null = null
   private childProcess: ChildProcessWithoutNullStreams | null = null
+  private activeDelegate: IEngine | null = null
 
   async download(task: DownloadTask, context?: EngineContext): Promise<EngineResult> {
+    if (isThreadsUrl(task.url)) {
+      const delegate = new ThreadsEngine()
+      this.activeDelegate = delegate
+      this.runtime = context?.runtime ?? null
+      try {
+        return await delegate.download(task, context)
+      } finally {
+        if (this.activeDelegate === delegate) this.activeDelegate = null
+      }
+    }
     await ensureEnginesReady(['yt-dlp', 'deno', 'ffmpeg', 'ffprobe'])
     await checkJsRuntime()
     if (!context) throw new Error('[YoutubeEngine] Missing EngineContext')
@@ -68,11 +81,13 @@ export class YoutubeEngine implements IEngine {
 
   pause(): void {
     log.info(`[YoutubeEngine] Pausing — aborting child process...`)
+    this.activeDelegate?.pause()
     this.runtime?.abortController?.abort()
   }
 
   stop(): void {
     log.info(`[YoutubeEngine] Stopping — aborting child process...`)
+    this.activeDelegate?.stop()
     this.runtime?.abortController?.abort()
   }
 

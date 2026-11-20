@@ -12,6 +12,8 @@ import { SubtitleProcesses } from './process'
 import { parseSpeechRecognition, serializeSubtitles, validateCues } from '../../../Shared/subtitleCues'
 import { startTranslator } from './translator'
 import { youtubeErrorCode } from '../../../Shared/youtubeErrors'
+import { isThreadsUrl } from '../../../Shared/analysisUrl'
+import { resolveThreadsMedia, selectThreadsDownloadPlan } from '../services/threadsService'
 import { detectNvidiaGpu, selectVulkanDevice, translationGpuLayers } from './gpu'
 
 export class LocalSubtitleService {
@@ -76,10 +78,23 @@ export class LocalSubtitleService {
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid media URL')
         cacheKey = JSON.stringify([input, request.sourceLanguage, request.speechModel, recognitionMode, request.compute ?? 'auto', speechBackend])
         if (this.speechCache?.key !== cacheKey) {
-          await ensureEnginesReady(['yt-dlp', 'deno']); await checkJsRuntime(); signal.throwIfAborted()
-          await processes.run(getBinaryPath('yt-dlp'), ['--ignore-config', '--no-playlist', '--no-progress', '--retries', '0', '--extractor-retries', '0', '--socket-timeout', '20',
-            ...getJsRuntimeArgs(), '--ffmpeg-location', path.dirname(getBinaryPath('ffmpeg')), '-f', 'bestaudio/best', '-x', '--audio-format', 'wav', '-o', path.join(directory, 'input.%(ext)s'), input])
-          input = path.join(directory, 'input.wav')
+          if (isThreadsUrl(input)) {
+            let extracted = await resolveThreadsMedia(input, signal)
+            if (extracted.kind === 'playlist' && extracted.items[0]) {
+              extracted = await resolveThreadsMedia(extracted.items[0].url, signal)
+            }
+            if (extracted.kind !== 'media') throw new Error('THREADS_NO_MEDIA')
+            const plan = selectThreadsDownloadPlan(extracted.media, 'wav')
+            const streamUrl = plan.mode === 'single' ? plan.stream.url : plan.audio.url
+            const wavTarget = path.join(directory, 'input.wav')
+            await processes.run(getBinaryPath('ffmpeg'), ['-y', '-v', 'error', '-i', streamUrl, '-vn', '-c:a', 'pcm_s16le', wavTarget])
+            input = wavTarget
+          } else {
+            await ensureEnginesReady(['yt-dlp', 'deno']); await checkJsRuntime(); signal.throwIfAborted()
+            await processes.run(getBinaryPath('yt-dlp'), ['--ignore-config', '--no-playlist', '--no-progress', '--retries', '0', '--extractor-retries', '0', '--socket-timeout', '20',
+              ...getJsRuntimeArgs(), '--ffmpeg-location', path.dirname(getBinaryPath('ffmpeg')), '-f', 'bestaudio/best', '-x', '--audio-format', 'wav', '-o', path.join(directory, 'input.%(ext)s'), input])
+            input = path.join(directory, 'input.wav')
+          }
         }
       } else {
         if (!path.isAbsolute(input) || !/\.(mp4|mkv|webm|mov|avi|m4v|ogv|mp3|wav|m4a|aac|opus|flac|ogg|wma)$/i.test(input)) throw new Error('Select a supported local media file')

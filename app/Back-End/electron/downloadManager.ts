@@ -493,7 +493,8 @@ export class DownloadManager {
     if (
       low.includes('youtube.com') || low.includes('youtu.be') ||
       low.includes('facebook.com') || low.includes('instagram.com') ||
-      low.includes('twitter.com') || low.includes('tiktok.com')
+      low.includes('threads.com') || low.includes('threads.net') ||
+      low.includes('twitter.com') || low.includes('x.com') || low.includes('tiktok.com')
     ) return 'ytdlp'
 
     if (targetFormat && AUDIO_FORMATS.includes(targetFormat as AudioFormat)) {

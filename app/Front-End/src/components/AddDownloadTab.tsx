@@ -9,6 +9,7 @@ import { getTrimPreviewSource } from './AdvancedTrimmer/trimSource'
 import UrlInputBar from './UrlInputBar'
 import SmartImage from './SmartImage'
 import { YouTubeMusicIcon } from './icons/YouTubeMusicIcon'
+import { ThreadsIcon } from './icons/ThreadsIcon'
 import { variantLabel } from '../lib/variantLabel'
 import { MAX_BATCH_ITEMS } from '../constants/limits'
 import { useUIStore } from '../stores/useUIStore'
@@ -494,6 +495,9 @@ const AddDownloadTab: React.FC = () => {
           </button>
           <button className="brand-icon-btn instagram" onClick={() => onOpenExternal('https://www.instagram.com')} title="Instagram">
             <Instagram size={20} />
+          </button>
+          <button className="brand-icon-btn threads" onClick={() => onOpenExternal('https://www.threads.com')} title="Threads" aria-label="Threads">
+            <ThreadsIcon size={20} />
           </button>
           <button className="brand-icon-btn reddit" onClick={() => onOpenExternal('https://www.reddit.com')} title="Reddit">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
