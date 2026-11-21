@@ -48,6 +48,12 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
         {analyzeResult.kind === 'ytdlp' && !analyzing && (
           <div className="preview-metadata">
             <div className="preview-metadata-row">
+              {analyzeResult.isLive && (
+                <div className="metadata-badge" style={{ backgroundColor: 'rgba(239, 68, 68, 0.18)', borderColor: 'rgba(239, 68, 68, 0.45)', color: '#fca5a5', fontWeight: 700 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                  <span>{lang === 'ar' ? 'بث مباشر' : 'LIVE'}</span>
+                </div>
+              )}
               {analyzeResult.views != null && (
                 <div className="metadata-badge" title={lang === 'ar' ? 'المشاهدات' : 'Views'}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path><circle cx="12" cy="12" r="3"></circle></svg>

@@ -1,4 +1,18 @@
 
+const KICK_HOSTS = new Set([
+  'kick.com',
+  'www.kick.com',
+  'm.kick.com',
+  'player.kick.com',
+])
+
+export function isKickUrl(input: string): boolean {
+  try {
+    const url = new URL(input.trim())
+    return ['https:', 'http:'].includes(url.protocol) && KICK_HOSTS.has(url.hostname.toLowerCase())
+  } catch { return false }
+}
+
 const THREADS_HOSTS = new Set([
   'threads.com',
   'www.threads.com',

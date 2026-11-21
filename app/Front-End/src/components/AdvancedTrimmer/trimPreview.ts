@@ -3,6 +3,10 @@ export function logPreviewFailure(reason: string): void {
   if (typeof window !== 'undefined') window.cortexDl?.logPreviewError?.(reason)
 }
 
+export function isHlsStreamUrl(value: string): boolean {
+  return /\.m3u8(\?|#|$)/i.test(value)
+}
+
 export function validatePreviewUrl(value: string): string {
   const url = new URL(value)
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid preview stream URL')
@@ -44,7 +48,7 @@ export class TrimPreview {
       const url = validatePreviewUrl(await extract())
       if (!this.disposed) { this.activeUrl = url; this.update(url, null, false) }
     } catch (error) {
-      if (!this.disposed) this.fail(`yt-dlp preview extraction failed: ${error instanceof Error ? error.message : String(error)}`)
+      if (!this.disposed) this.fail(`Preview extraction failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

@@ -5,7 +5,7 @@ import { translations } from '../translations'
 import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud, AlertCircle } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer/AdvancedTrimmer'
-import { getTrimPreviewSource } from './AdvancedTrimmer/trimSource'
+import { getTrimmerContext } from './AdvancedTrimmer/trimSource'
 import UrlInputBar from './UrlInputBar'
 import SmartImage from './SmartImage'
 import { YouTubeMusicIcon } from './icons/YouTubeMusicIcon'
@@ -82,6 +82,8 @@ const AddDownloadTab: React.FC = () => {
   const setStartTime = useFormStore((s) => s.setStartTime)
   const endTime = useFormStore((s) => s.endTime)
   const setEndTime = useFormStore((s) => s.setEndTime)
+  const trimMode = useFormStore((s) => s.trimMode)
+  const setTrimMode = useFormStore((s) => s.setTrimMode)
   const setSelectedYtdlpFormatId = useFormStore((s) => s.setSelectedYtdlpFormatId)
   const availableVideoQualities = useAvailableVideoQualities()
 
@@ -122,9 +124,12 @@ const AddDownloadTab: React.FC = () => {
   }
 
   const trimmerSource = useMemo(() => {
-    if (isAudioMode || analyzeResult?.kind !== 'ytdlp' || !analyzeResult.duration) return null
-    return getTrimPreviewSource(analyzeResult.formats, selectedQuality, analyzeResult.duration)
-  }, [analyzeResult, isAudioMode, selectedQuality])
+    return getTrimmerContext(analyzeResult, selectedQuality, selectedVariantUrl)
+  }, [analyzeResult, selectedQuality, selectedVariantUrl])
+
+  useEffect(() => {
+    setIsTrimmerOpen(false)
+  }, [url])
 
   const applyTrimRange = (range: TrimRange) => {
     setStartTime(range.startTime)
@@ -364,7 +369,18 @@ const AddDownloadTab: React.FC = () => {
                       }}
                     >
                       <Scissors size={15} />
-                      <span>{isTrimmerOpen ? 'Close Trimmer' : 'Advanced Trim'}</span>
+                      <span>
+                        {isTrimmerOpen
+                          ? (lang === 'ar' ? 'إغلاق محرر القص' : 'Close Trimmer')
+                          : trimmerSource.isLive
+                            ? (lang === 'ar' ? 'قص مقطع من البث المباشر (Advanced Trim)' : 'Clip Live Stream (Advanced Trim)')
+                            : (lang === 'ar' ? 'قص متقدم للفيديو (Advanced Trim)' : 'Advanced Trim')}
+                      </span>
+                      {(startTime || endTime) && (
+                        <span className="trimmer-toggle-badge" dir="ltr">
+                          {startTime || '00:00:00'} → {endTime || 'END'}
+                        </span>
+                      )}
                     </button>
 
                     <div className={`trimmer-collapse${isTrimmerOpen ? ' trimmer-collapse--open' : ''}`}>
@@ -374,12 +390,19 @@ const AddDownloadTab: React.FC = () => {
                           videoUrl={trimmerSource.videoUrl}
                           originalUrl={url}
                           duration={trimmerSource.duration}
+                          isLive={trimmerSource.isLive}
+                          initialStreamType={trimmerSource.streamType}
+                          lang={lang}
                           initialStartTime={startTime}
                           initialEndTime={endTime}
+                          trimMode={trimMode}
+                          onTrimModeChange={setTrimMode}
                           onChange={applyTrimRange}
                           onConfirm={(range) => {
                             applyTrimRange(range)
-                            showToast(`Trim saved: ${range.startTime} - ${range.endTime}`)
+                            showToast(lang === 'ar'
+                              ? `تم حفظ القص: ${range.startTime} - ${range.endTime}`
+                              : `Trim saved: ${range.startTime} - ${range.endTime}`)
                           }}
                         />
                       )}

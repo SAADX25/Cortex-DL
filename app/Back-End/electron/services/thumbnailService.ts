@@ -309,21 +309,59 @@ export const PREVIEW_FORMAT = ['https', 'http']
   .flatMap(protocol => PREVIEW_CODECS.map(format => `${format}[protocol=${protocol}]`))
   .join('/')
 
-export type PreviewStreams = { videoUrl: string; audioUrl?: string }
+export type PreviewStreams = {
+  videoUrl: string
+  audioUrl?: string
+  streamType?: 'progressive' | 'hls'
+  isLive?: boolean
+  duration?: number
+}
 
-export const TRIM_PREVIEW_FORMAT = `${PREVIEW_FORMAT}/bv[ext=mp4][vcodec^=avc1][protocol=https][height<=1080]+ba[acodec^=mp4a][protocol=https]/bv[ext=webm][vcodec^=vp9][protocol=https][height<=1080]+ba[acodec=opus][protocol=https]`
+export const TRIM_PREVIEW_FORMAT =
+  `${PREVIEW_FORMAT}/bv[ext=mp4][vcodec^=avc1][protocol=https][height<=1080]+ba[acodec^=mp4a][protocol=https]`
+  + `/bv[ext=webm][vcodec^=vp9][protocol=https][height<=1080]+ba[acodec=opus][protocol=https]`
+  + `/b[protocol^=m3u8][height<=720]/b[protocol^=m3u8]`
 
-function progressiveUrl(info: Record<string, unknown>): string {
-  if (!['http', 'https'].includes(String(info.protocol))) throw new Error('Preview requires a progressive HTTP stream')
-  const url = new URL(String(info.url))
+function validateStreamHttpUrl(rawUrl: unknown): string {
+  const url = new URL(String(rawUrl))
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid preview stream URL')
   const expires = Number(url.searchParams.get('expire') || url.searchParams.get('expires'))
   if (expires > 0 && expires * 1000 <= Date.now()) throw new Error('Expired preview stream URL')
   return url.href
 }
 
+function progressiveUrl(info: Record<string, unknown>): string {
+  if (!['http', 'https'].includes(String(info.protocol))) throw new Error('Preview requires a progressive HTTP stream')
+  return validateStreamHttpUrl(info.url)
+}
+
+function playableHlsPreview(info: Record<string, unknown>): PreviewStreams {
+  const vcodec = info.vcodec ? String(info.vcodec) : ''
+  if (vcodec && vcodec !== 'none' && !/^(?:avc1|avc3|h264|vp09|vp9|vp08|vp8|hev1|hvc1)/i.test(vcodec)) {
+    throw new Error(`Unsupported HLS preview codec: ${vcodec}`)
+  }
+  const acodec = info.acodec ? String(info.acodec) : ''
+  if (acodec && acodec !== 'none' && !/^(?:mp4a|aac|opus|vorbis|mp3)/i.test(acodec)) {
+    throw new Error(`Unsupported HLS preview audio codec: ${acodec}`)
+  }
+  const url = validateStreamHttpUrl(info.url || info.manifest_url)
+  const isLive = info.is_live === true || info.live_status === 'is_live'
+  const duration = typeof info.duration === 'number' && Number.isFinite(info.duration) && info.duration > 0 ? info.duration : undefined
+  return {
+    videoUrl: url,
+    streamType: 'hls',
+    ...(isLive ? { isLive: true } : {}),
+    ...(duration !== undefined ? { duration } : {}),
+  }
+}
+
 export function playablePreviewStreams(info: Record<string, unknown>): PreviewStreams {
-  if (!Array.isArray(info.requested_formats)) return { videoUrl: playablePreviewUrl(info) }
+  if (!Array.isArray(info.requested_formats)) {
+    if (['m3u8', 'm3u8_native'].includes(String(info.protocol))) {
+      return playableHlsPreview(info)
+    }
+    return { videoUrl: playablePreviewUrl(info) }
+  }
   const formats = info.requested_formats as Record<string, unknown>[]
   const video = formats.find(format => format.vcodec && format.vcodec !== 'none')
   const audio = formats.find(format => format.vcodec === 'none' && format.acodec && format.acodec !== 'none')

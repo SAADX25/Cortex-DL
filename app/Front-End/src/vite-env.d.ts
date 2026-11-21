@@ -36,6 +36,7 @@ declare global {
     vcodec?: string
     acodec?: string
     ext: string
+    protocol?: string
     resolution: string
     filesize: number | null
     description: string
@@ -59,6 +60,8 @@ declare global {
       likes?: number
       dislikes?: number
       duration?: number
+      isLive?: boolean
+      wasLive?: boolean
       qualityStatus?: 'restricted' | 'limited' | 'available'
       comments?: { author: string; text: string; likeCount: number }[]
     }
@@ -124,11 +127,13 @@ declare global {
         ytdlpFormatId?: string
         title?: string
         thumbnail?: string
+        isLive?: boolean
         username?: string
         password?: string
         speedLimit?: string
         startTime?: string
         endTime?: string
+        trimMode?: 'fast' | 'exact'
       }) => Promise<DownloadTask>
       addBatchDownloads: (inputs: {
         url: string
@@ -140,11 +145,13 @@ declare global {
         ytdlpFormatId?: string
         title?: string
         thumbnail?: string
+        isLive?: boolean
         username?: string
         password?: string
         speedLimit?: string
         startTime?: string
         endTime?: string
+        trimMode?: 'fast' | 'exact'
       }[]) => Promise<DownloadTask[]>
       pauseDownload: (id: string) => Promise<DownloadTask>
       resumeDownload: (id: string) => Promise<DownloadTask>
@@ -184,7 +191,7 @@ declare global {
       fetchThumbnail: (url: string) => Promise<string>
       getMediaFps: (filePath: string, session: string) => Promise<number | null>
       getDirectStreamUrl: (url: string, previewSession?: string) => Promise<string>
-      getTrimPreviewStreams: (url: string, previewSession: string) => Promise<{ videoUrl: string; audioUrl?: string } | null>
+      getTrimPreviewStreams: (url: string, previewSession: string) => Promise<{ videoUrl: string; audioUrl?: string; streamType?: 'progressive' | 'hls'; isLive?: boolean; duration?: number } | null>
       logPreviewError: (message: string) => void
 
       getSubtitles: (filePath: string, session: string) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>

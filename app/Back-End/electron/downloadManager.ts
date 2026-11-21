@@ -8,7 +8,7 @@ import { type DownloadTask, type TaskRuntime, type AttemptRuntime, type EngineRe
 import { updateTaskProgress } from '../../Shared/progressModel'
 import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion, runMediaProcess, trimBounds, validateMediaOutput, probeMediaFile } from './services/mediaService'
 import { youtubeDiagnostic } from './engines/ytdlpService'
-import { sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl, withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate, killProcessTree, clearPendingTrailing, sendNotification } from './utils'
+import { sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl, isM3u8Url, withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate, killProcessTree, clearPendingTrailing, sendNotification } from './utils'
 import { type IEngine } from './engines/IEngine'
 import { DirectEngine } from './engines/DirectEngine'
 import { YoutubeEngine } from './engines/YoutubeEngine'
@@ -268,8 +268,10 @@ export class DownloadManager {
       speedLimit: input.speedLimit,
       startTime: input.startTime,
       endTime: input.endTime,
+      trimMode: input.trimMode,
       ytdlpFormatId: input.ytdlpFormatId,
       fps: input.fps,
+      isLive: input.isLive,
     }
 
     this.tasks.set(id, task)
@@ -334,8 +336,10 @@ export class DownloadManager {
         speedLimit: input.speedLimit,
         startTime: input.startTime,
         endTime: input.endTime,
+        trimMode: input.trimMode,
         ytdlpFormatId: input.ytdlpFormatId,
         fps: input.fps,
+        isLive: input.isLive,
       }
 
       this.tasks.set(id, task)
@@ -490,10 +494,12 @@ export class DownloadManager {
 
   private detectEngine(url: string, targetFormat?: TargetFormat): DownloadEngine {
     const low = url.toLowerCase()
+    if (isM3u8Url(url)) return 'ffmpeg'
     if (
       low.includes('youtube.com') || low.includes('youtu.be') ||
       low.includes('facebook.com') || low.includes('instagram.com') ||
       low.includes('threads.com') || low.includes('threads.net') ||
+      low.includes('kick.com') || low.includes('twitch.tv') || low.includes('reddit.com') ||
       low.includes('twitter.com') || low.includes('x.com') || low.includes('tiktok.com')
     ) return 'ytdlp'
 
@@ -670,7 +676,7 @@ export class DownloadManager {
       const result = await entry.start(engine, draft, context)
       this.assertCurrent(id, attempt)
       if (result.kind === 'success') {
-        await this.finalize(task, draft, attempt, context, result.candidate)
+        await this.finalize(task, draft, attempt, context, result.candidate, Boolean(result.sectionTrimmed))
       } else if (result.kind === 'retryable-error' && attempt.retries < (task.engine === 'ytdlp' ? 5 : 3)) {
         attempt.retries++
         task.status = 'queued'
@@ -728,7 +734,7 @@ export class DownloadManager {
     }
   }
 
-  private async finalize(task: DownloadTask, draft: DownloadTask, attempt: AttemptRuntime, ctx: EngineContext, source: string): Promise<void> {
+  private async finalize(task: DownloadTask, draft: DownloadTask, attempt: AttemptRuntime, ctx: EngineContext, source: string, sectionTrimmed = false): Promise<void> {
     const check = () => this.assertCurrent(task.id, attempt)
     if (path.dirname(path.resolve(source)) !== path.resolve(attempt.directory)) throw new Error('Candidate is not attempt-owned')
     const phase = (value: 'validating' | 'trimming' | 'converting' | 'merging' | 'finalizing') => {
@@ -745,20 +751,46 @@ export class DownloadManager {
     const trimming = Boolean(task.startTime || task.endTime)
     const duration = Number(probe.format?.duration)
     let expectedDuration: number | undefined
+    let localTrimStart = bounds.start
+    let needsLocalTrim = false
+
     if (trimming) {
-      if (!Number.isFinite(duration) || duration <= bounds.start) throw new Error('Trim start exceeds media duration')
-      expectedDuration = Math.min(bounds.end ?? duration, duration) - bounds.start
+      if (sectionTrimmed) {
+        if (bounds.end !== undefined) {
+          expectedDuration = Math.max(0.1, bounds.end - bounds.start)
+          if (task.trimMode === 'exact' && Number.isFinite(duration) && duration > expectedDuration + 0.75) {
+            localTrimStart = 0
+            needsLocalTrim = true
+          }
+        }
+      } else {
+        if (!Number.isFinite(duration) || duration <= bounds.start) throw new Error('Trim start exceeds media duration')
+        expectedDuration = Math.min(bounds.end ?? duration, duration) - bounds.start
+        needsLocalTrim = true
+      }
     }
+
     let candidate = source
-    if (trimming || !matchesMediaFormat(task.targetFormat, probe)) {
-      const conversion = decideMediaConversion(task.targetFormat, probe, trimming)
-      if (task.engine === 'ytdlp') youtubeDiagnostic('conversion', { decision: conversion, targetFormat: task.targetFormat, trimming })
-      log.info(`[Finalize] ${task.id}: ${conversion} to ${task.targetFormat}`)
-      phase(trimming ? 'trimming' : conversion === 'remux' ? 'merging' : 'converting')
+    const sourceExt = path.extname(source).slice(1).toLowerCase()
+    const needsContainerRemux =
+      (task.targetFormat === 'webm' && sourceExt !== 'webm') ||
+      (task.targetFormat === 'mov' && sourceExt !== 'mov') ||
+      (task.targetFormat === 'mp4' && sourceExt !== 'mp4')
+    if (needsLocalTrim || needsContainerRemux || !matchesMediaFormat(task.targetFormat, probe)) {
+      const conversion = decideMediaConversion(task.targetFormat, probe, needsLocalTrim)
+      const phaseDecision = conversion === 'direct' && needsContainerRemux ? 'remux' : conversion
+      if (task.engine === 'ytdlp') youtubeDiagnostic('conversion', { decision: phaseDecision, targetFormat: task.targetFormat, trimming: needsLocalTrim })
+      log.info(`[Finalize] ${task.id}: ${phaseDecision} to ${task.targetFormat}`)
+      phase(needsLocalTrim ? 'trimming' : phaseDecision === 'remux' ? 'merging' : 'converting')
       candidate = path.join(attempt.directory, `candidate.${task.targetFormat}`)
-      const args = ['-i', source]
-      if (trimming) args.push('-ss', String(bounds.start), '-t', String(expectedDuration))
-      args.push(...mediaOutputArgs(task.targetFormat, candidate, probe, trimming))
+      const args = needsLocalTrim
+        ? [
+            ...(localTrimStart > 0 ? ['-ss', String(localTrimStart)] : []),
+            '-i', source,
+            ...(expectedDuration !== undefined ? ['-t', String(expectedDuration)] : []),
+          ]
+        : ['-i', source]
+      args.push(...mediaOutputArgs(task.targetFormat, candidate, probe, needsLocalTrim))
       await runMediaProcess(args, draft, ctx, expectedDuration ?? (Number.isFinite(duration) ? duration : undefined))
       check()
     }
@@ -772,7 +804,14 @@ export class DownloadManager {
     check()
     if (!matchesMediaFormat(task.targetFormat, finalProbe)) throw new Error(`Invalid ${task.targetFormat} container or codec`)
     const actualDuration = Number(finalProbe.format?.duration ?? finalProbe.streams?.find(s => s.duration)?.duration)
-    if (expectedDuration !== undefined && (!Number.isFinite(actualDuration) || Math.abs(actualDuration - expectedDuration) > Math.max(0.25, Math.min(1, expectedDuration * 0.02)))) throw new Error('Trim duration failed validation')
+    const durationTolerance = sectionTrimmed && (task.isLive || draft.isLive)
+      ? Math.max(2, Math.min(6, (expectedDuration ?? 0) * 0.15))
+      : sectionTrimmed && task.trimMode !== 'exact'
+        ? Math.max(6, Math.min(15, (expectedDuration ?? 0) * 0.2))
+        : sectionTrimmed
+          ? Math.max(0.5, Math.min(1.5, (expectedDuration ?? 0) * 0.03))
+          : Math.max(0.25, Math.min(1, (expectedDuration ?? 0) * 0.02))
+    if (expectedDuration !== undefined && (!Number.isFinite(actualDuration) || Math.abs(actualDuration - expectedDuration) > durationTolerance)) throw new Error('Trim duration failed validation')
     await validateMediaOutput(candidate, draft, ctx, Number.isFinite(actualDuration) && actualDuration > 0 ? actualDuration : undefined)
     check()
     const size = (await fs.stat(candidate)).size

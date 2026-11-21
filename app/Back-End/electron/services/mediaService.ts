@@ -118,9 +118,12 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
       })
     }
   }
+  const needsH264AnnexB =
+    format === 'avi' &&
+    Boolean(source?.streams?.some(s => s.codec_type === 'video' && !s.disposition?.attached_pic && s.codec_name === 'h264'))
   if (decision === 'direct' || decision === 'remux') {
     const muxer = format === 'm4v' ? 'mp4' : format === 'm4a' ? 'ipod' : format === 'mkv' ? 'matroska' : format === 'aac' ? 'adts' : format === 'wma' ? 'asf' : format === 'ogv' ? 'ogg' : format
-    return [...mapping, ...(spec.videoCodec === null ? ['-vn'] : []), '-c', 'copy', ...subtitleArgs, '-map_metadata', '0', '-f', muxer, output]
+    return [...mapping, ...(spec.videoCodec === null ? ['-vn'] : []), '-c', 'copy', ...(needsH264AnnexB ? ['-bsf:v', 'h264_mp4toannexb'] : []), ...subtitleArgs, '-map_metadata', '0', '-f', muxer, output]
   }
 
   const encoding = [...spec.ffmpegArgs]
@@ -130,6 +133,7 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
     if (flag) {
       const index = encoding.indexOf(flag)
       if (index >= 0) encoding[index + 1] = 'copy'
+      if (decision === 'audio-encode' && needsH264AnnexB) encoding.push('-bsf:v', 'h264_mp4toannexb')
     }
   }
   return [...mapping, ...encoding, ...subtitleArgs, '-map_metadata', '0', output]

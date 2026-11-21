@@ -242,6 +242,7 @@ async function extractFullAnalysis(url: string, signal: AbortSignal): Promise<An
     .map((f: any) => ({
       formatId: f.format_id,
       ext: f.ext,
+      protocol: typeof f.protocol === 'string' ? f.protocol : undefined,
       vcodec: f.vcodec,
       acodec: f.acodec,
       resolution: f.resolution || (f.vcodec !== 'none' ? `${f.width}x${f.height}` : 'audio only'),
@@ -265,6 +266,9 @@ async function extractFullAnalysis(url: string, signal: AbortSignal): Promise<An
   youtubeDiagnostic('analysis', { mode: 'public', runtime: runtimeSelection.name,
     ytDlpVersion: await getYtdlpVersion(), elapsedMs: Date.now() - startMs, formatCount: formats.length, resolutions, categories })
 
+  const isLive = info.is_live === true || info.live_status === 'is_live'
+  const wasLive = info.was_live === true || info.live_status === 'was_live'
+
   const result: AnalyzeResult = {
     kind: 'ytdlp',
     title: info.title || 'Unknown Title',
@@ -274,6 +278,8 @@ async function extractFullAnalysis(url: string, signal: AbortSignal): Promise<An
     likes: info.like_count,
     dislikes: info.dislike_count,
     duration: info.duration,
+    ...(isLive ? { isLive: true } : {}),
+    ...(wasLive ? { wasLive: true } : {}),
     qualityStatus: categories.some(category => /FORMATS_RESTRICTED|PO_TOKEN_REQUIRED|formats-skipped|js-challenge/.test(category))
       ? 'restricted' : resolutions.length && Math.max(...resolutions) <= 360 ? 'limited' : 'available',
   };
@@ -291,7 +297,7 @@ export async function getTrimPreviewStreams(url: string, options: PreviewExtract
     return await extractPreviewStreams(binary, [
       '--ignore-config',
       '-f', TRIM_PREVIEW_FORMAT, '--dump-single-json', '--no-playlist', '--geo-bypass', ...ytdlpCacheArgs(),
-      '--socket-timeout', '10',
+      '--socket-timeout', '15',
       ...getJsRuntimeArgs(), url,
     ], options)
   } catch (error) {

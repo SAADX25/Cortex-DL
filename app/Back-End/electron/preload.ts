@@ -206,7 +206,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getDirectStreamUrl(url: string, previewSession?: string): Promise<string> {
     return invokeRendererSafe('cortexdl:get-direct-stream-url', url, previewSession)
   },
-  getTrimPreviewStreams(url: string, previewSession: string): Promise<{ videoUrl: string; audioUrl?: string } | null> {
+  getTrimPreviewStreams(url: string, previewSession: string): Promise<{ videoUrl: string; audioUrl?: string; streamType?: 'progressive' | 'hls'; isLive?: boolean; duration?: number } | null> {
     return invokeRendererSafe('cortexdl:get-trim-preview-streams', url, previewSession)
   },
   logPreviewError(message: string): void {

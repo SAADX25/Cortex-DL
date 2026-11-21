@@ -1,9 +1,15 @@
-import { type YtdlpFormat } from '../../../../Shared/types'
+import { type AnalyzeResult, type YtdlpFormat } from '../../../../Shared/types'
 
-export type TrimPreviewSource = { videoUrl: string; duration: number }
+export type TrimPreviewSource = {
+  videoUrl: string
+  duration: number
+  isLive?: boolean
+  streamType?: 'progressive' | 'hls'
+}
 
 function isSupportedMuxedFormat(format: YtdlpFormat): boolean {
   if (!format.url || !format.vcodec || !format.acodec || format.vcodec === 'none' || format.acodec === 'none') return false
+  if (format.protocol && ['m3u8', 'm3u8_native'].includes(format.protocol)) return false
 
   const supportedVideo = format.ext === 'mp4'
     ? /^(avc1|avc3|h264)/i.test(format.vcodec)
@@ -13,6 +19,17 @@ function isSupportedMuxedFormat(format: YtdlpFormat): boolean {
     : format.ext === 'webm' && /^(opus|vorbis)/i.test(format.acodec)
 
   if (!supportedVideo || !supportedAudio) return false
+  try {
+    return ['http:', 'https:'].includes(new URL(format.url).protocol)
+  } catch {
+    return false
+  }
+}
+
+function isHlsFormat(format: YtdlpFormat): boolean {
+  if (!format.url) return false
+  const isM3u8 = format.protocol === 'm3u8' || format.protocol === 'm3u8_native' || /\.m3u8(\?|#|$)/i.test(format.url)
+  if (!isM3u8) return false
   try {
     return ['http:', 'https:'].includes(new URL(format.url).protocol)
   } catch {
@@ -49,4 +66,66 @@ export function getTrimPreviewSource(
   })
 
   return { videoUrl: sorted[0].url!, duration }
+}
+
+function pickBestHlsFormat(formats: YtdlpFormat[]): YtdlpFormat | null {
+  const hlsFormats = formats.filter(isHlsFormat)
+  if (hlsFormats.length === 0) return null
+  return [...hlsFormats].sort((a, b) => {
+    const aPreferred = (a.height ?? 0) <= 720 ? 1 : 0
+    const bPreferred = (b.height ?? 0) <= 720 ? 1 : 0
+    if (aPreferred !== bPreferred) return bPreferred - aPreferred
+    return (b.height ?? 0) - (a.height ?? 0)
+  })[0] ?? null
+}
+
+export function getTrimmerContext(
+  analyzeResult: AnalyzeResult | null,
+  selectedQuality: string,
+  selectedVariantUrl?: string | null,
+): TrimPreviewSource | null {
+  if (!analyzeResult) return null
+
+  if (analyzeResult.kind === 'hls-media') {
+    return { videoUrl: analyzeResult.url, duration: 0, isLive: true, streamType: 'hls' }
+  }
+
+  if (analyzeResult.kind === 'hls-master') {
+    const url = selectedVariantUrl || analyzeResult.variants[0]?.url || ''
+    if (!url) return null
+    return { videoUrl: url, duration: 0, isLive: true, streamType: 'hls' }
+  }
+
+  if (analyzeResult.kind !== 'ytdlp' || analyzeResult.preview) return null
+
+  if (analyzeResult.isLive) {
+    const hls = pickBestHlsFormat(analyzeResult.formats)
+    return {
+      videoUrl: hls?.url ?? '',
+      duration: 0,
+      isLive: true,
+      streamType: hls?.url ? 'hls' : undefined,
+    }
+  }
+
+  if (!analyzeResult.duration || !Number.isFinite(analyzeResult.duration) || analyzeResult.duration <= 0) {
+    return null
+  }
+
+  const progressive = getTrimPreviewSource(analyzeResult.formats, selectedQuality, analyzeResult.duration)
+  if (progressive && progressive.videoUrl) {
+    return { ...progressive, isLive: false, streamType: 'progressive' }
+  }
+
+  const hls = pickBestHlsFormat(analyzeResult.formats)
+  if (hls?.url) {
+    return {
+      videoUrl: hls.url,
+      duration: analyzeResult.duration,
+      isLive: false,
+      streamType: 'hls',
+    }
+  }
+
+  return progressive ? { ...progressive, isLive: false } : null
 }

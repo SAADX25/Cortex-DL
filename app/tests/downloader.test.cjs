@@ -140,6 +140,35 @@ suite('Download attempts', test => {
     assert.equal(matchesMediaFormat('aac',await media.probeMediaFile(path.join(dir,'output.m4a'))),false)
   }))
 
+  test('section-trimmed long-VOD download finalizes without double-trimming at high start offsets', async () => sandbox(async dir => {
+    const source = path.join(dir, 'section.mp4'); fixture(source, true, 2)
+    const original = DirectEngine.prototype.download
+    DirectEngine.prototype.download = async draft => {
+      const candidate = path.join(draft.directory, 'section.mp4')
+      await fs.copyFile(source, candidate)
+      return { kind: 'success', candidate, sectionTrimmed: true }
+    }
+    const t = item(dir, {
+      id: 'long-vod-section',
+      targetFormat: 'mp4',
+      filename: 'long_clip.mp4',
+      filePath: path.join(dir, 'long_clip.mp4'),
+      startTime: '03:15:00',
+      endTime: '03:15:02',
+    })
+    const manager = managerFor(t)
+    try {
+      await manager.executeEngine(t.id)
+      assert.equal(t.status, 'completed', t.errorMessage)
+      const probe = await media.probeMediaFile(t.filePath)
+      assert.equal(matchesMediaFormat('mp4', probe), true)
+      assert.ok(Math.abs(Number(probe.format.duration) - 2) < 0.5)
+    } finally {
+      DirectEngine.prototype.download = original
+      manager.flushPendingSave()
+    }
+  }))
+
   test('real video/audio trimming supports start only, end only, both, with verified output duration', async () => sandbox(async dir => {
     for (const video of [false,true]) {
       const source=path.join(dir,video?'source.mp4':'source.wav'); fixture(source,video,3)
@@ -1272,6 +1301,69 @@ suite('YouTube access', test => {
     const selector = seen[1][seen[1].indexOf('-f') + 1]
     assert.equal(selector, 'bestvideo[protocol^=m3u8][height<=1080]+bestaudio[protocol^=m3u8]/best[protocol^=m3u8][height<=1080]')
     assert.equal(seen[1].includes('--cookies'), false)
+  })
+
+  test('YouTube and Kick long/live trimming defaults to low-CPU fast copy and supports exact capped-thread mode & format preferences', async () => {
+    const engine = new YoutubeEngine(), seen = []
+    engine.runYtdlpAttempt = async (_task, _context, _runtime, args) => {
+      seen.push(args); return { exitCode: 0, detectedFinalPath: 'fixture.mp4', stderr: '' }
+    }
+    const vodFastRes = await engine.download({ ...task(), startTime: '03:15:00', endTime: '03:16:30' }, context())
+    assert.deepEqual(vodFastRes, { kind: 'success', candidate: 'fixture.mp4', sectionTrimmed: true })
+    assert.equal(seen[0][seen[0].indexOf('--download-sections') + 1], '*11700-11790')
+    assert.equal(seen[0].includes('--force-keyframes-at-cuts'), false)
+    assert.equal(seen[0].includes('--continue'), false)
+    assert.equal(seen[0][seen[0].indexOf('--merge-output-format') + 1], 'mkv')
+
+    const vodExactRes = await engine.download({ ...task(), startTime: '03:15:00', endTime: '03:16:30', trimMode: 'exact' }, context())
+    assert.deepEqual(vodExactRes, { kind: 'success', candidate: 'fixture.mp4', sectionTrimmed: true })
+    assert.equal(seen[1][seen[1].indexOf('--download-sections') + 1], '*11700-11790')
+    assert.equal(seen[1].includes('--force-keyframes-at-cuts'), true)
+    assert.match(seen[1][seen[1].indexOf('--downloader-args') + 1], /-threads \d+.*libx264.*aac/)
+
+    const webmExactRes = await engine.download({ ...task(), targetFormat: 'webm', startTime: '00:01:00', endTime: '00:02:00', trimMode: 'exact' }, context())
+    assert.deepEqual(webmExactRes, { kind: 'success', candidate: 'fixture.mp4', sectionTrimmed: true })
+    assert.equal(seen[2][seen[2].indexOf('-S') + 1], 'res,fps,vcodec:vp9,acodec:opus')
+    assert.equal(seen[2][seen[2].indexOf('--merge-output-format') + 1], 'mkv')
+    assert.match(seen[2][seen[2].indexOf('--downloader-args') + 1], /-threads \d+.*libvpx-vp9.*libopus/)
+
+    await engine.download({ ...task(), targetFormat: 'mov' }, context())
+    assert.equal(seen[3][seen[3].indexOf('-S') + 1], 'res,fps,vcodec:h264,acodec:aac')
+    assert.equal(seen[3][seen[3].indexOf('--merge-output-format') + 1], 'mkv')
+
+    await engine.download({ ...task(), targetFormat: 'avi', startTime: '00:00:10', endTime: '00:00:25', trimMode: 'exact' }, context())
+    assert.equal(seen[4][seen[4].indexOf('-S') + 1], 'res,fps,vcodec:h264')
+    assert.match(seen[4][seen[4].indexOf('--downloader-args') + 1], /-threads \d+.*libx264.*libmp3lame/)
+
+    const kickLiveRes = await engine.download({
+      ...task(),
+      url: 'https://kick.com/xqc',
+      isLive: true,
+      startTime: '00:00:00',
+      endTime: '00:02:00',
+      trimMode: 'exact',
+    }, context())
+    assert.deepEqual(kickLiveRes, { kind: 'success', candidate: 'fixture.mp4', sectionTrimmed: true })
+    assert.equal(seen[5][seen[5].indexOf('--download-sections') + 1], '*0-120')
+    assert.equal(seen[5].includes('--force-keyframes-at-cuts'), false)
+  })
+
+  test('AVI mediaOutputArgs adds h264_mp4toannexb bitstream filter when stream-copying H.264 video', () => {
+    const { mediaOutputArgs } = require('../Back-End/electron/services/mediaService.ts')
+    const h264AacProbe = { format: { format_name: 'matroska,webm' }, streams: [{ codec_type: 'video', codec_name: 'h264' }, { codec_type: 'audio', codec_name: 'aac' }] }
+    const h264Mp3Probe = { format: { format_name: 'matroska,webm' }, streams: [{ codec_type: 'video', codec_name: 'h264' }, { codec_type: 'audio', codec_name: 'mp3' }] }
+    const vp9OpusProbe = { format: { format_name: 'matroska,webm' }, streams: [{ codec_type: 'video', codec_name: 'vp9' }, { codec_type: 'audio', codec_name: 'opus' }] }
+
+    const audioEncodeArgs = mediaOutputArgs('avi', 'out.avi', h264AacProbe, false)
+    assert.equal(audioEncodeArgs[audioEncodeArgs.indexOf('-c:v') + 1], 'copy')
+    assert.equal(audioEncodeArgs[audioEncodeArgs.indexOf('-bsf:v') + 1], 'h264_mp4toannexb')
+
+    const remuxArgs = mediaOutputArgs('avi', 'out.avi', h264Mp3Probe, false)
+    assert.equal(remuxArgs[remuxArgs.indexOf('-c') + 1], 'copy')
+    assert.equal(remuxArgs[remuxArgs.indexOf('-bsf:v') + 1], 'h264_mp4toannexb')
+
+    const vp9Args = mediaOutputArgs('avi', 'out.avi', vp9OpusProbe, false)
+    assert.equal(vp9Args.includes('-bsf:v'), false)
   })
 
   test('YouTube HLS fallback is bounded and honors cancellation', async () => {

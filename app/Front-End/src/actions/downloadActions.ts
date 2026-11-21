@@ -254,6 +254,7 @@ export async function onStartBatchDownload(): Promise<void> {
         speedLimit: form.speedLimit !== 'auto' ? form.speedLimit : undefined,
         startTime: form.startTime.trim() || undefined,
         endTime: form.endTime.trim() || undefined,
+        trimMode: form.trimMode,
       }
     })
 
@@ -309,6 +310,7 @@ export async function onDownloadNow(): Promise<void> {
         speedLimit: form.speedLimit !== 'auto' ? form.speedLimit : undefined,
         startTime: form.startTime.trim() || undefined,
         endTime: form.endTime.trim() || undefined,
+        trimMode: form.trimMode,
       }))
 
       const createdTasks = await window.cortexDl.addBatchDownloads(inputs)
@@ -317,11 +319,16 @@ export async function onDownloadNow(): Promise<void> {
     } else {
       const trimmed = ui.url.trim()
       if (!trimmed) return
-      const engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
+      let engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
 
       let downloadUrl = trimmed
-      if (analyzeResult.kind === 'hls-media') downloadUrl = analyzeResult.url
-      else if (analyzeResult.kind === 'hls-master' && form.selectedVariantUrl) downloadUrl = form.selectedVariantUrl
+      if (analyzeResult.kind === 'hls-media') {
+        downloadUrl = analyzeResult.url
+        engine = 'ffmpeg'
+      } else if (analyzeResult.kind === 'hls-master' && form.selectedVariantUrl) {
+        downloadUrl = form.selectedVariantUrl
+        engine = 'ffmpeg'
+      }
 
       await window.cortexDl.addDownload({
         url: downloadUrl,
@@ -333,11 +340,13 @@ export async function onDownloadNow(): Promise<void> {
         ytdlpFormatId: form.selectedYtdlpFormatId || form.selectedQuality || undefined,
         title: analyzeResult.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined,
         thumbnail: analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined,
+        isLive: analyzeResult.kind === 'ytdlp' ? Boolean(analyzeResult.isLive) : undefined,
         username: settings.username || undefined,
         password: settings.password || undefined,
         speedLimit: form.speedLimit !== 'auto' ? form.speedLimit : undefined,
         startTime: form.startTime.trim() || undefined,
         endTime: form.endTime.trim() || undefined,
+        trimMode: form.trimMode,
       })
       ui.showToast('🚀 Download started!')
     }

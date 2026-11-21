@@ -10,3 +10,24 @@ export function syncTrimAudio(video: HTMLVideoElement | null, audio: HTMLAudioEl
   if (video.paused || video.seeking || !play) audio.pause()
   return Promise.resolve()
 }
+
+export function applyTrimAudioControls(
+  video: HTMLVideoElement | null,
+  audio: HTMLAudioElement | null,
+  volume: number,
+  muted: boolean,
+  playbackRate: number,
+): void {
+  const safeVolume = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1
+  const safeRate = Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1
+  if (video) {
+    video.volume = safeVolume
+    video.muted = muted
+    video.playbackRate = safeRate
+  }
+  if (audio) {
+    audio.volume = safeVolume
+    audio.muted = muted
+    audio.playbackRate = safeRate
+  }
+}

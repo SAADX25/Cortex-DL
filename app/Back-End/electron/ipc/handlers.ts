@@ -429,6 +429,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
 
   ipcMain.handle('cortexdl:get-trim-preview-streams', async (_event, url: string, previewSession: string) => {
     if (typeof previewSession !== 'string' || !/^trim-[\w-]{1,128}$/.test(previewSession)) throw new Error('Invalid trim session')
+    if (/\.m3u8(\?|#|$)/i.test(url)) return { videoUrl: url, streamType: 'hls' as const }
     const previewOptions = {
       isClosed: () => isMediaSessionClosed(previewSession),
       track: (stop: () => void) => trackMediaProcess(previewSession, 'probe', stop),

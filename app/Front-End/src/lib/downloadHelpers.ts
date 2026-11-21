@@ -12,6 +12,9 @@ export function isYtdlpUrl(url: string): boolean {
     lowUrl.includes('instagram.com') ||
     lowUrl.includes('threads.com') ||
     lowUrl.includes('threads.net') ||
+    lowUrl.includes('kick.com') ||
+    lowUrl.includes('twitch.tv') ||
+    lowUrl.includes('reddit.com') ||
     lowUrl.includes('tiktok.com') ||
     lowUrl.includes('twitter.com') ||
     lowUrl.includes('x.com') ||

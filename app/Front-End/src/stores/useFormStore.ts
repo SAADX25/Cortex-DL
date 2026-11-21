@@ -7,6 +7,8 @@ interface FormStoreState {
   setStartTime: (v: string) => void
   endTime: string
   setEndTime: (v: string) => void
+  trimMode: 'fast' | 'exact'
+  setTrimMode: (v: 'fast' | 'exact') => void
 
   selectedVariantUrl: string | null
   setSelectedVariantUrl: (v: string | null) => void
@@ -37,6 +39,8 @@ export const useFormStore = create<FormStoreState>((set) => ({
   setStartTime: (v) => set({ startTime: v }),
   endTime: '',
   setEndTime: (v) => set({ endTime: v }),
+  trimMode: 'fast',
+  setTrimMode: (v) => set({ trimMode: v }),
 
   selectedVariantUrl: null,
   setSelectedVariantUrl: (v) => set({ selectedVariantUrl: v }),

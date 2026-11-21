@@ -37,19 +37,21 @@
     "test:release": "node --test tests/releaseTags.test.cjs"
   },
   "dependencies": {
+    "adm-zip": "0.6.1",
     "axios": "^1.14.0",
     "better-sqlite3": "13.0.3",
     "dotenv": "^17.4.0",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
     "framer-motion": "^10.12.16",
+    "hls.js": "^1.7.4",
     "lucide-react": "^0.563.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "zustand": "^5.0.11",
-    "adm-zip": "0.6.1"
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
@@ -62,12 +64,11 @@
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "js-yaml": "^4.1.0",
     "rimraf": "^5.0.5",
     "typescript": "5.5.4",
     "vite": "6.4.3",
-    "vite-plugin-electron": "^0.28.6",
-    "@types/adm-zip": "^0.5.7",
-    "js-yaml": "^4.1.0"
+    "vite-plugin-electron": "^0.28.6"
   },
   "main": "dist-electron/main.js"
 }

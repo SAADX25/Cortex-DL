@@ -33,7 +33,9 @@ export type StartInput = {
   speedLimit?: string
   startTime?: string
   endTime?: string
+  trimMode?: 'fast' | 'exact'
   fps?: number | string
+  isLive?: boolean
 }
 
 export type TaskRuntime = {
@@ -48,7 +50,7 @@ export type TaskRuntime = {
 }
 
 export type EngineResult =
-  | { kind: 'success'; candidate: string }
+  | { kind: 'success'; candidate: string; sectionTrimmed?: boolean }
   | { kind: 'paused' | 'canceled' }
   | { kind: 'retryable-error'; message: string; delayMs: number }
   | { kind: 'fatal-error'; message: string }

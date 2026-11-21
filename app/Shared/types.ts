@@ -65,10 +65,12 @@ export type DownloadTask = {
   speedLimit?: string
   startTime?: string
   endTime?: string
+  trimMode?: 'fast' | 'exact'
   convertingPercent?: number
   downloadPercent?: number
   ytdlpFormatId?: string
   fps?: number | string
+  isLive?: boolean
   ytdlpExpectedBytes?: number
   ytdlpExpectedStreamCount?: number
 
@@ -90,6 +92,7 @@ export type YtdlpFormat = {
   vcodec?: string
   acodec?: string
   ext: string
+  protocol?: string
   resolution: string
   filesize: number | null
   description: string
@@ -114,6 +117,8 @@ export type AnalyzeResult =
       likes?: number
       dislikes?: number
       duration?: number
+      isLive?: boolean
+      wasLive?: boolean
       qualityStatus?: 'restricted' | 'limited' | 'available'
       comments?: { author: string; text: string; likeCount: number }[]
     }

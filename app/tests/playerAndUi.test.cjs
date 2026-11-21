@@ -424,7 +424,8 @@ suite('Trim preview', test => {
     return load.call(this,request,parent,...rest)
   }
   const { TrimPreview, validatePreviewUrl, videoFailure, seekPreview } = require('../Front-End/src/components/AdvancedTrimmer/trimPreview.ts')
-  const { getTrimPreviewSource } = require('../Front-End/src/components/AdvancedTrimmer/trimSource.ts')
+  const { getTrimPreviewSource, getTrimmerContext } = require('../Front-End/src/components/AdvancedTrimmer/trimSource.ts')
+  const { parseTimecode, formatTimecode, computeZoomViewport, computeRulerTicks } = require('../Front-End/src/components/AdvancedTrimmer/trimTime.ts')
   const { playablePreviewUrl, playablePreviewStreams, extractPreview, extractPreviewStreams, PREVIEW_FORMAT, TRIM_PREVIEW_FORMAT } = require('../Back-End/electron/services/thumbnailService.ts')
   const { syncTrimAudio } = require('../Front-End/src/components/AdvancedTrimmer/trimAudio.ts')
   const { MediaRequestRegistry } = require('../Back-End/electron/services/mediaService.ts')
@@ -505,7 +506,67 @@ suite('Trim preview', test => {
       assert.equal(await extractPreview(path.join(process.cwd(),'engine-baseline','yt-dlp.exe'),['--load-info-json',info,'--dump-single-json','--skip-download','-f',PREVIEW_FORMAT]),modern.url)
     } finally { await fs.rm(dir,{recursive:true,force:true}) }
   })
-  test('Visual Trim Electron plays adaptive audio, falls back, seeks and releases 26 sessions', {timeout:90000}, async () => {
+  test('Visual Trim supports Kick HLS live/VOD streams, long-video zoom ruler, and timecode helpers', () => {
+    const kickLive = {
+      url: 'https://fa723fc1b171.playlist.live-video.net/v1/playlist/live.m3u8',
+      protocol: 'm3u8_native',
+      vcodec: 'avc1.64002A',
+      acodec: 'mp4a.40.2',
+      is_live: true,
+    }
+    assert.deepEqual(playablePreviewStreams(kickLive), {
+      videoUrl: kickLive.url,
+      streamType: 'hls',
+      isLive: true,
+    })
+
+    const kickVod = {
+      url: 'https://stream.kick.com/ivs/v1/vod/master.m3u8',
+      protocol: 'm3u8_native',
+      vcodec: 'avc1.64002A',
+      acodec: 'mp4a.40.2',
+      duration: 21600,
+    }
+    assert.deepEqual(playablePreviewStreams(kickVod), {
+      videoUrl: kickVod.url,
+      streamType: 'hls',
+      duration: 21600,
+    })
+
+    const liveCtx = getTrimmerContext({
+      kind: 'ytdlp',
+      title: 'Kick Live',
+      isLive: true,
+      formats: [{ formatId: '4', ext: 'mp4', protocol: 'm3u8_native', height: 720, resolution: '1280x720', filesize: null, description: '', url: kickLive.url }],
+    }, '')
+    assert.equal(liveCtx?.isLive, true)
+    assert.equal(liveCtx?.streamType, 'hls')
+    assert.equal(liveCtx?.videoUrl, kickLive.url)
+
+    const vodCtx = getTrimmerContext({
+      kind: 'ytdlp',
+      title: 'Kick 6h VOD',
+      duration: 21600,
+      formats: [{ formatId: '4', ext: 'mp4', protocol: 'm3u8_native', height: 720, resolution: '1280x720', filesize: null, description: '', url: kickVod.url }],
+    }, '')
+    assert.equal(vodCtx?.isLive, false)
+    assert.equal(vodCtx?.streamType, 'hls')
+    assert.equal(vodCtx?.duration, 21600)
+
+    assert.equal(parseTimecode('03:15:20'), 11720)
+    assert.equal(parseTimecode('02:30'), 150)
+    assert.equal(parseTimecode('bad:99'), null)
+    assert.equal(formatTimecode(11720), '03:15:20')
+
+    const zoomed = computeZoomViewport(21600, 32, 11500)
+    assert.equal(zoomed.viewDuration, 675)
+    assert.equal(zoomed.viewStart, 11500)
+    assert.equal(zoomed.viewEnd, 12175)
+    const ticks = computeRulerTicks(zoomed.viewStart, zoomed.viewEnd, 6)
+    assert.ok(ticks.some(t => t.major && t.label.startsWith('3:')))
+  })
+
+  test('Visual Trim Electron plays adaptive audio, falls back, seeks and releases 28 sessions', {timeout:90000}, async () => {
     const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cortex-trim-'))
     let server
     try {
