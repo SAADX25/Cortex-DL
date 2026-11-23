@@ -1,3 +1,4 @@
+// Confirmation dialog with backdrop dismiss and Framer Motion enter/exit transitions.
 import React from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'

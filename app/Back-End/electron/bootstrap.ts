@@ -1,3 +1,4 @@
+// Early Electron startup: single-instance lock, crash marker, safe mode, and engine verification/repair.
 import log from 'electron-log'
 import lock from '../../engines.lock.json'
 import { getBaselineDirectory, getBinDirectory } from './paths'
@@ -12,10 +13,12 @@ const marker = path.join(app.getPath('userData'), 'startup-state.json')
 
 export let previousStartupFailed = false
 
+// Stays "starting" until UI is ready; finding that state on next launch signals a startup crash.
 try { previousStartupFailed = JSON.parse(fs.readFileSync(marker, 'utf8')).state === 'starting' } catch { previousStartupFailed = false }
 
 export const safeMode = process.argv.includes('--safe-mode')
 
+// Must run before app.whenReady() for Electron to honor disabling GPU acceleration.
 if (safeMode) app.disableHardwareAcceleration()
 
 initializeDiagnostics()
@@ -25,6 +28,7 @@ export const gotTheLock = app.requestSingleInstanceLock()
 export function markStartup(state: 'starting' | 'ready' | 'clean-shutdown'): void {
   try {
     fs.mkdirSync(path.dirname(marker), { recursive: true })
+    // Atomic rename so a mid-write crash can't leave a half-written startup marker.
     fs.writeFileSync(`${marker}.tmp`, JSON.stringify({ state, timestamp: new Date().toISOString() }))
     fs.renameSync(`${marker}.tmp`, marker)
   } catch (error) { console.warn('[Startup marker]', error) }
@@ -107,12 +111,14 @@ async function setup(win: BrowserWindow, allowNetwork: boolean, force: boolean, 
     for (const spec of specs) {
       receipts.signal.throwIfAborted()
       const file = path.join(bin, spec.filename)
+      // Recover a binary if a previous promotion crashed between moving the old one aside and swapping in the new one.
       if (!fs.existsSync(file) && fs.existsSync(`${file}.previous`)) await fs.promises.rename(`${file}.previous`, file)
     }
     const health: EngineHealth[] = []
     for (const spec of specs) {
       health.push(await receipts.ensure(spec.name, force))
 
+      // Yield between binary checks so main keeps servicing window and IPC events.
       await new Promise<void>(resolve => setImmediate(resolve))
     }
     for (let i = 0; i < lock.packages.length; i++) {
@@ -131,6 +137,7 @@ async function setup(win: BrowserWindow, allowNetwork: boolean, force: boolean, 
         const needsDownload: EngineSpec[] = []
         for (const spec of missing) {
           const entry = bundled.find(engine => engine.name === spec.name)
+          // Reuse the bundled baseline copy when its package hash matches the lockfile, avoiding a network download.
           if (entry?.sha256 && (entry as EngineSpec & { packageSha256?: string }).packageSha256 === pkg.sha256 && (await verify(path.join(baseline, spec.filename), entry, receipts.signal)).available) {
             await fs.promises.copyFile(path.join(baseline, spec.filename), path.join(stage, spec.filename))
           } else needsDownload.push(spec)

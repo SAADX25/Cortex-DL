@@ -1,3 +1,4 @@
+// Verification, atomic download/promotion, and receipt caching for bundled engine binaries.
 import fs from 'node:fs'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -36,6 +37,7 @@ export async function verifyEngine(file: string, spec: EngineSpec, signal?: Abor
     if (!stat.isFile() || stat.size < 100_000 || stat.size > 350 * 1024 * 1024) return fail(`${spec.name} executable is corrupt`)
     if (spec.sha256 && await sha256(file, signal) !== spec.sha256) return fail(`${spec.name} checksum is invalid`)
     if (process.platform === 'win32') {
+      // Sanity-check DOS/PE magic bytes and x64 machine header before spawning the binary.
       const handle = await fs.promises.open(file, 'r')
       try {
         const header = Buffer.alloc(64); await handle.read(header, 0, 64, 0)
@@ -60,6 +62,7 @@ export async function verifyEngine(file: string, spec: EngineSpec, signal?: Abor
         if ((actual[i] || 0) < minimum[i]) return fail(`${spec.name} version ${version} is unsupported (requires ${spec.minimum})`)
       }
     } else {
+      // Nightly FFmpeg builds use N-<rev> instead of semver, so validate via libavcodec major version.
       const codec = /libavcodec\s+(\d+)/.exec(output)
       if (!codec || Number(codec[1]) < 60) return fail(`${spec.name} development version is unsupported`)
     }
@@ -94,6 +97,7 @@ export async function downloadEngine(url: string, destination: string, expectedH
     try {
       let response: Response | undefined
       let next = url
+      // Follow redirects manually so every hop is re-checked for HTTPS instead of silently downgrading.
       for (let redirects = 0; redirects <= 5; redirects++) {
         if (new URL(next).protocol !== 'https:') throw new Error('Engine downloads require HTTPS')
         const headerTimer = setTimeout(abort, 15_000)
@@ -161,6 +165,7 @@ export async function extractEngineZip(zip: string, destination: string, filenam
   if ((await fs.promises.stat(zip)).size > 350 * 1024 * 1024) throw new Error('Archive is too large')
 
   const require = createRequire(path.join(process.env.APP_ROOT || process.cwd(), 'package.json'))
+  // Run adm-zip in a worker thread with path-traversal and zip-bomb caps so large archives don't stall the main process.
   await new Promise<void>((resolve, reject) => {
     const worker = new Worker(String.raw`
       const { parentPort, workerData } = require('node:worker_threads');
@@ -262,6 +267,7 @@ export class EngineReceipts {
       const cached = await this.inspect(name)
       if (!force && !this.forceRequested.has(name) && cached.state !== 'background-check') return cached
 
+      // Serialize deep verifications so concurrent callers don't hash and spawn the same binary repeatedly.
       const verification = this.queue.then(() => this.deepVerify(name, force))
       this.queue = verification.catch(() => {})
       return verification
@@ -285,6 +291,7 @@ export class EngineReceipts {
       const health = await this.verify(location.file, { ...location.spec, sha256: expected }, this.controller.signal)
       if (!health.available) { if (!this.signal.aborted) await this.invalidate(name); return health }
       const after = await fs.promises.lstat(location.file)
+      // Guard against the binary changing on disk while verification was in flight.
       if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) throw new Error('Engine changed during verification')
       await this.record(name, health.version, expected, after)
       return health
@@ -327,6 +334,7 @@ export const engineReceipts = new EngineReceipts(async (name): Promise<EngineLoc
   const receipt = path.join(getBinDirectory(), `${spec.filename}.integrity.json`)
   const identity = JSON.stringify({ schema: lock.schema, platform: lock.platform, architecture: lock.architecture, package: pkg, spec })
   let expected: EngineSpec = { ...spec, version: spec.version || (/^N-/.test(pkg.version) ? /^N-\d+/.exec(pkg.version)?.[0] : pkg.version) }
+  // Baseline binaries must match the shipped manifest; user-updated yt-dlp can advance past the lockfile version.
   if (path.dirname(file) === getBaselineDirectory()) {
     try {
       const baseline = await readEngineMetadata<{ engines: (EngineSpec & { packageSha256?: string })[] }>(path.join(getBaselineDirectory(), 'manifest.json'))

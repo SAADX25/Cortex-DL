@@ -1,3 +1,4 @@
+// Generation-based session guard that cancels and invalidates stale async URL analyses.
 export type AnalysisStage = 'details' | 'formats'
 
 export class AnalysisSession {

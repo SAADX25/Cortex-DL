@@ -1,3 +1,4 @@
+// Selects a browser-playable progressive or HLS preview source from yt-dlp/HLS analysis results.
 import { type AnalyzeResult, type YtdlpFormat } from '../../../../Shared/types'
 
 export type TrimPreviewSource = {
@@ -7,6 +8,7 @@ export type TrimPreviewSource = {
   streamType?: 'progressive' | 'hls'
 }
 
+// Progressive preview needs a single muxed stream with codecs Chromium decodes natively (no separate DASH tracks).
 function isSupportedMuxedFormat(format: YtdlpFormat): boolean {
   if (!format.url || !format.vcodec || !format.acodec || format.vcodec === 'none' || format.acodec === 'none') return false
   if (format.protocol && ['m3u8', 'm3u8_native'].includes(format.protocol)) return false
@@ -46,6 +48,7 @@ export function getTrimPreviewSource(
 
   const muxedFormats = formats.filter(isSupportedMuxedFormat)
 
+  // Still return duration when no muxed progressive format exists so callers can fall back to HLS or extraction.
   if (muxedFormats.length === 0) return { videoUrl: '', duration }
 
   const selectedHeight = selectedQuality.endsWith('p')
@@ -68,6 +71,7 @@ export function getTrimPreviewSource(
   return { videoUrl: sorted[0].url!, duration }
 }
 
+// Prefer <=720p HLS variants so preview playback starts quickly without pulling 4K streams.
 function pickBestHlsFormat(formats: YtdlpFormat[]): YtdlpFormat | null {
   const hlsFormats = formats.filter(isHlsFormat)
   if (hlsFormats.length === 0) return null
@@ -96,6 +100,7 @@ export function getTrimmerContext(
     return { videoUrl: url, duration: 0, isLive: true, streamType: 'hls' }
   }
 
+  // Wait for full yt-dlp format metadata; the instant preview card has no stream URLs yet.
   if (analyzeResult.kind !== 'ytdlp' || analyzeResult.preview) return null
 
   if (analyzeResult.isLive) {

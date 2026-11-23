@@ -1,3 +1,4 @@
+// Spawns an ephemeral loopback llama-server instance for local TranslateGemma cue translation.
 import net from 'node:net'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -7,17 +8,20 @@ import { SubtitleProcesses } from './process'
 export function translationPrompt(text: string, source: SubtitleLanguage, target: SubtitleLanguage): string {
   const from = SUBTITLE_LANGUAGES[source], to = SUBTITLE_LANGUAGES[target]
 
+  // Follows TranslateGemma's official chat template with deterministic greedy decoding.
   return `<bos><start_of_turn>user\nYou are a professional ${from} (${source}) to ${to} (${target}) translator. Your goal is to accurately convey the meaning and nuances of the original ${from} text while adhering to ${to} grammar, vocabulary, and cultural sensitivities.\nProduce only the ${to} translation, without any additional explanations or commentary. Please translate the following ${from} text into ${to}:\n\n\n${text}<end_of_turn>\n<start_of_turn>model\n`
 }
 
 export function validateTranslation(value: unknown, source: string): string {
   if (typeof value !== 'string') throw new Error('Invalid translation engine response')
   const text = value.trim().replace(/\s+/g, ' ')
+  // Reject runaway outputs or leaked chat/markup tokens rather than silently emitting broken captions.
   if (!text || text.length > Math.max(1000, source.length * 12) || /<\|?|```|-->|\[_/.test(text)) throw new Error('Translation output needs review; original transcript retained')
   return text
 }
 
 export async function startTranslator(binary: string, model: string, processes: SubtitleProcesses, gpu?: { layers: number; device: string }): Promise<(text: string, source: string, target: SubtitleLanguage) => Promise<string>> {
+  // Probe for a free ephemeral loopback port and protect the local HTTP server with a per-run bearer token.
   const port = await new Promise<number>((resolve, reject) => {
     const server = net.createServer(); server.once('error', reject)
     server.listen(0, '127.0.0.1', () => { const port = (server.address() as net.AddressInfo).port; server.close(() => resolve(port)) })

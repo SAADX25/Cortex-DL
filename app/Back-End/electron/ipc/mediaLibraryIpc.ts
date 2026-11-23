@@ -1,3 +1,4 @@
+// IPC endpoints for the local media library, lazy thumbnail extraction, and embedded cover-art edits
 import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
 import path from 'node:path'
 import { MediaLibrary } from '../mediaLibrary'
@@ -69,8 +70,8 @@ export function registerMediaLibraryIpc(getWin: () => BrowserWindow | null): voi
     const win = getWin()
     if (!win) return null
     const result = await dialog.showOpenDialog(win, {
-      title: 'Choose media cover · اختيار صورة الغلاف', properties: ['openFile'],
-      filters: [{ name: 'Images · الصور (8 MB)', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+      title: 'Choose media cover', properties: ['openFile'],
+      filters: [{ name: 'Images (8 MB)', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
     })
     if (result.canceled || !result.filePaths.length) return null
     const image = await images().prepareArtwork(result.filePaths[0])

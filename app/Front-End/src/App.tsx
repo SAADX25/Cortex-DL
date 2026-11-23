@@ -1,3 +1,4 @@
+// Root application shell; keeps all tab panes mounted to preserve form and scroll state
 import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import './App.css'
@@ -9,6 +10,7 @@ import SettingsTab from './components/SettingsTab'
 import SubtitleStudio from './components/Subtitles/SubtitleStudio'
 import AddDownloadTab from './components/AddDownloadTab'
 import SetupOverlay from './components/SetupOverlay'
+import { formatMessage, translations } from './translations'
 import { useUIStore } from './stores/useUIStore'
 import { useSettingsStore } from './stores/useSettingsStore'
 import { useCommentsStore, initCommentsStore } from './stores/useCommentsStore'
@@ -39,6 +41,7 @@ function App() {
   }, [])
 
   const lang = useSettingsStore((s) => s.lang)
+  const t = translations[lang]
   const refreshHealth = useSettingsStore((s) => s.refreshHealth)
 
   const activeTab = useUIStore((s) => s.activeTab)
@@ -111,7 +114,7 @@ function App() {
         </div>
 
         <div style={tabPaneStyle(activeTab === 'library')}>
-          <Suspense fallback={<div className="tab-content" role="status">{lang === 'ar' ? 'جارٍ تحميل المكتبة…' : 'Loading your library…'}</div>}><MediaLibrary /></Suspense>
+          <Suspense fallback={<div className="tab-content" role="status">{t.app.loadingLibrary}</div>}><MediaLibrary /></Suspense>
         </div>
 
         <div style={tabPaneStyle(activeTab === 'settings')}>
@@ -171,12 +174,12 @@ function App() {
                 <>
                   <div className="spinner-sm" style={{ margin: '0 auto 16px auto', borderTopColor: '#3b82f6', width: '36px', height: '36px', borderWidth: '3px' }}></div>
                   <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600 }}>
-                    {lang === 'ar' ? 'جاري تحميل ملف التعليقات...' : 'Downloading comments file...'}
+                    {t.app.downloadingComments}
                   </h3>
                   <p style={{ marginTop: '12px', color: '#94a3b8', fontSize: '0.95rem', marginBottom: 0, animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
-                    {lang === 'ar'
-                      ? (commentsProgress ? `جاري استخراج التعليقات... ${commentsProgress.current} / ~${commentsProgress.total}` : 'جاري الاتصال...')
-                      : (commentsProgress ? `Extracting comments... ${commentsProgress.current} / ~${commentsProgress.total}` : 'Connecting...')}
+                    {commentsProgress
+                      ? formatMessage(t.app.extractingComments, { current: commentsProgress.current, total: commentsProgress.total })
+                      : t.app.connecting}
                   </p>
                 </>
               ) : (
@@ -187,7 +190,7 @@ function App() {
                     </svg>
                   </div>
                   <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600, marginBottom: '24px' }}>
-                    {lang === 'ar' ? 'تم تحميل التعليقات بنجاح!' : 'Comments downloaded successfully!'}
+                    {t.app.commentsDownloaded}
                   </h3>
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                     <button
@@ -208,7 +211,7 @@ function App() {
                         <line x1="16" y1="17" x2="8" y2="17"></line>
                         <polyline points="10 9 9 9 8 9"></polyline>
                       </svg>
-                      {lang === 'ar' ? 'فتح الملف' : 'Open File'}
+                      {t.app.openFile}
                     </button>
                     <button
                       className="btn"
@@ -218,7 +221,7 @@ function App() {
                       }}
                       style={{ padding: '8px 16px', fontSize: '0.9rem', backgroundColor: '#334155', color: '#f8fafc', border: '1px solid #475569' }}
                     >
-                      {lang === 'ar' ? 'إغلاق' : 'Close'}
+                      {t.app.close}
                     </button>
                   </div>
                 </>

@@ -1,3 +1,4 @@
+// Parses yt-dlp and FFmpeg stdout/stderr into structured download progress and phase transitions.
 import { type DownloadTask } from './types'
 import { parseTimeToSeconds } from './utils'
 import log from 'electron-log'
@@ -25,6 +26,7 @@ export function logRawProgressChunk(taskId: string, source: string, chunk: strin
 export function parseDownloadProgress(line: string, task: DownloadTask): boolean {
   let changed = false
 
+  // Custom --progress-template format emitted by YoutubeEngine; preferred over yt-dlp's default text output.
   const tplMatch = /CORTEX_DL\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|([^|\s]+)/.exec(line)
   if (tplMatch) {
     const [, formatId, filename, downloadedText, totalText, speedText] = tplMatch
@@ -55,6 +57,7 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
     return true
   }
 
+  // Once structured stream tracking is active, ignore legacy [download] lines so totals don't jitter.
   if (task.engine === 'ytdlp' && task.ytdlpStreams && Object.keys(task.ytdlpStreams).length) return false
 
   const progressMatch = /\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+~?\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|TiB|B)/i.exec(line)
@@ -111,6 +114,7 @@ export function parseFfmpegProgress(
   }
 
   const timeMatch = /\b(?:out_)?time=(-?\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
+  // FFmpeg reports out_time_ms in microseconds despite the key name; both keys divide by 1e6.
   const outTimeUnitsMatch = /^out_time_(?:ms|us)=(\d+)$/.exec(line.trim())
   if (timeMatch || outTimeUnitsMatch) {
     const currentSec = timeMatch
@@ -202,6 +206,7 @@ export function parseStateTransition(
   return { transitioned: false, detectedPath }
 }
 
+// Split on CR as well as LF since yt-dlp and FFmpeg overwrite progress in-place with \r.
 export function flushLines(buf: string, chunk: string): [string[], string] {
   buf += chunk
 

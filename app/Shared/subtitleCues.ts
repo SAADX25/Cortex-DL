@@ -1,3 +1,4 @@
+// Whisper JSON parsing, cue validation, and SRT/WebVTT serialization.
 import type { SubtitleCue } from './localSubtitles'
 
 function cleanText(text: string): string { return text.replace(/\[_[^\]]*\]/g, '').replace(/\s+/gu, ' ').trim() }
@@ -23,11 +24,13 @@ export function parseWhisperDocument(value: unknown, duration: number): { langua
     if (!text) continue
     const rawStart = Number(segment.offsets?.from) / 1000
     if (!Number.isFinite(rawStart) || rawStart < 0) throw new Error('Speech engine returned invalid timing')
+    // Clamp overlapping Whisper timestamps so cues stay strictly monotonic.
     const start = Math.max(cues.at(-1)?.end ?? 0, rawStart)
     const end = Math.min(duration, Number(segment.offsets?.to) / 1000)
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) throw new Error('Speech engine returned invalid timing')
     const tokens = segment.tokens?.filter(t => Number.isFinite(t.p)) ?? []
     const confidence = tokens.length ? tokens.reduce((sum, t) => sum + t.p!, 0) / tokens.length : 1
+    // Flag low-confidence, overly long (>84 chars), or fast (>25 chars/s) cues for user review.
     cues.push({ id: cues.length + 1, start, end, text, original: text, review: confidence < 0.55 || text.length > 84 || text.length / (end - start) > 25 })
   }
   validateCues(cues, duration)
@@ -35,6 +38,7 @@ export function parseWhisperDocument(value: unknown, duration: number): { langua
 }
 
 export function hasSpokenText(text: string): boolean {
+  // Strip common English and Arabic non-speech sound tags so music/silence-only cues are dropped.
   const words = text.replace(/\[[^\]]*\]|\([^)]*\)/gu, match =>
     /^(?:\[|\()\s*(?:music|instrumental(?: music)?|silence|applause|laughter|laughing|singing|inaudible|no speech|background music|موسيقى|تصفيق|ضحك)\s*(?:\]|\))$/iu.test(match) ? '' : match)
   return /[\p{L}\p{N}]/u.test(words) && !/^\s*(?:music|instrumental|silence|applause|موسيقى)\s*$/iu.test(words)
@@ -46,6 +50,7 @@ export function parseSpeechRecognition(value: unknown, duration: number): Return
   const parsed = parseWhisperDocument(value, duration)
   parsed.cues = parsed.cues.filter(cue => hasSpokenText(cue.text)).map((cue, i) => ({ ...cue, id: i + 1 }))
 
+  // Flag 3+ identical consecutive cues as likely Whisper hallucination loops.
   let runStart = 0
   for (let i = 1; i < parsed.cues.length; i++) {
     if (parsed.cues[i].text !== parsed.cues[i - 1].text) { runStart = i; continue }
@@ -63,6 +68,7 @@ function wrapText(text: string): string {
   const words = text.trim().split(/\s+/u), lines = ['']
   for (const word of words) {
     const last = lines.length - 1
+    // Count Unicode code points via Array.from so surrogate pairs don't skew the 42-char wrap width.
     if (lines[last] && Array.from(lines[last] + ' ' + word).length > 42) lines.push(word)
     else lines[last] += (lines[last] ? ' ' : '') + word
   }

@@ -1,7 +1,8 @@
+// Main download composer: URL drop/paste, format & quality selection, visual trimmer, and batch queue
 import { primaryAnalysis } from '../lib/analysisSession'
 import React, { useState, useMemo, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { translations } from '../translations'
+import { formatMessage, translations } from '../translations'
 import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud, AlertCircle } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer/AdvancedTrimmer'
@@ -371,10 +372,10 @@ const AddDownloadTab: React.FC = () => {
                       <Scissors size={15} />
                       <span>
                         {isTrimmerOpen
-                          ? (lang === 'ar' ? 'إغلاق محرر القص' : 'Close Trimmer')
+                          ? t.trimmer.closeTrimmer
                           : trimmerSource.isLive
-                            ? (lang === 'ar' ? 'قص مقطع من البث المباشر (Advanced Trim)' : 'Clip Live Stream (Advanced Trim)')
-                            : (lang === 'ar' ? 'قص متقدم للفيديو (Advanced Trim)' : 'Advanced Trim')}
+                            ? t.trimmer.clipLiveBtn
+                            : t.trimmer.advancedTrimBtn}
                       </span>
                       {(startTime || endTime) && (
                         <span className="trimmer-toggle-badge" dir="ltr">
@@ -400,9 +401,7 @@ const AddDownloadTab: React.FC = () => {
                           onChange={applyTrimRange}
                           onConfirm={(range) => {
                             applyTrimRange(range)
-                            showToast(lang === 'ar'
-                              ? `تم حفظ القص: ${range.startTime} - ${range.endTime}`
-                              : `Trim saved: ${range.startTime} - ${range.endTime}`)
+                            showToast(formatMessage(t.trimmer.trimSaved, { start: range.startTime, end: range.endTime }))
                           }}
                         />
                       )}

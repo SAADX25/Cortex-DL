@@ -1,3 +1,4 @@
+// Maps raw yt-dlp and network errors into structured YouTube error codes for UI recovery.
 export const YOUTUBE_AUTH_REQUIRED_CODE = 'YOUTUBE_AUTH_REQUIRED'
 export const YOUTUBE_RATE_LIMITED_CODE = 'YOUTUBE_RATE_LIMITED'
 export const YOUTUBE_BOT_VERIFICATION_CODE = 'YOUTUBE_BOT_VERIFICATION'
@@ -22,6 +23,7 @@ export function getErrorText(value: unknown): string {
 export function youtubeErrorCode(value: unknown): string | null {
   const text = getErrorText(value)
 
+  // Rate limits and network errors take precedence over generic auth/format hints in stderr.
   if (/YOUTUBE_RATE_LIMITED|HTTP (?:Error )?429|too many requests|rate[-_\s]?limit(?:ed|ing)?|requests?[^\r\n]{0,40}limit exceeded|temporarily blocked[^\r\n]{0,40}(?:request|traffic|youtube)/i.test(text)) {
     return YOUTUBE_RATE_LIMITED_CODE
   }

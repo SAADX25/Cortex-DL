@@ -1,3 +1,4 @@
+// Grouped format selector that portals its menu to document.body to escape overflow clipping.
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Video, Music, Check, ChevronDown } from 'lucide-react'
@@ -22,6 +23,7 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; minWidth?: number } | null>(null)
 
   useEffect(() => {
+    // Menu is portaled to document.body, so outside-click detection must check both trigger and menu refs.
     function onDoc(e: MouseEvent) {
       const t = e.target as Node
       if (wrapperRef.current && wrapperRef.current.contains(t)) return
@@ -38,6 +40,7 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
     const rect = btn.getBoundingClientRect()
     const menuWidth = 144
 
+    // Clamp horizontal placement so the portaled menu stays inside the viewport.
     let left = rect.left
     if (left + menuWidth > window.innerWidth - 8) {
       left = Math.max(8, window.innerWidth - menuWidth - 8)
@@ -55,6 +58,7 @@ export default function CustomDropdown({ value, onChange, groups = [], ariaLabel
       if (open) computePosition()
     }
     window.addEventListener('resize', onWindow)
+    // Capture-phase scroll listener tracks scrolls inside nested overflow containers.
     window.addEventListener('scroll', onWindow, true)
     return () => {
       window.removeEventListener('resize', onWindow)

@@ -1,3 +1,4 @@
+// Fetches and parses HLS (.m3u8) manifests to distinguish media playlists from multi-variant master playlists.
 import { type HlsVariant, type AnalyzeResult } from './types'
 
 function isLikelyM3u8(url: string): boolean {
@@ -51,6 +52,7 @@ export async function analyzeUrlForHls(inputUrl: string, signal?: AbortSignal): 
       const { done, value } = await reader.read()
       if (done) break
       size += value.length
+      // Cap manifest reads at 4 MB so a misclassified media stream can't exhaust memory.
       if (size > 4 * 1024 * 1024) throw new Error('HLS manifest exceeds size limit')
       chunks.push(value)
     }
@@ -83,6 +85,7 @@ export async function analyzeUrlForHls(inputUrl: string, signal?: AbortSignal): 
     })
   }
 
+  // Put highest-bandwidth variant first for default quality selection.
   variants.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))
   return { kind: 'hls-master', variants }
 }

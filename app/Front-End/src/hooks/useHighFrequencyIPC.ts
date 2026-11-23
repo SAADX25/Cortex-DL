@@ -1,3 +1,4 @@
+// Bridges high-frequency download IPC ticks: updates card DOM directly and throttles Zustand writes.
 import { useEffect, useRef, type RefObject } from 'react'
 import { type DownloadTask } from '../../../Shared/types'
 import { getProgressView } from '../../../Shared/progressModel'
@@ -8,6 +9,7 @@ interface RegisteredDom {
   percentTextRef?: RefObject<HTMLSpanElement | null>
 }
 
+// Direct DOM refs per task let progress bars update smoothly without triggering React re-renders on every IPC tick.
 const domRegistry = new Map<string, RegisteredDom>()
 
 const lastSent = new Map<string, number>()
@@ -45,6 +47,7 @@ export function useHighFrequencyIPC(taskId: string | undefined, options: Registe
   useEffect(() => {
     if (!taskId) return
 
+    // Expose getters over optionsRef so the registry sees current refs without re-registering on every render.
     const refs: RegisteredDom = {
       get progressBarRef() { return optionsRef.current.progressBarRef },
       get speedTextRef() { return optionsRef.current.speedTextRef },
@@ -65,6 +68,7 @@ function updateTaskDom(task: DownloadTask): void {
   if (bar) {
     bar.style.width = `${progress.isIndeterminate ? 100 : progress.overallProgress ?? 0}%`
     bar.classList.toggle('indeterminate', progress.isIndeterminate)
+    // Collapse granular backend sub-phases onto the CSS classes styled for the progress bar.
     const target = ['trimming', 'validating', 'finalizing'].includes(progress.phase) ? 'converting'
       : ['starting', 'preparing'].includes(progress.phase) ? 'downloading' : progress.phase
     for (const cls of PHASE_CLASSES) bar.classList.toggle(cls, cls === target)
@@ -78,6 +82,7 @@ function structuralKey(task: DownloadTask): string {
   return `${progress.phase}|${task.errorMessage ?? ''}|speed=${(task.speedBytesPerSec ?? 0) > 0}|total=${(task.totalBytes ?? 0) > 0}|known=${progress.overallProgress !== null}`
 }
 
+// Flush to Zustand immediately on terminal states or structural UI changes; otherwise throttle to 250ms.
 function publishTask(task: DownloadTask, opts: { upsertTask: (task: DownloadTask) => void }): void {
   const now = Date.now()
   const key = structuralKey(task)

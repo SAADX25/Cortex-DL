@@ -1,4 +1,4 @@
-
+// Resilient thumbnail image with optional blurred backdrop, Meta CDN proxy fallback, and inline SVG fallback.
 import React, { useState, useEffect, useRef } from 'react'
 import { buildMediaUrl, useMediaEndpoint } from '../lib/mediaEndpoint'
 
@@ -26,6 +26,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
   const proxyAttempt = useRef(false)
   const mediaEndpoint = useMediaEndpoint()
 
+  // Bump generation on src change/unmount so late proxy responses for stale URLs are ignored.
   useEffect(() => {
     const reference = generation
     reference.current++
@@ -37,6 +38,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
   const finalSrc = (resolved.source === src ? resolved.image : src) || THUMB_FALLBACK_DATA_URI
   const onImageError = () => {
     const owned = generation.current
+    // Meta CDN thumbnails often block direct renderer requests; retry once via the main-process proxy first.
     if (src && /(?:cdninstagram|instagram|fbcdn)\./i.test(new URL(src, window.location.href).hostname) && mediaEndpoint && !proxyAttempt.current) {
       proxyAttempt.current = true
       void window.cortexDl.fetchThumbnail(src).then(file => {

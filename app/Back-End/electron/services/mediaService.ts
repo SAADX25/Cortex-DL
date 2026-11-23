@@ -1,3 +1,4 @@
+// Media format specs, remux/transcode planning, FFmpeg/ffprobe runners, and playback request tracking.
 import { type AudioFormat, type TargetFormat, type VideoFormat, AUDIO_FORMATS, type DownloadTask, VIDEO_FORMATS, type EngineContext } from '../types'
 import { ensureEnginesReady, engineExecutionFailed } from '../engines/engineManager'
 import { promises as fs } from 'node:fs'
@@ -15,6 +16,7 @@ type AudioSpec = {
   ffmpegArgs: readonly string[]
 }
 
+// Pairs yt-dlp format names with accepted container/codec probes so remuxes can skip re-encoding.
 export const AUDIO_SPECS: Record<AudioFormat, AudioSpec> = {
   mp3: { ytDlpFormat: 'mp3', codec: 'mp3', containers: ['mp3'], ffmpegArgs: ['-c:a', 'libmp3lame', '-q:a', '0'] },
   wav: { ytDlpFormat: 'wav', codec: 'pcm_s16le', containers: ['wav'], ffmpegArgs: ['-c:a', 'pcm_s16le'] },
@@ -84,6 +86,7 @@ export function matchesMediaFormat(format: TargetFormat, probe: MediaProbe): boo
 
 export type MediaConversion = 'direct' | 'remux' | 'audio-encode' | 'video-encode' | 'full-transcode'
 
+// Pick the cheapest pipeline: leave matching files untouched, stream-copy compatible codecs, or re-encode only mismatched tracks.
 export function decideMediaConversion(format: TargetFormat, source?: MediaProbe, trim = false): MediaConversion {
   const spec = MediaFormatRegistry[format]
   if (!source || trim || format === 'gif') return spec.videoCodec ? 'full-transcode' : 'audio-encode'
@@ -118,6 +121,7 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
       })
     }
   }
+  // AVI expects Annex-B H.264 framing, so convert MP4/MKV length-prefixed NALUs when stream-copying H.264.
   const needsH264AnnexB =
     format === 'avi' &&
     Boolean(source?.streams?.some(s => s.codec_type === 'video' && !s.disposition?.attached_pic && s.codec_name === 'h264'))
@@ -228,6 +232,7 @@ export async function runMediaProcess(args: string[], task: DownloadTask, ctx: E
   const signal = ctx.runtime.abortController?.signal
   signal?.throwIfAborted()
 
+  // Cap total FFmpeg threads to half the host cores (2-4) split 1:2 decode/encode so the UI stays responsive.
   const budget = Math.max(2, Math.min(4, Math.floor(availableParallelism() / 2)))
   const decoderThreads = String(Math.max(1, Math.floor(budget / 3)))
   const encoderThreads = String(Math.max(1, budget - Number(decoderThreads)))
@@ -281,6 +286,7 @@ export async function runMediaProcess(args: string[], task: DownloadTask, ctx: E
   }
 }
 
+// Run a fast container-level pass first, then decode 2s at the start and end to catch corrupt tail frames.
 export async function validateMediaOutput(file: string, task: DownloadTask, ctx: EngineContext, duration?: number): Promise<void> {
   await runMediaProcess(['-xerror', '-i', file, '-map', '0:v?', '-map', '0:a?', '-c', 'copy', '-f', 'null', '-'], task, ctx, duration)
   const offsets = [0]
@@ -290,6 +296,7 @@ export async function validateMediaOutput(file: string, task: DownloadTask, ctx:
   }
 }
 
+// Supports standard byte ranges (start-end, start-) and suffix ranges (-N), clamping the end to file size.
 export function parseMediaRange(header: string, size: number): [number, number] | null {
   const match = /^bytes=(\d*)-(\d*)$/.exec(header)
   if (!match || (!match[1] && !match[2]) || size <= 0) return null
@@ -301,6 +308,7 @@ export function parseMediaRange(header: string, size: number): [number, number] 
   return [start, Math.min(requestedEnd, size - 1)]
 }
 
+// Tracks in-flight media streams and ffmpeg/ffprobe children per UI session so closing a view cleans them up cleanly.
 export class MediaRequestRegistry {
   private readonly active = new Map<() => void, { session: string | null; kind: 'stream' | 'subtitle' | 'probe' }>()
   private readonly closedSessions = new Set<string>()

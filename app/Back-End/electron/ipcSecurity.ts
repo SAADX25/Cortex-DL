@@ -1,3 +1,4 @@
+// IPC security gate restricting channels to the main window's main frame and validating arguments.
 import { ipcMain, type BrowserWindow } from 'electron'
 import path from 'node:path'
 import { validateSubtitleRequest } from '../../Shared/localSubtitles'
@@ -32,6 +33,7 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
   const paths = ['open-folder', 'open-file', 'get-media-fps', 'get-subtitles']
   if (paths.some(name => channel === `cortexdl:${name}`)) {
     if (typeof first !== 'string' || first.length > 32767 || first.includes('\0') || !path.isAbsolute(first)) throw new Error('Invalid file path')
+    // Allowlist media/text extensions so open-file can never launch executables or scripts.
     if (channel.endsWith('open-file') && !/\.(?:mp4|mkv|webm|avi|mov|ogv|m4v|gif|mp3|m4a|aac|opus|flac|wav|ogg|wma|srt|vtt|txt)$/i.test(first)) throw new Error('Only media and text files can be opened')
   }
   if (channel === 'cortexdl:set-concurrency' && (!Number.isInteger(first) || Number(first) < 1 || Number(first) > 20)) throw new Error('Invalid concurrency')
@@ -46,6 +48,7 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
 }
 
 export function installIpcBoundary(getWin: () => BrowserWindow | null): void {
+  // Wrap ipcMain.handle/on before handlers register so every channel inherits sender and schema checks.
   const handle = ipcMain.handle.bind(ipcMain)
   ipcMain.handle = (channel, listener) => handle(channel, (event, ...args) => {
     const win = getWin()

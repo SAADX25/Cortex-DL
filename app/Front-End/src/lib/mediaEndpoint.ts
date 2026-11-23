@@ -1,3 +1,4 @@
+// Resolves and caches the local loopback media server port/token and builds authenticated file URLs.
 import { useEffect, useState } from 'react'
 
 export interface MediaEndpoint {
@@ -15,6 +16,7 @@ export function peekMediaEndpoint(): MediaEndpoint | null {
 
 export function loadMediaEndpoint(): Promise<MediaEndpoint | null> {
   if (cachedEndpoint) return Promise.resolve(cachedEndpoint)
+  // Coalesce concurrent callers into one IPC fetch; reset inflightRequest on failure so later mounts can retry.
   if (inflightRequest) return inflightRequest
 
   const bridge = window.cortexDl?.getMediaEndpoint

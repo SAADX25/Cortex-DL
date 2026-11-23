@@ -1,3 +1,4 @@
+// Direct FFmpeg download engine for raw stream URLs (e.g., HLS/DASH) with optional trimming.
 import type { DownloadTask, EngineContext, TaskRuntime, EngineResult } from '../types'
 import log from 'electron-log'
 import { mediaOutputArgs, runMediaProcess, trimBounds } from '../services/mediaService'
@@ -22,6 +23,7 @@ export class FfmpegEngine implements IEngine {
     const trimming = Boolean(task.startTime || task.endTime)
     const bounds = trimming ? trimBounds(task) : null
     const clipDuration = bounds?.end !== undefined ? Math.max(0.1, bounds.end - bounds.start) : undefined
+    // Place -ss before -i for fast input seeking and -t after -i to cap clip duration.
     const inputArgs = [
       ...(bounds && bounds.start > 0 ? ['-ss', String(bounds.start)] : []),
       '-i', task.url,
@@ -30,6 +32,7 @@ export class FfmpegEngine implements IEngine {
 
     try {
       await runMediaProcess([...inputArgs, ...mediaOutputArgs(task.targetFormat, task.filePath, undefined, trimming)], task, context, clipDuration)
+      // Mark sectionTrimmed so post-processing doesn't re-apply the trim window a second time.
       return { kind: 'success', candidate: task.filePath, ...(trimming ? { sectionTrimmed: true } : {}) }
     } catch (error) {
       if (runtime.abortController.signal.aborted) return { kind: 'paused' }

@@ -1,3 +1,4 @@
+// Preview stream URL validation, media error formatting, and fallback lifecycle for the visual trimmer.
 export function logPreviewFailure(reason: string): void {
   console.error('[Visual Trim]', reason)
   if (typeof window !== 'undefined') window.cortexDl?.logPreviewError?.(reason)
@@ -10,6 +11,7 @@ export function isHlsStreamUrl(value: string): boolean {
 export function validatePreviewUrl(value: string): string {
   const url = new URL(value)
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid preview stream URL')
+  // Reject signed CDN stream URLs whose expire/expires timestamp has already passed.
   const expires = Number(url.searchParams.get('expire') || url.searchParams.get('expires'))
   if (expires > 0 && expires * 1000 <= Date.now()) throw new Error('Expired preview stream URL; analyze the source again')
   return url.href
@@ -55,6 +57,7 @@ export class TrimPreview {
   fail(reason: string): void {
     if (this.disposed) return
     logPreviewFailure(reason)
+    // Fall back once to the pre-analyzed stream URL if it differs from the one that just failed.
     if (!this.fallbackUsed && this.fallback) {
       this.fallbackUsed = true
       try {
@@ -70,6 +73,7 @@ export class TrimPreview {
 }
 
 export function seekPreview(video: HTMLMediaElement | null, seconds: number): boolean {
+  // Wait for HAVE_METADATA (readyState >= 1) before seeking or browsers ignore/throw on currentTime.
   if (!video || video.readyState < 1) return false
   try {
     video.currentTime = Number.isFinite(video.duration) ? Math.min(seconds, video.duration) : seconds

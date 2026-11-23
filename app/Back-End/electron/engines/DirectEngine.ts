@@ -1,3 +1,4 @@
+// Multi-connection HTTP(S) downloader with range-based chunking, resume, and single-stream fallback.
 import { type IEngine } from './IEngine'
 import { type DownloadTask, type EngineContext, type EngineResult } from '../types'
 import log from 'electron-log'
@@ -62,6 +63,7 @@ function getNumChunksFromSettings(): number {
 }
 
 export class DirectEngine implements IEngine {
+  // Disable keep-alive so destroying the agents on pause/stop tears down sockets immediately.
   private readonly httpAgent = new HttpAgent({ keepAlive: false });
   private readonly httpsAgent = new HttpsAgent({ keepAlive: false });
   private abortController: AbortController | null = null;
@@ -109,6 +111,7 @@ export class DirectEngine implements IEngine {
 
           const etag = headResponse.headers['etag'] as string | undefined;
           const lastModified = headResponse.headers['last-modified'] as string | undefined;
+          // Weak ETags (W/) aren't byte-identical validators, so fall back to Last-Modified before reusing partial output.
           const unchanged = (task.etag && !task.etag.startsWith('W/') ? task.etag === etag : task.lastModified ? task.lastModified === lastModified : false) &&
             (!task.lastModified || task.lastModified === lastModified);
           if (task.downloadedBytes > 0 && !unchanged) await this.discardOutput(task);
@@ -149,6 +152,7 @@ export class DirectEngine implements IEngine {
         try {
           await this.downloadWithChunking(task, totalBytes, context);
         } catch (error) {
+          // Some CDNs advertise Accept-Ranges on HEAD but ignore Range on GET; drop partial chunks and retry as one stream.
           if (!(error instanceof RangeUnsupportedError) || this.stopRequested) throw error;
 
           log.warn(
@@ -216,6 +220,7 @@ export class DirectEngine implements IEngine {
       }
     }
 
+    // Force identity encoding so Content-Length and byte offsets stay aligned with the file on disk.
     const headers: Record<string, string> = { 'Accept-Encoding': 'identity' };
     const validator = task.etag && !task.etag.startsWith('W/') ? task.etag : task.lastModified;
     if (startByte > 0 && validator) headers['If-Range'] = validator;
@@ -317,6 +322,7 @@ export class DirectEngine implements IEngine {
         `[DirectEngine] Task ${task.id}: Starting FRESH ${this.numChunks}-chunk parallel download`
       );
 
+      // Preallocate the target size upfront so parallel chunks can write directly to disjoint file offsets.
       const preallocate = await fsPromises.open(task.filePath, 'w');
       try {
         await preallocate.truncate(totalBytes);
@@ -348,6 +354,7 @@ export class DirectEngine implements IEngine {
     try {
       const inFlight = pending.map((chunk) =>
         this.downloadChunkWithRetry(task, chunk, handle, context).catch((err: unknown) => {
+          // Capture the first real error before aborting sibling chunks, whose cancellations would otherwise mask it.
           if (this.failure == null && !this.isAbort(err)) this.failure = err;
           this.abortController?.abort();
           throw err;
@@ -633,6 +640,7 @@ export class DirectEngine implements IEngine {
       return null;
     }
 
+    // Verify saved chunks form a contiguous, non-overlapping cover of the preallocated file before trusting resume state.
     const ordered = [...saved].sort((a, b) => a.start - b.start);
     let expectedStart = 0;
 

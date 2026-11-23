@@ -9,6 +9,7 @@ export function getBaselineDirectory(): string {
 
 export function getBinDirectory(): string { return path.join(app.getPath('userData'), 'bin') }
 
+// Prefer updated binaries in userData/bin over the read-only bundled baseline.
 export function getBinaryPath(name: string): string {
   const filename = process.platform === 'win32' ? `${name}.exe` : name
   const mutable = path.join(getBinDirectory(), filename)

@@ -1,3 +1,4 @@
+// Abortable child-process runner for local subtitle binaries with process-tree cleanup and redacted error tails.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { killProcessTree } from '../utils'
 import path from 'node:path'
@@ -9,6 +10,7 @@ export class SubtitleProcesses {
     this.signal.throwIfAborted()
     const child = spawn(binary, args, { windowsHide: true, cwd: path.dirname(binary), detached: process.platform !== 'win32', stdio: 'pipe',
       env: libraryDirectory ? { ...process.env, PATH: libraryDirectory + path.delimiter + (process.env.PATH ?? '') } : process.env })
+    // Close stdin immediately so binaries never hang waiting for interactive input.
     child.stdin.end()
     const abort = () => { void killProcessTree(child) }
     this.signal.addEventListener('abort', abort, { once: true })
@@ -25,6 +27,7 @@ export class SubtitleProcesses {
       })
     })
 
+    // Prevent unhandled rejections when callers don't await settled before stop() aborts the child.
     void settled.catch(() => {})
     this.children.set(child, settled)
     return { child, settled }

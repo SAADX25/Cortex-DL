@@ -1,6 +1,7 @@
+// Application settings, engine readiness checks, updates, and uninstall controls
 import React from 'react'
 import { RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react'
-import { translations, type Language } from '../translations'
+import { languageNames, translations, type Language } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 import { useLang, useSettingsStore } from '../stores/useSettingsStore'
 
@@ -91,8 +92,8 @@ const SettingsTab: React.FC = () => {
                   value={lang}
                   onChange={(e) => setLang(e.target.value as Language)}
                 >
-                  <option value="en" className="bg-[#1e293b] text-white">English</option>
-                  <option value="ar" className="bg-[#1e293b] text-white">العربية</option>
+                  <option value="en" className="bg-[#1e293b] text-white">{languageNames.en}</option>
+                  <option value="ar" className="bg-[#1e293b] text-white">{languageNames.ar}</option>
                 </select>
                 <div className="custom-select-icon">
                   <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">

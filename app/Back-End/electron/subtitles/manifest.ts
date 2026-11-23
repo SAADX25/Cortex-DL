@@ -1,3 +1,4 @@
+// Pinned URLs, byte sizes, and SHA-256 digests for local Whisper, Silero VAD, CUDA, and TranslateGemma assets.
 export type SubtitleAsset = { id: string; url: string; sha256: string; bytes: number; file: string; archive?: boolean; executable?: string; expandedLimit?: number }
 
 const whisperRepo = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/'

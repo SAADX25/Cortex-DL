@@ -1,3 +1,4 @@
+// Download form options (trim range, format, quality, speed limit) and derived quality selectors.
 import { create } from 'zustand'
 import { useMemo } from 'react'
 import { useUIStore } from './useUIStore'
@@ -66,6 +67,7 @@ export const useFormStore = create<FormStoreState>((set) => ({
   subfolderName: '',
   setSubfolderName: (v) => set({ subfolderName: v }),
 
+  // Clear per-URL format picks without wiping sticky preferences like target format or speed limit.
   resetForNewUrl: () =>
     set({
       selectedVariantUrl: null,
@@ -83,6 +85,7 @@ export function useAvailableVideoQualities(): { height: number; fps: number }[] 
     const formats = analyzeResult.formats
     const unique = new Map<number, number>()
 
+    // Deduplicate by height, keeping the highest fps per resolution and skipping sub-140p entries.
     for (const f of formats) {
       if (!f.height || f.height < 140) continue
       const standardHeight = f.height

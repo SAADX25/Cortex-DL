@@ -1,3 +1,4 @@
+// Main-process helpers for filename sanitization, speed sampling, throttled IPC, and process-tree cleanup.
 import log from 'electron-log'
 import { Notification, BrowserWindow } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -70,6 +71,7 @@ export function computeSpeed(task: DownloadTask, runtime: TaskRuntime): void {
     return
   }
   const dtMs = now - runtime.lastSpeedSampleAtMs
+  // Sample over >=800ms windows to smooth out bursty chunk delivery.
   if (dtMs < 800) return
   const db = task.downloadedBytes - runtime.lastSpeedSampleBytes
   task.speedBytesPerSec = Math.max(0, Math.round((db * 1000) / dtMs))
@@ -104,6 +106,7 @@ export function sendUpdate(win: BrowserWindow | null, task: DownloadTask): void 
   win.webContents.send(UPDATE_CHANNEL, task)
 }
 
+// Cap progress broadcasts to ~10 Hz per task while flushing terminal states immediately with a trailing snapshot.
 const IPC_THROTTLE_MS = 100
 
 const TERMINAL_STATUSES = new Set(['completed', 'error', 'canceled', 'paused'])
@@ -208,6 +211,7 @@ async function terminateProcessTree(child: ChildProcessWithoutNullStreams): Prom
     return
   }
 
+  // Avoid spawning taskkill for an already-exited PID, which Windows could reuse.
   if (process.platform === 'win32' && (typeof child.exitCode === 'number' || child.signalCode)) return
 
   if (process.platform === 'win32') {

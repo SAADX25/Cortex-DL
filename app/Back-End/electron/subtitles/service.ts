@@ -1,3 +1,4 @@
+// End-to-end local subtitle pipeline: media ingest, Whisper transcription with GPU fallback, LLM translation, and export/embed.
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -76,6 +77,7 @@ export class LocalSubtitleService {
       if (/^https?:\/\//i.test(input)) {
         const url = new URL(input)
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid media URL')
+        // Cache the last transcription so switching target language skips re-downloading and re-running Whisper.
         cacheKey = JSON.stringify([input, request.sourceLanguage, request.speechModel, recognitionMode, request.compute ?? 'auto', speechBackend])
         if (this.speechCache?.key !== cacheKey) {
           if (isThreadsUrl(input)) {
@@ -109,6 +111,7 @@ export class LocalSubtitleService {
         if (duration > 8 * 3600) throw new Error('Split media longer than eight hours before transcription')
         const space = await fs.statfs(directory)
         if (Number(space.bavail) * Number(space.bsize) < duration * 32000 + 50 * 1024 * 1024) throw new Error('LOCAL_SUBTITLES_DISK_SPACE')
+        // Whisper expects mono 16 kHz 16-bit PCM WAV.
         const wav = path.join(directory, 'speech.wav')
         await processes.run(getBinaryPath('ffmpeg'), ['-y', '-v', 'error', '-i', input, '-map', '0:a:0', '-vn', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav])
         this.state = { ...this.state, stage: 'transcribing', progress: null }
@@ -129,6 +132,7 @@ export class LocalSubtitleService {
             ...(useVad ? ['--vad', '--vad-model', vad, '--vad-speech-pad-ms', '120', '--vad-min-silence-duration-ms', '300'] : []),
             '-pp', '-t', String(Math.max(1, Math.min(8, os.availableParallelism() - 2)))], text => {
             backendOutput = (backendOutput + text).slice(-12000)
+            // Confirm CUDA allocation from whisper-cli logs; fall back to CPU automatically if CUDA init fails.
             if (useGpu && /CUDA\d*\s+total size|CUDA\d*\s+model buffer/i.test(backendOutput)) {
               gpuConfirmed = true; this.state = { ...this.state, acceleration: { ...this.state.acceleration!, speech: 'gpu' } }
             }
@@ -150,6 +154,7 @@ export class LocalSubtitleService {
           return parseSpeechRecognition(JSON.parse(await fs.readFile(output + '.json', 'utf8')), duration)
         }
         let recognized: ReturnType<typeof parseSpeechRecognition>
+        // If VAD strips all speech or yields bad offsets, retry once against the full unsegmented audio.
         try {
           recognized = await recognize(recognitionMode === 'speech')
         } catch (error) {
@@ -181,6 +186,7 @@ export class LocalSubtitleService {
         const translationGpu = request.compute !== 'cpu' ? await detectNvidiaGpu(signal) : null
         const gpuTranslator = translationGpu ? await this.assets.locate('llamaGpu') : null
         let translator: Awaited<ReturnType<typeof startTranslator>> | undefined
+        // Try Vulkan GPU offloading for llama-server first, falling back to CPU on any startup failure.
         if (gpuTranslator && translationGpu) {
           try {
             let output = ''
@@ -198,6 +204,7 @@ export class LocalSubtitleService {
         translator ??= await startTranslator((await this.assets.locate('llama'))!, translationModel, processes)
 
         const translated: SubtitleCue[] = []
+        // Memoize repeated cue text (choruses, recurring lines) to cut redundant LLM calls.
         const memo = new Map<string, string>()
         for (const cue of document.cues) {
           signal.throwIfAborted()

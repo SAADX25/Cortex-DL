@@ -1,3 +1,4 @@
+// Discovers sidecar SRT/VTT files beside completed downloads and muxes them into MP4/MKV without re-encoding.
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -8,6 +9,7 @@ import { getBinaryPath } from '../paths'
 import { probeMediaFile, subtitleLanguageTag, validateSubtitleMedia } from '../services/mediaService'
 import { SubtitleProcesses } from './process'
 
+// Deduplicate concurrent readdir calls when multiple download cards share a directory.
 const directoryReads = new Map<string, Promise<string[]>>()
 
 async function readDirectory(directory: string): Promise<string[]> {
@@ -28,6 +30,7 @@ export async function listDownloadSubtitles(media: string): Promise<DownloadSubt
     const file = path.join(directory, fileName), stat = await fs.lstat(file).catch(() => null)
     if (!stat?.isFile() || stat.size <= 0 || stat.size > 5 * 1024 * 1024) return null
     const text = await fs.readFile(file, 'utf8').catch(() => '')
+    // Require at least one SRT/VTT cue timestamp so empty or non-subtitle files are skipped.
     if (!/(?:\d{2}:)?\d{2}:\d{2}[,.]\d{3}\s*-->\s*(?:\d{2}:)?\d{2}:\d{2}[,.]\d{3}/.test(text)) return null
     const suffix = path.parse(fileName).name.slice(base.length).replace(/^\./, '')
     const language = /^[a-z]{2,3}(?:-[a-z0-9]+)*$/i.test(suffix) ? suffix.toLowerCase() : 'und'
@@ -53,6 +56,7 @@ export async function mergeDownloadSubtitle(media: string, fileName: string, out
     const before = await probeMediaFile(media, undefined, signal)
     if (!before.streams?.some(stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic)) throw new Error('SELECT_VIDEO_FOR_SUBTITLES')
     const subtitleIndex = before.streams?.filter(stream => stream.codec_type === 'subtitle').length ?? 0
+    // Stream-copy video/audio and encode only the added caption track (mov_text for MP4, srt for MKV).
     await processes.run(getBinaryPath('ffmpeg'), ['-n', '-nostdin', '-v', 'error', '-i', media, '-sub_charenc', 'UTF-8', '-i', caption,
       '-map', '0:v?', '-map', '0:a?', '-map', '0:s?', '-map', '1:s:0', '-c:v', 'copy', '-c:a', 'copy', '-c:s', format === 'mp4' ? 'mov_text' : 'copy',
       `-c:s:${subtitleIndex}`, format === 'mp4' ? 'mov_text' : 'srt',

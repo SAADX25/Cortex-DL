@@ -1,58 +1,18 @@
+// On-device speech-to-subtitle studio: model setup, GPU/CPU toggle, cue review, and SRT/VTT/video export
 import { useEffect, useState } from 'react'
 import { Captions, FolderOpen, Languages, Download, CheckCircle2, ShieldCheck, X, AlertCircle, Play, LoaderCircle, PencilLine, Trash2, Cpu, Zap, CircuitBoard, Check, Mic, Music, Info, ChevronDown } from 'lucide-react'
 import { SUBTITLE_LANGUAGES, type SubtitleCue, type SubtitleLanguage, type SubtitleState, type SubtitleReadiness, type SpeechModel, type TranslationModel, type RecognitionMode } from '../../../../Shared/localSubtitles'
 import { useLang } from '../../stores/useSettingsStore'
 import { useUIStore } from '../../stores/useUIStore'
 import { useSubtitleStudioStore } from '../../stores/useSubtitleStudioStore'
+import { translations } from '../../translations'
 import './SubtitleStudio.css'
 import { serializeSubtitles } from '../../../../Shared/subtitleCues'
 import SubtitleLanguageSelect from './SubtitleLanguageSelect'
 
-const labels = {
-  en: {
-    title: 'Video subtitles', intro: 'Turn speech into timed captions. Translate and review them in one place.', local: 'On your device',
-    clear: 'Clear session', cleared: 'Subtitle session cleared', session: 'Session only', sessionNote: 'Results disappear when the app fully exits. Saved exports stay on disk.',
-    gpuMemoryNote: 'Reduced memory; accuracy may differ slightly.',
-    source: 'Video or audio', placeholder: 'Paste a public video link, or choose a file', choose: 'Choose file', spoken: 'Spoken language', auto: 'Detect automatically', target: 'Subtitle language', original: 'Original language',
-    accuracy: 'Speech recognition', accurate: 'Higher accuracy · Large v3', fast: 'Faster · Large v3 Turbo', translation: 'Translation quality', standard: 'Standard · 4B', quality: 'Higher quality · 12B', memory: '12B translation needs at least 24 GB RAM.',
-    setup: 'Prepare local models', setupNote: 'Download once. Speech and text are processed on this computer.', download: 'Download selected models', ready: 'Models ready', start: 'Generate subtitles', cancel: 'Cancel', preparing: 'Preparing audio', transcribing: 'Recognizing speech and timing', translating: 'Translating captions', installing: 'Downloading and checking models', exporting: 'Saving subtitled video', embed: 'Save subtitled video', completed: 'Subtitles ready for review', canceled: 'Canceled',
-    license: 'Model license', review: 'Review captions', reviewNote: 'Check names, dialect and highlighted captions before exporting.', saveSrt: 'Save SRT', saveVtt: 'Save VTT', play: 'Preview video', onlyReview: 'Needs review', all: 'All captions', originalText: 'Original speech', translatedText: 'Subtitle text', startTime: 'Start (seconds)', endTime: 'End (seconds)', offset: 'Timing adjustment (seconds)', page: 'Page', previous: 'Previous', next: 'Next', saved: 'Subtitles saved', invalid: 'Check caption timing: positive duration, chronological order, and no overlaps.', error: 'Could not complete subtitles',
-    preparingHint: 'First use can take time while the model loads. Recognition speed depends on your computer.', noReview: 'No captions flagged for review.',
-    content: 'Audio content', speechContent: 'Speech and dialogue', musicContent: 'Music and singing', speechHint: 'Recognizes spoken words and dialogue. Best for interviews and conversations.', musicHint: 'Reads the full audio to keep singing. Processing takes longer; review lyrics and timing.', retryingSpeech: 'No words detected yet. Retrying with the full audio.', retryingTiming: 'Speech timing was invalid. Retrying with the full audio.',
-    device: 'Processing device', autoDevice: 'Automatic', cpuDevice: 'CPU', recommended: 'Recommended', autoHint: 'GPU when available, with CPU fallback', cpuHint: 'Use the processor only', cpuNote: 'GPU acceleration is off for this session.', autoCpuNote: 'CPU is available. Automatic switches to GPU when its engines and memory are ready.', checkingDevice: 'Checking available hardware…', gpuReady: 'GPU ready', cpuAvailable: 'CPU available', gpuSetup: 'Prepare GPU acceleration', gpuDownload: 'Prepare GPU engines', gpuNote: 'Uses your graphics card for recognition and translation. CPU is used if GPU memory or support is unavailable.', gpuCompact: 'Large v3 Q5 · reduced memory; accuracy may differ slightly.', gpuFallback: 'GPU unavailable for this step; continuing on CPU.', optimizingGpu: 'Optimizing existing Large v3 for GPU memory',
-  },
-  ar: {
-    title: 'ترجمة الفيديو', intro: 'حوّل الكلام إلى ترجمة بتوقيت الصوت، وترجمها وراجعها من مكان واحد.', local: 'على جهازك',
-    clear: 'مسح جلسة الترجمة', cleared: 'تم مسح جلسة الترجمة', session: 'لهذه الجلسة فقط', sessionNote: 'تختفي النتائج عند الخروج الكامل من البرنامج. الملفات التي صدّرتها تبقى محفوظة.',
-    gpuMemoryNote: 'ذاكرة أقل؛ قد تختلف الدقة قليلًا.',
-    source: 'الفيديو أو الصوت', placeholder: 'الصق رابط فيديو عام أو اختر ملفًا', choose: 'اختيار ملف', spoken: 'لغة الكلام', auto: 'اكتشاف تلقائي', target: 'لغة الترجمة', original: 'لغة الكلام الأصلية',
-    accuracy: 'التعرف على الكلام', accurate: 'دقة أعلى · Large v3', fast: 'أسرع · Large v3 Turbo', translation: 'جودة الترجمة', standard: 'قياسي · 4B', quality: 'جودة أعلى · 12B', memory: 'الترجمة بنموذج 12B تحتاج 24 GB RAM على الأقل.',
-    setup: 'تجهيز النماذج المحلية', setupNote: 'تنزيل لمرة واحدة. تتم معالجة الصوت والنص على هذا الجهاز.', download: 'تنزيل النماذج المختارة', ready: 'النماذج جاهزة', start: 'إنشاء الترجمة', cancel: 'إلغاء', preparing: 'تجهيز الصوت', transcribing: 'التعرف على الكلام وتوقيته', translating: 'ترجمة النص', installing: 'تنزيل النماذج وفحصها', exporting: 'حفظ الفيديو مع الترجمة', embed: 'حفظ الفيديو مع الترجمة', completed: 'الترجمة جاهزة للمراجعة', canceled: 'تم الإلغاء',
-    license: 'ترخيص النموذج', review: 'مراجعة الترجمة', reviewNote: 'راجع الأسماء واللهجة والمقاطع المعلّمة قبل التصدير.', saveSrt: 'حفظ SRT', saveVtt: 'حفظ VTT', play: 'معاينة الفيديو', onlyReview: 'تحتاج مراجعة', all: 'كل المقاطع', originalText: 'الكلام الأصلي', translatedText: 'نص الترجمة', startTime: 'البداية (ثوانٍ)', endTime: 'النهاية (ثوانٍ)', offset: 'ضبط توقيت الترجمة (ثوانٍ)', page: 'صفحة', previous: 'السابق', next: 'التالي', saved: 'تم حفظ الترجمة', invalid: 'راجع توقيت المقاطع: مدة موجبة، ترتيب زمني، ومن دون تداخل.', error: 'تعذر إكمال الترجمة',
-    preparingHint: 'قد يستغرق تحميل النموذج وقتًا عند أول استخدام. سرعة التعرف على الكلام تعتمد على جهازك.', noReview: 'لا توجد مقاطع معلّمة للمراجعة.',
-    content: 'نوع الصوت', speechContent: 'كلام وحوار', musicContent: 'موسيقى وغناء', speechHint: 'يتعرّف على الكلام والحوار. مناسب للمقابلات والمحادثات.', musicHint: 'يقرأ الصوت كاملًا للحفاظ على الغناء. يستغرق وقتًا أطول؛ راجع الكلمات والتوقيت.', retryingSpeech: 'لم تُكتشف كلمات بعد. تجري المحاولة مجددًا باستخدام الصوت كاملًا.', retryingTiming: 'تعذّر ضبط توقيت الكلام. تجري المحاولة مجددًا باستخدام الصوت كاملًا.',
-    device: 'جهاز المعالجة', autoDevice: 'تلقائي', cpuDevice: 'المعالج CPU', recommended: 'موصى به', autoHint: 'كرت الشاشة عند توفره، والمعالج عند الحاجة', cpuHint: 'استخدام المعالج فقط', cpuNote: 'تسريع كرت الشاشة متوقف لهذه الجلسة.', autoCpuNote: 'المعالج متاح. ينتقل الوضع التلقائي للكرت عند جاهزية محركاته وذاكرته.', checkingDevice: 'جارٍ فحص الأجهزة المتاحة…', gpuReady: 'الكرت جاهز', cpuAvailable: 'المعالج متاح', gpuSetup: 'تجهيز تسريع كرت الشاشة', gpuDownload: 'تجهيز محركات GPU', gpuNote: 'يستخدم كرت الشاشة للتعرف والترجمة. يُستخدم CPU إذا لم تكفِ ذاكرة الكرت أو تعذر تشغيله.', gpuCompact: 'Large v3 Q5 · ذاكرة أقل؛ قد تختلف الدقة قليلًا.', gpuFallback: 'تعذر استخدام الكرت لهذه المرحلة؛ تجري المتابعة على CPU.', optimizingGpu: 'تهيئة Large v3 الموجود ليتناسب مع ذاكرة الكرت',
-  },
-}
-function errorLabel(message: string, ar: boolean): string {
-  const errors: Record<string, [string, string]> = {
-    YOUTUBE_AUTH_REQUIRED: ['This video requires sign-in. Choose a local video file instead.', 'هذا الفيديو يتطلب تسجيل الدخول. اختر ملف فيديو من جهازك.'],
-    YOUTUBE_NETWORK_ERROR: ['Could not reach the video provider. Check your connection.', 'تعذر الاتصال بمصدر الفيديو. تحقق من اتصال الإنترنت.'],
-    YOUTUBE_RATE_LIMITED: ['The video provider limited requests. Wait before retrying.', 'مصدر الفيديو قيّد الطلبات مؤقتًا. انتظر قبل المحاولة.'],
-    LOCAL_SUBTITLES_NOT_INSTALLED: ['Download the selected models first.', 'نزّل النماذج المختارة أولًا.'],
-    LOCAL_SUBTITLES_MEMORY: ['Select the 4B translation model for this computer.', 'اختر نموذج الترجمة 4B لهذا الجهاز.'],
-    LOCAL_SUBTITLES_DISK_SPACE: ['Not enough free disk space for the selected models or audio.', 'المساحة المتاحة لا تكفي للنماذج المختارة أو الصوت.'],
-    LOCAL_SUBTITLES_WINDOWS_X64: ['Local models currently support Windows x64.', 'النماذج المحلية تدعم Windows x64 حاليًا.'],
-    LOCAL_SUBTITLES_BUSY: ['Wait for the current operation or cancel it.', 'انتظر العملية الحالية أو ألغها.'],
-    LOCAL_SUBTITLES_NO_SPEECH: ['No recognizable words were found in the full audio. Check the spoken language and audio; music alone cannot be translated.', 'لم تُكتشف كلمات واضحة في الصوت كاملًا. تحقق من لغة الكلام والصوت؛ الموسيقى وحدها لا تُترجم.'],
-    'Speech engine returned invalid timing': ['The speech engine returned invalid caption timing. Try the higher accuracy model or CPU processing.', 'أعاد محرك التعرف على الكلام توقيتًا غير صالح للترجمة. جرّب نموذج الدقة الأعلى أو المعالجة باستخدام CPU.'],
-    'Invalid speech engine output': ['Could not read the speech engine output. Try generating subtitles again.', 'تعذّرت قراءة نتيجة محرك التعرف على الكلام. حاول إنشاء الترجمة مجددًا.'],
-    'Invalid subtitle timing or text': ['Some caption timing or text is invalid. Review the captions before saving.', 'توقيت بعض مقاطع الترجمة أو نصها غير صالح. راجع المقاطع قبل الحفظ.'],
-  }
-  return errors[message]?.[ar ? 1 : 0] ?? message
-}
 export default function SubtitleStudio() {
-  const lang = useLang(), t = labels[lang], ar = lang === 'ar'
+  const lang = useLang(), t = translations[lang].subtitles.studio, ar = lang === 'ar'
+  const errorLabel = (msg: string) => t.errors[msg] ?? msg
   const languageName = (code: string, fallback: string) => new Intl.DisplayNames([lang], { type: 'language' }).of(code) || fallback
   const source = useSubtitleStudioStore(s => s.source), setSource = useSubtitleStudioStore(s => s.setSource)
   const [spoken, setSpoken] = useState<SubtitleLanguage | 'auto'>('auto')
@@ -125,7 +85,7 @@ export default function SubtitleStudio() {
   }, [state.document, state.stage])
   const invoke = async (action: () => Promise<void>) => {
     setPending(true); setMessage('')
-    try { await action() } catch (error) { setMessage(errorLabel(error instanceof Error ? error.message : String(error), ar)) }
+    try { await action() } catch (error) { setMessage(errorLabel(error instanceof Error ? error.message : String(error))) }
     finally { setPending(false) }
   }
   const begin = (install: boolean) => void invoke(async () => {
@@ -204,7 +164,7 @@ export default function SubtitleStudio() {
       {activeDevice && <small className="ss-active-device"><bdi>{activeDevice === 'gpu' ? `GPU · ${state.acceleration?.device}` : cpuLabel}</bdi>{state.stage === 'transcribing' && state.acceleration?.compact ? ` · ${t.gpuCompact}` : ''}</small>}
       <small>{state.progress === null ? t.preparingHint : `${Math.round(state.progress)}%`}{state.detail && state.detail !== 'ready' ? ` · ${detailLabel}` : ''}</small>
     </div>}
-    {(message || state.error) && <div className="ss-error" role="alert"><AlertCircle size={18} /><span>{message || errorLabel(state.error!, ar)}</span></div>}
+    {(message || state.error) && <div className="ss-error" role="alert"><AlertCircle size={18} /><span>{message || errorLabel(state.error!)}</span></div>}
     {state.stage === 'canceled' && <p className="ss-muted">{t.canceled}</p>}
     {document && !busy && <div className="ss-card ss-review"><div className="ss-review-header"><div><h2><PencilLine size={19} />{t.review}</h2><p>{t.reviewNote}</p><small>{document.name} · {document.sourceLanguage} → {document.targetLanguage} · {cues.length}</small></div><div className="ss-export">
       {localVideo && <button className="ss-button ss-play" disabled={pending || !valid} onClick={() => void invoke(async () => { useUIStore.getState().setMediaPlayerFile({ filePath: document.localFile!, title: document.name, subtitlePreview: { language: document.targetLanguage, vtt: serializeSubtitles(adjusted, document.duration, 'vtt') } }) })}><Play size={16} />{t.play}</button>}
@@ -213,7 +173,7 @@ export default function SubtitleStudio() {
     </div></div><div className="ss-review-tools"><div className="ss-filter"><button aria-pressed={!onlyReview} onClick={() => { setOnlyReview(false); setPage(0) }}>{t.all} <span>{cues.length}</span></button><button aria-pressed={onlyReview} onClick={() => { setOnlyReview(true); setPage(0) }}>{t.onlyReview} <span>{reviewed}</span></button></div><label>{t.offset}<input type="number" dir="ltr" step="0.1" value={offset} onChange={e => setOffset(Number(e.target.value))} /></label></div>
       {!valid && <p className="ss-warning">{t.invalid}</p>}
       <div className="ss-cues">{visible.slice(currentPage * 20, currentPage * 20 + 20).map(cue => <article key={cue.id} className={`ss-cue ${cue.review ? 'needs-review' : ''}`}>
-        <div className="ss-cue-timing"><span className="ss-cue-number">{cue.id}</span><label>{t.startTime}<input type="number" step="0.01" min="0" dir="ltr" value={cue.start} onChange={e => updateCue(cue.id, { start: Number(e.target.value) })} /></label><label>{t.endTime}<input type="number" step="0.01" min="0" dir="ltr" value={cue.end} onChange={e => updateCue(cue.id, { end: Number(e.target.value) })} /></label>{cue.review && <button className="ss-reviewed" onClick={() => updateCue(cue.id, { review: false })} title={ar ? 'تأكيد المراجعة' : 'Mark as reviewed'} aria-label={ar ? 'تأكيد مراجعة المقطع' : 'Mark caption reviewed'}><CheckCircle2 size={18} /></button>}</div>
+        <div className="ss-cue-timing"><span className="ss-cue-number">{cue.id}</span><label>{t.startTime}<input type="number" step="0.01" min="0" dir="ltr" value={cue.start} onChange={e => updateCue(cue.id, { start: Number(e.target.value) })} /></label><label>{t.endTime}<input type="number" step="0.01" min="0" dir="ltr" value={cue.end} onChange={e => updateCue(cue.id, { end: Number(e.target.value) })} /></label>{cue.review && <button className="ss-reviewed" onClick={() => updateCue(cue.id, { review: false })} title={t.markReviewed} aria-label={t.markReviewedAria}><CheckCircle2 size={18} /></button>}</div>
         {document.sourceLanguage !== document.targetLanguage && <p className="ss-original" dir="auto" aria-label={t.originalText}>{cue.original}</p>}
         <textarea dir="auto" aria-label={`${t.translatedText} ${cue.id}`} value={cue.text} rows={2} onChange={e => updateCue(cue.id, { text: e.target.value.replace(/[\r\n]+/g, ' ') })} />
       </article>)}</div>

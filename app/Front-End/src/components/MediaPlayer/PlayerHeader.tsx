@@ -1,6 +1,8 @@
+// Floating overlay header inside video/audio players; marks itself inert when hidden
 import type { ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useLang } from '../../stores/useSettingsStore';
+import { translations } from '../../translations';
 
 export function PlayerHeader({ title, visible, onClose, actions }: {
   title: string;
@@ -9,8 +11,7 @@ export function PlayerHeader({ title, visible, onClose, actions }: {
   actions?: ReactNode;
 }) {
   const lang = useLang();
-  const back = lang === 'ar' ? 'رجوع' : 'Back';
-  const label = lang === 'ar' ? 'الرجوع إلى البرنامج (Esc)' : 'Back to app (Esc)';
+  const { back, backToApp: label } = translations[lang].player;
   return <div className="player-header" dir={lang === 'ar' ? 'rtl' : 'ltr'}
     style={{ opacity: visible ? 1 : 0, pointerEvents: visible ? 'auto' : 'none' }}
     onClick={event => event.stopPropagation()} ref={node => { if (node) node.inert = !visible; }}>

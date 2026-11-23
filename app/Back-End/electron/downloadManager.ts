@@ -1,3 +1,4 @@
+// Queued download manager handling concurrency, retries, pause/resume, post-processing, and atomic file promotion.
 import { BrowserWindow } from 'electron'
 import log from 'electron-log'
 import { existsSync, promises as fs } from 'node:fs'
@@ -83,6 +84,7 @@ export class DownloadManager {
           const task: DownloadTask = JSON.parse(row.full_payload)
           if (!task.id || !task.url) continue
 
+          // Any task left in-flight or missing its validated output on restart drops back to paused.
           if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting' || task.status === 'pausing' || task.status === 'queued') {
             task.status = 'paused'
             task.speedBytesPerSec = null
@@ -140,6 +142,7 @@ export class DownloadManager {
   private dirtyIds = new Set<string>()
   private writeBehindTimer: ReturnType<typeof setInterval> | null = null
 
+  // Coalesce high-frequency progress updates into 1s SQLite transactions; unref so it won't keep shutdown alive.
   private markDirty(id: string): void {
     this.dirtyIds.add(id)
     if (!this.writeBehindTimer) {
@@ -532,6 +535,7 @@ export class DownloadManager {
     return {
       runtime: attempt,
       sendUpdate: t => {
+        // Ignore late callbacks from paused, canceled, or superseded attempts.
         if (!current() || t !== draft) return
         const task = this.mustGet(taskId)
         const previousPhase = task.phase
@@ -649,6 +653,7 @@ export class DownloadManager {
 
   private async runAttempt(task: DownloadTask, attempt: AttemptRuntime): Promise<void> {
     const id = task.id
+    // Engines mutate a scratch clone rooted in .cortex_temp/<task>/<attempt> so partial writes never touch the target folder.
     const draft: DownloadTask = structuredClone(task)
     draft.directory = attempt.directory
     draft.filePath = path.join(attempt.directory, `${id}.${task.targetFormat}`)
@@ -658,6 +663,7 @@ export class DownloadManager {
       await fs.mkdir(path.dirname(attempt.directory), { recursive: true })
       this.assertCurrent(id, attempt)
 
+      // Carry over fragments from the previous attempt directory so range/yt-dlp resumes continue cleanly.
       const prior = task.resumeDirectory
       if (prior && path.dirname(path.resolve(prior)) === path.dirname(path.resolve(attempt.directory))) {
         await fs.rename(prior, attempt.directory).catch((error: NodeJS.ErrnoException) => {
@@ -804,6 +810,7 @@ export class DownloadManager {
     check()
     if (!matchesMediaFormat(task.targetFormat, finalProbe)) throw new Error(`Invalid ${task.targetFormat} container or codec`)
     const actualDuration = Number(finalProbe.format?.duration ?? finalProbe.streams?.find(s => s.duration)?.duration)
+    // Live and keyframe-fast section trims cut on looser boundaries than exact re-encodes, so widen tolerance accordingly.
     const durationTolerance = sectionTrimmed && (task.isLive || draft.isLive)
       ? Math.max(2, Math.min(6, (expectedDuration ?? 0) * 0.15))
       : sectionTrimmed && task.trimMode !== 'exact'
@@ -876,6 +883,7 @@ export class DownloadManager {
     const owned = path.resolve(root, task.id)
     if (path.dirname(owned) !== root) throw new Error('Unsafe task temp directory')
 
+    // Verify .cortex_temp is a real directory under task.directory before recursive deletion to prevent symlink traversal.
     const rootStat = await fs.lstat(root).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
       throw error

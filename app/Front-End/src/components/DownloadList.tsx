@@ -1,3 +1,4 @@
+// Filterable, searchable downloads queue with bulk history/file cleanup modal
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { X, Trash2, DownloadCloud, Search, Plus, CheckCheck } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -78,9 +79,8 @@ const DownloadList: React.FC = () => {
   }, [snapshot, debouncedSearchQuery, filter])
 
   const totalCount = taskIds.length
-  const filterLabels: Record<DownloadFilter, string> = lang === 'ar'
-    ? { all: 'الكل', active: 'قيد التنزيل', completed: 'مكتملة', paused: 'متوقفة', error: 'فشلت' }
-    : { all: 'All', active: 'In progress', completed: 'Completed', paused: 'Paused', error: 'Failed' }
+  const dl = t.downloads
+  const filterLabels: Record<DownloadFilter, string> = dl.filters
   const resetFilters = () => { setSearchInput(''); setFilter('all') }
 
   return (
@@ -90,8 +90,8 @@ const DownloadList: React.FC = () => {
 
         <div className="dl-heading-row">
           <div className="dl-title-section">
-            <h1 className="dl-main-title">{lang === 'ar' ? 'التنزيلات' : 'Downloads'} <span className="dl-total-count">{totalCount}</span></h1>
-            <p className="dl-subtitle-muted">{lang === 'ar' ? 'تابع تنزيلاتك وملفاتك في مكان واحد' : 'Your downloads and files, in one place'}</p>
+            <h1 className="dl-main-title">{dl.heading} <span className="dl-total-count">{totalCount}</span></h1>
+            <p className="dl-subtitle-muted">{dl.subtitle}</p>
           </div>
         </div>
 
@@ -121,7 +121,7 @@ const DownloadList: React.FC = () => {
                     setSearchInput('')
                     searchInputRef.current?.focus()
                   }}
-                  aria-label={lang === 'ar' ? 'مسح البحث' : 'Clear search'}
+                  aria-label={dl.clearSearch}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
@@ -138,19 +138,19 @@ const DownloadList: React.FC = () => {
               <motion.button
                 className="dl-clear-all-btn-pro"
                 onClick={() => setShowClearModal(true)}
-                title={lang === 'ar' ? 'مسح الكل' : 'Clear All'}
+                title={dl.clearAll}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.2 }}
               >
                 <Trash2 size={16} />
-                <span>{lang === 'ar' ? 'مسح الكل' : 'Clear All'}</span>
+                <span>{dl.clearAll}</span>
               </motion.button>
             )}
           </AnimatePresence>
         </div>
-        <div className="dl-filter-row" role="group" aria-label={lang === 'ar' ? 'تصفية التنزيلات' : 'Filter downloads'}>
+        <div className="dl-filter-row" role="group" aria-label={dl.filterGroupLabel}>
           {(Object.keys(filterLabels) as DownloadFilter[]).map(key => <button key={key} type="button" className={`dl-filter ${filter === key ? 'selected' : ''}`} aria-pressed={filter === key} onClick={() => setFilter(key)}>
             {filterLabels[key]}<span>{counts[key]}</span>
           </button>)}
@@ -195,7 +195,7 @@ const DownloadList: React.FC = () => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexDirection: lang === 'ar' ? 'row-reverse' : 'row' }}>
                 <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.4rem' }}>
-                  {lang === 'ar' ? 'مسح التنزيلات' : 'Clear Downloads'}
+                  {dl.clearModalTitle}
                 </h2>
                 <button
                   onClick={() => setShowClearModal(false)}
@@ -207,9 +207,7 @@ const DownloadList: React.FC = () => {
               </div>
 
               <p style={{ color: '#94a3b8', marginBottom: '2rem', lineHeight: 1.5, fontSize: '1rem' }}>
-                {lang === 'ar'
-                  ? 'كيف تريد مسح سجل التنزيلات الخاص بك؟ يرجى اختيار أحد الخيارات أدناه.'
-                  : 'How would you like to clear your download history? Please choose an option below.'}
+                {dl.clearModalDesc}
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -222,8 +220,8 @@ const DownloadList: React.FC = () => {
                     <Trash2 size={20} />
                   </div>
                   <div>
-                    <h4>{lang === 'ar' ? 'حذف من السجل فقط' : 'Clear History Only'}</h4>
-                    <p>{lang === 'ar' ? 'مسح القائمة من التطبيق فقط والاحتفاظ بالملفات على جهازك.' : 'Remove from the list but keep files on your computer.'}</p>
+                    <h4>{dl.clearHistoryTitle}</h4>
+                    <p>{dl.clearHistoryDesc}</p>
                   </div>
                 </button>
 
@@ -236,8 +234,8 @@ const DownloadList: React.FC = () => {
                     <Trash2 size={20} />
                   </div>
                   <div>
-                    <h4>{lang === 'ar' ? 'حذف الملفات بشكل نهائي' : 'Delete Files Permanently'}</h4>
-                    <p>{lang === 'ar' ? 'مسح القائمة وحذف جميع الملفات التي تم تنزيلها من جهازك.' : 'Remove from the list and delete all downloaded files from your device.'}</p>
+                    <h4>{dl.deleteFilesTitle}</h4>
+                    <p>{dl.deleteFilesDesc}</p>
                   </div>
                 </button>
               </div>
@@ -271,12 +269,12 @@ const DownloadList: React.FC = () => {
               <div className="dl-empty-sheet"><span /><span /><span /></div>
               <div className="dl-empty-symbol">{totalCount === 0 ? <DownloadCloud size={28} strokeWidth={1.7} /> : <Search size={27} />}</div>
             </div>
-            <h3>{totalCount === 0 ? (lang === 'ar' ? 'جاهز لتنزيلك الأول؟' : 'Ready for your first download?') : (lang === 'ar' ? 'لا توجد تنزيلات مطابقة' : 'No matching downloads')}</h3>
-            <p>{totalCount === 0 ? (lang === 'ar' ? 'أضف رابط فيديو أو صوت، وسنتولى الباقي.' : 'Add a video or audio link. We’ll take it from here.') : (lang === 'ar' ? 'جرّب بحثاً آخر أو اختر تصنيفاً مختلفاً.' : 'Try another search or choose a different filter.')}</p>
+            <h3>{totalCount === 0 ? dl.emptyFirstTitle : dl.emptyMatchTitle}</h3>
+            <p>{totalCount === 0 ? dl.emptyFirstDesc : dl.emptyMatchDesc}</p>
             <button type="button" className="dl-add-button" onClick={totalCount === 0 ? () => useUIStore.getState().setActiveTab('add') : resetFilters}>
-              {totalCount === 0 ? <Plus size={18} /> : <X size={17} />}{totalCount === 0 ? (lang === 'ar' ? 'إضافة رابط' : 'Add link') : (lang === 'ar' ? 'إظهار الكل' : 'Show all downloads')}
+              {totalCount === 0 ? <Plus size={18} /> : <X size={17} />}{totalCount === 0 ? dl.addLink : dl.showAll}
             </button>
-            {totalCount === 0 && <span className="dl-empty-note"><CheckCheck size={14} />{lang === 'ar' ? 'ستظهر ملفاتك هنا فور إضافة تنزيل' : 'Your files will appear here as you add downloads'}</span>}
+            {totalCount === 0 && <span className="dl-empty-note"><CheckCheck size={14} />{dl.emptyNote}</span>}
           </motion.div>
         )}
       </section>

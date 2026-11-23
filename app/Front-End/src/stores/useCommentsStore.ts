@@ -1,3 +1,4 @@
+// Tracks comment extraction status/progress and registers its IPC listeners.
 import { create } from 'zustand'
 
 interface CommentsStoreState {
@@ -22,6 +23,7 @@ export const useCommentsStore = create<CommentsStoreState>((set) => ({
   setCommentsProgress: (v) => set({ commentsProgress: v }),
 }))
 
+// Singleton guard avoids duplicate IPC subscriptions under StrictMode.
 let ipcInitialized = false
 
 export function initCommentsStore(): () => void {

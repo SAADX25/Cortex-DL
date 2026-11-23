@@ -1,7 +1,9 @@
+// Context-isolated preload bridge exposing the renderer-safe window.cortexDl API.
 import { ipcRenderer, contextBridge, webUtils } from 'electron'
 import { type AppHealthCheck, type DownloadTask, type AnalyzeResult, type JsRuntimeStatus, type StartInput, UPDATE_CHANNEL } from './types'
 import { customTitleBar } from './windowChrome'
 
+// Strip Electron's "Error invoking remote method '...':" wrapper so UI toasts stay readable.
 function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
     const rawMessage =
@@ -21,6 +23,7 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
 
 contextBridge.exposeInMainWorld('cortexDl', {
   customTitleBar,
+  // Sandboxed renderers can't read File.path directly; resolve dropped files via Electron's webUtils.
   getDroppedMediaPaths: (files: File[]): string[] => files.map(file => webUtils.getPathForFile(file)).filter(Boolean),
   listMediaLibrary: () => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:list'),
   checkMediaLibraryFiles: (ids: string[]) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:check', ids),
@@ -42,6 +45,7 @@ contextBridge.exposeInMainWorld('cortexDl', {
   selectFolder(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-folder')
   },
+  // Values are encrypted in main via safeStorage and stored as opaque ciphertext in localStorage.
   saveSecureData(key: string, value: string): Promise<boolean> {
     return ipcRenderer.invoke('cortexdl:secure-save', key, value).then(encryptedBase64 => {
       if (encryptedBase64) {

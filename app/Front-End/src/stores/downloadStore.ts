@@ -1,3 +1,4 @@
+// Zustand store for download tasks, using a Map for O(1) lookups and a version counter for subscribers.
 import { useShallow } from 'zustand/react/shallow'
 import { create } from 'zustand'
 import { type DownloadTask } from '../../../Shared/types'
@@ -30,6 +31,7 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     set((state) => {
       const isNew = !state.tasks.has(task.id)
 
+      // Mutate the Map in place to avoid copying on every tick; bump version to notify dependent views.
       state.tasks.set(task.id, task)
 
       return {
@@ -116,6 +118,7 @@ export const getActiveDownloadCount = () => countActive(useDownloadStore.getStat
 export const getTasksSnapshot = () =>
   useDownloadStore.getState().tasks
 
+// Prevent duplicate IPC listeners across React StrictMode remounts.
 let ipcInitialized = false
 
 export function initDownloadStore(): () => void {
@@ -130,6 +133,7 @@ export function initDownloadStore(): () => void {
     upsertTask,
   })
 
+  // Coalesce overlapping history loads and re-sync once engine setup reaches ready.
   const refreshHistory = (): Promise<void> => {
     if (pendingRefresh) return pendingRefresh
     pendingRefresh = window.cortexDl.listDownloads().then((initial) => {

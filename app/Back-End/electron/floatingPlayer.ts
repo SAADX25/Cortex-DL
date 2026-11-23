@@ -1,3 +1,4 @@
+// Manages the frameless always-on-top picture-in-picture child window for the media player.
 import { type BrowserWindow, screen, shell } from 'electron'
 
 export function installFloatingPlayerWindow(owner: BrowserWindow): void {
@@ -21,7 +22,9 @@ export function installFloatingPlayerWindow(owner: BrowserWindow): void {
     floating = child
     child.setMenu(null)
     const throttled = owner.webContents.getBackgroundThrottling()
+    // Keep the owner unthrottled while PiP is open so playback timers don't stall when main is hidden.
     owner.webContents.setBackgroundThrottling(false)
+    // Lock down the child window so links or redirects can't hijack the about:blank frame.
     child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     child.webContents.on('will-navigate', event => event.preventDefault())
     child.webContents.on('will-redirect', event => event.preventDefault())

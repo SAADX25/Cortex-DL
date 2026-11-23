@@ -1,8 +1,10 @@
+// In-player cover art menu; suspends media playback while FFmpeg rewrites embedded artwork
 import { useEffect, useId, useRef, useState } from 'react'
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import { canEmbedLibraryArtwork, libraryMediaKind } from '../../../../Shared/mediaLibrary'
 import { useMediaLibraryStore } from '../../stores/useMediaLibraryStore'
 import { useLang } from '../../stores/useSettingsStore'
+import { translations } from '../../translations'
 import ArtworkProgress from '../ArtworkProgress'
 
 const key = (path: string) => path.replace(/\\/g, '/').toLowerCase()
@@ -13,10 +15,8 @@ export function PlayerArtworkMenu({ filePath, suspend, onOpenChange, onImage }: 
   onOpenChange: (open: boolean) => void
   onImage: (url: string | null) => void
 }) {
-  const ar = useLang() === 'ar', id = useId()
-  const t = ar
-    ? { title: 'غلاف الملف', add: 'إضافة صورة', change: 'تغيير الصورة', remove: 'إزالة الغلاف', saved: 'الغلاف محفوظ داخل الملف', hint: 'JPG أو PNG أو WEBP · حتى 8 ميغابايت', local: 'تُحفظ الصورة في المكتبة لهذه الصيغة.', invalid: 'اختر صورة صالحة بصيغة JPG أو PNG أو WEBP بحجم لا يتجاوز 8 ميغابايت.', error: 'تعذّر تعديل الغلاف. أغلق الملف في المشغلات الأخرى وتأكد من صلاحية الكتابة.', changed: 'تغيّر الملف أثناء الحفظ. حدّث المكتبة وحاول مجددًا.', recovery: 'النسخة الاحتياطية للملف محفوظة هنا:' }
-    : { title: 'File cover', add: 'Add cover', change: 'Change cover', remove: 'Remove cover', saved: 'Cover saved to file', hint: 'JPG, PNG or WEBP · up to 8 MB', local: 'Cover stored in the library for this format.', invalid: 'Choose a valid JPG, PNG or WEBP image up to 8 MB.', error: 'Could not edit the cover. Close the file in other players and check write permissions.', changed: 'The file changed during saving. Refresh the library and try again.', recovery: 'The file backup is saved here:' }
+  const lang = useLang(), ar = lang === 'ar', id = useId()
+  const t = translations[lang].artwork
   const item = useMediaLibraryStore(state => state.items.find(entry => key(entry.filePath) === key(filePath)))
   const busy = useMediaLibraryStore(state => state.busy), error = useMediaLibraryStore(state => state.error)
   const [open, setOpen] = useState(false), [loading, setLoading] = useState(false)

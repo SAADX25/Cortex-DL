@@ -1,3 +1,4 @@
+// Electron main process entrypoint: window lifecycle, token-authenticated local media server, and startup/shutdown flow.
 import { markStartup, previousStartupFailed, safeMode, gotTheLock, afterUiReady, startupTimings, startupMark, startupDuration, checkCachedEngines, reportEngineFailure, stopSetup, runSetup, setupState } from './bootstrap'
 import log from 'electron-log'
 import * as dotenv from 'dotenv'
@@ -207,6 +208,7 @@ function createWindow() {
     initTray()
   })
 
+  // Hide to system tray on close unless an explicit app quit is underway.
   win.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
@@ -254,6 +256,7 @@ function createWindow() {
     /^stream\.kick\.com$/i,
   ]
 
+  // Kick HLS CDNs reject playback without kick.com Referer/Origin headers.
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
     try {
       if (details.url.startsWith('http')) {
@@ -271,6 +274,7 @@ function createWindow() {
     callback({ requestHeaders: details.requestHeaders })
   })
 
+  // Rewrite CORS headers for whitelisted media CDNs so renderer previews and HLS.js can load streams.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     try {
       const rawUrl = details.url
@@ -316,6 +320,7 @@ export const MEDIA_SERVER_TOKEN = randomBytes(32).toString('hex')
 
 const MEDIA_TOKEN_BUFFER = Buffer.from(MEDIA_SERVER_TOKEN, 'utf8')
 
+// Constant-time check for the per-launch loopback capability token.
 function isValidMediaToken(candidate: string | null): boolean {
   if (!candidate) return false
   const provided = Buffer.from(candidate, 'utf8')
@@ -419,6 +424,7 @@ async function isServablePath(target: string): Promise<boolean> {
   return freshRoots.some((root) => isUnderRoot(resolved, root))
 }
 
+// Reject DNS-rebinding Host headers and cross-origin browser requests to the local media server.
 function isLoopbackHost(hostHeader: string | undefined): boolean {
   if (!hostHeader) return false
   const withoutPort = hostHeader.replace(/:\d+$/, '').toLowerCase()
@@ -807,6 +813,7 @@ if (!gotTheLock) {
     }
   })
 
+  // Defer quit once so background workers, child processes, and SQLite state can flush cleanly.
   app.on('before-quit', (event) => {
     isQuitting = true
     if (shutdownFinished) return
@@ -892,6 +899,7 @@ if (!gotTheLock) {
     ipcMain.handle('cortexdl:build-info', () => ({ ...buildInfo(), safeMode }))
     const cachedCheck = checkCachedEngines(win!).catch(error => log.error('[Engine cache]', error))
 
+    // Wait for first paint before kicking off updater, media server, and background engine checks.
     const uiReady = Promise.all([shownPromise, firstRenderPromise])
     void afterUiReady(uiReady, loadBackendServices, error => log.error('[Updater initialization]', error))
     await uiReady

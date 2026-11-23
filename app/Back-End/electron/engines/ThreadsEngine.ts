@@ -1,3 +1,4 @@
+// Download engine for Meta Threads posts, supporting progressive streams and DASH video+audio muxing.
 import { createWriteStream, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { Readable, Transform } from 'node:stream'
@@ -54,6 +55,7 @@ export class ThreadsEngine implements IEngine {
       let extracted = await resolveThreadsMedia(task.url, signal)
       signal.throwIfAborted()
 
+      // A carousel URL without ?carousel=N resolves as a playlist; default to the first playable item.
       if (extracted.kind === 'playlist') {
         const first = extracted.items[0]
         if (!first) return { kind: 'fatal-error', message: 'THREADS_NO_MEDIA' }
@@ -88,6 +90,7 @@ export class ThreadsEngine implements IEngine {
           : null
       task.totalBytes = knownTotal
 
+      // Download video then audio sequentially so progress advances smoothly across the combined byte total.
       const videoBytes = await this.downloadStreamToFile(plan.video, videoDest, task, context, signal, 0, speedLimitBps, knownTotal !== null)
       signal.throwIfAborted()
       await this.downloadStreamToFile(plan.audio, audioDest, task, context, signal, videoBytes, speedLimitBps, knownTotal !== null)
@@ -100,6 +103,7 @@ export class ThreadsEngine implements IEngine {
       task.updatedAtMs = nowMs()
       context.sendUpdate(task)
 
+      // Remux DASH tracks into MP4 without re-encoding, moving the moov atom upfront for instant playback.
       const muxedDest = path.join(task.directory, `${task.id}.mp4`)
       await runMediaProcess(
         ['-i', videoDest, '-i', audioDest, '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', muxedDest],
@@ -158,6 +162,7 @@ export class ThreadsEngine implements IEngine {
 
     let received = 0
     try {
+      // Meta CDN endpoints reject bare requests without a browser User-Agent and Threads Referer.
       const response = await fetch(stream.url, {
         headers: {
           'User-Agent': THREADS_REQUEST_HEADERS['User-Agent'],
@@ -196,6 +201,7 @@ export class ThreadsEngine implements IEngine {
             context.sendUpdate(task)
           }
 
+          // Pace chunks with a sliding 1s window when a per-task speed limit is configured.
           if (speedLimitBps && speedLimitBps > 0) {
             throttleWindowBytes += chunk.length
             const elapsedMs = Math.max(1, now - throttleWindowStart)

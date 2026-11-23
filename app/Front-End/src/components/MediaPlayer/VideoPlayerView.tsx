@@ -1,3 +1,4 @@
+// Video surface, ambilight canvas, subtitle track loader/sync, and floating-mode control layout.
 import React from 'react';
 import { PlayerControls } from './PlayerControls';
 import { MediaInfoOverlay } from './MediaInfoOverlay';
@@ -62,6 +63,7 @@ export function VideoPlayerView({
     const sameFile = subtitleFile.current === filePath;
     if (!sameFile) { setSubtitles([]); setActiveSubtitle(-1); }
     if (subtitlePreview) {
+      // Use a temporary Blob URL for live Subtitle Studio previews and revoke it on cleanup.
       const previewUrl = URL.createObjectURL(new Blob([subtitlePreview.vtt], { type: 'text/vtt' }));
       setSubtitles([{ label: subtitlePreview.language, language: subtitlePreview.language, previewUrl }]);
       setActiveSubtitle(0);
@@ -75,6 +77,7 @@ export function VideoPlayerView({
         subtitleFile.current = filePath;
         setSubtitles(subs);
         if (subs && subs.length > 0) {
+          // Keep the user's chosen track index if the same file reloaded (e.g. after session refresh).
           setActiveSubtitle(previous => sameFile && previous >= -1 && previous < subs.length ? previous : 0);
         } else {
           setActiveSubtitle(-1);
@@ -84,6 +87,7 @@ export function VideoPlayerView({
     }
   }, [filePath, sessionId, subtitlePreview]);
 
+  // Chromium registers <track> elements asynchronously, so re-apply visibility across load/addtrack events.
   React.useEffect(() => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -143,6 +147,7 @@ export function VideoPlayerView({
             playsInline
           >
             {subtitles.map((sub, i) => {
+              // Embedded tracks and .srt sidecars go through the local server's on-the-fly WebVTT converter.
               const srcUrl = sub.previewUrl ?? (sub.isEmbedded
                 ? buildMediaUrl(filePath, mediaEndpoint, { session: sessionId, subtitle: 'true', streamIndex: sub.streamIndex })
                 : buildMediaUrl(sub.filePath, mediaEndpoint, { session: sessionId, ...(sub.filePath?.endsWith('.srt') ? { subtitle: 'true', streamIndex: 0 } : {}) }))

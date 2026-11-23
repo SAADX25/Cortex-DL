@@ -1,7 +1,8 @@
+// Primary navigation sidebar with live download badge and external links
 import React from 'react'
 import { Plus, DownloadCloud, Settings, Github, Captions, Library, Coffee, ArrowUpRight } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { translations } from '../translations'
+import { formatMessage, translations } from '../translations'
 import { useUIStore, type ActiveTab } from '../stores/useUIStore'
 import { useLang } from '../stores/useSettingsStore'
 import { useActiveDownloadCount, useTotalDownloadCount } from '../stores/downloadStore'
@@ -9,6 +10,7 @@ import { useActiveDownloadCount, useTotalDownloadCount } from '../stores/downloa
 const Sidebar: React.FC = () => {
   const lang = useLang()
   const t = translations[lang]
+  const s = t.sidebar
 
   const activeTab = useUIStore((s) => s.activeTab)
   const setActiveTab = useUIStore((s) => s.setActiveTab)
@@ -29,7 +31,7 @@ const Sidebar: React.FC = () => {
       id: 'add',
       label: t.nav_add,
       icon: Plus,
-      ariaLabel: lang === 'ar' ? 'إضافة تنزيل' : 'Add download',
+      ariaLabel: s.addAria,
     },
     {
       id: 'downloads',
@@ -37,27 +39,36 @@ const Sidebar: React.FC = () => {
       icon: DownloadCloud,
       badge: badgeCount,
       isActiveBadge: activeCount > 0,
-      ariaLabel: lang === 'ar' ? `التنزيلات، ${badgeCount} عنصر` : `Downloads, ${badgeCount} items`,
+      ariaLabel: formatMessage(s.downloadsAria, { count: badgeCount }),
+    },
+    {
+      id: 'library',
+      label: s.libraryLabel,
+      icon: Library,
+      ariaLabel: s.libraryLabel,
+    },
+    {
+      id: 'subtitles',
+      label: s.subtitlesLabel,
+      icon: Captions,
+      ariaLabel: s.subtitlesAria,
     },
     {
       id: 'settings',
       label: t.nav_settings,
       icon: Settings,
-      ariaLabel: lang === 'ar' ? 'الإعدادات' : 'Settings',
+      ariaLabel: s.settingsAria,
     },
   ]
-  navItems.splice(2, 0,
-    { id: 'library', label: lang === 'ar' ? 'مكتبة الوسائط' : 'Media Library', icon: Library, ariaLabel: lang === 'ar' ? 'مكتبة الوسائط' : 'Media Library' },
-    { id: 'subtitles', label: lang === 'ar' ? 'الترجمات' : 'Subtitles', icon: Captions, ariaLabel: lang === 'ar' ? 'ترجمة الفيديو' : 'Video subtitles' })
 
   return (
-    <aside className="sidebar" role="complementary" aria-label={lang === 'ar' ? 'الشريط الجانبي' : 'Sidebar'}>
+    <aside className="sidebar" role="complementary" aria-label={s.sidebarAria}>
 
       <div className="brand">
         <h1 className="cortex-logo-text">Cortex DL</h1>
       </div>
 
-      <nav className="nav-menu" role="navigation" aria-label={lang === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'}>
+      <nav className="nav-menu" role="navigation" aria-label={s.mainNavAria}>
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = activeTab === item.id
@@ -104,10 +115,10 @@ const Sidebar: React.FC = () => {
           target="_blank"
           rel="noreferrer noopener"
           className="sidebar-link sidebar-link-support"
-          aria-label={lang === 'ar' ? 'دعم Cortex DL عبر Ko-fi (يفتح في المتصفح)' : 'Support Cortex DL on Ko-fi (opens in your browser)'}
+          aria-label={s.supportAria}
         >
           <span className="sidebar-link-icon" aria-hidden="true"><Coffee size={18} /></span>
-          <span className="sidebar-link-copy"><span className="sidebar-link-title">{lang === 'ar' ? 'ادعم Cortex DL' : 'Support Cortex DL'}</span><span className="sidebar-link-detail" dir="ltr">Ko-fi</span></span>
+          <span className="sidebar-link-copy"><span className="sidebar-link-title">{s.supportTitle}</span><span className="sidebar-link-detail" dir="ltr">Ko-fi</span></span>
           <ArrowUpRight className="sidebar-link-arrow" size={15} aria-hidden="true" />
         </a>
         <a
@@ -115,7 +126,7 @@ const Sidebar: React.FC = () => {
           target="_blank"
           rel="noreferrer noopener"
           className="sidebar-link sidebar-link-github"
-          aria-label={lang === 'ar' ? 'ملف SAADX25 على GitHub (يفتح في المتصفح)' : 'GitHub profile of SAADX25 (opens in your browser)'}
+          aria-label={s.githubAria}
         >
           <span className="sidebar-link-icon" aria-hidden="true"><Github size={18} /></span>
           <span className="sidebar-link-copy"><span className="sidebar-link-title" dir="ltr">SAADX25</span><span className="sidebar-link-detail" dir="ltr">GitHub</span></span>

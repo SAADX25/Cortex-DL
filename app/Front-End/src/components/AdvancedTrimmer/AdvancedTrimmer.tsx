@@ -1,3 +1,4 @@
+// Visual trim editor for VODs (zoomable timeline + dual handles) and live streams (duration capture)
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Hls from 'hls.js'
 import {
@@ -35,7 +36,7 @@ import {
   formatTimecode,
   parseTimecode,
 } from './trimTime'
-import { type Language } from '../../translations'
+import { formatMessage, translations, type Language } from '../../translations'
 
 export type TrimRange = {
   startSeconds: number
@@ -105,6 +106,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   onConfirm,
 }) => {
   const ar = lang === 'ar'
+  const tr = translations[lang].trimmer
   const playerShellRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -203,6 +205,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     setEndSeconds(nextEnd)
   }, [initialEndTime, initialStartTime, safeDuration, effectiveIsLive])
 
+  // Resolve preview streams lazily and clean up any active media/HLS handles on unmount
   useEffect(() => {
     const session = `trim-${crypto.randomUUID()}`
     const video = videoRef.current
@@ -256,6 +259,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     }
   }, [videoUrl, originalUrl, initialStreamType])
 
+  // Attach hls.js only for live/VOD m3u8 streams; progressive MP4/WebM bind directly via video.src
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -330,11 +334,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
   const syncAudio = useCallback((play = false) => {
     void syncTrimAudio(videoRef.current, audioRef.current, play).catch(() => {
-      setAudioError(ar
-        ? 'تعذر تشغيل صوت المعاينة. أوقف التشغيل وأعد المحاولة أو أعد تحليل الرابط.'
-        : 'Preview audio could not play. Pause and play again, or reanalyze the source.')
+      setAudioError(tr.audioPlayFailed)
     })
-  }, [ar])
+  }, [tr.audioPlayFailed])
 
   const seekVideo = useCallback((seconds: number) => {
     if (effectiveIsLive) return
@@ -618,16 +620,16 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       <div className="advanced-trimmer__header">
         <div className="advanced-trimmer__title">
           <Scissors size={16} aria-hidden="true" />
-          <span>{ar ? 'محرر القص الاحترافي' : 'Visual Trim Studio'}</span>
+          <span>{tr.title}</span>
           {effectiveIsLive && (
             <span className="advanced-trimmer__live-pill" role="status">
               <Radio size={12} aria-hidden="true" />
-              <span>{ar ? 'بث مباشر' : 'LIVE'}</span>
+              <span>{tr.live}</span>
             </span>
           )}
           {!effectiveIsLive && safeDuration >= 1800 && (
             <span className="advanced-trimmer__fast-pill">
-              {ar ? 'قص سريع للمقاطع الطويلة' : 'Fast Section Cut'}
+              {tr.fastSectionCut}
             </span>
           )}
         </div>
@@ -647,7 +649,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           {isResolvingStream && (
             <div className="advanced-trimmer__loading-overlay">
               <Loader size={28} className="advanced-trimmer__spinner" aria-hidden="true" />
-              <span>{ar ? 'جاري تجهيز بث المعاينة…' : 'Preparing preview stream…'}</span>
+              <span>{tr.preparingPreview}</span>
             </div>
           )}
           {(streamError || audioError) && (
@@ -655,9 +657,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
               <AlertCircle size={15} aria-hidden="true" />
               <span>
                 {streamError
-                  ? (ar
-                      ? `المعاينة غير متاحة حالياً — ما زال بإمكانك تحديد وقت القص بدقة. ${streamError}`
-                      : `Video preview unavailable — the trim range still works normally. ${streamError}`)
+                  ? formatMessage(tr.previewUnavailable, { error: streamError })
                   : audioError}
               </span>
             </div>
@@ -741,11 +741,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
               syncAudio(!videoRef.current?.paused)
             }}
             onError={() => {
-              if (audioUrl) {
-                setAudioError(ar
-                  ? 'صوت المعاينة غير متاح أو انتهت صلاحية رابطه. أعد تحليل المصدر.'
-                  : 'Preview audio is unavailable or its link expired. Reanalyze the source.')
-              }
+              if (audioUrl) setAudioError(tr.audioUnavailable)
             }}
           />
         </div>
@@ -758,7 +754,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
               onClick={togglePlay}
               disabled={!streamUrl || Boolean(streamError)}
               aria-label={isPlaying ? 'Pause preview' : 'Play preview'}
-              title={isPlaying ? (ar ? 'إيقاف مؤقت (Space)' : 'Pause (Space)') : (ar ? 'تشغيل (Space)' : 'Play (Space)')}
+              title={isPlaying ? tr.pauseSpace : tr.playSpace}
             >
               {isPlaying ? <Pause size={15} /> : <Play size={15} />}
             </button>
@@ -770,7 +766,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                   className="advanced-trimmer__icon-btn"
                   onClick={() => seekVideo(currentTime - 10)}
                   aria-label="Back 10 seconds"
-                  title={ar ? 'رجوع 10 ثوانٍ' : 'Back 10s'}
+                  title={tr.back10s}
                 >
                   <SkipBack size={14} />
                   <span>10</span>
@@ -780,7 +776,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                   className="advanced-trimmer__icon-btn"
                   onClick={() => seekVideo(currentTime + 10)}
                   aria-label="Forward 10 seconds"
-                  title={ar ? 'تقديم 10 ثوانٍ' : 'Forward 10s'}
+                  title={tr.forward10s}
                 >
                   <SkipForward size={14} />
                   <span>10</span>
@@ -791,7 +787,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                   onClick={toggleLoopPreview}
                   aria-label="Loop trimmed clip"
                   aria-pressed={loopSelection}
-                  title={ar ? 'معاينة وتكرار الجزء المقصوص (L)' : 'Preview & Loop Selection (L)'}
+                  title={tr.loopSelection}
                 >
                   <Repeat size={14} />
                 </button>
@@ -804,7 +800,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                 className="advanced-trimmer__icon-btn"
                 onClick={toggleMute}
                 aria-label={effectiveVolume === 0 ? 'Unmute preview' : 'Mute preview'}
-                title={effectiveVolume === 0 ? (ar ? 'إلغاء كتم الصوت (M)' : 'Unmute (M)') : (ar ? 'كتم الصوت (M)' : 'Mute (M)')}
+                title={effectiveVolume === 0 ? tr.unmuteM : tr.muteM}
               >
                 <VolumeIcon size={15} />
               </button>
@@ -825,7 +821,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           <div className="advanced-trimmer__controls-right">
             <span className="advanced-trimmer__clock">
               {effectiveIsLive
-                ? (ar ? 'بث مباشر' : 'LIVE STREAM')
+                ? tr.liveStream
                 : `${formatCompactTime(currentTime)} / ${formatCompactTime(safeDuration)}`}
             </span>
 
@@ -849,7 +845,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
               className="advanced-trimmer__icon-btn"
               onClick={toggleFullscreen}
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen preview'}
-              title={isFullscreen ? (ar ? 'إنهاء ملء الشاشة' : 'Exit fullscreen') : (ar ? 'ملء الشاشة' : 'Fullscreen')}
+              title={isFullscreen ? tr.exitFullscreen : tr.fullscreen}
             >
               {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
@@ -860,12 +856,8 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       {effectiveIsLive ? (
         <div className="advanced-trimmer__live-panel">
           <div className="advanced-trimmer__live-info">
-            <strong>{ar ? 'مدة التسجيل من البث المباشر' : 'Live Stream Clip Length'}</strong>
-            <span>
-              {ar
-                ? `سيتم قص وتسجيل ${formatTimecode(liveClipSeconds)} مباشرة من البث بجودة عالية.`
-                : `Will capture and trim ${formatTimecode(liveClipSeconds)} directly from the live stream.`}
-            </span>
+            <strong>{tr.liveClipLength}</strong>
+            <span>{formatMessage(tr.liveClipDesc, { duration: formatTimecode(liveClipSeconds) })}</span>
           </div>
 
           <div className="advanced-trimmer__preset-row" dir="ltr">
@@ -902,9 +894,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           <div className="advanced-trimmer__timeline-section">
             <div className="advanced-trimmer__timeline-bar">
               <div className="advanced-trimmer__timeline-meta">
-                <span>{ar ? 'طول المقطع:' : 'Clip:'} <strong>{formatTimecode(clipDurationSeconds)}</strong></span>
+                <span>{tr.clipLabel} <strong>{formatTimecode(clipDurationSeconds)}</strong></span>
                 <span className="advanced-trimmer__divider">•</span>
-                <span>{ar ? 'التكبير:' : 'Zoom:'} <strong>{zoom}x</strong></span>
+                <span>{tr.zoomLabel} <strong>{zoom}x</strong></span>
               </div>
 
               <div className="advanced-trimmer__zoom-controls" dir="ltr">
@@ -917,7 +909,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                     changeZoom(prev)
                   }}
                   aria-label="Zoom out timeline"
-                  title={ar ? 'تصغير الشريط الزمني' : 'Zoom out'}
+                  title={tr.zoomOut}
                 >
                   <ZoomOut size={13} />
                 </button>
@@ -930,7 +922,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                     changeZoom(next)
                   }}
                   aria-label="Zoom in timeline"
-                  title={ar ? 'تكبير الشريط الزمني لدقة أعلى' : 'Zoom in for long videos'}
+                  title={tr.zoomIn}
                 >
                   <ZoomIn size={13} />
                 </button>
@@ -938,9 +930,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                   type="button"
                   className="advanced-trimmer__mini-btn"
                   onClick={zoomToSelection}
-                  title={ar ? 'تقريب على الجزء المحدد' : 'Fit selection'}
+                  title={tr.fitSelectionTitle}
                 >
-                  {ar ? 'تقريب المحدد' : 'Fit Clip'}
+                  {tr.fitClip}
                 </button>
                 {zoom > 1 && (
                   <button
@@ -1004,7 +996,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                 data-trim-selection
                 className="advanced-trimmer__selection"
                 style={{ left: `${startPct}%`, width: `${Math.max(0.5, endPct - startPct)}%` }}
-                title={ar ? 'اسحب لتحريك نافذة القص' : 'Drag to move clip window'}
+                title={tr.dragWindowTitle}
                 onPointerDown={(event) => {
                   event.stopPropagation()
                   setActiveDrag({ kind: 'move', originX: event.clientX, originStart: startSeconds, originEnd: endSeconds })
@@ -1086,14 +1078,14 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           <div className="advanced-trimmer__precision-grid">
             <div className="advanced-trimmer__field-card">
               <div className="advanced-trimmer__field-head">
-                <label htmlFor="trim-start-input">{ar ? 'نقطة البداية (In)' : 'Start (In)'}</label>
+                <label htmlFor="trim-start-input">{tr.startIn}</label>
                 <button
                   type="button"
                   className="advanced-trimmer__mark-btn"
                   onClick={() => updateStart(currentTime, false)}
-                  title={ar ? 'تعيين من موضع التشغيل الحالي (I)' : 'Set to current playhead (I)'}
+                  title={tr.setPlayheadInTitle}
                 >
-                  {ar ? 'من المؤشر [I]' : 'Use Current [I]'}
+                  {tr.useCurrentIn}
                 </button>
               </div>
               <div className="advanced-trimmer__field-row" dir="ltr">
@@ -1116,7 +1108,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
             <div className="advanced-trimmer__field-card">
               <div className="advanced-trimmer__field-head">
-                <label htmlFor="trim-duration-input">{ar ? 'مدة المقطع' : 'Clip Duration'}</label>
+                <label htmlFor="trim-duration-input">{tr.clipDuration}</label>
                 <div className="advanced-trimmer__quick-chips" dir="ltr">
                   {VOD_DURATION_PRESETS.filter((p) => p.seconds <= safeDuration).slice(0, 4).map((preset) => (
                     <button
@@ -1146,14 +1138,14 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
             <div className="advanced-trimmer__field-card">
               <div className="advanced-trimmer__field-head">
-                <label htmlFor="trim-end-input">{ar ? 'نقطة النهاية (Out)' : 'End (Out)'}</label>
+                <label htmlFor="trim-end-input">{tr.endOut}</label>
                 <button
                   type="button"
                   className="advanced-trimmer__mark-btn"
                   onClick={() => updateEnd(currentTime, false)}
-                  title={ar ? 'تعيين من موضع التشغيل الحالي (O)' : 'Set to current playhead (O)'}
+                  title={tr.setPlayheadOutTitle}
                 >
-                  {ar ? 'من المؤشر [O]' : 'Use Current [O]'}
+                  {tr.useCurrentOut}
                 </button>
               </div>
               <div className="advanced-trimmer__field-row" dir="ltr">
@@ -1177,36 +1169,30 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
           {onTrimModeChange && (
             <div className="advanced-trimmer__mode-bar">
-              <div className="advanced-trimmer__mode-toggle" role="group" aria-label={ar ? 'وضع القص' : 'Trim mode'}>
+              <div className="advanced-trimmer__mode-toggle" role="group" aria-label={tr.trimModeLabel}>
                 <button
                   type="button"
                   className={`advanced-trimmer__mode-btn${trimMode === 'fast' ? ' is-active' : ''}`}
                   onClick={() => onTrimModeChange('fast')}
                   aria-pressed={trimMode === 'fast'}
-                  title={ar
-                    ? 'نسخ مباشر بدون إعادة ضغط — خفيف جداً على المعالج وبنفس الجودة الأصلية'
-                    : 'Lossless stream copy — minimal CPU usage, finishes in seconds'}
+                  title={tr.fastModeTitle}
                 >
                   <Zap size={13} aria-hidden="true" />
-                  <span>{ar ? 'قص سريع (خفيف على المعالج)' : 'Fast Cut (Low CPU)'}</span>
+                  <span>{tr.fastMode}</span>
                 </button>
                 <button
                   type="button"
                   className={`advanced-trimmer__mode-btn${trimMode === 'exact' ? ' is-active is-exact' : ''}`}
                   onClick={() => onTrimModeChange('exact')}
                   aria-pressed={trimMode === 'exact'}
-                  title={ar
-                    ? 'دقة كاملة للثانية مع إعادة ترميز محدودة المعالج'
-                    : 'Frame-accurate cut with CPU-capped re-encoding'}
+                  title={tr.exactModeTitle}
                 >
                   <Crosshair size={13} aria-hidden="true" />
-                  <span>{ar ? 'قص دقيق للثانية' : 'Exact Cut'}</span>
+                  <span>{tr.exactMode}</span>
                 </button>
               </div>
               <span className="advanced-trimmer__mode-hint">
-                {trimMode === 'fast'
-                  ? (ar ? 'نسخ فوري بدون ضغط (~5% معالج · قد يتقرب ±1-3ث لأقرب إطار رئيسي)' : 'Instant lossless copy (~5% CPU · snaps ±1–3s to keyframe)')
-                  : (ar ? 'دقة كاملة للثانية مع تحديد أنوية المعالج لتفادي استهلاك 100%' : 'Exact second precision with capped CPU threads')}
+                {trimMode === 'fast' ? tr.fastModeHint : tr.exactModeHint}
               </span>
             </div>
           )}
@@ -1217,17 +1203,15 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
         <div className="advanced-trimmer__footer-main">
           <button className="advanced-trimmer__ghost-btn" type="button" onClick={handleReset}>
             <RotateCcw size={15} aria-hidden="true" />
-            <span>{ar ? 'إعادة تعيين' : 'Reset'}</span>
+            <span>{tr.reset}</span>
           </button>
           <span className="advanced-trimmer__shortcuts-hint">
-            {effectiveIsLive
-              ? (ar ? 'Space تشغيل · M كتم الصوت' : 'Space Play · M Mute')
-              : (ar ? 'Space تشغيل · M كتم · I بداية · O نهاية · L تكرار' : 'Space Play · M Mute · I In · O Out · L Loop')}
+            {effectiveIsLive ? tr.shortcutsLive : tr.shortcutsVod}
           </span>
         </div>
         <button className="advanced-trimmer__save-btn" type="button" onClick={() => onConfirm(currentRange)}>
           <Check size={16} aria-hidden="true" />
-          <span>{ar ? 'حفظ القص' : 'Save Trim'}</span>
+          <span>{tr.saveTrim}</span>
         </button>
       </div>
     </div>

@@ -1,3 +1,4 @@
+// Windows NVIDIA GPU detection via nvidia-smi and VRAM layer budgeting for Whisper/Llama.
 import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -8,6 +9,7 @@ export function parseNvidiaDevices(output: string): NvidiaGpu[] {
   return output.trim().split(/\r?\n/).flatMap(line => {
     const [index, name, memory, free, capability] = line.split(',').map(s => s.trim())
     const gpu = { index: Number(index), name, memoryMB: Number(memory), freeMB: Number(free), capability: Number(capability) }
+    // Require >=2 GB VRAM and CUDA compute capability 5.2-9.0 to match the bundled CUDA 11.8 Whisper build.
     return /^NVIDIA /i.test(name ?? '') && Number.isInteger(gpu.index) && gpu.index >= 0 && gpu.memoryMB >= 2048
       && gpu.freeMB >= 0 && gpu.freeMB <= gpu.memoryMB && gpu.capability >= 5.2 && gpu.capability <= 9 ? [gpu] : []
   }).sort((a, b) => b.freeMB - a.freeMB)
@@ -32,6 +34,7 @@ export async function detectNvidiaGpu(signal?: AbortSignal): Promise<NvidiaGpu |
 export function translationGpuLayers(model: 'standard' | 'quality', freeMB: number): number {
   const weightsMB = model === 'standard' ? 2375 : 6963
   const layers = model === 'standard' ? 34 : 49
+  // Reserve 768 MB VRAM headroom for KV cache and desktop compositing before offloading layers.
   return Math.max(0, Math.min(layers, Math.floor((freeMB - 768) / (weightsMB / layers))))
 }
 

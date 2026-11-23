@@ -1,13 +1,15 @@
+// Modal dialog to mux a nearby .srt/.vtt subtitle track into a downloaded video copy
 import { useEffect, useRef, useState, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { Captions, Check, CheckCircle2, Download, FileVideo, FolderOpen, Layers, LoaderCircle, Play, X } from 'lucide-react'
 import { useLang } from '../../stores/useSettingsStore'
+import { formatMessage, translations } from '../../translations'
 import type { DownloadSubtitleFile, SubtitleMergeFormat } from '../../../../Shared/downloadSubtitles'
 import './DownloadSubtitleMerge.css'
 
 type Props = { id: string; filePath: string; title: string; onOpenFile: (filePath: string, title?: string) => void; onOpenFolder: (filePath: string) => void }
 export default function DownloadSubtitleMerge({ id, filePath, title, onOpenFile, onOpenFolder }: Props) {
-  const ar = useLang() === 'ar'
+  const lang = useLang(), ar = lang === 'ar', copy = translations[lang].subtitles.merge
   const [files, setFiles] = useState<DownloadSubtitleFile[]>([]), [open, setOpen] = useState(false)
   const [selected, setSelected] = useState(''), [format, setFormat] = useState<SubtitleMergeFormat>('mp4')
   const [busy, setBusy] = useState(false), [saved, setSaved] = useState<string | null>(null), [error, setError] = useState('')
@@ -45,36 +47,35 @@ export default function DownloadSubtitleMerge({ id, filePath, title, onOpenFile,
     try { const output = await window.cortexDl.mergeDownloadSubtitle(id, selected, format); if (output) setSaved(output) }
     catch (failure) {
       const unavailable = failure instanceof Error && failure.message.includes('SUBTITLE_FILE_UNAVAILABLE')
-      setError(unavailable ? (ar ? 'ملف الترجمة لم يعد متاحًا. أعد فتح هذه النافذة.' : 'The subtitle file is no longer available. Reopen this window.')
-        : (ar ? 'تعذر الدمج. تحقق من المحركات وملف الترجمة، أو جرّب صيغة MKV.' : 'Could not merge. Check your engines and subtitle file, or try MKV.'))
+      setError(unavailable ? copy.fileUnavailable : copy.mergeFailed)
     } finally { active.current = false; setBusy(false) }
   }
   if (!files.length && !open) return null
   return <>
-    {!!files.length && <button ref={trigger} type="button" className="dc-btn dc-merge" title={ar ? 'دمج ملف ترجمة متاح مع الفيديو' : 'Embed an available subtitle file in this video'} onClick={() => {
+    {!!files.length && <button ref={trigger} type="button" className="dc-btn dc-merge" title={copy.mergeBtnTitle} onClick={() => {
       setSelected(files[0].fileName); setFormat('mp4'); setSaved(null); setError(''); setOpen(true)
-    }}><Layers size={15} />{ar ? 'دمج الترجمة' : 'Merge subtitles'}</button>}
+    }}><Layers size={15} />{copy.mergeBtn}</button>}
     {open && createPortal(<div className="dsm-backdrop" onClick={event => { if (event.target === event.currentTarget) close() }}>
       <div ref={dialog} className="dsm-dialog" role="dialog" aria-modal="true" aria-labelledby={heading} tabIndex={-1} dir={ar ? 'rtl' : 'ltr'}>
-        <header className="dsm-heading"><div className="dsm-icon"><Layers size={23} /></div><div><h3 id={heading}>{ar ? 'دمج الترجمة مع الفيديو' : 'Merge subtitles with video'}</h3><p><bdi>{title}</bdi></p></div>
-          <button type="button" className="dsm-close" disabled={busy} onClick={close} aria-label={ar ? 'إغلاق' : 'Close'}><X size={19} /></button></header>
-        {saved ? <div className="dsm-success" role="status"><CheckCircle2 size={35} /><h4>{ar ? 'تم حفظ الفيديو مع الترجمة' : 'Subtitled video saved'}</h4><p dir="auto">{saved.split(/[\\/]/).pop()}</p>
-          <div className="dsm-saved-actions"><button type="button" className="dsm-play" onClick={() => { close(); onOpenFile(saved, title) }}><Play size={16} />{ar ? 'تشغيل الفيديو' : 'Play video'}</button>
-            <button type="button" className="dsm-secondary" onClick={() => onOpenFolder(saved)}><FolderOpen size={16} />{ar ? 'فتح المجلد' : 'Open folder'}</button></div></div>
+        <header className="dsm-heading"><div className="dsm-icon"><Layers size={23} /></div><div><h3 id={heading}>{copy.dialogTitle}</h3><p><bdi>{title}</bdi></p></div>
+          <button type="button" className="dsm-close" disabled={busy} onClick={close} aria-label={copy.close}><X size={19} /></button></header>
+        {saved ? <div className="dsm-success" role="status"><CheckCircle2 size={35} /><h4>{copy.savedTitle}</h4><p dir="auto">{saved.split(/[\\/]/).pop()}</p>
+          <div className="dsm-saved-actions"><button type="button" className="dsm-play" onClick={() => { close(); onOpenFile(saved, title) }}><Play size={16} />{copy.playVideo}</button>
+            <button type="button" className="dsm-secondary" onClick={() => onOpenFolder(saved)}><FolderOpen size={16} />{copy.openFolder}</button></div></div>
           : <>
-            <fieldset className="dsm-files" disabled={busy}><legend>{ar ? 'ملف الترجمة' : 'Subtitle file'}</legend>
+            <fieldset className="dsm-files" disabled={busy}><legend>{copy.subtitleFile}</legend>
               <div className="dsm-file-list">{files.map(file => <label key={file.fileName} className={`dsm-file${selected === file.fileName ? ' selected' : ''}`}>
                 <input type="radio" name={heading} value={file.fileName} checked={selected === file.fileName} onChange={() => setSelected(file.fileName)} />
-                <Captions size={21} /><span><strong>{file.language === 'ar' && ar ? 'العربية' : file.label}</strong><small dir="auto">{file.fileName}</small></span><Check size={17} className="dsm-check" />
+                <Captions size={21} /><span><strong>{file.language === 'ar' && ar ? copy.arabicLabel : file.label}</strong><small dir="auto">{file.fileName}</small></span><Check size={17} className="dsm-check" />
               </label>)}</div>
             </fieldset>
-            <fieldset className="dsm-formats" disabled={busy}><legend>{ar ? 'صيغة الفيديو' : 'Video format'}</legend><div>{(['mp4', 'mkv'] as const).map(value => <label key={value} className={format === value ? 'selected' : ''}>
-              <input type="radio" name={`${heading}-format`} checked={format === value} onChange={() => setFormat(value)} /><FileVideo size={16} />{value.toUpperCase()}{value === 'mp4' && <small>{ar ? 'الافتراضي' : 'Default'}</small>}
+            <fieldset className="dsm-formats" disabled={busy}><legend>{copy.videoFormat}</legend><div>{(['mp4', 'mkv'] as const).map(value => <label key={value} className={format === value ? 'selected' : ''}>
+              <input type="radio" name={`${heading}-format`} checked={format === value} onChange={() => setFormat(value)} /><FileVideo size={16} />{value.toUpperCase()}{value === 'mp4' && <small>{copy.defaultTag}</small>}
             </label>)}</div></fieldset>
-            <p className="dsm-note">{ar ? 'حفظ نسخة جديدة بجودة الفيديو والصوت الأصلية، مع ترجمة قابلة للتشغيل والإيقاف في المشغّلات الداعمة.' : 'Save a new copy at the original video and audio quality, with subtitles you can switch on or off in supported players.'}</p>
+            <p className="dsm-note">{copy.note}</p>
             {error && <p className="dsm-error" role="alert">{error}</p>}
-            <footer className="dsm-footer">{busy ? <><span className="dsm-busy" role="status"><LoaderCircle size={17} className="spin" />{ar ? 'جارٍ حفظ الفيديو…' : 'Saving video…'}</span><button type="button" className="dsm-secondary" onClick={() => void window.cortexDl.cancelDownloadSubtitleMerge(id)}>{ar ? 'إلغاء' : 'Cancel'}</button></>
-              : <><button type="button" className="dsm-secondary" onClick={close}>{ar ? 'رجوع' : 'Back'}</button><button type="button" className="dsm-save" disabled={!files.some(file => file.fileName === selected)} onClick={() => void merge()}><Download size={17} />{ar ? `حفظ ${format.toUpperCase()} مع الترجمة` : `Save subtitled ${format.toUpperCase()}`}</button></>}</footer>
+            <footer className="dsm-footer">{busy ? <><span className="dsm-busy" role="status"><LoaderCircle size={17} className="spin" />{copy.saving}</span><button type="button" className="dsm-secondary" onClick={() => void window.cortexDl.cancelDownloadSubtitleMerge(id)}>{copy.cancel}</button></>
+              : <><button type="button" className="dsm-secondary" onClick={close}>{copy.back}</button><button type="button" className="dsm-save" disabled={!files.some(file => file.fileName === selected)} onClick={() => void merge()}><Download size={17} />{formatMessage(copy.saveFormat, { format: format.toUpperCase() })}</button></>}</footer>
           </>}
       </div>
     </div>, document.body)}

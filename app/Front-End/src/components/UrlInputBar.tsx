@@ -1,3 +1,4 @@
+// Primary URL input bar with local edit buffer, instant analysis cancellation, and Paste-and-Go action.
 import { primaryAnalysis } from '../lib/analysisSession'
 import { useUIStore } from '../stores/useUIStore'
 import React, { useState, useEffect } from 'react'
@@ -28,6 +29,7 @@ export const UrlInputBar = React.memo((
     initialUrl?: string
   }
 ) => {
+  // Keep input edits local so typing doesn't trigger global store re-renders on every keystroke.
   const [localUrl, setLocalUrl] = useState(initialUrl)
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export const UrlInputBar = React.memo((
         value={localUrl}
         onChange={(e) => {
           setLocalUrl(e.target.value)
+          // Cancel any in-flight analysis immediately when the user edits the URL.
           primaryAnalysis.cancel()
           useUIStore.getState().setAnalyzeResult(null)
           useUIStore.getState().setAnalyzing(false)

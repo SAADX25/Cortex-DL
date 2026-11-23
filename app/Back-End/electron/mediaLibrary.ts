@@ -1,3 +1,4 @@
+// Persistent local media library store with serialized writes, availability caching, and artwork management.
 import fs from 'node:fs/promises'
 import { constants } from 'node:fs'
 import path from 'node:path'
@@ -8,6 +9,7 @@ type SavedItem = Omit<LibraryMediaItem, 'availability'>
 
 const validPath = (value: unknown): value is string => typeof value === 'string' && value.length <= 32767 && !value.includes('\0') && path.isAbsolute(value)
 
+// Windows paths are case-insensitive; normalize case when deduplicating library entries.
 const key = (value: string) => process.platform === 'win32' ? path.normalize(value).toLowerCase() : path.normalize(value)
 
 export class MediaLibrary {
@@ -17,6 +19,7 @@ export class MediaLibrary {
   private statuses = new Map<string, { size: number; availability: LibraryMediaItem['availability'] }>()
   constructor(private readonly file: string) {}
 
+  // Serialize mutations on a promise chain so concurrent IPC calls can't clobber the JSON store.
   private serial<T>(action: () => Promise<T>): Promise<T> {
     const result = this.queue.then(action)
     this.queue = result.catch(() => {})
@@ -54,6 +57,7 @@ export class MediaLibrary {
     const serialized = JSON.stringify({ version: 1, items: entries })
     if (Buffer.byteLength(serialized) > 8 * 1024 * 1024) throw new Error('MEDIA_LIBRARY_FULL')
     await fs.mkdir(path.dirname(this.file), { recursive: true })
+    // Atomic write via exclusive temp file + fsync + rename to prevent corruption on crash.
     const temporary = `${this.file}.${randomUUID()}.tmp`
     try {
       const handle = await fs.open(temporary, 'wx')
@@ -117,6 +121,7 @@ export class MediaLibrary {
       return (await this.load()).filter(item => selected.has(item.id))
     })
 
+    // Run disk stat checks on a separate queue so availability refreshes don't stall user edits.
     const work = this.checkQueue.then(() => Promise.all(entries.map(async item => {
       const status = await this.inspectFile(item.filePath)
       if (this.entries?.includes(item)) this.rememberStatus(item.filePath, status)
@@ -165,6 +170,7 @@ export class MediaLibrary {
       const entries = await this.load(), item = entries.find(entry => entry.id === id)
       if (!item) throw new Error('MEDIA_LIBRARY_NOT_FOUND')
       if (!canEditLibraryArtwork(item)) throw new Error('MEDIA_LIBRARY_ARTWORK_UNSUPPORTED')
+      // Verify JPEG SOI/EOI magic bytes (FFD8 ... FFD9) and 1 MB cap before caching artwork.
       if (image && (image.length < 16 || image.length > 1024 * 1024 || image[0] !== 255 || image[1] !== 216 || image.at(-2) !== 255 || image.at(-1) !== 217)) throw new Error('MEDIA_LIBRARY_ARTWORK_INVALID')
       const artwork = image ? createHash('sha256').update(image).digest('hex') : undefined
       if (image && artwork) {

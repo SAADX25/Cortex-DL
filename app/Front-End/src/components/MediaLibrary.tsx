@@ -1,70 +1,30 @@
+// Local media catalog with drag-drop import, availability checks, pagination, and cover editing
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Film, FolderOpen, ImagePlus, Library, Loader2, Music2, Play, Plus, RefreshCw, Search, Trash2, Upload, X } from 'lucide-react'
 import { useLang } from '../stores/useSettingsStore'
 import { useUIStore } from '../stores/useUIStore'
 import { useMediaLibraryStore } from '../stores/useMediaLibraryStore'
 import { canEmbedLibraryArtwork, canEditLibraryArtwork, type LibraryMediaItem } from '../../../Shared/mediaLibrary'
+import { translations, type Translations } from '../translations'
 import './MediaLibrary.css'
 import LibraryThumbnail from './LibraryThumbnail'
 import ArtworkProgress from './ArtworkProgress'
 
-const labels = {
-  en: {
-    title: 'Media Library', intro: 'Your videos and music. Ready to play.', add: 'Add media',
-    dropTitle: 'Make room for your favorites', dropText: 'Drop videos and audio here, or choose files from your computer.',
-    local: 'Files stay in their original location.', formats: 'MP4, MKV, WEBM · MP3, FLAC, WAV and more',
-    all: 'All media', video: 'Videos', audio: 'Audio', search: 'Search your library…', searchLabel: 'Search media library',
-    sort: 'Sort library', newest: 'Recently added', name: 'Name A–Z', played: 'Recently played',
-    play: 'Play', folder: 'Show in folder', remove: 'Remove from library', locate: 'Locate file',
-    addCover: 'Add cover', changeCover: 'Change cover', removeCover: 'Remove cover from file and library', coverHint: 'JPG, PNG or WEBP · up to 8 MB · embedded in the media file', libraryCoverHint: 'JPG, PNG or WEBP · up to 8 MB · stored in the library for this format', coverError: 'Choose a valid JPG, PNG or WEBP image up to 8 MB.',
-    embedCover: 'Save to file', coverSaved: 'Cover saved to file', coverWriteError: 'Could not save the cover to this file. Close it in other players and check that the file and folder are writable.', coverChangedError: 'The file changed during saving. Refresh the library and try again.', coverRecoveryError: 'Could not restore the original file. Its backup is saved here:',
-    coverPlayingError: 'Close this file’s player before changing its cover.', removeLibraryCover: 'Remove library cover',
-    missing: 'File moved or missing', unreadable: 'File cannot be read', refresh: 'Refresh library',
-    nothing: 'No matches found', nothingText: 'Try a different name or show all media.', reset: 'Reset filters',
-    removeTitle: 'Remove this item?', removeText: 'This removes the item from your library. The file stays on your computer.', cancel: 'Cancel',
-    added: 'added', duplicates: 'already in your library', rejected: 'could not be added', dismiss: 'Dismiss message', retry: 'Try again',
-    error: 'Could not update your library. Please try again.', loadError: 'Could not read the saved library. Your media files are safe.',
-    missingError: 'This file is no longer available. Refresh the library, then locate the file.', duplicateError: 'That file is already in your library.',
-    fullError: 'Your library has reached its limit of 10,000 files.', tooMany: 'Add up to 10,000 files at a time.',
-    dropActive: 'Drop to add video & audio', count: 'items', loading: 'Loading your library…',
-    adding: 'Adding', files: 'files…', addingMedia: 'Adding media…',
-    previous: 'Previous', next: 'Next', pages: 'Media library pages', perPage: 'Items per page', page: 'Page', of: 'of',
-  },
-  ar: {
-    title: 'مكتبة الوسائط', intro: 'فيديوهاتك وموسيقاك، جاهزة للتشغيل.', add: 'إضافة وسائط',
-    dropTitle: 'مكان لمقاطعك المفضلة', dropText: 'اسحب الفيديوهات والملفات الصوتية هنا، أو اختر ملفات من جهازك.',
-    local: 'تبقى الملفات في موقعها الأصلي.', formats: 'MP4, MKV, WEBM · MP3, FLAC, WAV والمزيد',
-    all: 'كل الوسائط', video: 'فيديو', audio: 'صوت', search: 'ابحث في مكتبتك…', searchLabel: 'البحث في مكتبة الوسائط',
-    sort: 'ترتيب المكتبة', newest: 'المضافة حديثًا', name: 'الاسم', played: 'المشغّلة حديثًا',
-    play: 'تشغيل', folder: 'عرض في المجلد', remove: 'إزالة من المكتبة', locate: 'تحديد موقع الملف',
-    addCover: 'إضافة صورة', changeCover: 'تغيير الصورة', removeCover: 'إزالة الغلاف من الملف والمكتبة', coverHint: 'JPG أو PNG أو WEBP · حتى 8 ميغابايت · تُدمج داخل الملف', libraryCoverHint: 'JPG أو PNG أو WEBP · حتى 8 ميغابايت · تُحفظ في المكتبة لهذه الصيغة', coverError: 'اختر صورة صالحة بصيغة JPG أو PNG أو WEBP بحجم لا يتجاوز 8 ميغابايت.',
-    embedCover: 'حفظ داخل الملف', coverSaved: 'الغلاف محفوظ داخل الملف', coverWriteError: 'تعذّر حفظ الغلاف داخل الملف. أغلقه في المشغلات الأخرى وتأكد أن الملف والمجلد يسمحان بالكتابة.', coverChangedError: 'تغيّر الملف أثناء الحفظ. حدّث المكتبة وحاول مجددًا.', coverRecoveryError: 'تعذّر استعادة الملف الأصلي. النسخة الاحتياطية محفوظة هنا:',
-    coverPlayingError: 'أغلق مشغل هذا الملف قبل تغيير غلافه.', removeLibraryCover: 'إزالة الصورة من المكتبة',
-    missing: 'الملف منقول أو غير موجود', unreadable: 'تعذرت قراءة الملف', refresh: 'تحديث المكتبة',
-    nothing: 'لا توجد نتائج', nothingText: 'جرّب اسمًا آخر أو اعرض كل الوسائط.', reset: 'إعادة ضبط الفلاتر',
-    removeTitle: 'إزالة هذا العنصر؟', removeText: 'ستتم إزالة العنصر من المكتبة. يبقى الملف محفوظًا على جهازك.', cancel: 'إلغاء',
-    added: 'تمت إضافتها', duplicates: 'موجودة في المكتبة', rejected: 'تعذرت إضافتها', dismiss: 'إغلاق الرسالة', retry: 'إعادة المحاولة',
-    error: 'تعذر تحديث المكتبة. حاول مجددًا.', loadError: 'تعذرت قراءة المكتبة المحفوظة. ملفات الوسائط محفوظة على جهازك.',
-    missingError: 'هذا الملف غير متاح. حدّث المكتبة ثم حدد موقع الملف.', duplicateError: 'هذا الملف موجود في المكتبة بالفعل.',
-    fullError: 'وصلت مكتبتك إلى الحد الأقصى: 10,000 ملف.', tooMany: 'يمكن إضافة 10,000 ملف في المرة الواحدة.',
-    dropActive: 'أفلت لإضافة الفيديو والصوت', count: 'عنصر', loading: 'جارٍ تحميل المكتبة…',
-    adding: 'جارٍ إضافة', files: 'ملف…', addingMedia: 'جارٍ إضافة الوسائط…',
-    previous: 'السابق', next: 'التالي', pages: 'صفحات مكتبة الوسائط', perPage: 'عدد الملفات في الصفحة', page: 'صفحة', of: 'من',
-  },
-}
+type LibraryCopy = Translations['library']
+
 function formatSize(bytes: number): string {
   if (!bytes) return '0 B'
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3)
   return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${['B', 'KB', 'MB', 'GB'][index]}`
 }
 
-function LibraryCoverSaved({ item, t }: { item: LibraryMediaItem; t: typeof labels.en }) {
+function LibraryCoverSaved({ item, t }: { item: LibraryMediaItem; t: LibraryCopy }) {
   const embedded = useMediaLibraryStore(state => !!state.artworkInfo[item.id])
   return item.artworkEmbedded || !item.artwork && canEmbedLibraryArtwork(item.filePath) && embedded
     ? <div className="library-cover-saved"><CheckCircle2 size={13} />{t.coverSaved}</div> : null
 }
 
-function LibraryCoverActions({ item, t, busy }: { item: LibraryMediaItem; t: typeof labels.en; busy: boolean }) {
+function LibraryCoverActions({ item, t, busy }: { item: LibraryMediaItem; t: LibraryCopy; busy: boolean }) {
   const embedded = useMediaLibraryStore(state => !!state.artworkInfo[item.id])
   const selectArtwork = useMediaLibraryStore(state => state.selectArtwork), removeArtwork = useMediaLibraryStore(state => state.removeArtwork)
   const embedArtwork = useMediaLibraryStore(state => state.embedArtwork)
@@ -77,7 +37,7 @@ function LibraryCoverActions({ item, t, busy }: { item: LibraryMediaItem; t: typ
 }
 
 export default function MediaLibrary() {
-  const lang = useLang(), t = labels[lang]
+  const lang = useLang(), t = translations[lang].library
   const activeTab = useUIStore(state => state.activeTab)
   const playerOpen = useUIStore(state => !!state.mediaPlayerFile && !state.mediaPlayerFloating)
   const items = useMediaLibraryStore(state => state.items), busy = useMediaLibraryStore(state => state.busy)

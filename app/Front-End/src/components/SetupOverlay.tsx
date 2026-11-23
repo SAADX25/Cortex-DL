@@ -1,3 +1,4 @@
+// Full-screen startup overlay for engine verification/setup with recovery actions on failure.
 import { useState } from 'react'
 import './SetupOverlay.css'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -35,6 +36,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
     try { await window.cortexDl.exitApp() }
     catch { setActionError('Could not close the app. Use the window close button.') }
   }
+  // All non-transient engine failure states expose the manual repair/logs recovery controls.
   const isError = status === 'repair-required' || status === 'degraded' || status === 'fatal'
   const isDone = status === 'ready'
 

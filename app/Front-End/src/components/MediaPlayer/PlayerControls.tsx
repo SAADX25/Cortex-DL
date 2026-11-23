@@ -1,8 +1,10 @@
+// Shared playback transport bar; updates seek slider directly via refs on timeupdate
 import React, { useEffect, useRef } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings2, PictureInPicture, Palette } from 'lucide-react';
 import { SubtitleMenu } from './SubtitleMenu';
 import type { PlayerSubtitleTrack } from '../../../../Shared/types';
 import { useLang } from '../../stores/useSettingsStore';
+import { translations } from '../../translations';
 
 interface PlayerControlsProps {
   mediaRef: React.RefObject<HTMLVideoElement | HTMLAudioElement | null>;
@@ -44,9 +46,9 @@ export function PlayerControls({
   mediaRef, isPlaying, duration, volume, isMuted, playbackSpeed, showSettings, mediaType, isFullscreen, subtitles, activeSubtitle, onSubtitleChange, onSubtitleMenuChange,
   togglePlay, onSeek, onVolumeChange, toggleMute, onSpeedChange, toggleSettings, toggleFullscreen, togglePiP, isFloating, floatingActions, artworkControl, currentTheme, onToggleTheme
 }: PlayerControlsProps) {
-  const lang = useLang();
-  const floatingLabel = isFloating ? (lang === 'ar' ? 'إرجاع المشغل' : 'Return player') : (lang === 'ar' ? 'مشغل عائم مع الترجمة' : 'Floating player with subtitles');
-  const miniLabel = lang === 'ar' ? 'تصغير مشغل الصوت' : 'Minimize audio player';
+  const playerCopy = translations[useLang()].player;
+  const floatingLabel = isFloating ? playerCopy.returnPlayer : playerCopy.floatingWithSubtitles;
+  const miniLabel = playerCopy.minimizeAudio;
   const progressRef = useRef<HTMLInputElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
 

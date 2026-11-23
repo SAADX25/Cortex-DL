@@ -1,3 +1,4 @@
+// Reparents the live player DOM host between the main window and a floating popup without unmounting.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/useUIStore'
 
@@ -8,6 +9,7 @@ export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
   const detach = useRef<(() => void) | null>(null)
   const pendingMove = useRef<{ cancel: () => void; time: number; playing: boolean } | null>(null)
   const move = useCallback((target: HTMLElement) => {
+    // Reparenting a <video> across documents can pause or reset it; snapshot playback and subtitle state first.
     const video = host.querySelector('video')
     const time = pendingMove.current?.time ?? video?.currentTime ?? 0
     const playing = pendingMove.current?.playing ?? (!!video && !video.paused && !video.ended)
@@ -26,6 +28,7 @@ export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
       if (playing) void video.play().catch(() => {})
     }
     pendingMove.current = { cancel, time, playing }
+    // Try resuming right away via microtask, and also listen for loadedmetadata if the browser reloads the video.
     video.addEventListener('loadedmetadata', resume)
 
     queueMicrotask(resume)
@@ -45,6 +48,7 @@ export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
       detach.current?.(); detach.current = null
       const child = popup.current; popup.current = null
 
+      // Pull the portal host back into the main document before closing the popup so React unmounts cleanly.
       document.body.appendChild(host)
       pendingMove.current?.cancel(); pendingMove.current = null
       if (child && !child.closed) child.close()
@@ -61,6 +65,7 @@ export function useFloatingPlayer(title: string, dir: 'ltr' | 'rtl') {
       child.document.documentElement.dir = dir
       child.document.body.className = 'cortex-floating-player'
       child.document.body.style.margin = '0'
+      // Mirror document base URI and stylesheets into the about:blank popup so player styles and assets resolve.
       const base = child.document.createElement('base'); base.href = document.baseURI
       child.document.head.appendChild(base)
       document.querySelectorAll('link[rel="stylesheet"], style').forEach(style => child.document.head.appendChild(style.cloneNode(true)))

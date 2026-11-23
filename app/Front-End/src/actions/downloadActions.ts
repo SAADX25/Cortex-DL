@@ -1,3 +1,4 @@
+// Orchestrates URL analysis, batch queuing, download starts, and task actions across stores and IPC.
 import { primaryAnalysis } from '../lib/analysisSession'
 import { youtubeVideoId, normalizeAnalysisUrl } from '../../../Shared/analysisUrl'
 import { translations } from '../translations'
@@ -38,6 +39,7 @@ export async function onPickFolder(): Promise<string | null> {
 
 async function performAnalysis(urlToAnalyze: string): Promise<void> {
   const ui = useUIStore.getState()
+  // Avoid restarting an active analysis for the same normalized URL.
   if (ui.analyzing) {
     try { if (normalizeAnalysisUrl(ui.url) === normalizeAnalysisUrl(urlToAnalyze)) return } catch { primaryAnalysis.cancel() }
   }
@@ -52,6 +54,7 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
   const requestId = crypto.randomUUID()
   let detailed = false
   let dislikes: number | undefined
+  // Guard streamed IPC updates by requestId and generation so stale analyses cannot overwrite newer state.
   const unsubscribe = window.cortexDl.onAnalysisUpdate(update => {
     if (update.id !== requestId || !primaryAnalysis.current(generation)) return
     if (update.stage === 'enrichment') dislikes = update.data.dislikes
@@ -65,6 +68,7 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
     unsubscribe()
     void window.cortexDl.cancelAnalysis(requestId).catch(() => {})
   })
+  // Seed an instant YouTube placeholder card before yt-dlp returns full metadata (skip playlist URLs).
   const videoId = youtubeVideoId(urlToAnalyze)
   if (videoId && !['list', 'list_id'].some(key => new URL(urlToAnalyze.trim()).searchParams.has(key))) {
     ui.setAnalyzeResult({ kind: 'ytdlp', preview: true, title: 'YouTube',
@@ -114,6 +118,7 @@ export async function onPasteAndAnalyze(): Promise<void> {
 export async function handleAnalyzeUrlDirectly(inputUrl: string): Promise<void> {
   try {
     const parsedUrl = new URL(inputUrl)
+    // Prompt when a YouTube link points to a video inside a playlist so the user can pick scope.
     if (parsedUrl.searchParams.has('v') && (parsedUrl.searchParams.has('list') || parsedUrl.searchParams.has('list_id'))) {
       useUIStore.getState().setModalConfig({
         isOpen: true,
@@ -322,6 +327,7 @@ export async function onDownloadNow(): Promise<void> {
       let engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(trimmed) ? 'ytdlp' : 'auto'
 
       let downloadUrl = trimmed
+      // HLS playlists and selected variants go directly to the ffmpeg engine.
       if (analyzeResult.kind === 'hls-media') {
         downloadUrl = analyzeResult.url
         engine = 'ffmpeg'

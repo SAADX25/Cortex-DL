@@ -1,3 +1,4 @@
+// Singleton system tray icon and context menu for restoring or quitting the app.
 import { app, Tray, Menu, nativeImage, BrowserWindow } from 'electron'
 
 let tray: Tray | null = null

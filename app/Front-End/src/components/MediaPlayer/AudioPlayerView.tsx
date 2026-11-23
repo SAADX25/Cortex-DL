@@ -1,8 +1,10 @@
+// Full and mini-mode audio player with FLIP vinyl transition and WebAudio visualizer canvas
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { PlayerControls } from './PlayerControls';
 import { PlayerHeader } from './PlayerHeader';
 import { Play, Pause, Maximize, Volume2, VolumeX, X } from 'lucide-react';
 import { useLang } from '../../stores/useSettingsStore';
+import { translations } from '../../translations';
 
 interface AudioViewProps {
   fileUrl: string;
@@ -47,9 +49,7 @@ export function AudioPlayerView({
   const [hasError, setHasError] = React.useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const lang = useLang();
-  const labels = lang === 'ar'
-    ? { play: 'تشغيل', pause: 'إيقاف مؤقت', mute: 'كتم الصوت', unmute: 'إلغاء كتم الصوت', volume: 'مستوى الصوت', expand: 'توسيع المشغل', close: 'إغلاق المشغل', mini: 'مشغل صوت مصغّر' }
-    : { play: 'Play', pause: 'Pause', mute: 'Mute', unmute: 'Unmute', volume: 'Volume', expand: 'Expand player', close: 'Close player', mini: 'Mini audio player' };
+  const labels = translations[lang].player;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const recordRef = useRef<HTMLDivElement>(null);
   const previousRecord = useRef<DOMRect | null>(null);

@@ -1,3 +1,4 @@
+// Persisted user preferences, engine health/update state, and app-level settings actions.
 import { create } from 'zustand'
 import { translations, type Language } from '../translations'
 import { useUIStore } from './useUIStore'
@@ -53,6 +54,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   concurrentDownloads: 3,
   setConcurrentDownloads: (v) => set({ concurrentDownloads: v }),
 
+  // Default player and Windows artwork refresh options to enabled unless explicitly turned off.
   useInAppPlayer: localStorage.getItem('cortex-inapp-player') !== 'false',
   setUseInAppPlayer: (v) => {
     localStorage.setItem('cortex-inapp-player', String(v))
@@ -176,6 +178,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
         try {
           await window.cortexDl.uninstallApp()
         } catch {
+          // Fall back to Windows Apps & Features if the built-in uninstaller cannot be launched.
           await window.cortexDl.openExternal('ms-settings:appsfeatures')
         }
         useUIStore.getState().closeModal()

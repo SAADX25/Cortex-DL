@@ -1,3 +1,4 @@
+// Downloads, verifies, extracts, and tracks local Whisper/Llama binaries and models via receipts.
 import { promises as fs, createReadStream } from 'node:fs'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -24,6 +25,7 @@ export class SubtitleAssets {
     try {
       const receipt: Receipt = JSON.parse(await fs.readFile(this.receiptPath(asset), 'utf8'))
       if (receipt.id !== asset.id || receipt.sha256 !== asset.sha256 || !receipt.files?.length) return null
+      // Confirm every receipted file stays inside root and matches recorded size/mtime without following symlinks.
       for (const file of receipt.files) {
         const target = path.resolve(this.root, file.name)
         if (!target.startsWith(path.resolve(this.root) + path.sep)) return null
@@ -55,11 +57,13 @@ export class SubtitleAssets {
     for (const key of selected) { signal.throwIfAborted(); if (!await this.locate(key)) missing.push(SUBTITLE_ASSETS[key]) }
     const total = missing.reduce((n, a) => n + a.bytes, 0)
 
+    // Require enough free space for downloads, archive expansion, plus a 100 MB buffer.
     const space = await fs.statfs(this.root)
     const extraction = missing.reduce((n, a) => n + (a.archive ? a.expandedLimit ?? 200 * 1024 * 1024 : 0), 0)
     if (Number(space.bavail) * Number(space.bsize) < total + extraction + 100 * 1024 * 1024) throw new Error('LOCAL_SUBTITLES_DISK_SPACE')
     let done = 0
     for (const asset of missing) {
+      // Quantize the already-verified full accurate model locally instead of downloading another ~1 GB for GPU.
       if (asset === SUBTITLE_ASSETS.accurateGpu && await this.locate('accurate') && await this.locate('whisper')) {
         progress(Math.min(99, done / total * 100), 'optimizing-gpu-model')
         const model = (await this.locate('accurate'))!, executable = (await this.locate('whisper'))!
@@ -78,6 +82,7 @@ export class SubtitleAssets {
     const partial = path.join(this.root, `${asset.id}.download.part`)
     let offset = await fs.stat(partial).then(s => s.size, () => 0)
     if (offset > asset.bytes) { await fs.rm(partial, { force: true }); offset = 0 }
+    // Resume interrupted model downloads via HTTP Range when a partial file exists.
     if (offset < asset.bytes) {
       const response = await fetch(asset.url, { headers: offset ? { Range: `bytes=${offset}-` } : {}, signal })
       if (!response.ok || !response.body) throw new Error(`Model download failed (${response.status})`)
@@ -117,6 +122,7 @@ export class SubtitleAssets {
           signal.throwIfAborted()
           const relative = entry.entryName.replace(/\\/g, '/')
           const target = path.resolve(stage, relative)
+          // Reject Zip Slip path traversal and symlink entries (POSIX mode 0xA000) before extracting.
           if (!target.startsWith(stage + path.sep) || ((entry.header.attr >>> 16) & 0xF000) === 0xA000) throw new Error('Unsafe engine archive')
           if (entry.isDirectory) continue
           expanded += entry.header.size

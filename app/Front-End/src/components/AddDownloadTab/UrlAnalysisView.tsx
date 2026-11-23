@@ -1,8 +1,9 @@
+// Preview card for a single analyzed URL (thumbnail, stats, live badge, YouTube comments export)
 import React, { useEffect } from 'react'
 import { primaryAnalysis } from '../../lib/analysisSession'
 import AnalysisActivity from './AnalysisActivity'
 import { type AnalysisStage } from '../../lib/analysisSession'
-import { Language } from '../../translations'
+import { translations, type Language } from '../../translations'
 
 interface UrlAnalysisViewProps {
   analyzeResult: any
@@ -31,6 +32,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
     if (analyzeResult?.preview && window.cortexDl.analysisDebug) console.debug('[analysis timing] firstPreviewRenderedMs=', primaryAnalysis.elapsed())
   }, [analyzeResult?.preview])
   if (!analyzeResult || analyzeResult.kind === 'playlist') return null
+  const copy = translations[lang].analysis
 
   return (
     <div className={`video-preview-large${analyzing ? ' is-analyzing' : ''}`} style={{ alignItems: 'stretch' }}>
@@ -51,17 +53,17 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
               {analyzeResult.isLive && (
                 <div className="metadata-badge" style={{ backgroundColor: 'rgba(239, 68, 68, 0.18)', borderColor: 'rgba(239, 68, 68, 0.45)', color: '#fca5a5', fontWeight: 700 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-                  <span>{lang === 'ar' ? 'بث مباشر' : 'LIVE'}</span>
+                  <span>{copy.live}</span>
                 </div>
               )}
               {analyzeResult.views != null && (
-                <div className="metadata-badge" title={lang === 'ar' ? 'المشاهدات' : 'Views'}>
+                <div className="metadata-badge" title={copy.views}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                   <span>{analyzeResult.views.toLocaleString()}</span>
                 </div>
               )}
               {analyzeResult.duration != null && (
-                <div className="metadata-badge" title={lang === 'ar' ? 'المدة' : 'Duration'}>
+                <div className="metadata-badge" title={copy.duration}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   <span>{
                     (() => {
@@ -77,13 +79,13 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
                 </div>
               )}
               {analyzeResult.likes != null && (
-                <div className="metadata-badge" title={lang === 'ar' ? 'الإعجابات' : 'Likes'}>
+                <div className="metadata-badge" title={copy.likes}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
                   <span>{analyzeResult.likes.toLocaleString()}</span>
                 </div>
               )}
               {analyzeResult.dislikes != null && analyzeResult.dislikes > 0 && (
-                <div className="metadata-badge" title={lang === 'ar' ? 'عدم الإعجاب' : 'Dislikes'}>
+                <div className="metadata-badge" title={copy.dislikes}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>
                   <span>{analyzeResult.dislikes.toLocaleString()}</span>
                 </div>
@@ -94,28 +96,28 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
                 <div
                   className="metadata-badge"
                   style={{ cursor: 'pointer', backgroundColor: '#3b82f6', color: '#fff', border: 'none' }}
-                  title={lang === 'ar' ? 'تحميل جميع التعليقات بملف نصي' : 'Download all comments to text file'}
+                  title={copy.saveCommentsTitle}
                   onClick={async (e) => {
                     e.stopPropagation();
                     const res = await window.cortexDl.downloadComments(url);
                     if (typeof res === 'object' && res !== null) {
                       if (res.success) {
                         setCommentsSuccessPath(res.filePath || null);
-                        showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
+                        showToast(copy.commentsSaved);
                       } else {
                         setIsCommentsDownloading(false);
-                        if (!res.canceled) showToast(lang === 'ar' ? 'حدث خطأ أثناء استخراج التعليقات.' : 'Failed to extract comments.');
+                        if (!res.canceled) showToast(copy.commentsFailed);
                       }
                     } else if (res) {
                       setCommentsSuccessPath(null);
-                      showToast(lang === 'ar' ? 'تم حفظ التعليقات بنجاح!' : 'Comments saved successfully!');
+                      showToast(copy.commentsSaved);
                     } else {
                       setIsCommentsDownloading(false);
                     }
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
-                  <span>{lang === 'ar' ? 'تحميل التعليقات' : 'Save Comments'}</span>
+                  <span>{copy.saveComments}</span>
                 </div>
               )}
             </div>
@@ -125,7 +127,7 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
         {analyzeResult.kind === 'ytdlp' && (url.includes('youtube.com') || url.includes('youtu.be')) && analyzeResult.comments && analyzeResult.comments.length > 0 && (
           <div className="preview-comments custom-scrollbar">
             <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>
-              💬 {lang === 'ar' ? 'تعليقات' : 'Comments'}
+              💬 {copy.commentsHeading}
             </h4>
             <div className="comments-list">
               {analyzeResult.comments.map((comment: any, i: number) => (

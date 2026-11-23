@@ -1,7 +1,9 @@
+// Video metadata popover (container, resolution, lazy-probed FPS)
 import { Info, X } from 'lucide-react'
 import { useState, useEffect, useRef, useId } from 'react'
 import { parseFrameRate } from '../../../../Shared/frameRate'
 import { useLang } from '../../stores/useSettingsStore'
+import { translations } from '../../translations'
 
 interface MediaInfoProps {
   title: string
@@ -20,9 +22,8 @@ type FpsResult = { key: string; status: 'loading' | 'ready' | 'unavailable'; val
 
 export function MediaInfoOverlay({ filePath, videoWidth, videoHeight, mediaType, showOverlay, toggleOverlay, closeOverlay, taskFps, sessionId }: MediaInfoProps) {
   const lang = useLang()
-  const labels = lang === 'ar'
-    ? { title: 'معلومات الفيديو', format: 'الصيغة', resolution: 'الدقة', loading: 'جارٍ القراءة…', unavailable: 'غير متاح', close: 'إغلاق المعلومات' }
-    : { title: 'Media Information', format: 'Format', resolution: 'Resolution', loading: 'Reading…', unavailable: 'Unavailable', close: 'Close information' }
+  const p = translations[lang].player
+  const labels = { title: p.infoTitle, format: p.infoFormat, resolution: p.infoResolution, loading: p.infoLoading, unavailable: p.infoUnavailable, close: p.infoClose }
   const extension = filePath.split('.').pop()?.toUpperCase() || 'UNKNOWN'
   const panelId = useId()
   const panelRef = useRef<HTMLDivElement>(null)

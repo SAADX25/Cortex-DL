@@ -1,3 +1,4 @@
+// Full-screen/mini/floating in-app media player; manages WebAudio visualizer, ambilight canvas, and artwork suspend handoff
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { VideoPlayerView } from './VideoPlayerView';
 import { AudioPlayerView } from './AudioPlayerView';
@@ -11,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { useFloatingPlayer } from './useFloatingPlayer';
 import { PlayerArtworkMenu } from './PlayerArtworkMenu';
 import ArtworkProgress from '../ArtworkProgress';
+import { translations } from '../../translations';
 
 interface MediaPlayerModalProps {
   isOpen: boolean;
@@ -519,13 +521,14 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   };
 
   if (!isOpen) return null;
+  const playerCopy = translations[dir === 'rtl' ? 'ar' : 'en'].player;
   const artworkControl = <PlayerArtworkMenu filePath={filePath} suspend={suspendForArtwork} onOpenChange={setArtworkMenuOpen} onImage={setCoverImage} />;
 
   return <>
     {floatingWindow && <div className="floating-player-return" dir={dir} role="status">
-      <span>{dir === 'rtl' ? 'الفيديو يعمل في النافذة العائمة' : 'Video playing in floating window'}</span>
-      <button onClick={restoreFloating}>{dir === 'rtl' ? 'إرجاع المشغل' : 'Return player'}</button>
-      <button onClick={handleClose} aria-label={dir === 'rtl' ? 'إغلاق المشغل' : 'Close player'}>×</button>
+      <span>{playerCopy.floatingActive}</span>
+      <button onClick={restoreFloating}>{playerCopy.returnPlayer}</button>
+      <button onClick={handleClose} aria-label={playerCopy.close}>×</button>
     </div>}
     {createPortal(
     <div
@@ -618,7 +621,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
             <p>Unsupported file format</p>
           </div>
         )}
-        {floatingError && <div className="floating-player-error" role="alert">{dir === 'rtl' ? 'تعذر فتح المشغل العائم. حاول مجددًا.' : 'Could not open the floating player. Try again.'}<button onClick={() => setFloatingError(false)}>×</button></div>}
+        {floatingError && <div className="floating-player-error" role="alert">{playerCopy.floatingError}<button onClick={() => setFloatingError(false)}>×</button></div>}
         {mediaSuspended && <div className="player-artwork-saving" aria-hidden="true"><ArtworkProgress /></div>}
       </div>
     </div>, host)}

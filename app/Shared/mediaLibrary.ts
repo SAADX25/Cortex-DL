@@ -1,6 +1,8 @@
+// Supported local media library extensions, types, and artwork eligibility rules.
 export const LIBRARY_VIDEO_EXTENSIONS = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'ogv', 'm4v'] as const
 export const LIBRARY_AUDIO_EXTENSIONS = ['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'opus', 'wma'] as const
 export const LIBRARY_EXTENSIONS = [...LIBRARY_VIDEO_EXTENSIONS, ...LIBRARY_AUDIO_EXTENSIONS]
+// Only containers FFmpeg can rewrite cleanly with attached cover art.
 export const canEmbedLibraryArtwork = (filePath: string): boolean => /\.(mp3|flac|m4a|mp4)$/i.test(filePath)
 export const canEditLibraryArtwork = (item: Pick<LibraryMediaItem, 'kind' | 'filePath'>): boolean => item.kind === 'audio' || canEmbedLibraryArtwork(item.filePath)
 export type LibraryArtworkInfo = { thumbnail: string | null; embedded: boolean }

@@ -1,3 +1,4 @@
+// Download task card; high-frequency progress updates mutate DOM refs directly to skip React re-renders
 import React, { useRef, useState } from 'react'
 import { Play, FolderOpen, Trash2, X, Pause, RotateCcw, CheckCircle2, FileVideo, Music2, HardDrive, Gauge, Clock3, Captions } from 'lucide-react'
 import { openSubtitleStudio } from '../stores/useSubtitleStudioStore'
@@ -159,27 +160,27 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           <div className="dc-action-group">
             {vm.showPause && (
               <button className="dc-btn primary" onClick={vm.onPause} aria-label={t.btn_pause}>
-                <Pause size={15} />{lang === 'ar' ? 'إيقاف' : 'Pause'}
+                <Pause size={15} />{t.downloads.pause}
               </button>
             )}
             {vm.showResume && (
               <button className="dc-btn success" onClick={vm.onResume} aria-label={t.btn_resume}>
-                <RotateCcw size={15} />{lang === 'ar' ? 'استئناف' : 'Resume'}
+                <RotateCcw size={15} />{t.downloads.resume}
               </button>
             )}
             {vm.showCancel && (
               <button className="dc-btn danger" onClick={vm.onCancel} aria-label={t.btn_cancel}>
-                <X size={15} />{lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                <X size={15} />{t.downloads.cancel}
               </button>
             )}
             {vm.showPlay && (
-              <button className="dc-btn primary" onClick={() => openSubtitleStudio(vm.filePath)} title={lang === 'ar' ? 'إنشاء ترجمة من الصوت' : 'Generate speech subtitles'}>
-                <Captions size={15} />{lang === 'ar' ? 'ترجمة' : 'Subtitles'}
+              <button className="dc-btn primary" onClick={() => openSubtitleStudio(vm.filePath)} title={t.downloads.generateSubtitlesTitle}>
+                <Captions size={15} />{t.downloads.subtitles}
               </button>
             )}
             {vm.showPlay && (
               <button className="dc-btn dc-play" onClick={vm.onPlay} title={t.btn_play} aria-label={t.btn_play}>
-                <Play size={15} />{lang === 'ar' ? 'تشغيل' : 'Play'}
+                <Play size={15} />{t.downloads.play}
               </button>
             )}
             {vm.showPlay && /\.(mp4|mkv|webm|mov|avi|m4v|ogv)$/i.test(vm.filePath) && (
@@ -192,7 +193,7 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
             )}
           </div>
           <div className="dc-action-group">
-            <button className="dc-btn-icon" onClick={() => vm.onDelete(false)} title={lang === 'ar' ? 'إزالة من القائمة' : 'Remove from list'} aria-label={t.btn_remove}>
+            <button className="dc-btn-icon" onClick={() => vm.onDelete(false)} title={t.downloads.removeFromList} aria-label={t.btn_remove}>
               <X size={17} />
             </button>
             <button className="dc-btn-icon ghost-danger" onClick={() => vm.onDelete(true)} title={t.btn_delete} aria-label={t.btn_delete}>

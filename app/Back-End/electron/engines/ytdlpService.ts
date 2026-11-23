@@ -1,3 +1,4 @@
+// yt-dlp URL analysis, preview stream lookup, cache pruning, Deno JS runtime setup, and self-updates.
 import os from 'node:os'
 import path from 'node:path'
 import { readdir, stat, unlink, mkdir, rm } from 'node:fs/promises'
@@ -24,6 +25,7 @@ export function ytdlpCacheArgs(): string[] {
   return ['--cache-dir', directory]
 }
 
+// Evict cache entries older than 30 days or past 64 MB, sparing files touched in the last minute.
 async function prune(root: string): Promise<void> {
   const entries: { file: string; size: number; mtimeMs: number }[] = []
   const walk = async (folder: string): Promise<void> => {
@@ -81,6 +83,7 @@ export class YouTubeAuthRequiredError extends Error {
 
 type JsRuntimeSelection = { args: string[]; available: boolean; name: string }
 
+// Strip ephemeral stream URLs before caching so later callers don't reuse expired CDN signatures.
 const analysisCoordinator = new AnalysisCoordinator<AnalyzeResult>(3, ANALYSIS_CACHE_TTL_MS, ANALYSIS_CACHE_MAX, Date.now, result => result.kind !== 'unknown', result => {
   if (result.kind === 'ytdlp') result.formats = result.formats.map(({ url: _url, ...format }) => format)
   return result
@@ -93,6 +96,7 @@ async function prepareYtdlp(): Promise<void> {
   await checkJsRuntime()
 }
 
+// Back off for 60s per URL after YouTube rate-limit, auth, or bot errors to avoid hammering the endpoint.
 const analysisCooldown = new Map<string, { code: string; until: number }>()
 
 export function assertAnalysisAllowed(input: string): void {
@@ -118,6 +122,7 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
     await mkdir(binDir, { recursive: true })
     const release = await fetchBoundedJson('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest', undefined, 8000)
     const asset = release.assets?.find((a: any) => a.name === 'yt-dlp.exe')
+    // Require GitHub's sha256 digest and official release URL before downloading and atomically promoting.
     if (!asset?.digest?.startsWith('sha256:') || !asset.browser_download_url?.startsWith('https://github.com/yt-dlp/yt-dlp/releases/download/')) throw new Error('Verified release asset unavailable')
     await downloadEngine(asset.browser_download_url, candidate, asset.digest.slice(7))
     const spec = { name: 'yt-dlp', filename: 'yt-dlp.exe', minimum: '2026.06.09', architecture: 'x64', version: release.tag_name, sha256: asset.digest.slice(7) }
@@ -133,6 +138,7 @@ export async function updateYtdlp(): Promise<{ success: boolean; message: string
   } finally { await rm(candidate, { force: true }); updateInFlight = false }
 }
 
+// Point yt-dlp at the bundled Deno binary so YouTube n-parameter and JS signature challenges can be solved.
 export async function checkJsRuntime(): Promise<JsRuntimeStatus> {
   const health = await engineReceipts.inspect('deno')
   runtimeSelection = health.available
@@ -280,6 +286,7 @@ async function extractFullAnalysis(url: string, signal: AbortSignal): Promise<An
     duration: info.duration,
     ...(isLive ? { isLive: true } : {}),
     ...(wasLive ? { wasLive: true } : {}),
+    // Flag restricted/limited quality when yt-dlp warnings show skipped formats or YouTube capped output at 360p.
     qualityStatus: categories.some(category => /FORMATS_RESTRICTED|PO_TOKEN_REQUIRED|formats-skipped|js-challenge/.test(category))
       ? 'restricted' : resolutions.length && Math.max(...resolutions) <= 360 ? 'limited' : 'available',
   };

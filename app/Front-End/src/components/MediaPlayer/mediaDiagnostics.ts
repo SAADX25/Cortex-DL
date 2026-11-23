@@ -1,3 +1,4 @@
+// Tracks live renderer media sessions and AudioContexts for leak checks via window.__cortexMediaDiagnostics.
 const sessions = new Set<string>()
 
 let audioContexts = 0

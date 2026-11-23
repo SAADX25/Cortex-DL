@@ -1,3 +1,4 @@
+// Local media library state, file availability checks, and serialized artwork/file mutations.
 import { create } from 'zustand'
 import { useUIStore } from './useUIStore'
 import { useSettingsStore } from './useSettingsStore'
@@ -29,6 +30,7 @@ interface LibraryState {
   dismissNotice: () => void
 }
 
+// Monotonic counter discards stale async refresh/check results if a mutation starts mid-flight.
 let revision = 0
 
 let refreshPending: Promise<void> | null = null
@@ -36,11 +38,13 @@ let refreshPending: Promise<void> | null = null
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'MEDIA_LIBRARY_REQUEST_FAILED'
 
 export const useMediaLibraryStore = create<LibraryState>((set, get) => {
+  // Refuse artwork edits on the actively playing file unless the caller suspends playback to release the file handle.
   const checkCoverEdit = (id: string) => {
     const file = get().items.find(item => item.id === id)?.filePath, player = useUIStore.getState().mediaPlayerFile?.filePath
     const key = (path: string) => path.replace(/\\/g, '/').toLowerCase()
     if (file && player && key(file) === key(player)) throw new Error('MEDIA_LIBRARY_ARTWORK_PLAYING')
   }
+  // Serialize mutations and bump revision so concurrent refreshes cannot clobber newer state.
   const perform = async (action: () => Promise<void>, artworkTask: ArtworkTask | null = null) => {
     if (get().busy) return
     revision++
@@ -93,6 +97,7 @@ export const useMediaLibraryStore = create<LibraryState>((set, get) => {
       const items = await window.cortexDl.relocateMediaLibraryItem(id)
       if (items) set(state => ({ items, artworkInfo: {}, refreshVersion: state.refreshVersion + 1 }))
     }),
+    // Optionally suspend active playback before rewriting artwork so the file isn't locked on disk.
     selectArtwork: (id, suspend) => perform(async () => {
       if (!suspend) checkCoverEdit(id)
       const resume = await suspend?.()

@@ -1,3 +1,4 @@
+// Local library thumbnail extraction, remote thumbnail disk caching, and playable preview stream selection.
 import fs, { mkdir, stat, rename, unlink, readdir, open } from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -43,6 +44,7 @@ export class LibraryThumbnails {
     if (this.stopped || item.availability !== 'available') return empty
     const source = await fs.stat(item.filePath).catch(() => null)
     if (!source?.isFile()) return empty
+    // Check sidecar artwork (same stem, plus cover/folder for audio) and fold its mtime into the cache key.
     const stem = path.join(path.dirname(item.filePath), path.parse(item.filePath).name)
     const candidates = ['jpg', 'jpeg', 'png', 'webp'].flatMap(extension => [
       `${stem}.${extension}`,
@@ -100,6 +102,7 @@ export class LibraryThumbnails {
 
       const binary = await this.ffmpeg()
       if (this.stopped) return empty
+      // Fallback order: embedded cover -> video sidecar -> frame at 1s -> frame at 0s (short clips) -> audio folder art.
       let image: Buffer | null = null
       if (coverStream !== undefined) image = await this.extract(binary, item.filePath, undefined, '320:180', `0:${coverStream}`)
       if (!image && item.kind === 'video' && cover) image = await this.extract(binary, cover)
@@ -143,6 +146,7 @@ export class LibraryThumbnails {
   private extract(binary: string, file: string, seek?: number, dimensions = '320:180', stream = '0:v:0'): Promise<Buffer | null> {
     if (this.stopped) return Promise.resolve(null)
     return new Promise(resolve => {
+      // Constrain ffmpeg memory and threads so decoding malformed media or large images can't spike resource usage.
       const child = spawn(binary, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-max_alloc', '67108864', '-threads', '1',
         ...(seek !== undefined ? ['-ss', String(seek)] : []), '-i', file, '-map', stream, '-an', '-sn',
         '-vf', `scale=${dimensions}:force_original_aspect_ratio=decrease`, '-frames:v', '1', '-threads', '1', '-q:v', '4', '-c:v', 'mjpeg', '-f', 'image2pipe', 'pipe:1'],
@@ -198,6 +202,7 @@ const MAX_CACHE = 128 * 1024 * 1024
 
 const TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' }
 
+// Verify header and trailer magic bytes (e.g., JPEG SOI/EOI, PNG IEND) to reject truncated downloads before caching.
 async function validImage(file: string, extension: string, size: number): Promise<boolean> {
   if (size < 16) return false
   const handle = await open(file, 'r')
@@ -266,6 +271,7 @@ export class ThumbnailCache {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(new Error('Thumbnail request timed out')), 10000)
     try {
+      // Instagram/Meta CDN thumbnails often 403 without a Referer and browser-like User-Agent.
       const response = await fetch(url, { signal: controller.signal,
         headers: { Referer: 'https://www.instagram.com/', 'User-Agent': 'Mozilla/5.0' } })
       const type = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
@@ -317,11 +323,13 @@ export type PreviewStreams = {
   duration?: number
 }
 
+// Prefer browser-playable muxed progressive streams, falling back to split MP4/WebM (<=1080p) and finally HLS.
 export const TRIM_PREVIEW_FORMAT =
   `${PREVIEW_FORMAT}/bv[ext=mp4][vcodec^=avc1][protocol=https][height<=1080]+ba[acodec^=mp4a][protocol=https]`
   + `/bv[ext=webm][vcodec^=vp9][protocol=https][height<=1080]+ba[acodec=opus][protocol=https]`
   + `/b[protocol^=m3u8][height<=720]/b[protocol^=m3u8]`
 
+// Reject already-expired signed stream URLs (common on YouTube/CDN links) before handing them to the player.
 function validateStreamHttpUrl(rawUrl: unknown): string {
   const url = new URL(String(rawUrl))
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid preview stream URL')
@@ -371,6 +379,7 @@ export function playablePreviewStreams(info: Record<string, unknown>): PreviewSt
   return { videoUrl, audioUrl: progressiveUrl(audio) }
 }
 
+// Gate single-URL previews to progressive MP4 (H.264) or WebM (VP8/VP9) with audio so Electron's <video> plays natively.
 export function playablePreviewUrl(info: Record<string, unknown>): string {
   if (info.requested_formats || info.requested_downloads && Array.isArray(info.requested_downloads) && info.requested_downloads.length > 1) {
     throw new Error('Unsupported preview: separate video/audio resources')

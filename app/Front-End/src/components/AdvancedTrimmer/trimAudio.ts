@@ -1,3 +1,4 @@
+// Keeps a separate adaptive audio track synced to the visual trimmer's video element.
 import { seekPreview } from './trimPreview'
 
 export function syncTrimAudio(video: HTMLVideoElement | null, audio: HTMLAudioElement | null, play = false): Promise<void> {
@@ -5,7 +6,9 @@ export function syncTrimAudio(video: HTMLVideoElement | null, audio: HTMLAudioEl
   audio.volume = video.volume
   audio.muted = video.muted
   audio.playbackRate = video.playbackRate
+  // Only re-seek audio when drift exceeds 200ms to avoid audible stutter during normal playback.
   if (Math.abs(audio.currentTime - video.currentTime) > 0.2) seekPreview(audio, video.currentTime)
+  // Wait for HAVE_FUTURE_DATA (readyState >= 3) before playing audio so it doesn't outrun a buffering video.
   if (play && !video.paused && !video.seeking && video.readyState >= 3) return audio.play()
   if (video.paused || video.seeking || !play) audio.pause()
   return Promise.resolve()

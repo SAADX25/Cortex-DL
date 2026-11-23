@@ -1,3 +1,4 @@
+// Embeds/removes cover art via FFmpeg with atomic file replacement and Windows/VLC thumbnail cache invalidation.
 import fs from 'node:fs/promises'
 import { constants } from 'node:fs'
 import path from 'node:path'
@@ -45,6 +46,7 @@ export class AudioArtwork {
     if (this.stopped) return null
     const stat = await fs.stat(file).catch(() => null)
     if (!stat?.isFile()) return null
+    // Key probe cache by path + size + mtime and cap concurrent ffprobe calls at 2.
     const key = JSON.stringify([file, stat.size, stat.mtimeMs])
     const cached = this.inspections.get(key)
     if (cached) return cached
@@ -85,6 +87,7 @@ export class AudioArtwork {
       artworkMetadata = vlcArtworkMetadata(original.format?.tags, original.streams?.filter(stream => stream.disposition?.attached_pic).length ?? 0)
       const media = original.streams?.filter(stream => !stream.disposition?.attached_pic) ?? []
       const videoCount = media.filter(stream => stream.codec_type === 'video').length
+      // Ensure non-MP4 files are single-stream audio before remuxing; post-write probe verifies codecs and duration match.
       if (extension !== '.mp4' ? media.length !== 1 || media[0].codec_type !== 'audio' : !media.some(stream => ['audio', 'video'].includes(stream.codec_type ?? ''))) throw new Error('MEDIA_LIBRARY_ARTWORK_WRITE_FAILED')
       if (image) await fs.writeFile(cover, image, { flag: 'wx' })
       await this.run(ffmpeg, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-n', '-i', source,
@@ -102,6 +105,7 @@ export class AudioArtwork {
         || !Number.isFinite(duration) || !Number.isFinite(newDuration) || Math.abs(duration - newDuration) > .25
         || streams.filter(stream => stream.disposition?.attached_pic).length !== (image ? 1 : 0)) throw new Error('MEDIA_LIBRARY_ARTWORK_WRITE_FAILED')
 
+      // Flush the candidate to disk and re-stat the original to catch external edits before swapping in place.
       await fs.chmod(candidate, before.mode)
       const handle = await fs.open(candidate, 'r+')
       try { await handle.sync() } finally { await handle.close() }
@@ -155,6 +159,7 @@ public static class CortexArtworkShell {
 [CortexArtworkShell]::SHChangeNotify(0x00002000, 0x00002005, $env:CORTEX_ARTWORK_FILE, [IntPtr]::Zero)
 `
 
+// Notify Windows Explorer to drop its cached thumbnail for this file without blocking on UI refresh.
 export async function refreshArtworkFile(file: string): Promise<boolean> {
   if (process.platform !== 'win32') return false
   if (!path.isAbsolute(file) || file.includes('\0')) return false
@@ -261,6 +266,7 @@ export async function refreshVlcArtwork(file: string, metadata: VlcArtworkMetada
       }
     }
     if (!targets.length) return 0
+    // Move cached art into a backup folder instead of unlinking, verifying every path segment isn't a symlink.
     await fs.mkdir(backups).catch(error => { if (error.code !== 'EEXIST') throw error })
     if (!await plainDirectory(backups)) return 0
     let refreshed = 0
@@ -318,6 +324,7 @@ export async function refreshWindowsPlayerArtwork(file: string, localAppData = p
     const matches = entries.filter(entry => entry.isFile() && prefixes.some(prefix => entry.name.startsWith(prefix + '-') && /^\d{1,3}-\d{1,5}-\d{1,5}$/.test(entry.name.slice(prefix.length + 1))))
     if (!matches.length) return 0
     await fs.mkdir(backups).catch(error => { if (error.code !== 'EEXIST') throw error })
+    // Windows Media Player locks its cache while running, so close verified ZuneMusic instances before moving entries.
     if (!await plainDirectory(backups) || !await closePlayer()) return 0
     let refreshed = 0
     for (const entry of matches) {

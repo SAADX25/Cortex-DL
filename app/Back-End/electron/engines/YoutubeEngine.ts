@@ -1,3 +1,4 @@
+// yt-dlp download engine for YouTube and other supported sites, with Threads delegation and HLS fallback.
 import { ensureEnginesReady, engineExecutionFailed } from './engineManager'
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -31,6 +32,7 @@ export class YoutubeEngine implements IEngine {
   private activeDelegate: IEngine | null = null
 
   async download(task: DownloadTask, context?: EngineContext): Promise<EngineResult> {
+    // Threads bypasses yt-dlp and uses the native HTML/DASH extractor in ThreadsEngine.
     if (isThreadsUrl(task.url)) {
       const delegate = new ThreadsEngine()
       this.activeDelegate = delegate
@@ -64,6 +66,7 @@ export class YoutubeEngine implements IEngine {
     let result = await this.runYtdlpAttempt(task, context, runtime, args, profile, sectionBounds)
     runtime.abortController.signal.throwIfAborted()
 
+    // YouTube occasionally 403s HTTPS/DASH fragments on public sessions; retry with m3u8/HLS before failing.
     if (publicFirst && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
       && !youtubeErrorCode(result.stderr)) {
       const hlsArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, true)
@@ -103,6 +106,7 @@ export class YoutubeEngine implements IEngine {
   private async prefetchMetadata(task: DownloadTask, context: EngineContext, runtime: TaskRuntime): Promise<void> {
     const ytDlpPath = getBinaryPath('yt-dlp')
 
+    // Reuse the exact -f/-S selectors so expected byte counts match the streams yt-dlp will actually fetch.
     const selection = this.buildYtdlpArgs(task, this.selectProfile(task), { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
     const selectorArgs: string[] = []
     for (const flag of ['-f', '-S']) {
@@ -236,6 +240,7 @@ export class YoutubeEngine implements IEngine {
       saveState: () => context.saveState(),
     }
 
+    // Section cuts, livestreams, and Kick VODs can pause silently while seeking or buffering fragments.
     const stallLimitMs = sectionBounds || task.isLive || isKickUrl(task.url) ? 180_000 : 90_000
     let lastActivity = nowMs()
     const watchdog = setInterval(() => {
@@ -361,6 +366,7 @@ export class YoutubeEngine implements IEngine {
   ): string[] {
     const trimming = Boolean(task.startTime || task.endTime)
     const sectionBounds = trimming ? trimBounds(task) : null
+    // Exact cuts re-encode at cut points via ffmpeg, so cap encoder threads and skip it on live/Kick-from-0 streams.
     const isLiveOrKickZero = Boolean(task.isLive) || (isKickUrl(task.url) && sectionBounds?.start === 0)
     const forceKeyframes = Boolean(sectionBounds && task.trimMode === 'exact' && !isLiveOrKickZero)
     const threadBudget = Math.max(2, Math.min(4, Math.floor(availableParallelism() / 2)))
@@ -376,6 +382,7 @@ export class YoutubeEngine implements IEngine {
       '--retries', trimming || isKickUrl(task.url) ? '3' : '0',
       '--extractor-retries', trimming || isKickUrl(task.url) ? '2' : '0',
       '--fragment-retries', trimming || isKickUrl(task.url) ? '5' : '1',
+      // Skip --continue and chunked HTTP when trimming because ffmpeg section downloads don't support byte-range resume.
       ...(trimming ? [] : ['--continue', '--throttled-rate', YOUTUBE_THROTTLED_RATE]),
       '--progress-template', 'download:CORTEX_DL|%(info.format_id)s|%(progress.filename)s|%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s',
       '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
@@ -411,6 +418,7 @@ export class YoutubeEngine implements IEngine {
       }
     }
 
+    // Stream-copy on merge for non-exact cuts to avoid re-encoding; exact cuts already encode in the downloader stage.
     if (isAudioFormat(task.targetFormat)) {
       ytArgs.push('--postprocessor-args', 'ExtractAudio+ffmpeg:-y -hide_banner -threads 2 -max_muxing_queue_size 1024', '--embed-thumbnail', '--add-metadata')
     } else if (!forceKeyframes) {
@@ -442,6 +450,7 @@ export class YoutubeEngine implements IEngine {
           log.info(`[YoutubeEngine] Quality constraint applied: height<=${heightConstraint}`)
         }
 
+        // Merge into MKV first because it accepts any codec mix (e.g., VP9/AV1 + Opus); post-processing remuxes/transcodes to the target format.
         ytArgs.push('--merge-output-format', 'mkv')
         break
       }

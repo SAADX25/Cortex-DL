@@ -1,3 +1,4 @@
+// Engine routing heuristics and user-facing IPC error normalization for YouTube, Threads, and Electron.
 import { getErrorText, youtubeErrorCode, YOUTUBE_AUTH_REQUIRED_CODE, YOUTUBE_RATE_LIMITED_CODE, YOUTUBE_BOT_VERIFICATION_CODE } from '../../../Shared/youtubeErrors'
 import { threadsErrorCode, THREADS_NO_MEDIA_CODE, THREADS_POST_UNAVAILABLE_CODE, THREADS_INVALID_URL_CODE } from '../../../Shared/threadsErrors'
 import { type Translations } from '../translations'
@@ -24,6 +25,7 @@ export function isYtdlpUrl(url: string): boolean {
     return true
   }
 
+  // Direct media links bypass yt-dlp; unknown webpage URLs default to yt-dlp extractors.
   if (/\.(mp4|mp3|m4a|webm|mkv|avi|m3u8)(\?|#|$)/i.test(lowUrl)) {
     return false
   }
@@ -73,6 +75,7 @@ export function normalizeIpcError(error: unknown, fallback: string, messages: Pr
   const threadsMessage = threadsErrorMessage(error, messages)
   if (threadsMessage) return threadsMessage
 
+  // Strip Electron's IPC wrapper prefix so the UI displays the underlying reason.
   const cleaned = rawMessage
     .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*/i, '')
     .replace(/^(?:Error|YouTubeAuthRequiredError):\s*/i, '')

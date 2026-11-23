@@ -1,3 +1,4 @@
+// Shared IPC channel names and domain types used by Electron main, preload, and renderer.
 export type DownloadStatus =
   | 'queued'
   | 'downloading'
@@ -32,11 +33,13 @@ export const PROGRESS_CHANNEL = 'cortexdl:download-progress'
 export const STATS_CHANNEL = 'cortexdl:download-stats-updated'
 
 export type DownloadTask = {
+  // Records which attempt passed final validation so restart recovery trusts the output file.
   validatedAttemptId?: string
   attemptId?: string
   resumeDirectory?: string
   etag?: string
   lastModified?: string
+  // Tracks files promoted by this task so deletion never touches unrelated files.
   ownedFiles?: string[]
   etaSeconds?: number | null
   outputBytes?: number
@@ -74,6 +77,7 @@ export type DownloadTask = {
   ytdlpExpectedBytes?: number
   ytdlpExpectedStreamCount?: number
 
+  // Per-stream counters so multi-stream yt-dlp downloads (video + audio) aggregate cleanly.
   ytdlpStreams?: Record<string, { downloaded: number; total: number | null }>
 
   resumeChunks?: { start: number; end: number; downloaded: number; completed: boolean }[]

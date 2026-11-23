@@ -1,3 +1,4 @@
+// Derives display labels, progress state, and action flags for a single download card
 import { useMemo, useCallback } from 'react'
 import { useTask } from '../stores/downloadStore'
 import { type Language, translations } from '../translations'
@@ -100,8 +101,8 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       starting: t.accelerating,
       preparing: t.accelerating,
       pausing: t.status_paused,
-      validating: lang === 'ar' ? 'التحقق من الملف' : 'Validating',
-      finalizing: lang === 'ar' ? 'إنهاء التنزيل' : 'Finalizing',
+      validating: t.downloads.validating,
+      finalizing: t.downloads.finalizing,
       downloading: t.status_downloading,
       merging: t.status_merging,
       converting: t.status_converting,

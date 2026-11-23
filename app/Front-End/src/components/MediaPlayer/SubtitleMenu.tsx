@@ -1,7 +1,9 @@
+// Accessible subtitle track selector that works inside both the main and floating windows
 import { useEffect, useId, useRef, useState } from 'react'
 import { Check, ChevronDown, Subtitles } from 'lucide-react'
 import type { PlayerSubtitleTrack } from '../../../../Shared/types'
 import { useLang } from '../../stores/useSettingsStore'
+import { translations } from '../../translations'
 
 function trackName(track: PlayerSubtitleTrack, lang: string): string {
   const code = track.language.trim()
@@ -16,7 +18,7 @@ export function SubtitleMenu({ tracks, active, onChange, onOpenChange, isFloatin
   tracks: PlayerSubtitleTrack[]; active: number; onChange: (index: number) => void; onOpenChange?: (open: boolean) => void; isFloating?: boolean
 }) {
   const lang = useLang(), ar = lang === 'ar'
-  const title = ar ? 'الترجمة' : 'Subtitles', off = ar ? 'إيقاف الترجمة' : 'Subtitles off'
+  const { subtitlesTitle: title, subtitlesOff: off, subtitlesStatusOff } = translations[lang].player
   const [open, setOpen] = useState(false)
   const wrapper = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null)
   const options = useRef<(HTMLButtonElement | null)[]>([]), id = useId()
@@ -57,7 +59,7 @@ export function SubtitleMenu({ tracks, active, onChange, onOpenChange, isFloatin
     <button ref={trigger} type="button" className={`control-btn subtitle-trigger ${selected !== -1 ? 'active' : ''}`}
       aria-label={`${title}: ${selected === -1 ? off : names[selected]}`} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
       title={title} onClick={() => setOpen(value => !value)}>
-      <Subtitles size={20} /><span className="subtitle-current" dir="auto">{selected === -1 ? ar ? 'متوقفة' : 'Off' : names[selected]}</span><ChevronDown size={13} />
+      <Subtitles size={20} /><span className="subtitle-current" dir="auto">{selected === -1 ? subtitlesStatusOff : names[selected]}</span><ChevronDown size={13} />
     </button>
     {open && <div className="subtitle-menu" id={id} role="menu" aria-label={title} dir={ar ? 'rtl' : 'ltr'}>
       <div className="subtitle-menu-title"><Subtitles size={16} />{title}</div>

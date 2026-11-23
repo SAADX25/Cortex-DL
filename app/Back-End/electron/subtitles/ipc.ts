@@ -1,3 +1,4 @@
+// IPC registration for local subtitle generation, export, and MKV embedding.
 import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
 import path from 'node:path'
 import { type SpeechModel, type TranslationModel, type SubtitleRequest, type SubtitleCue } from '../../../Shared/localSubtitles'
@@ -7,6 +8,7 @@ import { LocalSubtitleService } from './service'
 let service: LocalSubtitleService | null = null
 
 export function registerLocalSubtitleIpc(getWin: () => BrowserWindow | null): void {
+  // Lazily construct the service on first IPC call so startup doesn't touch subtitle state unless used.
   const get = () => service ??= new LocalSubtitleService(new SubtitleAssets(path.join(app.getPath('userData'), 'local-subtitles')))
   ipcMain.handle('cortexdl:subtitles:state', () => get().state)
   ipcMain.handle('cortexdl:subtitles:readiness', () => get().assets.readiness())

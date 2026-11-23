@@ -1,3 +1,4 @@
+// Extracts video comments via yt-dlp --write-comments and saves a readable text report.
 import { ensureEnginesReady, engineExecutionFailed } from './engines/engineManager'
 import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
@@ -16,6 +17,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       '--dump-json',
       '--write-comments',
       '--skip-download',
+      // Prevents yt-dlp from expanding playlist URLs when only single-video comments are wanted.
       '--playlist-items', '0',
       '--ignore-config',
 
@@ -35,12 +37,14 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
     proc.stderr.on('data', (chunk) => {
       const text = chunk.toString()
 
+      // Guard against yt-dlp ignoring --skip-download and starting an actual media download.
       if (text.includes('Downloading 1 format(s)') || text.includes('[download] Destination:')) {
         proc.kill()
 
         return
       }
 
+      // Bail out immediately instead of letting yt-dlp stall without a JS runtime.
       if (text.includes('No supported JavaScript runtime could be found')) {
         proc.kill()
 

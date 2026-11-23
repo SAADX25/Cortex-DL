@@ -1,3 +1,4 @@
+// Log redaction, crash hooks, and diagnostics bundle export.
 import { app, dialog, shell, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -18,6 +19,7 @@ export function buildInfo(): { version: string; commit: string; dirty?: boolean;
 
 export function initializeDiagnostics(): void {
   log.transports.file.maxSize = 2 * 1024 * 1024
+  // Scrub URLs and auth secrets from every log entry before it hits disk.
   log.hooks.push(message => ({ ...message, data: message.data.map(value => redact(value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value))) }))
   log.info('[Startup]', { ...buildInfo(), os: `${os.platform()} ${os.release()}`, electron: process.versions.electron })
   const crash = (type: string, detail: unknown) => log.error('[Crash]', { timestamp: new Date().toISOString(), ...buildInfo(), type, detail })
@@ -37,6 +39,7 @@ export async function exportDiagnostics(win: BrowserWindow, health: unknown): Pr
   for (const file of fs.readdirSync(logFolder()).filter(name => /^main(?:\.old)?\.log$/.test(name))) {
     const handle = await fs.promises.open(path.join(logFolder(), file), 'r')
     try {
+      // Tail only the last 128 KB of each log file so exported bundles stay small.
       const stat = await handle.stat(); const size = Math.min(stat.size, 128 * 1024)
       const data = Buffer.alloc(size); await handle.read(data, 0, size, stat.size - size)
       logs.push(redact(data.toString('utf8')))

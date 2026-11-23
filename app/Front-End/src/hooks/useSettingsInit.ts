@@ -1,3 +1,4 @@
+// Hydrates persisted settings/credentials on mount and syncs updates back to Electron IPC and localStorage.
 import { useEffect } from 'react'
 import { useSettingsStore } from '../stores/useSettingsStore'
 
@@ -50,6 +51,7 @@ export function useSettingsInit(): void {
     window.cortexDl.setConcurrency(concurrentDownloads).catch(() => {})
   }, [concurrentDownloads])
 
+  // Debounce persistence so frequent download stats ticks don't hammer synchronous localStorage writes.
   useEffect(() => {
     const timer = setTimeout(() => localStorage.setItem('cortex-total-bytes', String(totalDownloadedBytes)), 1000)
     return () => clearTimeout(timer)
@@ -58,6 +60,7 @@ export function useSettingsInit(): void {
   useEffect(() => {
     (async () => {
       try {
+        // Load credentials from encrypted storage and scrub legacy plaintext localStorage entries.
         const [savedUser, savedPass] = await Promise.all([
           window.cortexDl.getSecureData('cortex-username'),
           window.cortexDl.getSecureData('cortex-password'),
@@ -70,6 +73,7 @@ export function useSettingsInit(): void {
     })()
 
   }, [setUsername, setPassword])
+  // Skip empty strings so initial state doesn't clobber stored credentials before hydration finishes.
   useEffect(() => { if (username !== '') window.cortexDl.saveSecureData('cortex-username', username) }, [username])
   useEffect(() => { if (password !== '') window.cortexDl.saveSecureData('cortex-password', password) }, [password])
 

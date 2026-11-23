@@ -1,3 +1,4 @@
+// Transient UI state: active tab, URL analysis progress, batch queue, modals, toasts, and player overlay.
 import { primaryAnalysis, type AnalysisStage } from '../lib/analysisSession'
 import { create } from 'zustand'
 import { type BatchItem } from '../components/AddDownloadTab'
@@ -81,6 +82,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
 
   url: '',
   setUrl: (url) => {
+    // Cancel any in-flight analysis whenever the URL changes so stale results cannot land later.
     if (get().url !== url) {
       primaryAnalysis.cancel()
       set({ url, analyzeResult: null, analyzing: false, analysisStage: 'details' })
@@ -102,6 +104,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
   closeModal: () => set((state) => ({ modalConfig: { ...state.modalConfig, isOpen: false } })),
 
   mediaPlayerFile: null,
+  // Keep floating mode only when updating the same file; switching files resets to docked.
   setMediaPlayerFile: (file) => set(state => ({ mediaPlayerFile: file, mediaPlayerFloating: !!file && file.filePath === state.mediaPlayerFile?.filePath && state.mediaPlayerFloating })),
   mediaPlayerFloating: false,
   setMediaPlayerFloating: (floating) => set({ mediaPlayerFloating: floating }),

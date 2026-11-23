@@ -1,3 +1,4 @@
+// Shared types and request validation for local speech-to-text and translation.
 export const SUBTITLE_LANGUAGES = {
   ar: 'Arabic', en: 'English', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian',
   pt: 'Portuguese', ru: 'Russian', tr: 'Turkish', ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
@@ -24,6 +25,7 @@ export function isSubtitleLanguage(value: unknown): value is SubtitleLanguage {
 }
 export function validateSubtitleRequest(value: unknown): asserts value is SubtitleRequest {
   const r = value as SubtitleRequest
+  // 32767 matches Windows extended path limit; reject NUL bytes before calling native binaries.
   if (!r || typeof r.source !== 'string' || !r.source.trim() || r.source.length > 32767 || r.source.includes('\0')
     || !(r.sourceLanguage === 'auto' || isSubtitleLanguage(r.sourceLanguage))
     || !(r.targetLanguage === 'original' || isSubtitleLanguage(r.targetLanguage))

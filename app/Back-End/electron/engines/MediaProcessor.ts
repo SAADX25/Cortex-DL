@@ -1,3 +1,4 @@
+// Tracks active ffprobe subprocesses so they can be cancelled together on shutdown.
 import { probeMediaFile } from '../services/mediaService'
 import { videoFrameRate } from '../../../Shared/frameRate'
 

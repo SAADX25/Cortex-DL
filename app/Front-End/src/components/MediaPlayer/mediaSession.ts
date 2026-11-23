@@ -1,4 +1,5 @@
-
+// Explicit teardown helpers for HTML media elements, canvases, Web Audio graphs, and rAF loops.
+// Strip src attributes and call load() to force Chromium to drop open range requests and Windows file handles.
 export function releaseMediaElement(element: HTMLMediaElement | null): void {
   if (!element) return
   element.pause()
@@ -15,6 +16,7 @@ export function clearMediaCanvas(canvas: HTMLCanvasElement | null): void {
   if (!canvas) return
   canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height)
 
+  // Zeroing dimensions releases the backing canvas buffer immediately rather than waiting for GC.
   canvas.width = 0
   canvas.height = 0
 }

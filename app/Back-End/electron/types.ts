@@ -1,3 +1,4 @@
+// Main-process download runtime types and re-exports from Shared/types.
 import { type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { type DownloadTask, type DownloadStatus, type DownloadEngine, type VideoFormat, type AudioFormat, type TargetFormat, type ThumbnailDataUrl, type HlsVariant, type YtdlpFormat, type AnalyzeResult, type JsRuntimeStatus, type AppHealthCheck } from '../../Shared/types'
 

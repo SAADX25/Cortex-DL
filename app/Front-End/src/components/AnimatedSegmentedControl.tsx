@@ -1,3 +1,4 @@
+// Pill-style segmented toggle with a Framer Motion shared-layout active highlight.
 import React from 'react'
 import { motion } from 'framer-motion'
 

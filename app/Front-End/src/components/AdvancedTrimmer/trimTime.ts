@@ -1,3 +1,4 @@
+// Timecode parsing/formatting and timeline zoom viewport + ruler tick math for the visual trimmer.
 export function clampSeconds(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min
   return Math.min(Math.max(value, min), max)
@@ -9,6 +10,7 @@ export function parseTimecode(value?: string | null): number | null {
   if (!/^\d+(?::\d{1,2}){0,2}(?:\.\d+)?$/.test(trimmed)) return null
   const parts = trimmed.split(':').map(Number)
   if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null
+  // Allow raw seconds (e.g. "90"), but enforce <60 on trailing fields in MM:SS / HH:MM:SS.
   if (parts.length > 1 && parts.slice(1).some((part) => part >= 60)) return null
   if (parts.length === 1) return parts[0]
   if (parts.length === 2) return parts[0] * 60 + parts[1]
@@ -82,6 +84,7 @@ const NICE_INTERVALS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600,
 export function computeRulerTicks(viewStart: number, viewEnd: number, maxMajorTicks = 7): RulerTick[] {
   const span = viewEnd - viewStart
   if (!Number.isFinite(span) || span <= 0) return []
+  // Snap spacing to clock-friendly intervals and use small epsilons to absorb float drift on tick boundaries.
   const rawStep = span / Math.max(2, maxMajorTicks)
   const majorStep = NICE_INTERVALS.find((step) => step >= rawStep) ?? Math.ceil(rawStep / 3600) * 3600
   const minorStep = majorStep >= 10 ? majorStep / 5 : majorStep >= 2 ? majorStep / 2 : majorStep

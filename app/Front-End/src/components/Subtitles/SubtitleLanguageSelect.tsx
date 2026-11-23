@@ -1,6 +1,8 @@
+// Portal-based searchable language combobox that flips upward near viewport bottom
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Search } from 'lucide-react'
+import { translations } from '../../translations'
 import './SubtitleLanguageSelect.css'
 
 type Option = { value: string; label: string; keywords?: string }
@@ -9,7 +11,7 @@ type Position = { left: number; width: number; maxHeight: number; top?: number; 
 export default function SubtitleLanguageSelect({ label, value, options, onChange, disabled, lang }: {
   label: string; value: string; options: Option[]; onChange: (value: string) => void; disabled: boolean; lang: 'en' | 'ar'
 }) {
-  const id = useId(), ar = lang === 'ar'
+  const id = useId(), ar = lang === 'ar', copy = translations[lang].subtitles.select
   const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [active, setActive] = useState(0)
   const [position, setPosition] = useState<Position | null>(null)
   const wrapper = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null), search = useRef<HTMLInputElement>(null)
@@ -63,7 +65,7 @@ export default function SubtitleLanguageSelect({ label, value, options, onChange
       <span>{options.find(option => option.value === value)?.label ?? value}</span><ChevronDown size={16} />
     </button>
     {open && position && createPortal(<div className="ss-language-menu" ref={menu} dir={ar ? 'rtl' : 'ltr'} style={position}>
-      <div className="ss-language-search"><Search size={15} /><input ref={search} role="combobox" aria-label={ar ? 'البحث عن لغة' : 'Search languages'} placeholder={ar ? 'ابحث عن لغة…' : 'Search languages…'}
+      <div className="ss-language-search"><Search size={15} /><input ref={search} role="combobox" aria-label={copy.searchAria} placeholder={copy.searchPlaceholder}
         aria-expanded="true" aria-autocomplete="list" aria-controls={`${id}-list`} aria-activedescendant={highlighted >= 0 ? `${id}-option-${filtered[highlighted].value}` : undefined}
         value={query} onChange={event => { setQuery(event.target.value); setActive(0) }}
         onKeyDown={event => {
@@ -76,7 +78,7 @@ export default function SubtitleLanguageSelect({ label, value, options, onChange
           aria-selected={value === option.value} data-highlighted={highlighted === index} data-value={option.value} className="ss-language-option" onClick={() => select(option)}>
           <span>{option.label}</span>{value === option.value && <Check size={15} />}
         </button>)}
-        {!filtered.length && <p className="ss-language-empty">{ar ? 'لا توجد لغة مطابقة' : 'No matching languages'}</p>}
+        {!filtered.length && <p className="ss-language-empty">{copy.noMatches}</p>}
       </div>
     </div>, document.body)}
   </div>

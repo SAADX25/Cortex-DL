@@ -1,3 +1,4 @@
+// Scrapes Threads SSR payloads and DASH manifests to analyze posts, carousels, and preview/download streams.
 import log from 'electron-log'
 import { type AnalyzeResult, type TargetFormat, type YtdlpFormat } from '../types'
 import { isAudioFormat } from './mediaService'
@@ -121,6 +122,7 @@ function readXmlAttr(attrs: string, name: string): string | undefined {
   return match ? decodeXmlEntities(match[1]) : undefined
 }
 
+// Use the shorter edge so vertical 1080x1920 clips report as 1080p rather than 1920p.
 function normalizeQualityHeight(width?: number, height?: number): number | undefined {
   if (width && width > 0 && height && height > 0) return Math.min(width, height)
   if (height && height > 0) return height
@@ -128,6 +130,7 @@ function normalizeQualityHeight(width?: number, height?: number): number | undef
   return undefined
 }
 
+// Meta CDN URLs embed base64-encoded JSON in ?efg= with encoding resolution and duration.
 function parseEfgMetadata(url: string): { height?: number; duration?: number } {
   try {
     const efg = new URL(url).searchParams.get('efg')
@@ -146,6 +149,7 @@ function parseEfgMetadata(url: string): { height?: number; duration?: number } {
   }
 }
 
+// Threads embeds inline DASH MPD XML with single-file BaseURL streams and custom FBContentLength/FBQualityLabel attrs.
 export function parseDashManifest(mpd: string): {
   duration?: number
   videos: ThreadsStreamFormat[]
@@ -314,6 +318,7 @@ function buildResolvedMedia(
 
       const efg = parseEfgMetadata(streamUrl)
       if (efg.duration && !duration) duration = efg.duration
+      // Progressive MP4s often omit explicit dimensions and cap at 720p when higher DASH streams exist.
       const hasExplicitDims = typeof version.width === 'number' && version.width > 0 && typeof version.height === 'number' && version.height > 0
       const width = hasExplicitDims ? version.width : (!videoFormats.length ? origW : undefined)
       const height = hasExplicitDims ? version.height : (!videoFormats.length ? origH : undefined)
@@ -401,6 +406,7 @@ function buildResolvedMedia(
   }
 }
 
+// SSR blobs often contain multiple partial copies of the same post code; score candidates to pick the fullest node.
 function scorePostCandidate(node: AnyRecord): number {
   let score = 0
   if ('text_post_app_info' in node && node.text_post_app_info) score += 20
@@ -502,6 +508,7 @@ function resolvePostNode(
     }
   }
 
+  // Fall through direct video -> linked inline media -> audio -> reposted/quoted posts (bounded depth prevents cycles).
   if (hasVideoPayload(post)) {
     return { kind: 'media', media: buildResolvedMedia(post, rootPost, code, canonicalUrl, fallbackOg) }
   }
@@ -665,6 +672,7 @@ function toAnalyzeFormats(media: ThreadsResolvedMedia): YtdlpFormat[] {
   return formats.sort((a, b) => (b.height ?? 0) - (a.height ?? 0) || (b.fps ?? 0) - (a.fps ?? 0) || (b.tbr ?? 0) - (a.tbr ?? 0))
 }
 
+// Strip signed CDN URLs from cached analysis entries; fresh URLs are re-fetched when a download starts.
 const threadsAnalysisCoordinator = new AnalysisCoordinator<AnalyzeResult>(
   3,
   ANALYSIS_CACHE_TTL_MS,
@@ -766,6 +774,7 @@ export function selectThreadsDownloadPlan(
     const dashFps = bestDashVideo.fps ?? 0
     const progFps = bestProgForHeight?.fps ?? 0
 
+    // Prefer DASH video+audio muxing over progressive MP4 whenever it yields higher resolution, FPS, or bitrate.
     const preferDash =
       !bestProgForHeight
       || dashH > progH

@@ -1,3 +1,4 @@
+// Main IPC handler registry for downloads, URL analysis, media probing, credentials, and app health
 import { app, dialog, ipcMain, shell, safeStorage } from 'electron'
 import { existsSync, promises as fsPromises } from 'node:fs'
 import path from 'node:path'
@@ -37,6 +38,7 @@ export interface IpcDependencies {
   mediaReadyPromise?: Promise<unknown>
 }
 
+// Probe write permission via an exclusive temp file instead of fs.access (unreliable on Windows ACLs)
 async function isDirectoryWritable(directory: string): Promise<boolean> {
   const testPath = path.join(directory, `.cortex-dl-write-test-${process.pid}-${Date.now()}`)
   let handle: Awaited<ReturnType<typeof fsPromises.open>> | null = null
@@ -274,7 +276,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
           const err = await shell.openPath(dir)
           if (err) throw new Error(err)
         } else {
-          throw new Error('المجلد غير موجود')
+          throw new Error('Folder does not exist')
         }
       }
     } catch (err) {

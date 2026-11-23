@@ -1,3 +1,4 @@
+// Lazy-loaded media library thumbnail that fetches artwork info only when scrolled near the viewport.
 import { memo, useEffect, useRef, useState } from 'react'
 import { Film, Music2 } from 'lucide-react'
 import type { LibraryMediaItem } from '../../../Shared/mediaLibrary'
@@ -25,6 +26,7 @@ export default memo(function LibraryThumbnail({ item, active }: { item: LibraryM
       } catch { completed = false }
       finally { inFlight = false }
     }
+    // Defer artwork IPC until near the viewport, and retry once engine/ffmpeg setup finishes.
     const observer = new IntersectionObserver(entries => {
       visible = entries.some(entry => entry.isIntersecting)
       if (visible) void load()
@@ -33,6 +35,7 @@ export default memo(function LibraryThumbnail({ item, active }: { item: LibraryM
     const unsubscribe = window.cortexDl.onSetupProgress?.(state => { if (state.status === 'ready') void load(true) })
     return () => { disposed = true; observer.disconnect(); unsubscribe?.() }
   }, [id, filePath, availability, size, artwork, artworkEmbedded, active, refreshVersion])
+  // Ignore stale thumbnail state if the item was relocated or its image failed to decode.
   const url = item.availability === 'available' && image?.path === item.filePath && image.url !== failed ? image.url : null
   return <div ref={root} className={`library-thumbnail ${url ? 'has-image' : ''} ${item.artwork || image?.embedded ? 'has-cover' : ''}`} aria-hidden="true">
     {url ? <img src={url} alt="" decoding="async" onError={() => setFailed(url)} /> : <div className="library-media-icon">{item.kind === 'video' ? <Film size={29} strokeWidth={1.5} /> : <Music2 size={29} strokeWidth={1.5} />}</div>}

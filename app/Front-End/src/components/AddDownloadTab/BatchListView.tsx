@@ -1,3 +1,4 @@
+// Editable queue of pending batch URLs with per-item format overrides and submission status.
 import React from 'react'
 import CustomDropdown from '../CustomDropdown'
 import { VIDEO_FORMATS, AUDIO_FORMATS } from '../../constants/formats'
@@ -21,6 +22,7 @@ const BatchListView: React.FC<BatchListViewProps> = ({
       {batchItems.map((item, idx) => {
         const isItemError = item.status === 'error'
         const isItemProcessing = item.status === 'processing'
+        // Lock format changes while submitting or after a batch item has already been accepted.
         const isItemLocked = isItemProcessing || item.status === 'success'
 
         return (

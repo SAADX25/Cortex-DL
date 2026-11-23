@@ -1,3 +1,4 @@
+// Normalizes download phase, percentage, and ETA consistently across main and renderer.
 import type { DownloadPhase, DownloadTask } from './types'
 export type ProgressView = { phase: DownloadPhase; phaseProgress: number | null; overallProgress: number | null; isIndeterminate: boolean; percentLabel: string }
 const finitePercent = (n: number | null | undefined) => n != null && Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null
@@ -5,6 +6,7 @@ const finitePercent = (n: number | null | undefined) => n != null && Number.isFi
 export function updateTaskProgress(task: DownloadTask): void {
   const active = ['downloading', 'merging', 'converting'].includes(task.status)
   let phase: DownloadPhase = active ? task.phase ?? task.status : task.status
+  // Clear stale terminal/paused phases right after resume before the engine reports progress.
   if (active && ['paused', 'queued', 'error', 'canceled', 'completed', 'pausing'].includes(phase)) phase = 'preparing'
   if (task.status === 'merging' && !['validating', 'finalizing'].includes(phase)) phase = 'merging'
   if (task.status === 'converting' && !['trimming', 'validating', 'finalizing'].includes(phase)) phase = 'converting'
@@ -13,6 +15,7 @@ export function updateTaskProgress(task: DownloadTask): void {
   task.phase = phase
   task.phaseProgress = task.status === 'completed' ? 100 : ['finalizing', 'preparing'].includes(phase) ? null : processing ? finitePercent(task.convertingPercent) : download
 
+  // Cap in-flight progress at 99% so the bar only reaches 100% after finalization succeeds.
   task.overallProgress = task.status === 'completed' ? 100 : task.phaseProgress === null ? null : Math.min(99, task.phaseProgress)
   task.etaSeconds = phase === 'downloading' && task.totalBytes && task.speedBytesPerSec && task.speedBytesPerSec > 0
     ? Math.max(0, (task.totalBytes - task.downloadedBytes) / task.speedBytesPerSec) : null

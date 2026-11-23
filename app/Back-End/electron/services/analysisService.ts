@@ -1,3 +1,4 @@
+// Deduplicated, concurrency-limited URL analysis runner with TTL caching and bounded yt-dlp/HTTP helpers.
 import { normalizeAnalysisUrl } from '../../../Shared/analysisUrl'
 import log from 'electron-log'
 import { engineExecutionFailed } from '../engines/engineManager'
@@ -45,6 +46,7 @@ export class AnalysisCoordinator<T> {
     const key = `${normalized}\0${scope}`
     const cached = this.cache.get(key)
     if (cached && this.now() - cached.at < this.ttl) {
+      // Refresh LRU position and clone so callers can't mutate cached results.
       this.cache.delete(key); this.cache.set(key, cached)
       return Promise.resolve(structuredClone(cached.value))
     }
@@ -69,6 +71,7 @@ export class AnalysisCoordinator<T> {
       })().finally(() => { if (this.jobs.get(key) === owned) this.jobs.delete(key) })
       this.jobs.set(key, job)
     }
+    // Coalesce concurrent requests for the same URL and only abort the job once every caller cancels.
     const owned = job
     owned.users++
     return new Promise<T>((resolve, reject) => {
@@ -118,6 +121,7 @@ export function analysisTiming(name: string, start: number): void {
   if (process.env.CORTEX_ANALYSIS_DEBUG === '1') log.info(`[analysis timing] ${name}=${Date.now() - start}ms`)
 }
 
+// Runs yt-dlp with bounded stdout/stderr and full process-tree teardown on abort or timeout.
 export function extractAnalysis(binary: string, args: string[], signal: AbortSignal,
   maxBytes = 32 * 1024 * 1024, timeoutMs = 90000, diagnostics?: (stderr: string) => void): Promise<string> {
   signal.throwIfAborted()
@@ -158,6 +162,7 @@ export function extractAnalysis(binary: string, args: string[], signal: AbortSig
   })
 }
 
+// Fast-reject URLs without a known media extension before spending a network HEAD request.
 export async function isDirectMedia(url: string, signal: AbortSignal): Promise<boolean> {
   if (!/\.(?:mp4|webm|mkv|mov|mp3|m4a|wav|flac|ogg|opus)(?:[?#]|$)/i.test(url)) return false
   const controller = new AbortController()

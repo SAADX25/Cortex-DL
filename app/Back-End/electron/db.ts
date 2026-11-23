@@ -1,3 +1,4 @@
+// SQLite initialization and prepared statements for persisted download tasks and settings.
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'node:path'
@@ -8,6 +9,7 @@ const dbPath = path.join(userDataPath, 'tasks.sqlite')
 
 export const db = new Database(dbPath)
 
+// WAL + NORMAL sync keeps frequent progress writes fast without blocking reads; incremental vacuum curbs file growth.
 db.pragma('journal_mode = WAL')
 
 db.pragma('auto_vacuum = INCREMENTAL')
@@ -33,6 +35,7 @@ db.exec(`
   );
 `)
 
+// Purge legacy cookie-file setting removed from the app.
 db.prepare('DELETE FROM settings WHERE key = ?').run('cookieFilePath')
 
 export const taskDb = {

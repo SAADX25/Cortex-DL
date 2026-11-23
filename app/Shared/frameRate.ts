@@ -14,6 +14,7 @@ export function videoFrameRate(streams: Array<{
   r_frame_rate?: string
   disposition?: { attached_pic?: number }
 }>): number | null {
+  // Skip embedded cover art and prefer avg_frame_rate over r_frame_rate (which can report timebase on VFR).
   const video = streams.find(stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic)
   return video ? parseFrameRate(video.avg_frame_rate) ?? parseFrameRate(video.r_frame_rate) : null
 }

@@ -1,3 +1,4 @@
+// IPC handlers for listing, merging, and canceling sidecar subtitle mux jobs on completed downloads.
 import { dialog, ipcMain } from 'electron'
 import path from 'node:path'
 import { type IpcDependencies } from '../ipc/handlers'
@@ -22,6 +23,7 @@ export function registerDownloadSubtitleIpc({ getWin, getDownloads }: IpcDepende
     if (!win) return null
     const controller = new AbortController(), job = { controller, done: Promise.resolve() as Promise<unknown>, processing: false }
     jobs.set(id, job)
+    // Abort in-flight merges if the renderer reloads or closes mid-operation.
     const onDestroyed = () => controller.abort()
     event.sender.once('destroyed', onDestroyed)
     job.done = (async () => {
@@ -41,5 +43,6 @@ export function registerDownloadSubtitleIpc({ getWin, getDownloads }: IpcDepende
 export async function stopDownloadSubtitleMerges(): Promise<void> {
   stopping = true
   for (const job of jobs.values()) job.controller.abort()
+  // Only await jobs already running FFmpeg so shutdown never hangs on an open save dialog.
   await Promise.allSettled([...jobs.values()].filter(job => job.processing).map(job => job.done))
 }
