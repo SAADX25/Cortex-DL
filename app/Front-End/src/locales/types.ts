@@ -173,6 +173,58 @@ export interface Translations {
     close: string
   }
 
+  updater: {
+    dialogAria: string
+    availableTitle: string
+    availableSubtitle: string
+    downloadingTitle: string
+    downloadingSubtitle: string
+    downloadedTitle: string
+    downloadedSubtitle: string
+    errorTitle: string
+    whatsNew: string
+    versionTransition: string
+    installerSize: string
+    releaseDateLabel: string
+    preservedNote: string
+    activeDownloadsNote: string
+    backgroundHint: string
+    downloadedProgress: string
+    preparingDownload: string
+    speedLabel: string
+    remainingLabel: string
+    calculating: string
+    secondsShort: string
+    minutesSecondsShort: string
+    updateNow: string
+    later: string
+    hideToBackground: string
+    cancelDownload: string
+    restartAndInstall: string
+    retry: string
+    close: string
+    viewUpdate: string
+    viewProgress: string
+    upToDate: string
+    availableInline: string
+    downloadingInline: string
+    downloadedInline: string
+    sidebarAvailableTitle: string
+    sidebarAvailableDetail: string
+    sidebarDownloadingTitle: string
+    sidebarDownloadingDetail: string
+    sidebarReadyTitle: string
+    sidebarReadyDetail: string
+    errors: {
+      offline: string
+      'not-published': string
+      integrity: string
+      download: string
+      unsupported: string
+      unknown: string
+    }
+  }
+
   sidebar: {
     addAria: string
     downloadsAria: string

@@ -1,6 +1,7 @@
 // Context-isolated preload bridge exposing the renderer-safe window.cortexDl API.
 import { ipcRenderer, contextBridge, webUtils } from 'electron'
 import { type AppHealthCheck, type DownloadTask, type AnalyzeResult, type JsRuntimeStatus, type StartInput, UPDATE_CHANNEL } from './types'
+import { APP_UPDATE_CHANNEL, type AppUpdateState } from '../../Shared/appUpdate'
 import { customTitleBar } from './windowChrome'
 
 // Strip Electron's "Error invoking remote method '...':" wrapper so UI toasts stay readable.
@@ -150,19 +151,28 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getHealthCheck(): Promise<AppHealthCheck> {
     return ipcRenderer.invoke('cortexdl:health-check')
   },
-  checkForUpdates(): Promise<void> {
-    return ipcRenderer.invoke('cortexdl:check-for-updates')
+  getUpdateState(): Promise<AppUpdateState> {
+    return invokeRendererSafe<AppUpdateState>('cortexdl:update:state')
   },
-  restartApp(): Promise<void> {
-    return ipcRenderer.invoke('cortexdl:restart-app')
+  checkForUpdates(): Promise<AppUpdateState> {
+    return invokeRendererSafe<AppUpdateState>('cortexdl:check-for-updates')
+  },
+  downloadUpdate(): Promise<AppUpdateState> {
+    return invokeRendererSafe<AppUpdateState>('cortexdl:update:download')
+  },
+  cancelUpdateDownload(): Promise<AppUpdateState> {
+    return invokeRendererSafe<AppUpdateState>('cortexdl:update:cancel')
+  },
+  restartApp(): Promise<boolean> {
+    return invokeRendererSafe<boolean>('cortexdl:restart-app')
   },
   uninstallApp(): Promise<void> {
     return ipcRenderer.invoke('cortexdl:uninstall-app')
   },
-  onUpdateStatus(callback: (status: any) => void): () => void {
-    const listener = (_event: unknown, status: any) => callback(status)
-    ipcRenderer.on('update-status', listener)
-    return () => ipcRenderer.off('update-status', listener)
+  onUpdateStatus(callback: (status: AppUpdateState) => void): () => void {
+    const listener = (_event: unknown, status: AppUpdateState) => callback(status)
+    ipcRenderer.on(APP_UPDATE_CHANNEL, listener)
+    return () => ipcRenderer.off(APP_UPDATE_CHANNEL, listener)
   },
   onDownloadUpdated(callback: (task: DownloadTask) => void): () => void {
     const listener = (_event: unknown, task: DownloadTask) => callback(task)

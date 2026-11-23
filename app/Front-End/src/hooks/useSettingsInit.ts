@@ -10,7 +10,7 @@ export function useSettingsInit(): void {
   const password = useSettingsStore((s) => s.password)
   const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
   const setEngineVersion = useSettingsStore((s) => s.setEngineVersion)
-  const setUpdateStatus = useSettingsStore((s) => s.setUpdateStatus)
+  const applyUpdateState = useSettingsStore((s) => s.applyUpdateState)
   const setUsername = useSettingsStore((s) => s.setUsername)
   const setPassword = useSettingsStore((s) => s.setPassword)
   const setTotalDownloadedBytes = useSettingsStore((s) => s.setTotalDownloadedBytes)
@@ -36,13 +36,24 @@ export function useSettingsInit(): void {
   }, [lang])
 
   useEffect(() => {
-    return window.cortexDl.onUpdateStatus((status) => {
-      setUpdateStatus(status)
-      if (status.status === 'not-available' || status.status === 'error') {
-        setTimeout(() => setUpdateStatus(null), 5000)
-      }
+    let disposed = false
+    let receivedEvent = false
+    const unsubscribe = window.cortexDl.onUpdateStatus((status) => {
+      receivedEvent = true
+      applyUpdateState(status)
     })
-  }, [setUpdateStatus])
+    if (window.cortexDl.getUpdateState) {
+      void window.cortexDl.getUpdateState().then((initial) => {
+        if (!disposed && !receivedEvent && initial) {
+          applyUpdateState(initial)
+        }
+      }).catch(() => {})
+    }
+    return () => {
+      disposed = true
+      unsubscribe()
+    }
+  }, [applyUpdateState])
 
   useEffect(() => { localStorage.setItem('cortex-notifications', 'true') }, [])
 

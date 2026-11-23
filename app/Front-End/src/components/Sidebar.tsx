@@ -1,10 +1,10 @@
 // Primary navigation sidebar with live download badge and external links
 import React from 'react'
-import { Plus, DownloadCloud, Settings, Github, Captions, Library, Coffee, ArrowUpRight } from 'lucide-react'
+import { Plus, DownloadCloud, Settings, Github, Captions, Library, Coffee, ArrowUpRight, Sparkles, ArrowDownToLine, CheckCircle2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { formatMessage, translations } from '../translations'
 import { useUIStore, type ActiveTab } from '../stores/useUIStore'
-import { useLang } from '../stores/useSettingsStore'
+import { useLang, useSettingsStore } from '../stores/useSettingsStore'
 import { useActiveDownloadCount, useTotalDownloadCount } from '../stores/downloadStore'
 
 const Sidebar: React.FC = () => {
@@ -18,6 +18,15 @@ const Sidebar: React.FC = () => {
   const activeCount = useActiveDownloadCount()
   const totalCount = useTotalDownloadCount()
   const badgeCount = activeCount > 0 ? activeCount : totalCount
+
+  const updateState = useSettingsStore((s) => s.updateState)
+  const openUpdateModal = useSettingsStore((s) => s.openUpdateModal)
+  const showUpdatePill =
+    updateState.phase === 'available' ||
+    updateState.phase === 'downloading' ||
+    updateState.phase === 'downloaded'
+  const updatePercent = Math.min(100, Math.max(0, Math.round(updateState.progress?.percent ?? 0)))
+  const u = t.updater
 
   const navItems: Array<{
     id: ActiveTab
@@ -110,6 +119,44 @@ const Sidebar: React.FC = () => {
       </nav>
 
       <div className="sidebar-links">
+        {showUpdatePill && (
+          <button
+            type="button"
+            className={`sidebar-update-pill phase-${updateState.phase}`}
+            onClick={openUpdateModal}
+          >
+            <span className="sidebar-update-icon" aria-hidden="true">
+              {updateState.phase === 'downloading' ? (
+                <ArrowDownToLine size={17} />
+              ) : updateState.phase === 'downloaded' ? (
+                <CheckCircle2 size={17} />
+              ) : (
+                <Sparkles size={17} />
+              )}
+            </span>
+            <span className="sidebar-link-copy">
+              <span className="sidebar-link-title">
+                {updateState.phase === 'downloading'
+                  ? formatMessage(u.sidebarDownloadingTitle, { percent: updatePercent })
+                  : updateState.phase === 'downloaded'
+                    ? u.sidebarReadyTitle
+                    : formatMessage(u.sidebarAvailableTitle, { version: updateState.latestVersion || '' })}
+              </span>
+              <span className="sidebar-link-detail">
+                {updateState.phase === 'downloading'
+                  ? u.sidebarDownloadingDetail
+                  : updateState.phase === 'downloaded'
+                    ? formatMessage(u.sidebarReadyDetail, { version: updateState.latestVersion || '' })
+                    : u.sidebarAvailableDetail}
+              </span>
+            </span>
+            {updateState.phase === 'downloading' && (
+              <span className="sidebar-update-progress" aria-hidden="true">
+                <span className="sidebar-update-progress-fill" style={{ width: `${updatePercent}%` }} />
+              </span>
+            )}
+          </button>
+        )}
         <a
           href="https://ko-fi.com/saadx25"
           target="_blank"

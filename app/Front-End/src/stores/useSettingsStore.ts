@@ -2,6 +2,9 @@
 import { create } from 'zustand'
 import { translations, type Language } from '../translations'
 import { useUIStore } from './useUIStore'
+import { initialAppUpdateState, type AppUpdateState } from '../../../Shared/appUpdate'
+
+const currentAppVersion = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0'
 
 interface SettingsStoreState {
   lang: Language
@@ -19,8 +22,12 @@ interface SettingsStoreState {
   totalDownloadedBytes: number
   setTotalDownloadedBytes: (updater: number | ((prev: number) => number)) => void
 
-  updateStatus: { status: string; percent?: number; error?: string } | null
-  setUpdateStatus: (v: { status: string; percent?: number; error?: string } | null) => void
+  updateState: AppUpdateState
+  updateModalOpen: boolean
+  updateDismissedVersion: string | null
+  applyUpdateState: (next: AppUpdateState) => void
+  openUpdateModal: () => void
+  closeUpdateModal: () => void
 
   engineVersion: string
   setEngineVersion: (v: string) => void
@@ -41,6 +48,8 @@ interface SettingsStoreState {
 
   refreshHealth: () => Promise<void>
   onCheckForUpdates: () => Promise<void>
+  onDownloadUpdate: () => Promise<void>
+  onCancelUpdateDownload: () => Promise<void>
   onUpdateEngine: () => Promise<void>
   onResetStats: () => void
   onRestartAndInstall: () => Promise<void>
@@ -73,8 +82,41 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       totalDownloadedBytes: typeof updater === 'function' ? updater(state.totalDownloadedBytes) : updater,
     })),
 
-  updateStatus: null,
-  setUpdateStatus: (v) => set({ updateStatus: v }),
+  updateState: initialAppUpdateState(currentAppVersion),
+  updateModalOpen: false,
+  updateDismissedVersion: null,
+  applyUpdateState: (next) =>
+    set((state) => {
+      const prev = state.updateState
+      let updateModalOpen = state.updateModalOpen
+      let updateDismissedVersion = state.updateDismissedVersion
+
+      if (next.phase === 'available') {
+        const isFreshVersion = !!next.latestVersion && next.latestVersion !== state.updateDismissedVersion
+        const justFinishedManualCheck = next.manualCheck && prev.phase === 'checking'
+        if (isFreshVersion || justFinishedManualCheck) {
+          updateModalOpen = true
+          if (justFinishedManualCheck) updateDismissedVersion = null
+        }
+      } else if (next.phase === 'downloaded') {
+        if (prev.phase !== 'downloaded') {
+          updateModalOpen = true
+        }
+      } else if (next.phase === 'up-to-date' || next.phase === 'idle') {
+        updateModalOpen = false
+      }
+
+      return { updateState: next, updateModalOpen, updateDismissedVersion }
+    }),
+  openUpdateModal: () => set({ updateModalOpen: true }),
+  closeUpdateModal: () =>
+    set((state) => ({
+      updateModalOpen: false,
+      updateDismissedVersion:
+        state.updateState.phase === 'available' && state.updateState.latestVersion
+          ? state.updateState.latestVersion
+          : state.updateDismissedVersion,
+    })),
 
   engineVersion: '...',
   setEngineVersion: (v) => set({ engineVersion: v }),
@@ -110,12 +152,61 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   },
 
   onCheckForUpdates: async () => {
-    set({ updateStatus: { status: 'checking' } })
+    const current = get().updateState
+    if (current.phase === 'downloading' || current.phase === 'downloaded') {
+      set({ updateModalOpen: true })
+      return
+    }
+    set({
+      updateState: {
+        ...current,
+        phase: 'checking',
+        errorCode: null,
+        errorDetail: null,
+        manualCheck: true,
+      },
+    })
     try {
-      await window.cortexDl.checkForUpdates()
+      const next = await window.cortexDl.checkForUpdates()
+      if (next) get().applyUpdateState(next)
     } catch (err) {
       console.error(err)
-      set({ updateStatus: { status: 'error' } })
+      set((state) => ({
+        updateState: {
+          ...state.updateState,
+          phase: 'error',
+          errorCode: 'unknown',
+          errorDetail: err instanceof Error ? err.message : null,
+          manualCheck: true,
+        },
+      }))
+    }
+  },
+
+  onDownloadUpdate: async () => {
+    set({ updateModalOpen: true })
+    try {
+      const next = await window.cortexDl.downloadUpdate()
+      if (next) get().applyUpdateState(next)
+    } catch (err) {
+      console.error(err)
+      set((state) => ({
+        updateState: {
+          ...state.updateState,
+          phase: 'error',
+          errorCode: 'download',
+          errorDetail: err instanceof Error ? err.message : null,
+        },
+      }))
+    }
+  },
+
+  onCancelUpdateDownload: async () => {
+    try {
+      const next = await window.cortexDl.cancelUpdateDownload()
+      if (next) get().applyUpdateState(next)
+    } catch (err) {
+      console.error(err)
     }
   },
 

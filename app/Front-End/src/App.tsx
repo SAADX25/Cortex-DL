@@ -3,6 +3,7 @@ import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import './App.css'
 import ConfirmModal from './components/ConfirmModal'
+import UpdateModal from './components/UpdateModal'
 import MediaPlayerModal from './components/MediaPlayer/MediaPlayerModal'
 import DownloadList from './components/DownloadList'
 import Sidebar from './components/Sidebar'
@@ -124,6 +125,8 @@ function App() {
           <SubtitleStudio />
         </div>
       </main>
+
+      <UpdateModal />
 
       <ConfirmModal
         isOpen={modalConfig.isOpen}

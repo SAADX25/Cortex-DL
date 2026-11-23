@@ -37,6 +37,7 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
     if (channel.endsWith('open-file') && !/\.(?:mp4|mkv|webm|avi|mov|ogv|m4v|gif|mp3|m4a|aac|opus|flac|wav|ogg|wma|srt|vtt|txt)$/i.test(first)) throw new Error('Only media and text files can be opened')
   }
   if (channel === 'cortexdl:set-concurrency' && (!Number.isInteger(first) || Number(first) < 1 || Number(first) > 20)) throw new Error('Invalid concurrency')
+  if (['cortexdl:update:state', 'cortexdl:update:download', 'cortexdl:update:cancel', 'cortexdl:check-for-updates', 'cortexdl:restart-app'].includes(channel) && args.length > 0) throw new Error('Invalid update operation')
   if (/^cortexdl:downloads:(pause|resume|cancel|delete)$/.test(channel) && (typeof first !== 'string' || !/^[\w-]{1,128}$/.test(first))) throw new Error('Invalid task ID')
   if (channel === 'cortexdl:downloads:delete' && typeof args[1] !== 'boolean') throw new Error('Invalid delete flag')
   if (['cortexdl:secure-save', 'cortexdl:secure-get'].includes(channel) && args.some(arg => typeof arg !== 'string' || arg.length > 65536)) throw new Error('Invalid secure data')

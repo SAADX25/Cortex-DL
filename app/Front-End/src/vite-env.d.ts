@@ -10,6 +10,7 @@ import type {
   AppHealthCheck as SharedAppHealthCheck,
   JsRuntimeStatus as SharedJsRuntimeStatus,
 } from '../../Shared/types'
+import type { AppUpdateState as SharedAppUpdateState } from '../../Shared/appUpdate'
 
 declare global {
   const __APP_VERSION__: string
@@ -73,11 +74,7 @@ declare global {
     [key: string]: unknown
   }
 
-  interface UpdateStatusData {
-    status: 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
-    percent?: number
-    error?: string
-  }
+  type UpdateStatusData = SharedAppUpdateState
 
   type DownloadCommentsResult =
     | boolean
@@ -179,8 +176,11 @@ declare global {
       getBuildInfo: () => Promise<{ version: string; commit: string; safeMode: boolean }>
       getHealthCheck: () => Promise<AppHealthCheck>
 
-      checkForUpdates: () => Promise<void>
-      restartApp: () => Promise<void>
+      getUpdateState: () => Promise<UpdateStatusData>
+      checkForUpdates: () => Promise<UpdateStatusData>
+      downloadUpdate: () => Promise<UpdateStatusData>
+      cancelUpdateDownload: () => Promise<UpdateStatusData>
+      restartApp: () => Promise<boolean>
       uninstallApp: () => Promise<void>
 
       getMediaPort: () => Promise<number>

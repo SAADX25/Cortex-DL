@@ -21,11 +21,12 @@ import { ensureEnginesReady, engineExecutionFailed, engineHealth } from '../engi
 import { buildInfo } from '../diagnostics'
 import { registerDownloadSubtitleIpc } from '../subtitles/downloadMergeIpc'
 import { registerMediaLibraryIpc } from './mediaLibraryIpc'
+import { type AppUpdateController } from '../services/updateService'
 
 export interface IpcDependencies {
   getWin: () => Electron.BrowserWindow | null
   getDownloads: () => DownloadManager | null
-  getAutoUpdater: () => typeof import('electron-updater').autoUpdater | null
+  getUpdateService: () => AppUpdateController
   getMediaPort: () => number
 
   getMediaToken: () => string
@@ -103,7 +104,7 @@ function validateDownloadInput(input: StartInput): void {
 export function registerIpcHandlers(deps: IpcDependencies) {
   registerDownloadSubtitleIpc(deps)
   registerMediaLibraryIpc(deps.getWin)
-  const { getWin, getDownloads, getAutoUpdater, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
+  const { getWin, getDownloads, getUpdateService, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
 
   const waitForEngines = async () => {
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -126,14 +127,24 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     }
   })
 
+  ipcMain.handle('cortexdl:update:state', async () => {
+    return getUpdateService().getState()
+  })
+
   ipcMain.handle('cortexdl:check-for-updates', async () => {
-    const autoUpdater = getAutoUpdater()
-    autoUpdater?.checkForUpdates()
+    return await getUpdateService().checkForUpdates(true)
+  })
+
+  ipcMain.handle('cortexdl:update:download', async () => {
+    return await getUpdateService().downloadUpdate()
+  })
+
+  ipcMain.handle('cortexdl:update:cancel', async () => {
+    return await getUpdateService().cancelDownload()
   })
 
   ipcMain.handle('cortexdl:restart-app', async () => {
-    const autoUpdater = getAutoUpdater()
-    autoUpdater?.quitAndInstall()
+    return getUpdateService().quitAndInstall()
   })
 
   ipcMain.handle('cortexdl:uninstall-app', () => {

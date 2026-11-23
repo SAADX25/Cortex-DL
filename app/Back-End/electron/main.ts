@@ -22,6 +22,7 @@ import { spawn } from 'node:child_process'
 import { getBinaryPath } from './paths'
 import { verificationMetrics, engineReceipts, onEngineFailure, ensureEnginesReady, engineExecutionFailed, engineHealth } from './engines/engineManager'
 import { MediaRequestRegistry, parseMediaRange } from './services/mediaService'
+import { createElectronUpdateService, type AppUpdateController } from './services/updateService'
 import { installFloatingPlayerWindow } from './floatingPlayer'
 import { mainWindowChrome } from './windowChrome'
 
@@ -37,7 +38,7 @@ export let downloads: DownloadManager | null = null
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-let autoUpdater: typeof import('electron-updater').autoUpdater | null = null
+let updateService: AppUpdateController | null = null
 
 let serviceReadyResolve: () => void
 
@@ -45,85 +46,31 @@ const serviceReadyPromise = new Promise<void>(resolve => {
   serviceReadyResolve = resolve
 })
 
+function ensureUpdateService(): AppUpdateController {
+  if (!updateService) {
+    updateService = createElectronUpdateService({
+      currentVersion: app.getVersion(),
+      isPackaged: () => app.isPackaged,
+      getWindow: () => win,
+      onBeforeQuitForInstall: () => { isQuitting = true },
+      logger: log,
+    })
+  }
+  return updateService
+}
+
 async function loadBackendServices() {
   if (isQuitting) return
 
   startupMark('updaterStartMs')
   const updaterStarted = performance.now()
-  const { autoUpdater: electronUpdater } = await import('electron-updater')
-
-  autoUpdater = electronUpdater
-
-  autoUpdater.logger = log
-  autoUpdater.autoDownload = false
-  autoUpdater.allowDowngrade = false
-
-  autoUpdater.on('update-downloaded', async () => {
-    log.info('Update downloaded. Prompting for install...')
-    if (win) win.webContents.send('update-status', { status: 'downloaded' })
-
-    if (win) {
-      const result = await dialog.showMessageBox(win, {
-        type: 'question',
-        title: 'Update Ready',
-        message: 'The update has been downloaded. Restart the app to install it now?',
-        buttons: ['Restart Now', 'Later'],
-        defaultId: 0,
-        cancelId: 1
-      })
-
-      if (result.response === 0) {
-        autoUpdater?.quitAndInstall()
-      }
-    }
-  })
-
-  autoUpdater.on('checking-for-update', () => {
-    log.info('[Updater] Checking')
-    if (win) win.webContents.send('update-status', { status: 'checking' })
-  })
-
-  autoUpdater.on('update-available', async (info: any) => {
-    if (win) win.webContents.send('update-status', { status: 'available' })
-
-    if (win) {
-      const result = await dialog.showMessageBox(win, {
-        type: 'info',
-        title: 'Update Available',
-        message: `A new version (${info.version}) of Cortex DL is available. Would you like to download it now?`,
-        buttons: ['Update Now', 'Later'],
-        defaultId: 0,
-        cancelId: 1
-      })
-
-      if (result.response === 0) {
-        if (win) win.webContents.send('update-status', { status: 'downloading-started' })
-        autoUpdater?.downloadUpdate()
-      } else {
-        if (win) win.webContents.send('update-status', { status: 'not-available' })
-      }
-    }
-  })
-
-  autoUpdater.on('update-not-available', () => {
-    if (win) win.webContents.send('update-status', { status: 'not-available' })
-  })
-
-  autoUpdater.on('error', (err) => {
-    log.error('[Updater]', err)
-    if (win) win.webContents.send('update-status', { status: 'error', error: err.message })
-  })
-
-  autoUpdater.on('download-progress', (progressObj) => {
-    if (win) win.webContents.send('update-status', { status: 'progress', percent: progressObj.percent })
-  })
-
+  const updater = ensureUpdateService()
   startupDuration('updaterInitializationMs', updaterStarted)
 
   log.info('Backend services loaded. Running startup checks...')
 
   if (app.isPackaged) {
-    void autoUpdater.checkForUpdatesAndNotify().catch(error => log.error('Deferred update check failed:', error))
+    void updater.checkForUpdates(false)
   }
 }
 
@@ -823,6 +770,7 @@ if (!gotTheLock) {
       await stopLocalSubtitles()
       await stopDownloadSubtitleMerges()
       await stopLibraryThumbnails()
+      updateService?.dispose()
       await engineReceipts.stop()
       await stopSetup()
       await stopMediaStreamingServer()
@@ -869,7 +817,7 @@ if (!gotTheLock) {
   registerIpcHandlers({
     getWin: () => win,
     getDownloads: () => downloads,
-    getAutoUpdater: () => autoUpdater,
+    getUpdateService: () => ensureUpdateService(),
     getMediaPort: () => MEDIA_SERVER_PORT,
     getMediaToken: () => MEDIA_SERVER_TOKEN,
     closeMediaSession: session => mediaRequests.closeSession(session),

@@ -1,7 +1,7 @@
 // Application settings, engine readiness checks, updates, and uninstall controls
 import React from 'react'
-import { RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react'
-import { languageNames, translations, type Language } from '../translations'
+import { RefreshCw, AlertTriangle, ShieldAlert, Sparkles, ArrowDownToLine, RotateCcw } from 'lucide-react'
+import { formatMessage, languageNames, translations, type Language } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 import { useLang, useSettingsStore } from '../stores/useSettingsStore'
 
@@ -23,9 +23,12 @@ const SettingsTab: React.FC = () => {
   const refreshHealth = useSettingsStore((s) => s.refreshHealth)
   const concurrentDownloads = useSettingsStore((s) => s.concurrentDownloads)
   const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
-  const updateStatus = useSettingsStore((s) => s.updateStatus)
+  const updateState = useSettingsStore((s) => s.updateState)
   const onCheckForUpdates = useSettingsStore((s) => s.onCheckForUpdates)
   const onRestartAndInstall = useSettingsStore((s) => s.onRestartAndInstall)
+  const openUpdateModal = useSettingsStore((s) => s.openUpdateModal)
+  const u = t.updater
+  const updatePercent = Math.min(100, Math.max(0, Math.round(updateState.progress?.percent ?? 0)))
   const engineUpdateStatus = useSettingsStore((s) => s.engineUpdateStatus)
   const engineVersion = useSettingsStore((s) => s.engineVersion)
   const onUpdateEngine = useSettingsStore((s) => s.onUpdateEngine)
@@ -167,26 +170,66 @@ const SettingsTab: React.FC = () => {
             <div className="row-info">
               <span className="row-title">{t.check_for_updates}</span>
               <span className="row-subtitle">
-                {updateStatus?.status === 'checking' && t.checking_updates}
-                {updateStatus?.status === 'available' && t.update_available}
-                {updateStatus?.status === 'progress' && `${t.update_available} ${Math.round(updateStatus.percent || 0)}%`}
-                {updateStatus?.status === 'not-available' && t.update_not_available}
-                {updateStatus?.status === 'error' && t.update_error}
-                {!updateStatus && `${t.settings_current_version}v${__APP_VERSION__}`}
+                {updateState.phase === 'checking' && t.checking_updates}
+                {updateState.phase === 'available' && (
+                  <span style={{ color: '#38bdf8' }}>
+                    {formatMessage(u.availableInline, { version: updateState.latestVersion || '' })}
+                  </span>
+                )}
+                {updateState.phase === 'downloading' && (
+                  <span style={{ color: '#7dd3fc' }}>
+                    {formatMessage(u.downloadingInline, {
+                      version: updateState.latestVersion || '',
+                      percent: updatePercent,
+                    })}
+                  </span>
+                )}
+                {updateState.phase === 'downloaded' && (
+                  <span style={{ color: '#4ade80' }}>
+                    {formatMessage(u.downloadedInline, { version: updateState.latestVersion || '' })}
+                  </span>
+                )}
+                {updateState.phase === 'up-to-date' && (
+                  <span style={{ color: '#4ade80' }}>
+                    {formatMessage(u.upToDate, { version: updateState.currentVersion || __APP_VERSION__ })}
+                  </span>
+                )}
+                {updateState.phase === 'error' && (
+                  <span style={{ color: '#f87171' }}>
+                    {u.errors[updateState.errorCode ?? 'unknown'] ?? t.update_error}
+                  </span>
+                )}
+                {updateState.phase === 'idle' && `${t.settings_current_version}v${__APP_VERSION__}`}
               </span>
+              {updateState.phase === 'downloading' && (
+                <div className="settings-update-bar" aria-hidden="true">
+                  <div className="settings-update-bar-fill" style={{ width: `${updatePercent}%` }} />
+                </div>
+              )}
             </div>
             <div className="row-control">
-              {updateStatus?.status === 'downloaded' ? (
+              {updateState.phase === 'downloaded' ? (
                 <button className="btn-ghost-success" onClick={onRestartAndInstall}>
-                  {t.update_downloaded}
+                  <RotateCcw size={15} />
+                  <span>{u.restartAndInstall}</span>
+                </button>
+              ) : updateState.phase === 'available' ? (
+                <button className="btn-ghost-primary" onClick={openUpdateModal}>
+                  <Sparkles size={15} />
+                  <span>{u.viewUpdate}</span>
+                </button>
+              ) : updateState.phase === 'downloading' ? (
+                <button className="btn-ghost-primary" onClick={openUpdateModal}>
+                  <ArrowDownToLine size={15} />
+                  <span>{formatMessage(u.viewProgress, { percent: updatePercent })}</span>
                 </button>
               ) : (
                 <button
                   className="btn-ghost-primary"
                   onClick={onCheckForUpdates}
-                  disabled={updateStatus?.status === 'checking' || updateStatus?.status === 'available' || updateStatus?.status === 'progress'}
+                  disabled={updateState.phase === 'checking'}
                 >
-                  <RefreshCw size={16} className={updateStatus?.status === 'checking' ? 'spin' : ''} />
+                  <RefreshCw size={16} className={updateState.phase === 'checking' ? 'spin' : ''} />
                   <span>{t.check_for_updates}</span>
                 </button>
               )}
