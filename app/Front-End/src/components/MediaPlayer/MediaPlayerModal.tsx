@@ -45,6 +45,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   const [isMuted, setIsMuted] = useState<boolean>(() => {
     return localStorage.getItem('cortexdl_media_muted') === 'true';
   });
+  const lastNonZeroVolumeRef = useRef<number>(volume > 0 ? volume : 0.8);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -160,6 +161,9 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     markAudioContext(true);
     analyserRef.current = analyser;
     sourceRef.current = source;
+    if (!audioEl.paused && audioCtx.state === 'suspended') {
+      void audioCtx.resume().catch(() => {});
+    }
 
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -301,6 +305,19 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     onClose();
   }, [releasePlayerSession, onClose, restoreFloating]);
 
+  const toggleMute = useCallback(() => {
+    setIsMuted(prevMuted => {
+      if (prevMuted || volume === 0) {
+        if (volume === 0) {
+          setVolume(lastNonZeroVolumeRef.current > 0.02 ? lastNonZeroVolumeRef.current : 0.8);
+        }
+        return false;
+      }
+      if (volume > 0) lastNonZeroVolumeRef.current = volume;
+      return true;
+    });
+  }, [volume]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -324,13 +341,25 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
           if (mediaRef.current) mediaRef.current.currentTime += 5;
           break;
         case 'ArrowUp':
-          setVolume(v => Math.min(1, v + 0.1));
+          setVolume(v => {
+            const next = Math.min(1, Number((v + 0.1).toFixed(2)));
+            if (next > 0) {
+              lastNonZeroVolumeRef.current = next;
+              setIsMuted(false);
+            }
+            return next;
+          });
           break;
         case 'ArrowDown':
-          setVolume(v => Math.max(0, v - 0.1));
+          setVolume(v => {
+            const next = Math.max(0, Number((v - 0.1).toFixed(2)));
+            if (next > 0) lastNonZeroVolumeRef.current = next;
+            if (next === 0) setIsMuted(true);
+            return next;
+          });
           break;
         case 'm':
-          setIsMuted(m => !m);
+          toggleMute();
           break;
         case 'f':
           if (mediaType === 'video' && !floatingWindow) toggleFullscreen();
@@ -342,7 +371,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     floatingWindow?.addEventListener('keydown', handleKeyDown);
     return () => { window.removeEventListener('keydown', handleKeyDown); floatingWindow?.removeEventListener('keydown', handleKeyDown); };
 
-  }, [floatingWindow, handleClose, isFullscreen, isOpen, mediaType, mediaSuspended, togglePlay]);
+  }, [floatingWindow, handleClose, isFullscreen, isOpen, mediaType, mediaSuspended, toggleMute, togglePlay]);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -374,6 +403,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
   useEffect(() => {
     const el = mediaRef.current || (mediaType === 'video' ? videoRef.current : audioRef.current);
     if (el) {
+      el.muted = isMuted;
       el.volume = isMuted ? 0 : volume;
       el.playbackRate = playbackSpeed;
     }
@@ -446,6 +476,7 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
     const el = mediaRef.current || (mediaType === 'video' ? videoRef.current : audioRef.current);
     if (el) {
       setDuration(el.duration);
+      el.muted = isMuted;
       el.volume = isMuted ? 0 : volume;
       el.playbackRate = playbackSpeed;
       const resume = resumePlaybackRef.current;
@@ -468,11 +499,10 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const vol = parseFloat(e.target.value);
+    if (vol > 0) lastNonZeroVolumeRef.current = vol;
     setVolume(vol);
     setIsMuted(vol === 0);
   };
-
-  const toggleMute = () => setIsMuted(m => !m);
 
   const handleSpeedChange = (speed: number) => {
     setPlaybackSpeed(speed);
@@ -575,7 +605,12 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handleEnded}
-            onPlay={() => setIsPlaying(true)}
+            onPlay={() => {
+              if (audioContextRef.current?.state === 'suspended') {
+                void audioContextRef.current.resume().catch(() => {});
+              }
+              setIsPlaying(true);
+            }}
             onPause={() => setIsPlaying(false)}
             onClose={handleClose}
           />
@@ -606,7 +641,12 @@ export default function MediaPlayerModal({ isOpen, filePath, title, subtitlePrev
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handleEnded}
-            onPlay={() => setIsPlaying(true)}
+            onPlay={() => {
+              if (audioContextRef.current?.state === 'suspended') {
+                void audioContextRef.current.resume().catch(() => {});
+              }
+              setIsPlaying(true);
+            }}
             onPause={() => setIsPlaying(false)}
             onClose={handleClose}
             isMiniMode={isMiniMode}

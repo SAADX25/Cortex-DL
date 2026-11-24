@@ -29,9 +29,15 @@ export const AUDIO_SPECS: Record<AudioFormat, AudioSpec> = {
 }
 
 export type MediaProbe = {
-  format?: { format_name?: string; duration?: string }
-  streams?: { codec_type?: string; codec_name?: string; duration?: string; width?: number; height?: number;
+  format?: { format_name?: string; duration?: string; start_time?: string }
+  streams?: { codec_type?: string; codec_name?: string; duration?: string; start_time?: string; width?: number; height?: number;
     avg_frame_rate?: string; r_frame_rate?: string; tags?: { language?: string; title?: string; handler_name?: string }; disposition?: { attached_pic?: number } }[]
+}
+
+export type StreamStartTimes = {
+  formatStart: number
+  videoStart: number | null
+  audioStart: number | null
 }
 
 export function subtitleLanguageTag(language: string): string {
@@ -104,13 +110,20 @@ export function decideMediaConversion(format: TargetFormat, source?: MediaProbe,
   return 'full-transcode'
 }
 
-export function mediaOutputArgs(format: TargetFormat, output: string, source?: MediaProbe, trim = false): string[] {
+export function mediaOutputArgs(
+  format: TargetFormat,
+  output: string,
+  source?: MediaProbe,
+  trim = false,
+  options?: { audioInputIndex?: number; avoidNegativeTs?: boolean },
+): string[] {
   const spec = MediaFormatRegistry[format]
   const decision = decideMediaConversion(format, source, trim)
+  const audioInputIndex = options?.audioInputIndex ?? 0
   const mapping: string[] = []
   const subtitleArgs: string[] = []
   if (spec.videoCodec && format !== 'gif') {
-    mapping.push('-map', '0:v:0', '-map', '0:a?')
+    mapping.push('-map', '0:v:0', '-map', `${audioInputIndex}:a?`)
     if (source?.streams?.some(s => s.codec_type === 'subtitle') && ['mp4', 'mov', 'm4v', 'mkv', 'webm'].includes(format)) {
       mapping.push('-map', '0:s?')
       subtitleArgs.push('-c:s', format === 'mkv' ? 'copy' : format === 'webm' ? 'webvtt' : 'mov_text')
@@ -121,13 +134,15 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
       })
     }
   }
+  const timestampArgs = options?.avoidNegativeTs || trim ? ['-avoid_negative_ts', 'make_zero'] : []
   // AVI expects Annex-B H.264 framing, so convert MP4/MKV length-prefixed NALUs when stream-copying H.264.
   const needsH264AnnexB =
     format === 'avi' &&
     Boolean(source?.streams?.some(s => s.codec_type === 'video' && !s.disposition?.attached_pic && s.codec_name === 'h264'))
   if (decision === 'direct' || decision === 'remux') {
     const muxer = format === 'm4v' ? 'mp4' : format === 'm4a' ? 'ipod' : format === 'mkv' ? 'matroska' : format === 'aac' ? 'adts' : format === 'wma' ? 'asf' : format === 'ogv' ? 'ogg' : format
-    return [...mapping, ...(spec.videoCodec === null ? ['-vn'] : []), '-c', 'copy', ...(needsH264AnnexB ? ['-bsf:v', 'h264_mp4toannexb'] : []), ...subtitleArgs, '-map_metadata', '0', '-f', muxer, output]
+    const faststartArgs = ['mp4', 'm4v', 'mov'].includes(format) ? ['-movflags', '+faststart'] : []
+    return [...mapping, ...(spec.videoCodec === null ? ['-vn'] : []), '-c', 'copy', ...(needsH264AnnexB ? ['-bsf:v', 'h264_mp4toannexb'] : []), ...subtitleArgs, ...timestampArgs, ...faststartArgs, '-map_metadata', '0', '-f', muxer, output]
   }
 
   const encoding = [...spec.ffmpegArgs]
@@ -140,7 +155,7 @@ export function mediaOutputArgs(format: TargetFormat, output: string, source?: M
       if (decision === 'audio-encode' && needsH264AnnexB) encoding.push('-bsf:v', 'h264_mp4toannexb')
     }
   }
-  return [...mapping, ...encoding, ...subtitleArgs, '-map_metadata', '0', output]
+  return [...mapping, ...encoding, ...subtitleArgs, ...timestampArgs, '-map_metadata', '0', output]
 }
 
 export function isAudioFormat(format: TargetFormat): format is AudioFormat {
@@ -166,21 +181,13 @@ export async function findTaskMediaFile(task: DownloadTask, detected: string | n
   return null
 }
 
-export async function probeMediaFile(
-  filePath: string,
+async function runFfprobeJson(
+  args: string[],
   track?: (child: ChildProcessWithoutNullStreams | null) => void,
   signal?: AbortSignal,
-): Promise<MediaProbe> {
+): Promise<unknown> {
   signal?.throwIfAborted()
-  await ensureEnginesReady(['ffprobe'])
-  signal?.throwIfAborted()
-  const stat = await fs.stat(filePath)
-  signal?.throwIfAborted()
-  if (!stat.isFile() || stat.size <= 0) throw new Error('Media output is empty')
-  const child = spawn(getBinaryPath('ffprobe'), [
-    '-v', 'error', '-show_entries', 'format=format_name,duration:stream=codec_type,codec_name,duration,width,height,avg_frame_rate,r_frame_rate:stream_tags=language,title,handler_name:stream_disposition=attached_pic',
-    '-of', 'json', filePath,
-  ], { windowsHide: true, detached: false })
+  const child = spawn(getBinaryPath('ffprobe'), args, { windowsHide: true, detached: false })
   child.on('error', error => engineExecutionFailed('ffprobe', error))
   track?.(child)
   const onAbort = () => { child.kill() }
@@ -202,13 +209,67 @@ export async function probeMediaFile(
     if (exitCode !== 0 || !output || output.length > 1024 * 1024) {
       throw new Error('ffprobe could not validate the media output')
     }
-    return JSON.parse(output) as MediaProbe
+    return JSON.parse(output)
   } finally {
     clearTimeout(timeout)
     signal?.removeEventListener('abort', onAbort)
     child.stdout.removeAllListeners()
     child.stderr.removeAllListeners()
     track?.(null)
+  }
+}
+
+export async function probeMediaFile(
+  filePath: string,
+  track?: (child: ChildProcessWithoutNullStreams | null) => void,
+  signal?: AbortSignal,
+): Promise<MediaProbe> {
+  signal?.throwIfAborted()
+  await ensureEnginesReady(['ffprobe'])
+  signal?.throwIfAborted()
+  const stat = await fs.stat(filePath)
+  signal?.throwIfAborted()
+  if (!stat.isFile() || stat.size <= 0) throw new Error('Media output is empty')
+  return await runFfprobeJson([
+    '-v', 'error', '-analyzeduration', '30000000', '-probesize', '50000000',
+    '-show_entries', 'format=format_name,duration,start_time:stream=codec_type,codec_name,duration,start_time,width,height,avg_frame_rate,r_frame_rate:stream_tags=language,title,handler_name:stream_disposition=attached_pic',
+    '-of', 'json', filePath,
+  ], track, signal) as MediaProbe
+}
+
+// Reads the true first-packet PTS for video and audio (MKV container headers often report the same start_time for both).
+export async function probeStreamStartTimes(
+  filePath: string,
+  track?: (child: ChildProcessWithoutNullStreams | null) => void,
+  signal?: AbortSignal,
+): Promise<StreamStartTimes> {
+  signal?.throwIfAborted()
+  await ensureEnginesReady(['ffprobe'])
+  signal?.throwIfAborted()
+  const firstPts = async (streamSelector: string): Promise<{ formatStart: number; pts: number | null }> => {
+    const data = await runFfprobeJson([
+      '-v', 'error', '-analyzeduration', '30000000', '-probesize', '50000000',
+      '-select_streams', streamSelector,
+      '-read_intervals', '%+#1',
+      '-show_entries', 'format=start_time:packet=pts_time,dts_time',
+      '-of', 'json', filePath,
+    ], track, signal) as { format?: { start_time?: string }; packets?: { pts_time?: string; dts_time?: string }[] }
+    const fmt = Number(data.format?.start_time)
+    const pkt = data.packets?.[0]
+    const rawPts = pkt?.pts_time ?? pkt?.dts_time
+    const pts = rawPts !== undefined ? Number(rawPts) : NaN
+    return {
+      formatStart: Number.isFinite(fmt) ? fmt : 0,
+      pts: Number.isFinite(pts) ? pts : null,
+    }
+  }
+
+  const video = await firstPts('v:0')
+  const audio = await firstPts('a:0')
+  return {
+    formatStart: video.formatStart || audio.formatStart,
+    videoStart: video.pts,
+    audioStart: audio.pts,
   }
 }
 

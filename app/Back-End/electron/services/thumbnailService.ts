@@ -323,11 +323,32 @@ export type PreviewStreams = {
   duration?: number
 }
 
-// Prefer browser-playable muxed progressive streams, falling back to split MP4/WebM (<=1080p) and finally HLS.
+const ADAPTIVE_PREVIEW_AUDIO =
+  '(ba[acodec^=mp4a][protocol=https]/ba[acodec^=opus][protocol=https]/ba[acodec^=aac][protocol=https]/ba[acodec^=vorbis][protocol=https]'
+  + '/ba[acodec^=mp4a][protocol=http]/ba[acodec^=opus][protocol=http]/ba[acodec^=aac][protocol=http]/ba[acodec^=vorbis][protocol=http])'
+
+const ADAPTIVE_PREVIEW_VIDEO_CODECS = [
+  'bv[ext=mp4][vcodec^=avc1]',
+  'bv[ext=mp4][vcodec^=avc3]',
+  'bv[ext=mp4][vcodec^=h264]',
+  'bv[ext=webm][vcodec^=vp09]',
+  'bv[ext=webm][vcodec^=vp9]',
+  'bv[ext=webm][vcodec^=vp08]',
+  'bv[ext=webm][vcodec^=vp8]',
+]
+
+function adaptiveVideoSelector(maxHeight: number): string {
+  return '(' + ['https', 'http']
+    .flatMap(protocol => ADAPTIVE_PREVIEW_VIDEO_CODECS.map(codec => `${codec}[protocol=${protocol}][height<=${maxHeight}]`))
+    .join('/') + ')'
+}
+
+// Prefer browser-playable muxed progressive streams, falling back to <=720p then <=1080p split adaptive streams, and finally muxed HLS.
 export const TRIM_PREVIEW_FORMAT =
-  `${PREVIEW_FORMAT}/bv[ext=mp4][vcodec^=avc1][protocol=https][height<=1080]+ba[acodec^=mp4a][protocol=https]`
-  + `/bv[ext=webm][vcodec^=vp9][protocol=https][height<=1080]+ba[acodec=opus][protocol=https]`
-  + `/b[protocol^=m3u8][height<=720]/b[protocol^=m3u8]`
+  `${PREVIEW_FORMAT}`
+  + `/${adaptiveVideoSelector(720)}+${ADAPTIVE_PREVIEW_AUDIO}`
+  + `/${adaptiveVideoSelector(1080)}+${ADAPTIVE_PREVIEW_AUDIO}`
+  + `/b[protocol^=m3u8][acodec!=none][vcodec!=none][height<=720]/b[protocol^=m3u8][acodec!=none][vcodec!=none]`
 
 // Reject already-expired signed stream URLs (common on YouTube/CDN links) before handing them to the player.
 function validateStreamHttpUrl(rawUrl: unknown): string {
@@ -345,11 +366,17 @@ function progressiveUrl(info: Record<string, unknown>): string {
 
 function playableHlsPreview(info: Record<string, unknown>): PreviewStreams {
   const vcodec = info.vcodec ? String(info.vcodec) : ''
-  if (vcodec && vcodec !== 'none' && !/^(?:avc1|avc3|h264|vp09|vp9|vp08|vp8|hev1|hvc1)/i.test(vcodec)) {
+  if (vcodec === 'none') {
+    throw new Error('Unsupported HLS preview: audio-only stream')
+  }
+  if (vcodec && !/^(?:avc1|avc3|h264|vp09|vp9|vp08|vp8|hev1|hvc1)/i.test(vcodec)) {
     throw new Error(`Unsupported HLS preview codec: ${vcodec}`)
   }
   const acodec = info.acodec ? String(info.acodec) : ''
-  if (acodec && acodec !== 'none' && !/^(?:mp4a|aac|opus|vorbis|mp3)/i.test(acodec)) {
+  if (acodec === 'none') {
+    throw new Error('Unsupported HLS preview: selected video stream has no audio track')
+  }
+  if (acodec && !/^(?:mp4a|aac|opus|vorbis|mp3)/i.test(acodec)) {
     throw new Error(`Unsupported HLS preview audio codec: ${acodec}`)
   }
   const url = validateStreamHttpUrl(info.url || info.manifest_url)
@@ -376,7 +403,15 @@ export function playablePreviewStreams(info: Record<string, unknown>): PreviewSt
   if (formats.length !== 2 || !video || !audio) throw new Error('Preview requires exactly one video and one audio resource')
 
   const videoUrl = playablePreviewUrl({ ...video, acodec: audio.acodec })
-  return { videoUrl, audioUrl: progressiveUrl(audio) }
+  const audioUrl = progressiveUrl(audio)
+  const duration = typeof info.duration === 'number' && Number.isFinite(info.duration) && info.duration > 0 ? info.duration : undefined
+  const isLive = info.is_live === true || info.live_status === 'is_live'
+  return {
+    videoUrl,
+    audioUrl,
+    ...(isLive ? { isLive: true } : {}),
+    ...(duration !== undefined ? { duration } : {}),
+  }
 }
 
 // Gate single-URL previews to progressive MP4 (H.264) or WebM (VP8/VP9) with audio so Electron's <video> plays natively.

@@ -24,9 +24,9 @@ import {
   Loader,
 } from 'lucide-react'
 import './AdvancedTrimmer.css'
-import { TrimPreview, isHlsStreamUrl, seekPreview, videoFailure } from './trimPreview'
+import { TrimPreview, isHlsStreamUrl, seekPreview, validatePreviewUrl, videoFailure } from './trimPreview'
 import { releaseMediaElement } from '../MediaPlayer/mediaSession'
-import { applyTrimAudioControls, syncTrimAudio } from './trimAudio'
+import { applyTrimAudioControls, isAbortPlaybackError, syncTrimAudio } from './trimAudio'
 import {
   clampSeconds,
   computeRulerTicks,
@@ -231,10 +231,11 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     void preview.start(originalUrl ? async () => {
       const streams = await window.cortexDl.getTrimPreviewStreams(originalUrl, session)
       if (!streams) throw new Error('Preview extraction cancelled')
+      const normalizedVideoUrl = validatePreviewUrl(streams.videoUrl)
       if (!disposed) {
-        extractedVideo = streams.videoUrl
+        extractedVideo = normalizedVideoUrl
         setAudioUrl(streams.audioUrl ?? null)
-        const nextType = streams.streamType ?? (isHlsStreamUrl(streams.videoUrl) ? 'hls' : 'progressive')
+        const nextType = streams.streamType ?? (isHlsStreamUrl(normalizedVideoUrl) ? 'hls' : 'progressive')
         setStreamType(nextType)
         if (streams.isLive) setDetectedLive(true)
         if (typeof streams.duration === 'number' && streams.duration > 0) {
@@ -242,7 +243,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           setDetectedLive(false)
         }
       }
-      return streams.videoUrl
+      return normalizedVideoUrl
     } : undefined)
 
     return () => {
@@ -333,7 +334,8 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   }, [])
 
   const syncAudio = useCallback((play = false) => {
-    void syncTrimAudio(videoRef.current, audioRef.current, play).catch(() => {
+    void syncTrimAudio(videoRef.current, audioRef.current, play).catch((error: unknown) => {
+      if (isAbortPlaybackError(error)) return
       setAudioError(tr.audioPlayFailed)
     })
   }, [tr.audioPlayFailed])
@@ -380,11 +382,19 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       if (!effectiveIsLive && loopSelection && (video.currentTime < startSeconds || video.currentTime >= endSeconds - 0.05)) {
         seekVideo(startSeconds)
       }
-      void video.play().catch(() => {})
+      setAudioError(null)
+      void video.play().then(() => {
+        syncAudio(true)
+      }).catch(() => {})
+      // Start adaptive audio inside the user click gesture when video is already buffered.
+      if (audioRef.current?.getAttribute('src') && video.readyState >= 3) {
+        syncAudio(true)
+      }
     } else {
       video.pause()
+      syncAudio(false)
     }
-  }, [streamUrl, streamError, effectiveIsLive, loopSelection, startSeconds, endSeconds, seekVideo])
+  }, [streamUrl, streamError, effectiveIsLive, loopSelection, startSeconds, endSeconds, seekVideo, syncAudio])
 
   const toggleMute = useCallback(() => {
     if (muted || volume === 0) {
@@ -417,11 +427,20 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       const next = !prev
       if (next && !effectiveIsLive) {
         seekVideo(startSeconds)
-        void videoRef.current?.play().catch(() => {})
+        setAudioError(null)
+        const video = videoRef.current
+        if (video) {
+          void video.play().then(() => {
+            syncAudio(true)
+          }).catch(() => {})
+          if (audioRef.current?.getAttribute('src') && video.readyState >= 3) {
+            syncAudio(true)
+          }
+        }
       }
       return next
     })
-  }, [effectiveIsLive, seekVideo, startSeconds])
+  }, [effectiveIsLive, seekVideo, startSeconds, syncAudio])
 
   const toggleFullscreen = useCallback(() => {
     const shell = playerShellRef.current
@@ -726,7 +745,10 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
               if (!effectiveIsLive && Number.isFinite(mediaDur) && Math.abs(mediaDur - safeDuration) > 1) {
                 console.warn('[Visual Trim] Preview duration differs from analyzed duration:', mediaDur, safeDuration)
               }
-              if (!effectiveIsLive) seekPreview(event.currentTarget, requestedSeek.current)
+              if (!effectiveIsLive) {
+                seekPreview(event.currentTarget, requestedSeek.current)
+                seekPreview(audioRef.current, requestedSeek.current)
+              }
             }}
           />
 
@@ -734,11 +756,26 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             ref={audioRef}
             data-trim-audio
             src={audioUrl ?? undefined}
-            preload="metadata"
+            preload="auto"
             hidden
-            onLoadedMetadata={() => {
-              applyTrimAudioControls(videoRef.current, audioRef.current, volume, muted, playbackRate)
+            onLoadedMetadata={(event) => {
+              applyTrimAudioControls(videoRef.current, event.currentTarget, volume, muted, playbackRate)
+              if (!effectiveIsLive) {
+                const targetTime = videoRef.current && videoRef.current.readyState >= 1
+                  ? videoRef.current.currentTime
+                  : requestedSeek.current
+                seekPreview(event.currentTarget, targetTime)
+              }
               syncAudio(!videoRef.current?.paused)
+            }}
+            onCanPlay={() => {
+              syncAudio(!videoRef.current?.paused)
+            }}
+            onSeeked={() => {
+              syncAudio(!videoRef.current?.paused)
+            }}
+            onPlaying={() => {
+              setAudioError(null)
             }}
             onError={() => {
               if (audioUrl) setAudioError(tr.audioUnavailable)

@@ -19,6 +19,21 @@ import { isKickUrl, isThreadsUrl } from '../../../Shared/analysisUrl'
 type Profile = 'proAudio' | 'bestVideo' | 'default'
 
 const YOUTUBE_THROTTLED_RATE = '512K'
+// Pre-roll adaptive audio before the cut start on Fast Cut so it covers any preceding video keyframe (typically 2-5s GOP) with zero silence.
+const FAST_CUT_AUDIO_PREROLL_SECONDS = 12
+
+function formatSectionSeconds(seconds: number): string {
+  return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(3)
+}
+
+function fastCutAudioPrerollStart(
+  task: Pick<DownloadTask, 'targetFormat' | 'trimMode' | 'isLive'>,
+  sectionBounds?: { start: number; end?: number } | null,
+): number | null {
+  if (!sectionBounds || sectionBounds.start <= 0) return null
+  if (task.trimMode === 'exact' || task.isLive || isAudioFormat(task.targetFormat) || task.targetFormat === 'gif') return null
+  return Math.max(0, sectionBounds.start - FAST_CUT_AUDIO_PREROLL_SECONDS)
+}
 
 interface YtdlpRunResult {
   exitCode: number
@@ -226,10 +241,16 @@ export class YoutubeEngine implements IEngine {
 
     log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile})`)
 
+    const audioPrerollStart = fastCutAudioPrerollStart(task, sectionBounds)
+    const progressOrigin = audioPrerollStart ?? sectionBounds?.start ?? 0
     const expectedSectionDuration = sectionBounds?.end !== undefined
-      ? Math.max(0.1, sectionBounds.end - sectionBounds.start)
+      ? Math.max(0.1, sectionBounds.end - progressOrigin)
       : null
-    const ffmpegState: FfmpegState = { totalDuration: expectedSectionDuration, stderr: '' }
+    const ffmpegState: FfmpegState = {
+      totalDuration: expectedSectionDuration,
+      ...(audioPrerollStart !== null ? { startOffset: audioPrerollStart } : {}),
+      stderr: '',
+    }
     let stdoutBuf = ''
     let stderrBuf = ''
     let lastUpdateAtMs = 0
@@ -398,10 +419,10 @@ export class YoutubeEngine implements IEngine {
     ]
 
     if (sectionBounds) {
-      const startSec = Number.isInteger(sectionBounds.start) ? String(sectionBounds.start) : sectionBounds.start.toFixed(3)
+      const startSec = formatSectionSeconds(sectionBounds.start)
       const endSec = sectionBounds.end === undefined
         ? 'inf'
-        : Number.isInteger(sectionBounds.end) ? String(sectionBounds.end) : sectionBounds.end.toFixed(3)
+        : formatSectionSeconds(sectionBounds.end)
       ytArgs.push('--download-sections', `*${startSec}-${endSec}`)
       if (forceKeyframes) {
         ytArgs.push('--force-keyframes-at-cuts')
@@ -414,6 +435,20 @@ export class YoutubeEngine implements IEngine {
                 ? `-threads ${threadBudget} -c:v libx264 -preset veryfast -crf 18 -c:a libmp3lame -q:a 2`
                 : `-threads ${threadBudget} -c:v libx264 -preset veryfast -crf 18 -c:a aac -b:a 192k`
           ytArgs.push('--downloader-args', `ffmpeg_o:${exactCodecArgs}`)
+        }
+      } else {
+        const audioPrerollStart = fastCutAudioPrerollStart(task, sectionBounds)
+        if (audioPrerollStart !== null) {
+          // Video stream-copy snaps back to the preceding keyframe (often 2-5s earlier); pre-roll input 2 (audio)
+          // and preserve original timestamps so finalization can align audio to the exact video keyframe without silence.
+          const audioStartSec = formatSectionSeconds(audioPrerollStart)
+          const audioDurArg = sectionBounds.end !== undefined
+            ? ` -t ${formatSectionSeconds(Math.max(0.1, sectionBounds.end - audioPrerollStart))}`
+            : ''
+          ytArgs.push(
+            '--downloader-args', `ffmpeg_i2:-ss ${audioStartSec}${audioDurArg}`,
+            '--downloader-args', 'ffmpeg_o:-copyts',
+          )
         }
       }
     }

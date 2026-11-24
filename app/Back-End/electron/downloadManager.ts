@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { db, taskDb } from './db'
 import { type DownloadTask, type TaskRuntime, type AttemptRuntime, type EngineResult, type StartInput, type EngineContext, type DownloadEngine, type AudioFormat, type TargetFormat, STATS_CHANNEL, AUDIO_FORMATS } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
-import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion, runMediaProcess, trimBounds, validateMediaOutput, probeMediaFile } from './services/mediaService'
+import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion, runMediaProcess, trimBounds, validateMediaOutput, probeMediaFile, probeStreamStartTimes, isAudioFormat } from './services/mediaService'
 import { youtubeDiagnostic } from './engines/ytdlpService'
 import { sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl, isM3u8Url, withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate, killProcessTree, clearPendingTrailing, sendNotification } from './utils'
 import { type IEngine } from './engines/IEngine'
@@ -759,6 +759,9 @@ export class DownloadManager {
     let expectedDuration: number | undefined
     let localTrimStart = bounds.start
     let needsLocalTrim = false
+    let alignAudioSkip: number | null = null
+    let needsTimestampReset = false
+    let alignedProgressDuration: number | undefined
 
     if (trimming) {
       if (sectionTrimmed) {
@@ -767,6 +770,30 @@ export class DownloadManager {
           if (task.trimMode === 'exact' && Number.isFinite(duration) && duration > expectedDuration + 0.75) {
             localTrimStart = 0
             needsLocalTrim = true
+          }
+        }
+        if (!isAudioFormat(task.targetFormat) && task.targetFormat !== 'gif') {
+          const hasVideo = Boolean(probe.streams?.some(s => s.codec_type === 'video' && !s.disposition?.attached_pic))
+          const hasAudio = Boolean(probe.streams?.some(s => s.codec_type === 'audio'))
+          if (hasVideo && hasAudio) {
+            const starts = await probeStreamStartTimes(source, child => { attempt.child = child }, attempt.abortController!.signal)
+            check()
+            if (starts.videoStart !== null && starts.audioStart !== null) {
+              if (!needsLocalTrim && starts.videoStart > starts.audioStart + 0.1) {
+                // Fast-cut audio pre-roll starts ahead of the video keyframe; trim leading audio losslessly to match video.
+                alignAudioSkip = Math.max(0, starts.videoStart - starts.formatStart)
+                if (Number.isFinite(duration) && duration > starts.videoStart) {
+                  alignedProgressDuration = Math.max(0.1, duration - starts.videoStart)
+                }
+              } else if (starts.audioStart > starts.videoStart + 0.15) {
+                // Audio starts after video (silent lead-in); trim from audio start so the output has sound from 00:00.
+                localTrimStart = Math.max(0, starts.audioStart - starts.formatStart)
+                needsLocalTrim = true
+              } else if (!needsLocalTrim && starts.formatStart > 0.25) {
+                // Single muxed stream downloaded with -copyts; remux cleanly to reset container timestamps to 00:00.
+                needsTimestampReset = true
+              }
+            }
           }
         }
       } else {
@@ -782,22 +809,34 @@ export class DownloadManager {
       (task.targetFormat === 'webm' && sourceExt !== 'webm') ||
       (task.targetFormat === 'mov' && sourceExt !== 'mov') ||
       (task.targetFormat === 'mp4' && sourceExt !== 'mp4')
-    if (needsLocalTrim || needsContainerRemux || !matchesMediaFormat(task.targetFormat, probe)) {
+    if (needsLocalTrim || alignAudioSkip !== null || needsTimestampReset || needsContainerRemux || !matchesMediaFormat(task.targetFormat, probe)) {
       const conversion = decideMediaConversion(task.targetFormat, probe, needsLocalTrim)
-      const phaseDecision = conversion === 'direct' && needsContainerRemux ? 'remux' : conversion
-      if (task.engine === 'ytdlp') youtubeDiagnostic('conversion', { decision: phaseDecision, targetFormat: task.targetFormat, trimming: needsLocalTrim })
+      const phaseDecision = conversion === 'direct' && (needsContainerRemux || alignAudioSkip !== null || needsTimestampReset) ? 'remux' : conversion
+      if (task.engine === 'ytdlp') youtubeDiagnostic('conversion', { decision: phaseDecision, targetFormat: task.targetFormat, trimming: needsLocalTrim || alignAudioSkip !== null })
       log.info(`[Finalize] ${task.id}: ${phaseDecision} to ${task.targetFormat}`)
-      phase(needsLocalTrim ? 'trimming' : phaseDecision === 'remux' ? 'merging' : 'converting')
+      phase(needsLocalTrim || alignAudioSkip !== null ? 'trimming' : phaseDecision === 'remux' ? 'merging' : 'converting')
       candidate = path.join(attempt.directory, `candidate.${task.targetFormat}`)
       const args = needsLocalTrim
         ? [
             ...(localTrimStart > 0 ? ['-ss', String(localTrimStart)] : []),
             '-i', source,
             ...(expectedDuration !== undefined ? ['-t', String(expectedDuration)] : []),
+            ...mediaOutputArgs(task.targetFormat, candidate, probe, true, { avoidNegativeTs: true }),
           ]
-        : ['-i', source]
-      args.push(...mediaOutputArgs(task.targetFormat, candidate, probe, needsLocalTrim))
-      await runMediaProcess(args, draft, ctx, expectedDuration ?? (Number.isFinite(duration) ? duration : undefined))
+        : alignAudioSkip !== null
+          ? [
+              '-analyzeduration', '30000000', '-probesize', '50000000',
+              '-itsoffset', String(-alignAudioSkip), '-i', source,
+              '-analyzeduration', '30000000', '-probesize', '50000000',
+              '-ss', String(alignAudioSkip), '-i', source,
+              ...mediaOutputArgs(task.targetFormat, candidate, probe, false, { audioInputIndex: 1, avoidNegativeTs: true }),
+            ]
+          : [
+              ...(needsTimestampReset ? ['-analyzeduration', '30000000', '-probesize', '50000000'] : []),
+              '-i', source,
+              ...mediaOutputArgs(task.targetFormat, candidate, probe, false, { avoidNegativeTs: needsTimestampReset }),
+            ]
+      await runMediaProcess(args, draft, ctx, alignedProgressDuration ?? expectedDuration ?? (Number.isFinite(duration) ? duration : undefined))
       check()
     }
     phase('validating')
@@ -814,7 +853,7 @@ export class DownloadManager {
     const durationTolerance = sectionTrimmed && (task.isLive || draft.isLive)
       ? Math.max(2, Math.min(6, (expectedDuration ?? 0) * 0.15))
       : sectionTrimmed && task.trimMode !== 'exact'
-        ? Math.max(6, Math.min(15, (expectedDuration ?? 0) * 0.2))
+        ? Math.max(10, Math.min(15, (expectedDuration ?? 0) * 0.2))
         : sectionTrimmed
           ? Math.max(0.5, Math.min(1.5, (expectedDuration ?? 0) * 0.03))
           : Math.max(0.25, Math.min(1, (expectedDuration ?? 0) * 0.02))

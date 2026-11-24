@@ -30,6 +30,8 @@ function isSupportedMuxedFormat(format: YtdlpFormat): boolean {
 
 function isHlsFormat(format: YtdlpFormat): boolean {
   if (!format.url) return false
+  // Reject video-only or audio-only HLS playlists (e.g. YouTube DASH-over-HLS itags with acodec='none').
+  if (format.vcodec === 'none' || format.acodec === 'none') return false
   const isM3u8 = format.protocol === 'm3u8' || format.protocol === 'm3u8_native' || /\.m3u8(\?|#|$)/i.test(format.url)
   if (!isM3u8) return false
   try {

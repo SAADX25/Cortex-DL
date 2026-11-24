@@ -5,6 +5,7 @@ import log from 'electron-log'
 
 export interface FfmpegState {
   totalDuration: number | null
+  startOffset?: number
   stderr: string
 }
 
@@ -117,9 +118,10 @@ export function parseFfmpegProgress(
   // FFmpeg reports out_time_ms in microseconds despite the key name; both keys divide by 1e6.
   const outTimeUnitsMatch = /^out_time_(?:ms|us)=(\d+)$/.exec(line.trim())
   if (timeMatch || outTimeUnitsMatch) {
-    const currentSec = timeMatch
+    const rawSec = timeMatch
       ? parseTimeToSeconds(timeMatch[1])
       : parseInt(outTimeUnitsMatch![1], 10) / 1_000_000
+    const currentSec = state.startOffset ? rawSec - state.startOffset : rawSec
     if (currentSec <= 0) return changed
 
     const totalDuration = state.totalDuration

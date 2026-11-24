@@ -304,7 +304,7 @@ export async function getTrimPreviewStreams(url: string, options: PreviewExtract
     return await extractPreviewStreams(binary, [
       '--ignore-config',
       '-f', TRIM_PREVIEW_FORMAT, '--dump-single-json', '--no-playlist', '--geo-bypass', ...ytdlpCacheArgs(),
-      '--socket-timeout', '15',
+      '--force-ipv4', '--socket-timeout', '15',
       ...getJsRuntimeArgs(), url,
     ], options)
   } catch (error) {

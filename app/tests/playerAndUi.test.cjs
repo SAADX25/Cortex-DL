@@ -566,6 +566,85 @@ suite('Trim preview', test => {
     assert.ok(ticks.some(t => t.major && t.label.startsWith('3:')))
   })
 
+  test('Visual Trim rejects video-only HLS fallback, supports VP9 adaptive streams, and prevents audio seek thrashing', async () => {
+    const silentYoutubeHls = {
+      formatId: '232',
+      ext: 'mp4',
+      protocol: 'm3u8_native',
+      vcodec: 'avc1.64001F',
+      acodec: 'none',
+      height: 720,
+      resolution: '1280x720',
+      filesize: null,
+      description: '',
+      url: 'https://manifest.googlevideo.com/api/manifest/hls_playlist/video_only.m3u8',
+    }
+    const audioOnlyHls = {
+      ...silentYoutubeHls,
+      formatId: '234',
+      vcodec: 'none',
+      acodec: 'mp4a.40.2',
+      url: 'https://manifest.googlevideo.com/api/manifest/hls_playlist/audio_only.m3u8',
+    }
+    const ytCtx = getTrimmerContext({
+      kind: 'ytdlp',
+      title: 'YouTube Modern Video',
+      duration: 678,
+      formats: [silentYoutubeHls, audioOnlyHls],
+    }, '720p')
+    assert.equal(ytCtx?.videoUrl, '')
+    assert.equal(ytCtx?.streamType, undefined)
+
+    assert.throws(() => playablePreviewStreams({ ...silentYoutubeHls }), /video-only|audio/i)
+    assert.throws(() => playablePreviewStreams({ ...audioOnlyHls }), /audio-only/i)
+
+    const vp9Video = { url: 'https://example.com/vp9.webm', ext: 'webm', vcodec: 'vp09.00.51.08', acodec: 'none', protocol: 'https', format_id: '247', height: 720 }
+    const opusAudio = { url: 'https://example.com/opus.webm', ext: 'webm', vcodec: 'none', acodec: 'opus', protocol: 'https', format_id: '251' }
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-vp9-adaptive-'))
+    try {
+      const info = path.join(dir, 'info.json')
+      await fs.writeFile(info, JSON.stringify({ id: 'vp9-adaptive', title: 'vp9', extractor: 'fixture', webpage_url: 'https://example.com/watch', formats: [vp9Video, opusAudio] }))
+      assert.deepEqual(
+        await extractPreviewStreams(path.join(process.cwd(), 'engine-baseline', 'yt-dlp.exe'), ['--load-info-json', info, '--dump-single-json', '--skip-download', '-f', TRIM_PREVIEW_FORMAT]),
+        { videoUrl: vp9Video.url, audioUrl: opusAudio.url },
+      )
+    } finally { await fs.rm(dir, { recursive: true, force: true }) }
+
+    let seeks = 0, plays = 0
+    const clock = { currentTime: 25.0, volume: 0.5, muted: false, playbackRate: 1, paused: false, seeking: false, readyState: 4 }
+    let audioTime = 24.4
+    const sound = {
+      get currentTime() { return audioTime },
+      set currentTime(value) { seeks++; audioTime = value },
+      duration: 100,
+      readyState: 4,
+      paused: false,
+      seeking: true,
+      getAttribute: () => opusAudio.url,
+      play: async () => { plays++; sound.paused = false },
+      pause: () => { sound.paused = true },
+    }
+    // While audio is actively seeking with < 2.5s drift, syncTrimAudio must not abort/re-seek or spam play()
+    await syncTrimAudio(clock, sound, true)
+    assert.equal(seeks, 0)
+    assert.equal(plays, 0)
+
+    // Large drift (> 2.5s) while seeking should resync
+    clock.currentTime = 30.0
+    await syncTrimAudio(clock, sound, true)
+    assert.equal(seeks, 1)
+    assert.equal(audioTime, 30.0)
+
+    // AbortError from interrupted play() must be silently ignored rather than surfaced as a fatal audio error
+    sound.seeking = false
+    sound.paused = true
+    let abortCalls = 0
+    const abortErr = Object.assign(new Error('The play() request was interrupted'), { name: 'AbortError' })
+    sound.play = async () => { abortCalls++; throw abortErr }
+    await syncTrimAudio(clock, sound, true)
+    assert.equal(abortCalls, 1)
+  })
+
   test('Visual Trim Electron plays adaptive audio, falls back, seeks and releases 28 sessions', {timeout:90000}, async () => {
     const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cortex-trim-'))
     let server

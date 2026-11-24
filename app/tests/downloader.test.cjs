@@ -26,9 +26,10 @@ suite('Download attempts', test => {
   const media = require('../Back-End/electron/services/mediaService.ts')
   const { DownloadManager } = require('../Back-End/electron/downloadManager.ts')
   const { DirectEngine } = require('../Back-End/electron/engines/DirectEngine.ts')
-  const { MediaFormatRegistry, matchesMediaFormat, trimBounds } = require('../Back-End/electron/services/mediaService.ts')
+  const { YoutubeEngine } = require('../Back-End/electron/engines/YoutubeEngine.ts')
+  const { MediaFormatRegistry, matchesMediaFormat, trimBounds, probeStreamStartTimes } = require('../Back-End/electron/services/mediaService.ts')
 
-  const { parseDownloadProgress } = require('../Back-End/electron/progressParser.ts')
+  const { parseDownloadProgress, parseFfmpegProgress } = require('../Back-End/electron/progressParser.ts')
   const bin = name => path.join(process.cwd(), 'engine-baseline', name + (process.platform === 'win32' ? '.exe' : ''))
   const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
   const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -166,6 +167,145 @@ suite('Download attempts', test => {
     } finally {
       DirectEngine.prototype.download = original
       manager.flushPendingSave()
+    }
+  }))
+
+  test('fast-cut split-stream trim aligns audio and video to 0s without a 3-4s silent intro (pre-roll and lagged fallback)', { timeout: 60000 }, async () => sandbox(async dir => {
+    // Verify -copyts startOffset adjustment in FFmpeg progress parser
+    const progressState = { totalDuration: 10, startOffset: 100 }
+    const progressTask = item(dir, { status: 'downloading', downloadPercent: 0 })
+    assert.equal(parseFfmpegProgress('out_time_us=95000000', progressTask, progressState), false)
+    assert.equal(progressTask.downloadPercent, 0)
+    assert.equal(parseFfmpegProgress('out_time_us=105000000', progressTask, progressState), true)
+    assert.equal(progressTask.downloadPercent, 50)
+
+    // Create a 30s split-stream H.264 (5s GOP) + continuous 1kHz sine AAC source over local HTTP
+    const videoSrc = path.join(dir, 'v.mp4')
+    const audioSrc = path.join(dir, 'a.m4a')
+    let gen = cp.spawnSync(bin('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=64x64:rate=20:duration=30', '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '100', '-keyint_min', '100', '-sc_threshold', '0', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', videoSrc], { timeout: 30000 })
+    assert.equal(gen.status, 0, gen.stderr?.toString())
+    gen = cp.spawnSync(bin('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=30', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', audioSrc], { timeout: 30000 })
+    assert.equal(gen.status, 0, gen.stderr?.toString())
+
+    const server = http.createServer(async (req, res) => {
+      const file = req.url === '/v.mp4' ? videoSrc : req.url === '/a.m4a' ? audioSrc : null
+      if (!file) { res.writeHead(404); res.end(); return }
+      const data = await fs.readFile(file)
+      const range = req.headers.range
+      if (range) {
+        const m = range.match(/bytes=(\d+)-(\d*)/)
+        const start = Number(m[1])
+        const end = m[2] ? Math.min(Number(m[2]), data.length - 1) : data.length - 1
+        res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${data.length}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': file.endsWith('.mp4') ? 'video/mp4' : 'audio/mp4' })
+        res.end(data.subarray(start, end + 1))
+      } else {
+        res.writeHead(200, { 'Accept-Ranges': 'bytes', 'Content-Length': data.length, 'Content-Type': file.endsWith('.mp4') ? 'video/mp4' : 'audio/mp4' })
+        res.end(data)
+      }
+    })
+    await new Promise(r => server.listen(0, '127.0.0.1', r))
+    const originalDirect = DirectEngine.prototype.download
+    try {
+      const port = server.address().port
+      const infoPath = path.join(dir, 'info.json')
+      await fs.writeFile(infoPath, JSON.stringify({
+        id: 'gop5-fastcut',
+        title: 'GOP5 FastCut',
+        extractor: 'fixture',
+        webpage_url: 'https://example.com/watch?v=gop5',
+        duration: 30,
+        formats: [
+          { format_id: '137', ext: 'mp4', vcodec: 'avc1.64001f', acodec: 'none', protocol: 'http', height: 64, width: 64, url: `http://127.0.0.1:${port}/v.mp4` },
+          { format_id: '140', ext: 'm4a', vcodec: 'none', acodec: 'mp4a.40.2', protocol: 'http', url: `http://127.0.0.1:${port}/a.m4a` },
+        ],
+      }))
+
+      // Build the real fast-cut yt-dlp args via YoutubeEngine and execute yt-dlp against our local HTTP split streams
+      const engine = new YoutubeEngine()
+      const fastTask = item(dir, {
+        id: 'fastcut-preroll',
+        url: 'https://www.youtube.com/watch?v=gop5fastcut',
+        engine: 'direct',
+        targetFormat: 'mp4',
+        filename: 'fastcut_preroll.mp4',
+        filePath: path.join(dir, 'fastcut_preroll.mp4'),
+        startTime: '00:00:19',
+        endTime: '00:00:25',
+      })
+      const engineArgs = engine.buildYtdlpArgs(fastTask, '137+140', { ffmpegDir: path.dirname(bin('ffmpeg')) }, { abortController: null, child: null, retries: 0 })
+      const sectionIdx = engineArgs.indexOf('--download-sections')
+      assert.notEqual(sectionIdx, -1)
+      const downloaderArgsPairs = []
+      for (let i = 0; i < engineArgs.length - 1; i++) {
+        if (engineArgs[i] === '--downloader-args') downloaderArgsPairs.push('--downloader-args', engineArgs[i + 1])
+      }
+      assert.ok(downloaderArgsPairs.some(a => a.startsWith('ffmpeg_i2:-ss 7 -t 18')), 'should pre-roll audio by 12s')
+      assert.ok(downloaderArgsPairs.includes('ffmpeg_o:-copyts'), 'should preserve timestamps for lossless alignment')
+
+      const rawMkv = path.join(dir, 'raw_fastcut.mkv')
+      await new Promise((resolve, reject) => {
+        const child = cp.spawn(bin('yt-dlp'), [
+          '--no-warnings', '--no-part', '--ffmpeg-location', path.dirname(bin('ffmpeg')),
+          '--load-info-json', infoPath, '-f', '137+140', '--merge-output-format', 'mkv',
+          '--download-sections', engineArgs[sectionIdx + 1],
+          ...downloaderArgsPairs,
+          '-o', rawMkv,
+        ], { windowsHide: true })
+        let stderr = ''
+        child.stderr.on('data', d => { stderr += d })
+        child.once('error', reject)
+        child.once('close', code => code === 0 ? resolve() : reject(new Error(`yt-dlp exited ${code}: ${stderr}`)))
+      })
+
+      // Feed the section-trimmed MKV into DownloadManager and verify lossless alignment produces zero leading silence
+      DirectEngine.prototype.download = async draft => {
+        const candidate = path.join(draft.directory, 'raw_fastcut.mkv')
+        await fs.copyFile(rawMkv, candidate)
+        return { kind: 'success', candidate, sectionTrimmed: true }
+      }
+      const managerA = managerFor(fastTask)
+      try {
+        await managerA.executeEngine(fastTask.id)
+        assert.equal(fastTask.status, 'completed', fastTask.errorMessage)
+        const starts = await probeStreamStartTimes(fastTask.filePath)
+        assert.ok(starts.videoStart !== null && starts.audioStart !== null)
+        assert.ok(starts.videoStart < 0.15, `expected videoStart < 0.15s, got ${starts.videoStart}`)
+        assert.ok(starts.audioStart < 0.15, `expected audioStart < 0.15s, got ${starts.audioStart}`)
+        assert.ok(Math.abs(starts.videoStart - starts.audioStart) < 0.15, `A/V drift too large: v=${starts.videoStart}, a=${starts.audioStart}`)
+        const silence = cp.spawnSync(bin('ffmpeg'), ['-hide_banner', '-i', fastTask.filePath, '-af', 'silencedetect=n=-30dB:d=0.5', '-f', 'null', '-'], { encoding: 'utf8', timeout: 15000 })
+        assert.doesNotMatch(silence.stderr, /silence_start:/, `unexpected silence detected: ${silence.stderr}`)
+      } finally { managerA.flushPendingSave() }
+
+      // Fallback Case B: if a section-trimmed source still arrives with audio lagging video by 3.5s, DownloadManager trims the silent intro
+      const laggedMkv = path.join(dir, 'lagged.mkv')
+      const lagGen = cp.spawnSync(bin('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-ss', '0', '-t', '10', '-i', videoSrc, '-itsoffset', '3.5', '-ss', '0', '-t', '6.5', '-i', audioSrc, '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', laggedMkv], { timeout: 30000 })
+      assert.equal(lagGen.status, 0, lagGen.stderr?.toString())
+
+      const fallbackTask = item(dir, {
+        id: 'fastcut-lagged-fallback',
+        targetFormat: 'mp4',
+        filename: 'fastcut_fallback.mp4',
+        filePath: path.join(dir, 'fastcut_fallback.mp4'),
+        startTime: '00:00:19',
+        endTime: '00:00:25',
+      })
+      DirectEngine.prototype.download = async draft => {
+        const candidate = path.join(draft.directory, 'lagged.mkv')
+        await fs.copyFile(laggedMkv, candidate)
+        return { kind: 'success', candidate, sectionTrimmed: true }
+      }
+      const managerB = managerFor(fallbackTask)
+      try {
+        await managerB.executeEngine(fallbackTask.id)
+        assert.equal(fallbackTask.status, 'completed', fallbackTask.errorMessage)
+        const startsB = await probeStreamStartTimes(fallbackTask.filePath)
+        assert.ok(startsB.videoStart !== null && startsB.audioStart !== null)
+        assert.ok(startsB.audioStart < 0.2, `fallback audioStart should be < 0.2s, got ${startsB.audioStart}`)
+        assert.ok(Math.abs(startsB.videoStart - startsB.audioStart) < 0.2, `fallback A/V drift too large: v=${startsB.videoStart}, a=${startsB.audioStart}`)
+      } finally { managerB.flushPendingSave() }
+    } finally {
+      DirectEngine.prototype.download = originalDirect
+      await new Promise(r => server.close(r))
     }
   }))
 
@@ -1314,6 +1454,8 @@ suite('YouTube access', test => {
     assert.equal(seen[0].includes('--force-keyframes-at-cuts'), false)
     assert.equal(seen[0].includes('--continue'), false)
     assert.equal(seen[0][seen[0].indexOf('--merge-output-format') + 1], 'mkv')
+    assert.equal(seen[0].includes('ffmpeg_i2:-ss 11688 -t 102'), true)
+    assert.equal(seen[0].includes('ffmpeg_o:-copyts'), true)
 
     const vodExactRes = await engine.download({ ...task(), startTime: '03:15:00', endTime: '03:16:30', trimMode: 'exact' }, context())
     assert.deepEqual(vodExactRes, { kind: 'success', candidate: 'fixture.mp4', sectionTrimmed: true })
