@@ -4,7 +4,6 @@ import { useSettingsStore } from '../stores/useSettingsStore'
 
 export function useSettingsInit(): void {
   const lang = useSettingsStore(s => s.lang)
-  const concurrentDownloads = useSettingsStore(s => s.concurrentDownloads)
   const totalDownloadedBytes = useSettingsStore(s => s.totalDownloadedBytes)
   const username = useSettingsStore(s => s.username)
   const password = useSettingsStore(s => s.password)
@@ -19,7 +18,10 @@ export function useSettingsInit(): void {
     window.cortexDl
       .getConcurrency()
       .then(val => {
-        if ([3, 5, 10].includes(val)) setConcurrentDownloads(val)
+        if ([3, 5, 10].includes(val)) {
+          localStorage.setItem('cortex-concurrent', String(val))
+          setConcurrentDownloads(val, false)
+        }
       })
       .catch(() => {})
   }, [setConcurrentDownloads])
@@ -37,6 +39,7 @@ export function useSettingsInit(): void {
 
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
+    document.documentElement.lang = lang
     localStorage.setItem('language', lang)
   }, [lang])
 
@@ -66,11 +69,6 @@ export function useSettingsInit(): void {
   useEffect(() => {
     localStorage.setItem('cortex-notifications', 'true')
   }, [])
-
-  useEffect(() => {
-    localStorage.setItem('cortex-concurrent', String(concurrentDownloads))
-    window.cortexDl.setConcurrency(concurrentDownloads).catch(() => {})
-  }, [concurrentDownloads])
 
   // Debounce persistence so frequent download stats ticks don't hammer synchronous localStorage writes.
   useEffect(() => {

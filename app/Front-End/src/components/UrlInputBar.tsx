@@ -12,6 +12,8 @@ export const UrlInputBar = React.memo(
     maxBatchItems,
     placeholderText,
     pasteAndGoText,
+    analyzeText = 'Analyze',
+    batchFullText,
     onPasteAndAnalyze,
     onAnalyze,
     onClear,
@@ -23,6 +25,8 @@ export const UrlInputBar = React.memo(
     maxBatchItems: number
     placeholderText: string
     pasteAndGoText: string
+    analyzeText?: string
+    batchFullText?: string
     onPasteAndAnalyze: () => void
     onAnalyze: (url: string) => void
     onClear: () => void
@@ -52,7 +56,8 @@ export const UrlInputBar = React.memo(
           }}
           placeholder={
             batchCount >= maxBatchItems
-              ? `Batch full (${maxBatchItems}/${maxBatchItems}). Start download to clear.`
+              ? batchFullText ||
+                `Batch full (${maxBatchItems}/${maxBatchItems}). Start download to clear.`
               : placeholderText
           }
           dir="auto"
@@ -75,11 +80,7 @@ export const UrlInputBar = React.memo(
           onClick={localUrl.trim().length === 0 ? onPasteAndAnalyze : () => onAnalyze(localUrl)}
           disabled={analyzing}
           aria-label={
-            analyzing
-              ? analyzingText
-              : localUrl.trim().length === 0
-                ? pasteAndGoText
-                : 'Analyze URL'
+            analyzing ? analyzingText : localUrl.trim().length === 0 ? pasteAndGoText : analyzeText
           }
         >
           {analyzing ? (
@@ -95,7 +96,7 @@ export const UrlInputBar = React.memo(
           ) : (
             <>
               <span>🔍</span>
-              <span>Analyze</span>
+              <span>{analyzeText}</span>
             </>
           )}
         </button>

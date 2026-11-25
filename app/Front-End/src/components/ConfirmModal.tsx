@@ -1,5 +1,5 @@
 // Confirmation dialog with backdrop dismiss and Framer Motion enter/exit transitions.
-import React from 'react'
+import React, { useEffect } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import '../App.css'
@@ -14,6 +14,7 @@ interface ConfirmModalProps {
   dir?: 'rtl' | 'ltr'
   onConfirm: () => void
   onCancel: () => void
+  onDismiss?: () => void
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -26,7 +27,19 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   dir = 'ltr',
   onConfirm,
   onCancel,
+  onDismiss,
 }) => {
+  const handleDismiss = onDismiss ?? onCancel
+
+  useEffect(() => {
+    if (!isOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleDismiss()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, handleDismiss])
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -41,7 +54,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           onClick={e => {
-            if (e.target === e.currentTarget) onCancel()
+            if (e.target === e.currentTarget) handleDismiss()
           }}
         >
           <motion.div
@@ -60,7 +73,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                   {title}
                 </h3>
               </div>
-              <button className="modal-close-btn" onClick={onCancel} aria-label="Close dialog">
+              <button className="modal-close-btn" onClick={handleDismiss} aria-label="Close dialog">
                 <X size={20} />
               </button>
             </div>

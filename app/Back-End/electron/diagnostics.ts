@@ -9,7 +9,7 @@ export function redact(text: string): string {
   return text
     .replace(/https?:\/\/[^\s"'<>]+/gi, '[URL redacted]')
     .replace(
-      /(?:authorization|cookie|set-cookie|password|oauth|access_token|refresh_token)[^\r\n]*/gi,
+      /(?:authorization|cookie|set-cookie|password|oauth|access_token|refresh_token|bearer\s+\S+|["']?token["']?\s*[:=])[^\r\n]*/gi,
       '[secret redacted]',
     )
 }

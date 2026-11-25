@@ -143,7 +143,16 @@ export class YoutubeEngine implements IEngine {
       return { kind: 'fatal-error', message: 'yt-dlp produced no final media file' }
     }
     const youtubeFailure = publicFirst ? youtubeErrorCode(result.stderr) : null
-    if (youtubeFailure) return { kind: 'fatal-error', message: youtubeFailure }
+    if (youtubeFailure) {
+      if (youtubeFailure === 'YOUTUBE_NETWORK_ERROR') {
+        return {
+          kind: 'retryable-error',
+          message: youtubeFailure,
+          delayMs: Math.min(3000 * 2 ** runtime.retries, 60000),
+        }
+      }
+      return { kind: 'fatal-error', message: youtubeFailure }
+    }
     if (publicFirst && /HTTP (?:Error )?403/i.test(result.stderr))
       return { kind: 'fatal-error', message: 'YOUTUBE_FORMATS_RESTRICTED' }
     return {
@@ -341,8 +350,13 @@ export class YoutubeEngine implements IEngine {
     // Section cuts, livestreams, and Kick VODs can pause silently while seeking or buffering fragments.
     const stallLimitMs = sectionBounds || task.isLive || isKickUrl(task.url) ? 180_000 : 90_000
     let lastActivity = nowMs()
+    let stalled = false
     const watchdog = setInterval(() => {
-      if (nowMs() - lastActivity >= stallLimitMs) void killProcessTree(proc)
+      if (nowMs() - lastActivity >= stallLimitMs && !stalled) {
+        stalled = true
+        ffmpegState.stderr += `\nERROR: Download stalled with no progress for ${Math.round(stallLimitMs / 1000)}s`
+        void killProcessTree(proc)
+      }
     }, 5000)
     watchdog.unref?.()
     const MAX_STDERR_BYTES = 64 * 1024
@@ -501,8 +515,6 @@ export class YoutubeEngine implements IEngine {
       '--socket-timeout',
       trimming || isKickUrl(task.url) ? '20' : '10',
 
-      '-N',
-      '10',
       '--concurrent-fragments',
       '6',
       ...(trimming ? [] : ['--http-chunk-size', '10.0M']),

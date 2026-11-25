@@ -44,7 +44,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
 
-log.initialize({ preload: true })
+log.initialize({ preload: false })
 log.transports.file.level = 'info'
 
 export let downloads: DownloadManager | null = null
@@ -134,7 +134,7 @@ function initTray(): void {
 
 function createWindow(): void {
   const iconPath = VITE_DEV_SERVER_URL
-    ? path.join(process.env.APP_ROOT!, 'public', 'CortexDL.ico')
+    ? path.join(process.env.APP_ROOT!, 'Front-End', 'public', 'CortexDL.ico')
     : path.join(RENDERER_DIST, 'CortexDL.ico')
 
   win = new BrowserWindow({
@@ -192,6 +192,9 @@ function createWindow(): void {
   win.webContents.on('will-navigate', (event, url) => {
     if (url !== win?.webContents.getURL()) event.preventDefault()
   })
+  win.webContents.on('will-redirect', (event, url) => {
+    if (url !== win?.webContents.getURL()) event.preventDefault()
+  })
   let crashes = 0
   win.webContents.on('render-process-gone', (_event, details) => {
     log.error('[Renderer crash]', {
@@ -212,6 +215,13 @@ function createWindow(): void {
   }
 
   installMediaSessionHeaders(session.defaultSession)
+  const allowedPermissions = new Set(['clipboard-read', 'clipboard-sanitized-write', 'fullscreen'])
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(allowedPermissions.has(permission))
+  })
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) =>
+    allowedPermissions.has(permission),
+  )
 }
 
 if (!gotTheLock) {
@@ -250,6 +260,11 @@ if (!gotTheLock) {
         }
       } finally {
         downloads?.flushPendingSave()
+        try {
+          db.close()
+        } catch (err) {
+          log.warn('[Shutdown] Failed to close SQLite database cleanly:', err)
+        }
       }
     })()
       .catch(err => {
@@ -368,10 +383,16 @@ if (!gotTheLock) {
 }
 
 let initialization: Promise<void> | null = null
+let initializationForced = false
 
 async function initializeRuntime(allowNetwork = true, force = false): Promise<void> {
   if (isQuitting) return
-  if (initialization) return initialization
+  if (initialization) {
+    if (!force || initializationForced) return initialization
+    await initialization
+    if (isQuitting) return
+  }
+  initializationForced = force
   initialization = (async () => {
     try {
       if (!win) throw new Error('Window unavailable')
@@ -383,6 +404,7 @@ async function initializeRuntime(allowNetwork = true, force = false): Promise<vo
     }
   })().finally(() => {
     initialization = null
+    initializationForced = false
   })
   return initialization
 }

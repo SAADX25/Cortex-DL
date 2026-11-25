@@ -17,8 +17,8 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
     const rawMessage =
       error instanceof Error ? error.message : typeof error === 'string' ? error : ''
     const cleanMessage = rawMessage
-      .replace(/^Error invoking remote method ['"][^'"]+['"]:s*/i, '')
-      .replace(/^Error:s*/i, '')
+      .replace(/^Error invoking remote method ['"][^'"]+['"]:\s*/i, '')
+      .replace(/^Error:\s*/i, '')
       .trim()
 
     throw new Error(cleanMessage || 'The request could not be completed.')

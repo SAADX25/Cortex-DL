@@ -162,6 +162,32 @@ export interface Translations {
   drag_drop_title: string
   drag_drop_subtitle: string
   drag_drop_toast: string
+  add_to_batch: string
+  processing_batch: string
+  start_batch_download: string
+  retry_failed_batch: string
+  batch_full_placeholder: string
+  playlist_detected_title: string
+  playlist_detected_desc: string
+  playlist_entire: string
+  playlist_single: string
+  repair_engines_btn: string
+  export_diagnostics_btn: string
+  open_logs_btn: string
+  health_healthy: string
+  health_unchecked: string
+  health_js_supported: string
+  health_js_unsupported: string
+  unsupported_format: string
+  setup_failed: string
+  setup_ready: string
+  setup_checking: string
+  setup_preparing: string
+  setup_recovery_hint: string
+  setup_retry: string
+  setup_retrying: string
+  setup_open_logs: string
+  setup_exit: string
 
   app: {
     loadingLibrary: string

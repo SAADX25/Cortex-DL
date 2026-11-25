@@ -3,6 +3,8 @@ import { useState } from 'react'
 import './SetupOverlay.css'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, AlertCircle, Loader2, RefreshCw, FolderOpen, X } from 'lucide-react'
+import { useLang } from '../stores/useSettingsStore'
+import { translations } from '../translations'
 
 interface SetupState {
   status: string
@@ -15,6 +17,8 @@ interface SetupOverlayProps {
 }
 
 export default function SetupOverlay({ setupState }: SetupOverlayProps) {
+  const lang = useLang()
+  const t = translations[lang]
   const { status, message } = setupState
   const progress = Math.min(
     100,
@@ -56,6 +60,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
   return (
     <div
       data-setup-overlay
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
       aria-busy={(!isError && !isDone) || retrying}
       style={{
         position: 'fixed',
@@ -185,12 +190,12 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
           }}
         >
           {isError
-            ? 'Setup Failed'
+            ? t.setup_failed
             : isDone
-              ? 'Ready to Go'
+              ? t.setup_ready
               : status === 'checking'
-                ? 'Checking Local Engines'
-                : 'Preparing Engines'}
+                ? t.setup_checking
+                : t.setup_preparing}
         </motion.h2>
 
         <div
@@ -203,7 +208,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
 
         {isError && (
           <div className="setup-recovery">
-            <p className="setup-recovery-hint">Restore missing or damaged engines to continue.</p>
+            <p className="setup-recovery-hint">{t.setup_recovery_hint}</p>
             <div className="setup-actions">
               <button
                 type="button"
@@ -216,11 +221,11 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
                   aria-hidden="true"
                   className={retrying ? 'setup-action-spinning' : undefined}
                 />
-                {retrying ? 'Retrying…' : 'Retry Setup'}
+                {retrying ? t.setup_retrying : t.setup_retry}
               </button>
               <button type="button" className="setup-action" onClick={() => void openLogs()}>
                 <FolderOpen size={17} aria-hidden="true" />
-                Open Log Folder
+                {t.setup_open_logs}
               </button>
               <button
                 type="button"
@@ -228,7 +233,7 @@ export default function SetupOverlay({ setupState }: SetupOverlayProps) {
                 onClick={() => void exitApp()}
               >
                 <X size={17} aria-hidden="true" />
-                Exit
+                {t.setup_exit}
               </button>
             </div>
             {actionError && (

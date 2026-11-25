@@ -141,12 +141,13 @@ export async function handleAnalyzeUrlDirectly(inputUrl: string): Promise<void> 
       parsedUrl.searchParams.has('v') &&
       (parsedUrl.searchParams.has('list') || parsedUrl.searchParams.has('list_id'))
     ) {
+      const copy = t()
       useUIStore.getState().setModalConfig({
         isOpen: true,
-        title: 'Playlist Detected',
-        message: 'Do you want to download the entire playlist or just this single video?',
-        confirmText: 'Entire Playlist',
-        cancelText: 'Single Video',
+        title: copy.playlist_detected_title,
+        message: copy.playlist_detected_desc,
+        confirmText: copy.playlist_entire,
+        cancelText: copy.playlist_single,
         type: 'info',
         onConfirm: () => {
           useUIStore.getState().closeModal()
@@ -159,6 +160,7 @@ export async function handleAnalyzeUrlDirectly(inputUrl: string): Promise<void> 
           parsedUrl.searchParams.delete('index')
           void performAnalysis(parsedUrl.toString())
         },
+        onDismiss: () => {},
       })
       return
     }

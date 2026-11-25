@@ -3,21 +3,22 @@ import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import './App.css'
 import ConfirmModal from './components/ConfirmModal'
-import UpdateModal from './components/UpdateModal'
-import MediaPlayerModal from './components/MediaPlayer/MediaPlayerModal'
 import DownloadList from './components/DownloadList'
 import Sidebar from './components/Sidebar'
-import SettingsTab from './components/SettingsTab'
-import SubtitleStudio from './components/Subtitles/SubtitleStudio'
 import AddDownloadTab from './components/AddDownloadTab'
-import SetupOverlay from './components/SetupOverlay'
 import { formatMessage, translations } from './translations'
-import { useUIStore } from './stores/useUIStore'
+import { useUIStore, type ActiveTab } from './stores/useUIStore'
 import { useSettingsStore } from './stores/useSettingsStore'
 import { useCommentsStore, initCommentsStore } from './stores/useCommentsStore'
 import { useSettingsInit } from './hooks/useSettingsInit'
 import { useDownloadInit } from './hooks/useDownloadInit'
+
 const MediaLibrary = lazy(() => import('./components/MediaLibrary'))
+const SettingsTab = lazy(() => import('./components/SettingsTab'))
+const SubtitleStudio = lazy(() => import('./components/Subtitles/SubtitleStudio'))
+const MediaPlayerModal = lazy(() => import('./components/MediaPlayer/MediaPlayerModal'))
+const UpdateModal = lazy(() => import('./components/UpdateModal'))
+const SetupOverlay = lazy(() => import('./components/SetupOverlay'))
 
 const tabPaneStyle = (isActive: boolean): React.CSSProperties => ({
   width: '100%',
@@ -49,8 +50,18 @@ function App() {
   const lang = useSettingsStore(s => s.lang)
   const t = translations[lang]
   const refreshHealth = useSettingsStore(s => s.refreshHealth)
+  const updateModalOpen = useSettingsStore(s => s.updateModalOpen)
 
   const activeTab = useUIStore(s => s.activeTab)
+  const [visitedTabs, setVisitedTabs] = useState<Set<ActiveTab>>(() => new Set<ActiveTab>(['add']))
+  useEffect(() => {
+    setVisitedTabs(prev => {
+      if (prev.has(activeTab)) return prev
+      const next = new Set(prev)
+      next.add(activeTab)
+      return next
+    })
+  }, [activeTab])
   const toastMsg = useUIStore(s => s.toastMsg)
   const modalConfig = useUIStore(s => s.modalConfig)
   const closeModal = useUIStore(s => s.closeModal)
@@ -90,7 +101,12 @@ function App() {
       void window.cortexDl
         .getSetupState()
         .then(state => {
-          if (!disposed && !receivedProgress) setSetupState(state)
+          if (!disposed && !receivedProgress) {
+            setSetupState(state)
+            if (['ready', 'cached-ready', 'degraded', 'repair-required'].includes(state.status)) {
+              void refreshHealth()
+            }
+          }
         })
         .catch(error => console.error('[Setup] State request failed:', error))
       return () => {
@@ -112,7 +128,9 @@ function App() {
       )}
       {setupState &&
         ['repairing', 'repair-required', 'degraded', 'fatal'].includes(setupState.status) && (
-          <SetupOverlay setupState={setupState} />
+          <Suspense fallback={null}>
+            <SetupOverlay setupState={setupState} />
+          </Suspense>
         )}
       <Sidebar />
 
@@ -142,26 +160,40 @@ function App() {
         </div>
 
         <div style={tabPaneStyle(activeTab === 'library')}>
-          <Suspense
-            fallback={
-              <div className="tab-content" role="status">
-                {t.app.loadingLibrary}
-              </div>
-            }
-          >
-            <MediaLibrary />
-          </Suspense>
+          {visitedTabs.has('library') && (
+            <Suspense
+              fallback={
+                <div className="tab-content" role="status">
+                  {t.app.loadingLibrary}
+                </div>
+              }
+            >
+              <MediaLibrary />
+            </Suspense>
+          )}
         </div>
 
         <div style={tabPaneStyle(activeTab === 'settings')}>
-          <SettingsTab />
+          {visitedTabs.has('settings') && (
+            <Suspense fallback={<div className="tab-content" role="status" />}>
+              <SettingsTab />
+            </Suspense>
+          )}
         </div>
         <div style={tabPaneStyle(activeTab === 'subtitles')}>
-          <SubtitleStudio />
+          {visitedTabs.has('subtitles') && (
+            <Suspense fallback={<div className="tab-content" role="status" />}>
+              <SubtitleStudio />
+            </Suspense>
+          )}
         </div>
       </main>
 
-      <UpdateModal />
+      {updateModalOpen && (
+        <Suspense fallback={null}>
+          <UpdateModal />
+        </Suspense>
+      )}
 
       <ConfirmModal
         isOpen={modalConfig.isOpen}
@@ -176,18 +208,24 @@ function App() {
           closeModal()
           modalConfig.onCancel?.()
         }}
+        onDismiss={() => {
+          closeModal()
+          modalConfig.onDismiss?.()
+        }}
       />
 
       {mediaPlayerFile && (
-        <MediaPlayerModal
-          key={mediaPlayerFile.filePath}
-          isOpen
-          filePath={mediaPlayerFile.filePath}
-          title={mediaPlayerFile.title}
-          subtitlePreview={mediaPlayerFile.subtitlePreview}
-          dir={lang === 'ar' ? 'rtl' : 'ltr'}
-          onClose={() => setMediaPlayerFile(null)}
-        />
+        <Suspense fallback={null}>
+          <MediaPlayerModal
+            key={mediaPlayerFile.filePath}
+            isOpen
+            filePath={mediaPlayerFile.filePath}
+            title={mediaPlayerFile.title}
+            subtitlePreview={mediaPlayerFile.subtitlePreview}
+            dir={lang === 'ar' ? 'rtl' : 'ltr'}
+            onClose={() => setMediaPlayerFile(null)}
+          />
+        </Suspense>
       )}
 
       <AnimatePresence>

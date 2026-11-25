@@ -2,12 +2,30 @@
 import { app, ipcMain } from 'electron'
 import log from 'electron-log'
 import { spawn } from 'node:child_process'
-import { existsSync, promises as fsPromises } from 'node:fs'
+import { existsSync, lstatSync, promises as fsPromises } from 'node:fs'
 import path from 'node:path'
 import type { PlayerSubtitleTrack } from '../../../Shared/types'
 import { engineExecutionFailed, ensureEnginesReady } from '../engines/engineManager'
 import { getBinaryPath } from '../paths'
 import type { IpcDependencies } from './handlers'
+
+const SUBTITLE_SOURCE_EXTENSIONS = new Set([
+  '.mp4',
+  '.mkv',
+  '.webm',
+  '.avi',
+  '.mov',
+  '.ogv',
+  '.m4v',
+  '.mp3',
+  '.m4a',
+  '.aac',
+  '.opus',
+  '.flac',
+  '.wav',
+  '.ogg',
+  '.wma',
+])
 
 export function registerMediaIpcHandlers(deps: IpcDependencies): void {
   const {
@@ -72,11 +90,15 @@ export function registerMediaIpcHandlers(deps: IpcDependencies): void {
     async (_event, videoPath: string, playerSession: string) => {
       try {
         if (isMediaSessionClosed(playerSession)) return []
-        if (!videoPath || !existsSync(videoPath)) return []
+        const normalizedVideoPath = videoPath ? path.normalize(videoPath) : ''
+        if (!normalizedVideoPath || !existsSync(normalizedVideoPath)) return []
+        const stat = lstatSync(normalizedVideoPath)
+        if (stat.isSymbolicLink() || !stat.isFile()) return []
 
-        const dir = path.dirname(videoPath)
-        const ext = path.extname(videoPath)
-        const baseName = path.basename(videoPath, ext)
+        const ext = path.extname(normalizedVideoPath)
+        if (!SUBTITLE_SOURCE_EXTENSIONS.has(ext.toLowerCase())) return []
+        const dir = path.dirname(normalizedVideoPath)
+        const baseName = path.basename(normalizedVideoPath, ext)
         const files = await fsPromises.readdir(dir)
         const subtitles: PlayerSubtitleTrack[] = []
 
@@ -120,6 +142,7 @@ export function registerMediaIpcHandlers(deps: IpcDependencies): void {
               )
               const untrack = trackMediaProcess(playerSession, 'probe', () => p.kill())
               const timer = setTimeout(() => p.kill(), 15_000)
+              timer.unref()
 
               p.stdout.on('data', d => {
                 output += d.toString()

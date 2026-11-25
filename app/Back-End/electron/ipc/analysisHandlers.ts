@@ -36,10 +36,14 @@ export function registerAnalysisIpcHandlers(deps: IpcDependencies): void {
       })
       if (canceled || !filePath) return { success: false, canceled: true }
 
-      win.webContents.send('cortexdl:comments-extraction-started')
+      if (!win.isDestroyed()) {
+        win.webContents.send('cortexdl:comments-extraction-started')
+      }
 
       const result = await extractAndSaveComments(url, filePath, (current, total) => {
-        win.webContents.send('cortexdl:comments-progress', current, total)
+        if (!win.isDestroyed()) {
+          win.webContents.send('cortexdl:comments-progress', current, total)
+        }
       })
       if (result) {
         return { success: true, filePath }
@@ -146,7 +150,7 @@ export function registerAnalysisIpcHandlers(deps: IpcDependencies): void {
   ipcMain.handle(
     'cortexdl:get-trim-preview-streams',
     async (_event, url: string, previewSession: string) => {
-      if (typeof previewSession !== 'string' || !/^trim-[\w-]{1,128}$/.test(previewSession)) {
+      if (typeof previewSession !== 'string' || !/^trim-[a-zA-Z0-9-]{1,75}$/.test(previewSession)) {
         throw new Error('Invalid trim session')
       }
       if (/\.m3u8(\?|#|$)/i.test(url)) return { videoUrl: url, streamType: 'hls' as const }
@@ -163,6 +167,12 @@ export function registerAnalysisIpcHandlers(deps: IpcDependencies): void {
     'cortexdl:get-direct-stream-url',
     async (_event, url: string, previewSession?: string) => {
       try {
+        if (
+          previewSession !== undefined &&
+          (typeof previewSession !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(previewSession))
+        ) {
+          throw new Error('Invalid media session')
+        }
         log.info(`[IPC] get-direct-stream-url called for: ${url.slice(0, 80)}...`)
         const previewOptions = previewSession
           ? {

@@ -3,6 +3,7 @@ import log from 'electron-log'
 import { Notification, BrowserWindow } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { promises as fs } from 'node:fs'
+import path from 'node:path'
 import { type DownloadTask, type TaskRuntime, UPDATE_CHANNEL } from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
 
@@ -250,7 +251,12 @@ const TASKKILL_TIMEOUT_MS = 5_000
 
 function spawnTaskkill(pid: number): Promise<number> {
   return new Promise<number>((resolve, reject) => {
-    const killer = spawn('taskkill', ['/F', '/T', '/PID', String(pid)], {
+    const taskkillPath = path.join(
+      process.env.SystemRoot || 'C:\\Windows',
+      'System32',
+      'taskkill.exe',
+    )
+    const killer = spawn(taskkillPath, ['/F', '/T', '/PID', String(pid)], {
       windowsHide: true,
       detached: false,
       stdio: 'ignore',

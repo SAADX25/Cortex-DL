@@ -81,10 +81,13 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
   let loadPromise: Promise<LoadedUpdater> | null = null
   const currentPhase = () => state.phase
   let activeToken: UpdaterCancellationToken | null = null
+  let downloadInFlight = false
+  let downloadGeneration = 0
   let hasUpdateCandidate = false
   let cancelling = false
   let disposed = false
   let lastProgressEmitMs = 0
+  const boundListeners: Array<[string, (...args: any[]) => void]> = []
 
   const publish = (next: AppUpdateState): AppUpdateState => {
     state = next
@@ -103,7 +106,12 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
     updater.allowDowngrade = false
     updater.autoInstallOnAppQuit = true
 
-    updater.on('checking-for-update', () => {
+    const listen = (event: string, fn: (...args: any[]) => void) => {
+      updater.on(event, fn)
+      boundListeners.push([event, fn])
+    }
+
+    listen('checking-for-update', () => {
       if (disposed) return
       deps.logger.info('[Updater] Checking for updates...')
       updateState({
@@ -114,7 +122,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       })
     })
 
-    updater.on('update-available', (info: UpdaterInfoPayload) => {
+    listen('update-available', (info: UpdaterInfoPayload) => {
       if (disposed) return
       hasUpdateCandidate = true
       const totalSizeBytes = extractUpdateSize(info?.files)
@@ -140,7 +148,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       })
     })
 
-    updater.on('update-not-available', () => {
+    listen('update-not-available', () => {
       if (disposed) return
       hasUpdateCandidate = false
       deps.logger.info('[Updater] Application is up to date')
@@ -159,7 +167,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       })
     })
 
-    updater.on('download-progress', (progressObj: UpdaterProgressPayload) => {
+    listen('download-progress', (progressObj: UpdaterProgressPayload) => {
       if (disposed || cancelling) return
       const snapshot = createProgressSnapshot(progressObj, state.totalSizeBytes)
       const currentMs = now()
@@ -185,7 +193,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       }
     })
 
-    updater.on('update-downloaded', (info: UpdaterInfoPayload) => {
+    listen('update-downloaded', (info: UpdaterInfoPayload) => {
       if (disposed) return
       activeToken = null
       cancelling = false
@@ -222,7 +230,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       })
     })
 
-    updater.on('update-cancelled', () => {
+    listen('update-cancelled', () => {
       if (disposed) return
       activeToken = null
       cancelling = false
@@ -236,7 +244,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       })
     })
 
-    updater.on('error', (err: Error) => {
+    listen('error', (err: Error) => {
       if (disposed) return
       if (cancelling || isCancellationError(err)) {
         cancelling = false
@@ -261,6 +269,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       loadPromise = deps
         .loadUpdater()
         .then(result => {
+          if (disposed) return result
           attachListeners(result.autoUpdater)
           loaded = result
           return result
@@ -335,7 +344,7 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
 
   const downloadUpdate = async (): Promise<AppUpdateState> => {
     if (disposed) return state
-    if (state.phase === 'downloading' || state.phase === 'downloaded') {
+    if (downloadInFlight || state.phase === 'downloading' || state.phase === 'downloaded') {
       return state
     }
 
@@ -348,18 +357,21 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       })
     }
 
+    downloadInFlight = true
+    const generation = ++downloadGeneration
+    let token: UpdaterCancellationToken | null = null
     try {
       const runtime = await ensureLoaded()
-      if (!runtime || disposed) return state
+      if (!runtime || disposed || generation !== downloadGeneration) return state
 
       if (!hasUpdateCandidate) {
         const checked = await checkForUpdates(true)
-        if (checked.phase !== 'available') return checked
+        if (checked.phase !== 'available' || generation !== downloadGeneration) return checked
       }
 
       cancelling = false
       lastProgressEmitMs = 0
-      const token = runtime.createCancellationToken()
+      token = runtime.createCancellationToken()
       activeToken = token
 
       updateState({
@@ -376,8 +388,8 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       await runtime.autoUpdater.downloadUpdate(token)
       return state
     } catch (err) {
-      if (disposed) return state
-      activeToken = null
+      if (disposed || generation !== downloadGeneration) return state
+      if (activeToken === token) activeToken = null
       if (cancelling || isCancellationError(err)) {
         cancelling = false
         return updateState({
@@ -396,6 +408,10 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
         errorDetail: classified.detail || null,
         canCancel: false,
       })
+    } finally {
+      if (generation === downloadGeneration) {
+        downloadInFlight = false
+      }
     }
   }
 
@@ -405,6 +421,8 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       return state
     }
     cancelling = true
+    downloadGeneration++
+    downloadInFlight = false
     const token = activeToken
     activeToken = null
     try {
@@ -435,6 +453,8 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
 
   const dispose = (): void => {
     disposed = true
+    downloadGeneration++
+    downloadInFlight = false
     if (activeToken) {
       try {
         activeToken.cancel()
@@ -443,7 +463,12 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       }
       activeToken = null
     }
-    loaded?.autoUpdater.removeAllListeners()
+    if (loaded) {
+      for (const [event, listener] of boundListeners) {
+        loaded.autoUpdater.off(event, listener)
+      }
+      boundListeners.length = 0
+    }
   }
 
   return {

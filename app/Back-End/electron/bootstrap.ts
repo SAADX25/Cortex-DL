@@ -143,20 +143,26 @@ const setupServices = {
 }
 
 let pending: Promise<void> | null = null
+let pendingForced = false
 
 export async function stopSetup(): Promise<void> {
   await pending?.catch(() => {})
 }
 
-export function runSetup(
+export async function runSetup(
   win: BrowserWindow,
   allowNetwork = true,
   force = false,
   services = setupServices,
 ): Promise<void> {
-  if (pending) return pending
+  if (pending) {
+    if (!force || pendingForced) return pending
+    await pending.catch(() => {})
+  }
+  pendingForced = force
   pending = setup(win, allowNetwork, force, services).finally(() => {
     pending = null
+    pendingForced = false
   })
   return pending
 }

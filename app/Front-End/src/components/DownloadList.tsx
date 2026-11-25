@@ -1,6 +1,6 @@
 // Filterable, searchable downloads queue with bulk history/file cleanup modal
 import React, { useState, useMemo, useRef, useEffect } from 'react'
-import { X, Trash2, DownloadCloud, Search, Plus, CheckCheck } from 'lucide-react'
+import { X, Trash2, DownloadCloud, Search, Plus, CheckCheck, AlertCircle } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useDownloadSnapshot, useDownloadStore } from '../stores/downloadStore'
 import { useUIStore } from '../stores/useUIStore'
@@ -18,6 +18,7 @@ const DownloadList: React.FC = () => {
   const lang = useLang()
   const activeTab = useUIStore(s => s.activeTab)
   const playerOpen = useUIStore(s => !!s.mediaPlayerFile && !s.mediaPlayerFloating)
+  const globalError = useUIStore(s => s.globalError)
   const onError = useUIStore(s => s.setGlobalError)
   const t = translations[lang]
   const snapshot = useDownloadSnapshot()
@@ -48,6 +49,15 @@ const DownloadList: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeTab, playerOpen])
+
+  useEffect(() => {
+    if (!showClearModal) return
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowClearModal(false)
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [showClearModal])
 
   const handleClearAll = async (deleteFiles: boolean) => {
     setShowClearModal(false)
@@ -185,6 +195,35 @@ const DownloadList: React.FC = () => {
         </div>
       </header>
 
+      {globalError ? (
+        <div
+          className="global-error-banner"
+          role="alert"
+          dir={lang === 'ar' ? 'rtl' : 'ltr'}
+          style={{ marginBottom: 16, justifyContent: 'space-between' }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            <AlertCircle size={19} />
+            <span>{globalError}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onError(null)}
+            aria-label={t.app.close}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              padding: 4,
+              display: 'inline-flex',
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : null}
+
       <AnimatePresence>
         {showClearModal && (
           <motion.div
@@ -211,6 +250,9 @@ const DownloadList: React.FC = () => {
             }}
           >
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={dl.clearModalTitle}
               style={{
                 backgroundColor: 'var(--bg-card)',
                 padding: '2rem',

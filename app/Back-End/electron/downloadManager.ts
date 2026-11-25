@@ -108,10 +108,14 @@ export class DownloadManager {
   private loadState(): void {
     try {
       const rows = taskDb.getAllTasks.all() as { full_payload: string }[]
+      const modified: DownloadTask[] = []
       for (const row of rows) {
         try {
           const task: DownloadTask = JSON.parse(row.full_payload)
           if (!task.id || !task.url) continue
+          const prevStatus = task.status
+          const prevPhase = task.phase
+          const prevProgress = task.overallProgress
 
           // Any task left in-flight or missing its validated output on restart drops back to paused.
           if (
@@ -135,10 +139,22 @@ export class DownloadManager {
           updateTaskProgress(task)
           this.tasks.set(task.id, task)
           this.runtime.set(task.id, this.freshRuntime())
-          this.upsertTaskToDb(task)
+          if (
+            task.status !== prevStatus ||
+            task.phase !== prevPhase ||
+            task.overallProgress !== prevProgress
+          ) {
+            modified.push(task)
+          }
         } catch (e) {
           log.error('Failed to parse task from DB row:', e)
         }
+      }
+      if (modified.length > 0) {
+        const trans = db.transaction((tasks: DownloadTask[]) => {
+          for (const t of tasks) this.upsertTaskToDb(t)
+        })
+        trans(modified)
       }
     } catch (err) {
       log.error('Error loading tasks from DB:', err)
@@ -257,18 +273,28 @@ export class DownloadManager {
     return this.tasks.get(id) ?? null
   }
 
+  private resolveTargetDirectory(directory: string, subfolderName?: string): string {
+    const rawSubfolder = (subfolderName ?? '').trim()
+    const safeSubfolder = rawSubfolder.replace(/[/\\:*?"<>|]/g, '').trim()
+    if (!safeSubfolder || safeSubfolder === '.' || safeSubfolder === '..') {
+      return directory
+    }
+    const base = path.resolve(directory)
+    const target = path.resolve(base, safeSubfolder)
+    const rel = path.relative(base, target)
+    if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+      throw new Error('Invalid subfolder name')
+    }
+    return target
+  }
+
   async add(input: StartInput): Promise<DownloadTask> {
     trimBounds(input)
     if (!isHttpUrl(input.url)) {
       throw new Error('URL must be http or https')
     }
 
-    const rawSubfolder = (input.subfolderName ?? '').trim()
-
-    const safeSubfolder = rawSubfolder.replace(/[/\\:*?"<>|]/g, '').trim()
-    const finalDirectory = safeSubfolder
-      ? path.join(input.directory, safeSubfolder)
-      : input.directory
+    const finalDirectory = this.resolveTargetDirectory(input.directory, input.subfolderName)
     await ensureDirectoryExists(finalDirectory)
 
     const id = randomUUID()
@@ -315,7 +341,7 @@ export class DownloadManager {
 
     this.tasks.set(id, task)
     this.runtime.set(id, this.freshRuntime())
-    this.saveStateImmediate()
+    this.saveStateImmediate(id)
     log.info(
       `[DM] Task added: ${id} engine=${engine} format=${targetFormat} url=${input.url.slice(0, 60)}`,
     )
@@ -331,12 +357,7 @@ export class DownloadManager {
       trimBounds(input)
       if (!isHttpUrl(input.url)) continue
 
-      const rawSubfolder = (input.subfolderName ?? '').trim()
-
-      const safeSubfolder = rawSubfolder.replace(/[/\\:*?"<>|]/g, '').trim()
-      const finalDirectory = safeSubfolder
-        ? path.join(input.directory, safeSubfolder)
-        : input.directory
+      const finalDirectory = this.resolveTargetDirectory(input.directory, input.subfolderName)
       await ensureDirectoryExists(finalDirectory)
 
       const id = randomUUID()
@@ -422,6 +443,7 @@ export class DownloadManager {
       await killProcessTree(attempt.child)
       await attempt.done
     }
+    if (this.tasks.get(id) !== task) return task
     if (task.status === 'pausing') task.status = 'paused'
     this.saveStateImmediate(id)
     sendUpdate(this.win, task)
@@ -465,6 +487,7 @@ export class DownloadManager {
     task.resumeChunks = undefined
     task.resumeDirectory = undefined
     await this.removeTaskFragments(task).catch(e => log.warn('[DM] Temp cleanup:', e))
+    if (this.tasks.get(id) !== task) return task
     this.saveStateImmediate(id)
     sendUpdate(this.win, task)
     this.schedule()
@@ -474,7 +497,13 @@ export class DownloadManager {
   async delete(id: string, deleteFile: boolean): Promise<void> {
     const task = this.tasks.get(id)
     if (!task) return
-    await this.cancel(id)
+    if (task.status !== 'completed' && task.status !== 'canceled') {
+      await this.cancel(id)
+    } else {
+      await this.attempts.get(id)?.done
+      await this.removeTaskFragments(task).catch(e => log.warn('[DM] Temp cleanup:', e))
+    }
+    if (this.tasks.get(id) !== task) return
     if (deleteFile) {
       for (const file of task.ownedFiles ?? []) {
         if (path.dirname(path.resolve(file)) !== path.resolve(task.directory)) continue
@@ -510,10 +539,15 @@ export class DownloadManager {
       this.countedStats.delete(id)
       this.dirtyIds.delete(id)
     }
-    try {
-      taskDb.clearCompleted.run()
-    } catch {
-      log.error('DB clearCompleted failed')
+    if (completedIds.length > 0) {
+      try {
+        const trans = db.transaction((ids: string[]) => {
+          for (const id of ids) taskDb.deleteTask.run(id)
+        })
+        trans(completedIds)
+      } catch {
+        log.error('DB clearCompleted failed')
+      }
     }
   }
 
@@ -538,7 +572,7 @@ export class DownloadManager {
       .map(t => t.id)
 
     try {
-      for (const id of activeIds) await this.pause(id)
+      await Promise.allSettled(activeIds.map(id => this.pause(id)))
     } finally {
       this.pausingAll = false
     }
@@ -627,6 +661,7 @@ export class DownloadManager {
           'ytdlpStreams',
           'ytdlpExpectedBytes',
           'ytdlpExpectedStreamCount',
+          'isLive',
         ] as const) {
           Object.assign(task, { [key]: t[key] })
         }

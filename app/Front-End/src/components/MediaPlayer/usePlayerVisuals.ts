@@ -76,7 +76,16 @@ export function useAudioVisualizer({
     const dataArray = new Uint8Array(bufferLength)
 
     const draw = () => {
-      if (sessionClosedRef.current) return
+      if (sessionClosedRef.current || cleaned) {
+        rafId = null
+        animationFrameRef.current = null
+        return
+      }
+      if (audioEl.paused || audioEl.ended) {
+        rafId = null
+        animationFrameRef.current = null
+        return
+      }
       rafId = requestAnimationFrame(draw)
       animationFrameRef.current = rafId
 
@@ -123,22 +132,44 @@ export function useAudioVisualizer({
       }
     }
 
-    draw()
+    const startDraw = () => {
+      if (
+        !cleaned &&
+        !sessionClosedRef.current &&
+        rafId === null &&
+        !audioEl.paused &&
+        !audioEl.ended
+      ) {
+        draw()
+      }
+    }
 
     let cleaned = false
-    audioCleanupRef.current = async () => {
+    audioEl.addEventListener('play', startDraw)
+    audioEl.addEventListener('playing', startDraw)
+    if (!audioEl.paused && !audioEl.ended) startDraw()
+
+    const cleanup = async () => {
       if (cleaned) return
       cleaned = true
+      audioEl.removeEventListener('play', startDraw)
+      audioEl.removeEventListener('playing', startDraw)
       stopPlayerFrame(rafId)
+      rafId = null
       animationFrameRef.current = null
 
       audioContextRef.current = null
       analyserRef.current = null
       sourceRef.current = null
-      audioCleanupRef.current = null
+      if (audioCleanupRef.current === cleanup) audioCleanupRef.current = null
       clearMediaCanvas(canvas)
       await releaseAudioGraph(audioCtx, source, analyser)
       markAudioContext(false)
+    }
+    audioCleanupRef.current = cleanup
+
+    return () => {
+      void cleanup()
     }
   }, [
     safeMode,

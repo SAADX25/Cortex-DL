@@ -1,5 +1,5 @@
 // Zoomable timeline ruler, draggable start/end handles, playhead scrubber, and pan bar for VOD trimming
-import React from 'react'
+import React, { useEffect } from 'react'
 import { ZoomIn, ZoomOut } from 'lucide-react'
 import { clampSeconds, formatCompactTime, formatTimecode, type RulerTick } from './trimTime'
 import type { Translations } from '../../locales/types'
@@ -69,6 +69,35 @@ export const TrimmerTimeline: React.FC<TrimmerTimelineProps> = ({
     '--trim-start': `${startPct}%`,
     '--trim-end': `${endPct}%`,
   } as React.CSSProperties & Record<'--trim-start' | '--trim-end', string>
+
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track) return
+    const handleWheel = (event: WheelEvent) => {
+      if (safeDuration <= 0) return
+      if (event.ctrlKey) {
+        event.preventDefault()
+        const factor = event.deltaY < 0 ? 1.5 : 1 / 1.5
+        onChangeZoom(zoom * factor, onPointerToTime(event.clientX))
+      } else if (zoom > 1) {
+        event.preventDefault()
+        const shift = (event.deltaY > 0 ? 1 : -1) * viewport.viewDuration * 0.15
+        onSetViewStart(prev =>
+          clampSeconds(prev + shift, 0, Math.max(0, safeDuration - viewport.viewDuration)),
+        )
+      }
+    }
+    track.addEventListener('wheel', handleWheel, { passive: false })
+    return () => track.removeEventListener('wheel', handleWheel)
+  }, [
+    trackRef,
+    safeDuration,
+    zoom,
+    viewport.viewDuration,
+    onChangeZoom,
+    onPointerToTime,
+    onSetViewStart,
+  ])
 
   return (
     <div className="advanced-trimmer__timeline-section">
@@ -166,20 +195,6 @@ export const TrimmerTimeline: React.FC<TrimmerTimelineProps> = ({
             originStart: startSeconds,
             originEnd: endSeconds,
           })
-        }}
-        onWheel={event => {
-          if (safeDuration <= 0) return
-          if (event.ctrlKey) {
-            event.preventDefault()
-            const factor = event.deltaY < 0 ? 1.5 : 1 / 1.5
-            onChangeZoom(zoom * factor, onPointerToTime(event.clientX))
-          } else if (zoom > 1) {
-            event.preventDefault()
-            const shift = (event.deltaY > 0 ? 1 : -1) * viewport.viewDuration * 0.15
-            onSetViewStart(prev =>
-              clampSeconds(prev + shift, 0, Math.max(0, safeDuration - viewport.viewDuration)),
-            )
-          }
         }}
       >
         <div

@@ -2,6 +2,8 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { type DownloadTask } from '../../../Shared/types'
 import { getProgressView } from '../../../Shared/progressModel'
+import { useSettingsStore } from '../stores/useSettingsStore'
+import { translations } from '../translations'
 
 interface RegisteredDom {
   progressBarRef?: RefObject<HTMLDivElement | null>
@@ -89,7 +91,9 @@ function updateTaskDom(task: DownloadTask): void {
       ? 'converting'
       : ['starting', 'preparing'].includes(progress.phase)
         ? 'downloading'
-        : progress.phase
+        : ['pausing', 'canceled'].includes(progress.phase)
+          ? 'paused'
+          : progress.phase
     for (const cls of PHASE_CLASSES) bar.classList.toggle(cls, cls === target)
   }
   if (refs.percentTextRef?.current) refs.percentTextRef.current.innerText = progress.percentLabel
@@ -122,7 +126,8 @@ function publishTask(task: DownloadTask, opts: { upsertTask: (task: DownloadTask
 
 function formatSpeed(bytesPerSec: number | null): string {
   if (bytesPerSec == null || bytesPerSec <= 0) return '-'
-  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
+  const unitSuffix = translations[useSettingsStore.getState().lang].speed_unit
+  const units = ['B', 'KB', 'MB', 'GB']
   let value = bytesPerSec
   let i = 0
   while (value >= 1024 && i < units.length - 1) {
@@ -130,5 +135,5 @@ function formatSpeed(bytesPerSec: number | null): string {
     i++
   }
   const digits = i === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0
-  return `${value.toFixed(digits)} ${units[i]}`
+  return `${value.toFixed(digits)} ${units[i]}/${unitSuffix}`
 }

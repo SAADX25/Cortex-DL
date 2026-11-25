@@ -59,13 +59,15 @@ interface UIStoreState {
   setMediaPlayerFloating: (floating: boolean) => void
 }
 
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
 export const useUIStore = create<UIStoreState>((set, get) => ({
   activeTab: 'add',
   setActiveTab: tab => set({ activeTab: tab }),
 
-  directory: localStorage.getItem('cortex-directory'),
+  directory: typeof localStorage !== 'undefined' ? localStorage.getItem('cortex-directory') : null,
   setDirectory: dir => {
-    if (dir) localStorage.setItem('cortex-directory', dir)
+    if (dir && typeof localStorage !== 'undefined') localStorage.setItem('cortex-directory', dir)
     set({ directory: dir })
   },
 
@@ -80,8 +82,12 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
 
   toastMsg: null,
   showToast: msg => {
+    if (toastTimer) clearTimeout(toastTimer)
     set({ toastMsg: msg })
-    setTimeout(() => set({ toastMsg: null }), 2300)
+    toastTimer = setTimeout(() => {
+      toastTimer = null
+      set({ toastMsg: null })
+    }, 2300)
   },
 
   url: '',

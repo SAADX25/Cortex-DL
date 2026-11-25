@@ -131,7 +131,11 @@ export function subtitleLanguageTag(language: string): string {
     ms: 'msa',
   }
   const base = language.split('-')[0]
-  return codes[base] ?? (/^[a-z]{3}$/.test(base) ? base : 'und')
+  return Object.prototype.hasOwnProperty.call(codes, base)
+    ? codes[base]
+    : /^[a-z]{3}$/.test(base)
+      ? base
+      : 'und'
 }
 
 export function validateSubtitleMedia(

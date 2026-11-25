@@ -1,7 +1,7 @@
 // Post-download finalization: media probing, fast-cut audio alignment, remux/transcode, validation, and atomic promotion
 import { type BrowserWindow } from 'electron'
 import log from 'electron-log'
-import { promises as fs } from 'node:fs'
+import { constants as fsConstants, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { updateTaskProgress } from '../../../Shared/progressModel'
 import { youtubeDiagnostic } from '../engines/ytdlpService'
@@ -115,8 +115,8 @@ export async function finalizeDownload({
             if (!needsLocalTrim && starts.videoStart > starts.audioStart + 0.1) {
               // Fast-cut audio pre-roll starts ahead of the video keyframe; trim leading audio losslessly to match video.
               alignAudioSkip = Math.max(0, starts.videoStart - starts.formatStart)
-              if (Number.isFinite(duration) && duration > starts.videoStart) {
-                alignedProgressDuration = Math.max(0.1, duration - starts.videoStart)
+              if (Number.isFinite(duration) && duration > alignAudioSkip) {
+                alignedProgressDuration = Math.max(0.1, duration - alignAudioSkip)
               }
             } else if (starts.audioStart > starts.videoStart + 0.15) {
               // Audio starts after video (silent lead-in); trim from audio start so the output has sound from 00:00.
@@ -286,10 +286,29 @@ export async function finalizeDownload({
   check()
   phase('finalizing')
 
+  const promoteExclusive = async (src: string, dst: string) => {
+    // Prefer hard link for zero-copy exclusive promotion; fall back to exclusive copy on filesystems without hard-link support (e.g. FAT32/exFAT).
+    try {
+      await fs.link(src, dst)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (
+        code === 'EXDEV' ||
+        code === 'EPERM' ||
+        code === 'ENOTSUP' ||
+        code === 'EINVAL' ||
+        code === 'ENOSYS'
+      ) {
+        await fs.copyFile(src, dst, fsConstants.COPYFILE_EXCL)
+        return
+      }
+      throw error
+    }
+  }
+
   const target = reserveOutputPath(task.directory, task.filename, task.id)
   check()
-  // link() refuses an existing destination; rename() can overwrite it.
-  await fs.link(candidate, target)
+  await promoteExclusive(candidate, target)
   const promoted = [target]
   try {
     check()
@@ -303,7 +322,7 @@ export async function finalizeDownload({
         path.parse(target).name + name.slice(task.id.length),
       )
       try {
-        await fs.link(path.join(attempt.directory, name), subtitle)
+        await promoteExclusive(path.join(attempt.directory, name), subtitle)
         promoted.push(subtitle)
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error

@@ -59,8 +59,8 @@ const SettingsTab: React.FC = () => {
           label: t.health_js_runtime,
           ok: healthCheck.jsRuntime.available,
           detail: healthCheck.jsRuntime.available
-            ? healthCheck.jsRuntime.name + ' — Supported'
-            : 'No supported yt-dlp JS runtime',
+            ? formatMessage(t.health_js_supported, { name: healthCheck.jsRuntime.name })
+            : t.health_js_unsupported,
         },
         {
           label: t.health_download_directory,
@@ -134,8 +134,18 @@ const SettingsTab: React.FC = () => {
             </div>
             <div className="row-control">
               <div
+                role="switch"
+                tabIndex={0}
+                aria-label={t.use_inapp_player}
+                aria-checked={useInAppPlayer}
                 className={`toggle-switch ${useInAppPlayer ? 'active' : ''}`}
                 onClick={() => setUseInAppPlayer(!useInAppPlayer)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setUseInAppPlayer(!useInAppPlayer)
+                  }
+                }}
               >
                 <div className="toggle-switch-thumb" />
               </div>
@@ -269,14 +279,14 @@ const SettingsTab: React.FC = () => {
 
           <div className="minimal-row">
             <div className="row-info">
-              <span className="row-title">Engine (yt-dlp)</span>
+              <span className="row-title">{t.health_ytdlp}</span>
               <span className="row-subtitle">
                 {engineUpdateStatus?.updating && engineUpdateStatus.message}
                 {engineUpdateStatus?.success === true && (
-                  <span className="text-green-400">{engineUpdateStatus.message}</span>
+                  <span style={{ color: '#4ade80' }}>{engineUpdateStatus.message}</span>
                 )}
                 {engineUpdateStatus?.success === false && (
-                  <span className="text-red-400">{engineUpdateStatus.message}</span>
+                  <span style={{ color: '#f87171' }}>{engineUpdateStatus.message}</span>
                 )}
                 {!engineUpdateStatus && engineVersion}
               </span>
@@ -288,7 +298,7 @@ const SettingsTab: React.FC = () => {
                 disabled={engineUpdateStatus?.updating}
               >
                 <RefreshCw size={16} className={engineUpdateStatus?.updating ? 'spin' : ''} />
-                <span>Update Engine</span>
+                <span>{t.update_engine_btn}</span>
               </button>
             </div>
           </div>
@@ -338,28 +348,29 @@ const SettingsTab: React.FC = () => {
             </div>
             <div className="about-row muted">
               ffprobe:{' '}
-              {healthCheck?.ffprobe?.version || healthCheck?.ffprobe?.message || 'Unchecked'} ·
-              Database: {healthCheck?.database?.healthy ? 'Healthy' : 'Unchecked'}
+              {healthCheck?.ffprobe?.version || healthCheck?.ffprobe?.message || t.health_unchecked}{' '}
+              · Database: {healthCheck?.database?.healthy ? t.health_healthy : t.health_unchecked}
             </div>
             <div className="about-row muted">
-              Media server: {healthCheck?.mediaServer?.healthy ? 'Healthy' : 'Unchecked'} · Update
-              service: {healthCheck?.updateService || 'Unchecked'}
+              Media server:{' '}
+              {healthCheck?.mediaServer?.healthy ? t.health_healthy : t.health_unchecked} · Update
+              service: {healthCheck?.updateService || t.health_unchecked}
             </div>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <button
                 className="btn-ghost-primary"
                 onClick={() => void window.cortexDl.repairEngines().then(refreshHealth)}
               >
-                Repair Engines
+                {t.repair_engines_btn}
               </button>
               <button
                 className="btn-ghost-primary"
                 onClick={() => void window.cortexDl.exportDiagnostics()}
               >
-                Export Diagnostics
+                {t.export_diagnostics_btn}
               </button>
               <button className="btn-ghost-primary" onClick={() => void window.cortexDl.openLogs()}>
-                Open Logs
+                {t.open_logs_btn}
               </button>
             </div>
             {healthRows.map(row => (

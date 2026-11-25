@@ -5,6 +5,10 @@ import { promises as fsPromises } from 'node:fs'
 import log from 'electron-log'
 import { getBinaryPath } from './paths'
 import { checkJsRuntime, getJsRuntimeArgs } from './engines/ytdlpService'
+import { killProcessTree } from './utils'
+
+const MAX_COMMENTS_STDOUT_BYTES = 50 * 1024 * 1024
+const COMMENTS_TIMEOUT_MS = 5 * 60 * 1000
 
 export async function extractAndSaveComments(
   url: string,
@@ -21,12 +25,10 @@ export async function extractAndSaveComments(
       '--dump-json',
       '--write-comments',
       '--skip-download',
-      // Prevents yt-dlp from expanding playlist URLs when only single-video comments are wanted.
-      '--playlist-items',
-      '0',
+      '--no-playlist',
       '--ignore-config',
-
       ...getJsRuntimeArgs(),
+      '--',
       url,
     ]
 
@@ -34,28 +36,64 @@ export async function extractAndSaveComments(
       windowsHide: true,
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     })
-    proc.on('error', error => engineExecutionFailed('yt-dlp', error))
+
+    let settled = false
+    let aborted = false
+    let stdoutBytes = 0
+    const finish = (ok: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolve(ok)
+    }
+
+    const abortExtraction = (reason: string) => {
+      if (aborted) return
+      aborted = true
+      log.warn(`[CommentsExtractor] Aborting extraction: ${reason}`)
+      void killProcessTree(proc)
+    }
+
+    const timeout = setTimeout(() => {
+      abortExtraction(`timed out after ${COMMENTS_TIMEOUT_MS}ms`)
+    }, COMMENTS_TIMEOUT_MS)
+    timeout.unref?.()
+
+    const safeProgress = (current: number, total: number) => {
+      if (!onProgress || settled || aborted) return
+      try {
+        onProgress(current, total)
+      } catch (err) {
+        log.warn('[CommentsExtractor] Progress callback threw:', err)
+      }
+    }
 
     const stdoutChunks: Buffer[] = []
 
     proc.stdout.on('data', chunk => {
-      stdoutChunks.push(Buffer.from(chunk))
+      if (aborted) return
+      const buf = Buffer.from(chunk)
+      stdoutBytes += buf.length
+      if (stdoutBytes > MAX_COMMENTS_STDOUT_BYTES) {
+        abortExtraction(`output exceeded ${MAX_COMMENTS_STDOUT_BYTES} bytes`)
+        return
+      }
+      stdoutChunks.push(buf)
     })
 
     proc.stderr.on('data', chunk => {
+      if (aborted) return
       const text = chunk.toString()
 
       // Guard against yt-dlp ignoring --skip-download and starting an actual media download.
       if (text.includes('Downloading 1 format(s)') || text.includes('[download] Destination:')) {
-        proc.kill()
-
+        abortExtraction('unexpected media download started')
         return
       }
 
       // Bail out immediately instead of letting yt-dlp stall without a JS runtime.
       if (text.includes('No supported JavaScript runtime could be found')) {
-        proc.kill()
-
+        abortExtraction('no supported JS runtime found')
         return
       }
 
@@ -64,7 +102,7 @@ export async function extractAndSaveComments(
         if (finalMatch && finalMatch[1]) {
           const finalCount = parseInt(finalMatch[1], 10)
           if (!isNaN(finalCount)) {
-            onProgress(finalCount, finalCount)
+            safeProgress(finalCount, finalCount)
           }
         } else {
           const match = text.match(/\((\d+)\/~?(\d+)\)/)
@@ -73,7 +111,7 @@ export async function extractAndSaveComments(
             const current = parseInt(match[1], 10)
             const total = parseInt(match[2], 10)
             if (!isNaN(current) && !isNaN(total)) {
-              onProgress(current, total)
+              safeProgress(current, total)
             }
           }
         }
@@ -81,11 +119,17 @@ export async function extractAndSaveComments(
     })
 
     proc.on('close', async code => {
+      clearTimeout(timeout)
+      if (aborted || code !== 0) {
+        log.warn(`[CommentsExtractor] Extraction exited with code ${code} (aborted=${aborted}).`)
+        finish(false)
+        return
+      }
       try {
         const stdoutData = Buffer.concat(stdoutChunks).toString('utf-8')
         if (!stdoutData.trim()) {
           log.warn(`[CommentsExtractor] No output from yt-dlp. Process exited with code ${code}.`)
-          resolve(false)
+          finish(false)
           return
         }
 
@@ -93,7 +137,7 @@ export async function extractAndSaveComments(
         if (!info.comments || !Array.isArray(info.comments) || info.comments.length === 0) {
           log.warn(`[CommentsExtractor] No comments found in JSON for ${url}`)
           await fsPromises.writeFile(outputPath, 'No comments found.', 'utf-8')
-          resolve(true)
+          finish(true)
           return
         }
 
@@ -118,16 +162,17 @@ export async function extractAndSaveComments(
 
         await fsPromises.writeFile(outputPath, header + formattedComments, 'utf-8')
         log.info(`[CommentsExtractor] Comments successfully written to ${outputPath}`)
-        resolve(true)
+        finish(true)
       } catch (err) {
         log.error(`[CommentsExtractor] Failed to parse JSON or write file:`, err)
-        resolve(false)
+        finish(false)
       }
     })
 
     proc.on('error', err => {
+      engineExecutionFailed('yt-dlp', err)
       log.error(`[CommentsExtractor] Spawn error:`, err)
-      resolve(false)
+      finish(false)
     })
   })
 }

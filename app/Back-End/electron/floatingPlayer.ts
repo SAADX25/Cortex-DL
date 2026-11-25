@@ -27,7 +27,14 @@ export function installFloatingPlayerWindow(owner: BrowserWindow): void {
         },
       }
     }
-    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        void shell.openExternal(parsed.toString())
+      }
+    } catch {
+      // Ignore invalid URLs.
+    }
     return { action: 'deny' }
   })
   owner.webContents.on('did-create-window', (child, details) => {

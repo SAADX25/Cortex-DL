@@ -8,6 +8,7 @@ interface UsePlayerHotkeysOptions {
   isFullscreen: boolean
   mediaType: 'video' | 'audio' | 'unknown'
   mediaRef: MutableRefObject<HTMLVideoElement | HTMLAudioElement | null>
+  volumeRef: MutableRefObject<number>
   lastNonZeroVolumeRef: MutableRefObject<number>
   setVolume: Dispatch<SetStateAction<number>>
   setIsMuted: Dispatch<SetStateAction<boolean>>
@@ -24,6 +25,7 @@ export function usePlayerHotkeys({
   isFullscreen,
   mediaType,
   mediaRef,
+  volumeRef,
   lastNonZeroVolumeRef,
   setVolume,
   setIsMuted,
@@ -37,17 +39,23 @@ export function usePlayerHotkeys({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (floatingWindow && e.currentTarget === window) return
-      if (mediaSuspended && e.key !== 'Escape') return
+      if (e.key === 'Escape') {
+        if (isFullscreen) {
+          void document.exitFullscreen?.().catch(() => {})
+        } else {
+          handleClose()
+        }
+        return
+      }
+      if (mediaSuspended) return
       const target = e.target as HTMLElement | null
       if (
         target?.closest('input, select, textarea, button, [role="menu"], [contenteditable="true"]')
       ) {
         return
       }
-      switch (e.key) {
-        case 'Escape':
-          isFullscreen ? document.exitFullscreen?.() : handleClose()
-          break
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+      switch (key) {
         case ' ':
           e.preventDefault()
           togglePlay()
@@ -58,24 +66,20 @@ export function usePlayerHotkeys({
         case 'ArrowRight':
           if (mediaRef.current) mediaRef.current.currentTime += 5
           break
-        case 'ArrowUp':
-          setVolume(v => {
-            const next = Math.min(1, Number((v + 0.1).toFixed(2)))
-            if (next > 0) {
-              lastNonZeroVolumeRef.current = next
-              setIsMuted(false)
-            }
-            return next
-          })
+        case 'ArrowUp': {
+          const next = Math.min(1, Number((volumeRef.current + 0.1).toFixed(2)))
+          if (next > 0) lastNonZeroVolumeRef.current = next
+          setVolume(next)
+          if (next > 0) setIsMuted(false)
           break
-        case 'ArrowDown':
-          setVolume(v => {
-            const next = Math.max(0, Number((v - 0.1).toFixed(2)))
-            if (next > 0) lastNonZeroVolumeRef.current = next
-            if (next === 0) setIsMuted(true)
-            return next
-          })
+        }
+        case 'ArrowDown': {
+          const next = Math.max(0, Number((volumeRef.current - 0.1).toFixed(2)))
+          if (next > 0) lastNonZeroVolumeRef.current = next
+          setVolume(next)
+          if (next === 0) setIsMuted(true)
           break
+        }
         case 'm':
           toggleMute()
           break
@@ -105,5 +109,6 @@ export function usePlayerHotkeys({
     toggleFullscreen,
     toggleMute,
     togglePlay,
+    volumeRef,
   ])
 }

@@ -1,11 +1,11 @@
 // Main IPC handler registry orchestrating downloads, system/update/credentials, analysis, media, and library channels
 import { app, dialog, ipcMain, shell, safeStorage } from 'electron'
-import { existsSync } from 'node:fs'
+import { existsSync, lstatSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import log from 'electron-log'
 import { spawn } from 'node:child_process'
 import { type DownloadManager } from '../downloadManager'
-import { type StartInput } from '../types'
+import { AUDIO_FORMATS, VIDEO_FORMATS, type StartInput } from '../types'
 import { updateYtdlp, getYtdlpVersion, checkJsRuntime } from '../engines/ytdlpService'
 import { db } from '../db'
 import { registerDownloadSubtitleIpc } from '../subtitles/downloadMergeIpc'
@@ -35,30 +35,79 @@ export interface IpcDependencies {
   mediaReadyPromise?: Promise<unknown>
 }
 
-function validateDownloadInput(input: StartInput): void {
-  if (
-    !input ||
-    typeof input.url !== 'string' ||
-    input.url.length > 16384 ||
-    !/^https?:\/\//i.test(input.url)
-  ) {
+const ALLOWED_TARGET_FORMATS = new Set<string>([...VIDEO_FORMATS, ...AUDIO_FORMATS])
+const ALLOWED_ENGINES = new Set(['auto', 'direct', 'ffmpeg', 'ytdlp'])
+const ALLOWED_TRIM_MODES = new Set(['fast', 'exact'])
+const ALLOWED_OPEN_FILE_EXT =
+  /\.(?:mp4|mkv|webm|avi|mov|ogv|m4v|gif|mp3|m4a|aac|opus|flac|wav|ogg|wma|srt|vtt|txt)$/i
+
+function isUncOrDevicePath(value: string): boolean {
+  return /^\\\\/.test(value) || /^\/\//.test(value)
+}
+
+export function validateDownloadInput(input: StartInput): void {
+  if (!input || typeof input.url !== 'string' || input.url.length > 16384) {
+    throw new Error('Invalid download URL')
+  }
+  try {
+    const parsed = new URL(input.url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('Invalid download URL')
+    }
+  } catch {
     throw new Error('Invalid download URL')
   }
   if (
     typeof input.directory !== 'string' ||
+    input.directory.length > 32767 ||
     !path.isAbsolute(input.directory) ||
-    input.directory.includes('\0')
+    input.directory.includes('\0') ||
+    isUncOrDevicePath(input.directory)
   ) {
     throw new Error('Invalid download directory')
   }
   if (
-    input.filename &&
+    input.filename !== undefined &&
+    input.filename !== '' &&
     (typeof input.filename !== 'string' ||
+      input.filename.length > 255 ||
       /[/\\]/.test(input.filename) ||
       input.filename.includes('\0') ||
+      input.filename === '.' ||
       input.filename === '..')
   ) {
     throw new Error('Invalid filename')
+  }
+  if (input.subfolderName !== undefined && input.subfolderName !== '') {
+    if (
+      typeof input.subfolderName !== 'string' ||
+      input.subfolderName.length > 255 ||
+      input.subfolderName.includes('\0')
+    ) {
+      throw new Error('Invalid subfolder name')
+    }
+    const cleaned = input.subfolderName.replace(/[/\\:*?"<>|]/g, '').trim()
+    if (cleaned === '.' || cleaned === '..') {
+      throw new Error('Invalid subfolder name')
+    }
+  }
+  if (
+    input.targetFormat !== undefined &&
+    (typeof input.targetFormat !== 'string' || !ALLOWED_TARGET_FORMATS.has(input.targetFormat))
+  ) {
+    throw new Error('Invalid target format')
+  }
+  if (
+    input.engine !== undefined &&
+    (typeof input.engine !== 'string' || !ALLOWED_ENGINES.has(input.engine))
+  ) {
+    throw new Error('Invalid download engine')
+  }
+  if (
+    input.trimMode !== undefined &&
+    (typeof input.trimMode !== 'string' || !ALLOWED_TRIM_MODES.has(input.trimMode))
+  ) {
+    throw new Error('Invalid trim mode')
   }
 }
 
@@ -250,28 +299,39 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
     return getDownloads()?.getMaxConcurrent() ?? 3
   })
 
+  const openExistingDirectory = async (dirPath: string): Promise<boolean> => {
+    if (!existsSync(dirPath)) return false
+    const stat = lstatSync(dirPath)
+    if (stat.isSymbolicLink() || !stat.isDirectory()) return false
+    const err = await shell.openPath(dirPath)
+    if (err) throw new Error(err)
+    return true
+  }
+
   ipcMain.handle('cortexdl:open-folder', async (_event, filePath: string) => {
+    const normalizedPath = path.normalize(filePath)
+    if (isUncOrDevicePath(normalizedPath)) throw new Error('Invalid file path')
     try {
-      const normalizedPath = path.normalize(filePath)
       if (existsSync(normalizedPath)) {
-        shell.showItemInFolder(normalizedPath)
-      } else {
-        const dir = path.dirname(normalizedPath)
-        if (existsSync(dir)) {
-          const err = await shell.openPath(dir)
+        const stat = lstatSync(normalizedPath)
+        if (stat.isSymbolicLink()) throw new Error('Cannot open symbolic links')
+        if (stat.isDirectory()) {
+          const err = await shell.openPath(normalizedPath)
           if (err) throw new Error(err)
         } else {
+          shell.showItemInFolder(normalizedPath)
+        }
+      } else {
+        const dir = path.dirname(normalizedPath)
+        if (!(await openExistingDirectory(dir))) {
           throw new Error('Folder does not exist')
         }
       }
     } catch (err) {
       log.error('Failed to open folder:', err)
       try {
-        const dir = path.dirname(filePath)
-        if (existsSync(dir)) {
-          await shell.openPath(dir)
-          return
-        }
+        const dir = path.dirname(normalizedPath)
+        if (await openExistingDirectory(dir)) return
       } catch (e) {
         log.error('Fallback open folder failed:', e)
       }
@@ -282,12 +342,20 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   ipcMain.handle('cortexdl:open-file', async (_event, filePath: string) => {
     try {
       const normalizedPath = path.normalize(filePath)
-      if (existsSync(normalizedPath)) {
-        const err = await shell.openPath(normalizedPath)
-        if (err) throw new Error(err)
-      } else {
+      if (isUncOrDevicePath(normalizedPath)) throw new Error('Invalid file path')
+      if (!existsSync(normalizedPath)) {
         throw new Error(`File not found on disk: ${normalizedPath}`)
       }
+      const stat = lstatSync(normalizedPath)
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        throw new Error('Target is not a regular file')
+      }
+      const resolvedPath = realpathSync(normalizedPath)
+      if (!ALLOWED_OPEN_FILE_EXT.test(resolvedPath)) {
+        throw new Error('Only media and text files can be opened')
+      }
+      const err = await shell.openPath(resolvedPath)
+      if (err) throw new Error(err)
     } catch (err) {
       log.error('Failed to open file:', err)
       throw err

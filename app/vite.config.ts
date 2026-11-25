@@ -18,7 +18,20 @@ export default defineConfig(({ command }) => {
     },
     build: {
       sourcemap: false,
-      minify: 'esbuild' as const
+      minify: 'esbuild' as const,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return
+            if (id.includes('hls.js')) return 'hls-vendor'
+            if (id.includes('framer-motion')) return 'motion-vendor'
+            if (id.includes('lucide-react')) return 'icons-vendor'
+            if (/node_modules[\\/](?:react|react-dom|scheduler)[\\/]/.test(id)) {
+              return 'react-vendor'
+            }
+          },
+        },
+      },
     },
     plugins: [
       react(),

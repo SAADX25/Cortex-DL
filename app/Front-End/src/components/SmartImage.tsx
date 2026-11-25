@@ -13,6 +13,14 @@ interface SmartImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   bgClassName?: string
 }
 
+function isMetaCdnUrl(raw: string): boolean {
+  try {
+    return /(?:cdninstagram|instagram|fbcdn)\./i.test(new URL(raw, window.location.href).hostname)
+  } catch {
+    return false
+  }
+}
+
 const SmartImage: React.FC<SmartImageProps> = ({
   src,
   withBlurBg = false,
@@ -25,6 +33,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
     source: src,
     image: src,
   })
+  const [bgFailedForSrc, setBgFailedForSrc] = useState<string | null>(null)
   const generation = useRef(0)
   const proxyAttempt = useRef(false)
   const mediaEndpoint = useMediaEndpoint()
@@ -35,6 +44,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
     reference.current++
     proxyAttempt.current = false
     setResolved({ source: src, image: src })
+    setBgFailedForSrc(null)
     return () => {
       reference.current++
     }
@@ -44,12 +54,7 @@ const SmartImage: React.FC<SmartImageProps> = ({
   const onImageError = () => {
     const owned = generation.current
     // Meta CDN thumbnails often block direct renderer requests; retry once via the main-process proxy first.
-    if (
-      src &&
-      /(?:cdninstagram|instagram|fbcdn)\./i.test(new URL(src, window.location.href).hostname) &&
-      mediaEndpoint &&
-      !proxyAttempt.current
-    ) {
+    if (src && isMetaCdnUrl(src) && mediaEndpoint && !proxyAttempt.current) {
       proxyAttempt.current = true
       void window.cortexDl
         .fetchThumbnail(src)
@@ -69,17 +74,17 @@ const SmartImage: React.FC<SmartImageProps> = ({
   if (withBlurBg) {
     return (
       <>
-        <img
-          src={finalSrc}
-          alt=""
-          className={bgClassName}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          aria-hidden="true"
-          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-            e.currentTarget.style.display = 'none'
-          }}
-        />
+        {bgFailedForSrc !== finalSrc && (
+          <img
+            src={finalSrc}
+            alt=""
+            className={bgClassName}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            aria-hidden="true"
+            onError={() => setBgFailedForSrc(finalSrc)}
+          />
+        )}
 
         <img
           src={finalSrc}

@@ -11,6 +11,8 @@
     "build": "npm --prefix app run build",
     "typecheck": "npm --prefix app run typecheck",
     "lint": "npm --prefix app run lint",
+    "format": "npm --prefix app run format",
+    "format:check": "npm --prefix app run format:check",
     "test": "npm --prefix app test",
     "check": "npm --prefix app run check",
     "clean": "npm --prefix app run clean",

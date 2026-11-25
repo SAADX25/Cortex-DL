@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { useLang } from '../../stores/useSettingsStore'
+import { useUIStore } from '../../stores/useUIStore'
 import { formatMessage, translations } from '../../translations'
 import type {
   DownloadSubtitleFile,
@@ -62,11 +63,17 @@ export default function DownloadSubtitleMerge({
       }
     }
     void refresh()
-    window.addEventListener('focus', refresh)
+    const onFocus = () => {
+      const inHiddenDownloadsTab =
+        Boolean(document.querySelector('.downloads-page')) &&
+        useUIStore.getState().activeTab !== 'downloads'
+      if (!inHiddenDownloadsTab) void refresh()
+    }
+    window.addEventListener('focus', onFocus)
     window.addEventListener('cortex:subtitle-files-changed', refresh)
     return () => {
       stopped = true
-      window.removeEventListener('focus', refresh)
+      window.removeEventListener('focus', onFocus)
       window.removeEventListener('cortex:subtitle-files-changed', refresh)
       if (active.current) void window.cortexDl.cancelDownloadSubtitleMerge(id).catch(() => {})
     }

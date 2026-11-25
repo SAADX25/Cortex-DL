@@ -6,12 +6,30 @@ import { initialAppUpdateState, type AppUpdateState } from '../../../Shared/appU
 
 const currentAppVersion = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0'
 
+function storageGet(key: string): string | null {
+  return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null
+}
+
+function storageSet(key: string, value: string): void {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(key, value)
+}
+
+function readInitialLanguage(): Language {
+  const saved = storageGet('language')
+  return saved === 'ar' ? 'ar' : 'en'
+}
+
+function readInitialConcurrency(): number {
+  const saved = parseInt(storageGet('cortex-concurrent') || '', 10)
+  return [3, 5, 10].includes(saved) ? saved : 3
+}
+
 interface SettingsStoreState {
   lang: Language
   setLang: (lang: Language) => void
 
   concurrentDownloads: number
-  setConcurrentDownloads: (v: number) => void
+  setConcurrentDownloads: (v: number, persist?: boolean) => void
 
   useInAppPlayer: boolean
   setUseInAppPlayer: (v: boolean) => void
@@ -59,26 +77,33 @@ interface SettingsStoreState {
 }
 
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
-  lang: (localStorage.getItem('language') as Language) || 'en',
-  setLang: lang => set({ lang }),
+  lang: readInitialLanguage(),
+  setLang: lang => set({ lang: lang === 'ar' ? 'ar' : 'en' }),
 
-  concurrentDownloads: 3,
-  setConcurrentDownloads: v => set({ concurrentDownloads: v }),
+  concurrentDownloads: readInitialConcurrency(),
+  setConcurrentDownloads: (v, persist = true) => {
+    const normalized = [3, 5, 10].includes(v) ? v : 3
+    if (persist) {
+      storageSet('cortex-concurrent', String(normalized))
+      window.cortexDl?.setConcurrency?.(normalized).catch(() => {})
+    }
+    set({ concurrentDownloads: normalized })
+  },
 
   // Default player and Windows artwork refresh options to enabled unless explicitly turned off.
-  useInAppPlayer: localStorage.getItem('cortex-inapp-player') !== 'false',
+  useInAppPlayer: storageGet('cortex-inapp-player') !== 'false',
   setUseInAppPlayer: v => {
-    localStorage.setItem('cortex-inapp-player', String(v))
+    storageSet('cortex-inapp-player', String(v))
     set({ useInAppPlayer: v })
   },
 
-  refreshWindowsPlayerArtwork: localStorage.getItem('cortex-refresh-windows-artwork') !== 'false',
+  refreshWindowsPlayerArtwork: storageGet('cortex-refresh-windows-artwork') !== 'false',
   setRefreshWindowsPlayerArtwork: v => {
-    localStorage.setItem('cortex-refresh-windows-artwork', String(v))
+    storageSet('cortex-refresh-windows-artwork', String(v))
     set({ refreshWindowsPlayerArtwork: v })
   },
 
-  totalDownloadedBytes: parseInt(localStorage.getItem('cortex-total-bytes') || '0', 10),
+  totalDownloadedBytes: parseInt(storageGet('cortex-total-bytes') || '0', 10),
   setTotalDownloadedBytes: updater =>
     set(state => ({
       totalDownloadedBytes:
@@ -215,7 +240,8 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   },
 
   onUpdateEngine: async () => {
-    set({ engineUpdateStatus: { updating: true, message: 'Downloading...' } })
+    const t = translations[get().lang]
+    set({ engineUpdateStatus: { updating: true, message: t.updating_engine } })
     try {
       const result = await window.cortexDl.updateEngine()
       if (result.success) {
@@ -230,7 +256,9 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       }
     } catch (err) {
       console.error('Engine update error:', err)
-      set({ engineUpdateStatus: { updating: false, success: false, message: 'Update failed' } })
+      set({
+        engineUpdateStatus: { updating: false, success: false, message: t.engine_update_failed },
+      })
       setTimeout(() => set({ engineUpdateStatus: null }), 5000)
     }
   },

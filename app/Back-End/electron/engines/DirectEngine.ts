@@ -170,6 +170,7 @@ export class DirectEngine implements IEngine {
             `[DirectEngine] Task ${task.id}: ${error.message} — restarting as a single stream`,
           )
           task.supportsRanges = false
+          this.failure = null
           await this.discardOutput(task)
           if (parentSignal?.aborted || this.stopRequested) throw new DownloadAbortedError()
           this.adoptController(new AbortController())
@@ -193,7 +194,11 @@ export class DirectEngine implements IEngine {
 
       return { kind: 'success', candidate: task.filePath }
     } catch (error) {
-      if (this.stopRequested || this.isAbort(error)) {
+      if (
+        this.stopRequested ||
+        parentSignal?.aborted ||
+        (this.failure == null && this.isAbort(error))
+      ) {
         this.persistChunkState(task)
         log.warn(`[DirectEngine] Task ${task.id} download aborted — chunk state saved`)
         return { kind: 'paused' }
@@ -222,8 +227,9 @@ export class DirectEngine implements IEngine {
     if (task.downloadedBytes > 0) {
       try {
         const stat = await fsPromises.stat(task.filePath)
-        if (stat.size > 0 && stat.size === task.downloadedBytes) {
+        if (stat.size > 0 && stat.size <= task.downloadedBytes) {
           startByte = stat.size
+          task.downloadedBytes = stat.size
           writeFlags = 'a'
           log.info(`[DirectEngine] Task ${task.id}: Resuming single-stream from byte ${startByte}`)
         }
@@ -255,6 +261,7 @@ export class DirectEngine implements IEngine {
 
     if (startByte > 0 && response.status === 206 && this.identityChanged(task, response.headers)) {
       response.data.destroy()
+      await this.discardOutput(task)
       throw new RangeUnsupportedError('Remote identity changed during single-stream resume')
     }
 
@@ -586,11 +593,13 @@ export class DirectEngine implements IEngine {
     getLastActivityAtMs: () => number,
     label: string,
   ): ReturnType<typeof setInterval> {
-    return setInterval(() => {
+    const timer = setInterval(() => {
       if (nowMs() - getLastActivityAtMs() < STALL_TIMEOUT_MS) return
       log.warn(`[DirectEngine] ${label} stalled for ${STALL_TIMEOUT_MS}ms — dropping connection`)
       stream.destroy(new Error(`${label} stalled for ${STALL_TIMEOUT_MS}ms`))
     }, STALL_CHECK_INTERVAL_MS)
+    timer.unref?.()
+    return timer
   }
 
   private reportProgress(task: DownloadTask, context?: EngineContext): void {

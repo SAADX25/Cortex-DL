@@ -1,6 +1,6 @@
 // Visual trim editor for VODs (zoomable timeline + dual handles) and live streams (duration capture)
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Hls from 'hls.js'
+import type Hls from 'hls.js'
 import { AlertCircle, Check, Loader, Radio, RotateCcw, Scissors } from 'lucide-react'
 import './AdvancedTrimmer.css'
 import {
@@ -144,6 +144,11 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   const [activeDrag, setActiveDrag] = useState<DragState>(null)
 
   const lastNonZeroVolume = useRef(1)
+  const startSecondsRef = useRef(startSeconds)
+  startSecondsRef.current = startSeconds
+  const endSecondsRef = useRef(endSeconds)
+  endSecondsRef.current = endSeconds
+  const lastEmittedRef = useRef<{ start: string; end: string } | null>(null)
   const requestedSeek = useRef<number>(
     clampSeconds(parseTimecode(initialStartTime) ?? 0, 0, safeDuration),
   )
@@ -167,6 +172,14 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
   useEffect(() => {
     if (effectiveIsLive) return
+    if (
+      lastEmittedRef.current &&
+      initialStartTime === lastEmittedRef.current.start &&
+      initialEndTime === lastEmittedRef.current.end &&
+      endSecondsRef.current <= safeDuration
+    ) {
+      return
+    }
     const parsedStart = parseTimecode(initialStartTime)
     const parsedEnd = parseTimecode(initialEndTime)
     const nextStart = parsedStart == null ? 0 : clampSeconds(parsedStart, 0, safeDuration)
@@ -240,7 +253,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     }
   }, [videoUrl, originalUrl, initialStreamType])
 
-  // Attach hls.js only for live/VOD m3u8 streams; progressive MP4/WebM bind directly via video.src
+  // Attach hls.js lazily only for live/VOD m3u8 streams; progressive MP4/WebM bind directly via video.src
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -252,52 +265,80 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
     if (!streamUrl || !isHlsActive) return
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        maxBufferLength: 20,
-        maxMaxBufferLength: 40,
-        backBufferLength: 10,
-      })
-      hlsRef.current = hls
-      let recoveredMedia = false
+    let cancelled = false
+    let localHls: Hls | null = null
 
-      hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-        if (!data?.details) return
-        if (data.details.live) {
-          setDetectedLive(true)
-        } else if (Number.isFinite(data.details.totalduration) && data.details.totalduration > 0) {
-          setDetectedLive(false)
-          setDetectedDuration(prev => (prev > 0 ? prev : Math.round(data.details.totalduration)))
-        }
-      })
+    const attachHls = async () => {
+      try {
+        const { default: HlsCtor } = await import('hls.js')
+        if (cancelled || videoRef.current !== video) return
 
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
-          recoveredMedia = true
-          hls.recoverMediaError()
+        if (HlsCtor.isSupported()) {
+          const hls = new HlsCtor({
+            enableWorker: true,
+            lowLatencyMode: false,
+            maxBufferLength: 20,
+            maxMaxBufferLength: 40,
+            backBufferLength: 10,
+          })
+          localHls = hls
+          hlsRef.current = hls
+          let recoveredMedia = false
+
+          hls.on(HlsCtor.Events.LEVEL_LOADED, (_event, data) => {
+            if (cancelled || !data?.details) return
+            if (data.details.live) {
+              setDetectedLive(true)
+            } else if (
+              Number.isFinite(data.details.totalduration) &&
+              data.details.totalduration > 0
+            ) {
+              setDetectedLive(false)
+              setDetectedDuration(prev =>
+                prev > 0 ? prev : Math.round(data.details.totalduration),
+              )
+            }
+          })
+
+          hls.on(HlsCtor.Events.ERROR, (_event, data) => {
+            if (cancelled || !data.fatal) return
+            if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
+              recoveredMedia = true
+              hls.recoverMediaError()
+              return
+            }
+            hls.destroy()
+            if (hlsRef.current === hls) hlsRef.current = null
+            previewRef.current?.fail(`HLS preview error: ${data.details || data.type}`)
+          })
+
+          hls.loadSource(streamUrl)
+          hls.attachMedia(video)
           return
         }
-        hls.destroy()
-        if (hlsRef.current === hls) hlsRef.current = null
-        previewRef.current?.fail(`HLS preview error: ${data.details || data.type}`)
-      })
 
-      hls.loadSource(streamUrl)
-      hls.attachMedia(video)
-
-      return () => {
-        hls.destroy()
-        if (hlsRef.current === hls) hlsRef.current = null
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = streamUrl
+        } else {
+          previewRef.current?.fail('HLS playback is not supported in this browser runtime')
+        }
+      } catch (err) {
+        if (!cancelled) {
+          previewRef.current?.fail(
+            `HLS preview failed to load: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
       }
     }
 
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl
-    } else {
-      previewRef.current?.fail('HLS playback is not supported in this browser runtime')
+    void attachHls()
+
+    return () => {
+      cancelled = true
+      if (localHls) {
+        localHls.destroy()
+        if (hlsRef.current === localHls) hlsRef.current = null
+      }
     }
   }, [streamUrl, isHlsActive])
 
@@ -337,7 +378,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
   const emitChange = useCallback(
     (nextStart: number, nextEnd: number) => {
-      onChange?.(buildRange(nextStart, nextEnd))
+      const range = buildRange(nextStart, nextEnd)
+      lastEmittedRef.current = { start: range.startTime, end: range.endTime }
+      onChange?.(range)
     },
     [onChange],
   )
@@ -453,27 +496,25 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   )
 
   const toggleLoopPreview = useCallback(() => {
-    setLoopSelection(prev => {
-      const next = !prev
-      if (next && !effectiveIsLive) {
-        seekVideo(startSeconds)
-        setAudioError(null)
-        const video = videoRef.current
-        if (video) {
-          void video
-            .play()
-            .then(() => {
-              syncAudio(true)
-            })
-            .catch(() => {})
-          if (audioRef.current?.getAttribute('src') && video.readyState >= 3) {
+    const next = !loopSelection
+    setLoopSelection(next)
+    if (next && !effectiveIsLive) {
+      seekVideo(startSeconds)
+      setAudioError(null)
+      const video = videoRef.current
+      if (video) {
+        void video
+          .play()
+          .then(() => {
             syncAudio(true)
-          }
+          })
+          .catch(() => {})
+        if (audioRef.current?.getAttribute('src') && video.readyState >= 3) {
+          syncAudio(true)
         }
       }
-      return next
-    })
-  }, [effectiveIsLive, seekVideo, startSeconds, syncAudio])
+    }
+  }, [loopSelection, effectiveIsLive, seekVideo, startSeconds, syncAudio])
 
   const toggleFullscreen = useCallback(() => {
     const shell = playerShellRef.current
@@ -540,23 +581,25 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
         ((event.clientX - activeDrag.originX) / Math.max(1, rect.width)) * viewport.viewDuration
 
       if (activeDrag.kind === 'start') {
+        const currentEnd = endSecondsRef.current
         const next = clampSeconds(
           activeDrag.originStart + deltaSeconds,
           0,
-          Math.max(0, endSeconds - MIN_CLIP_SECONDS),
+          Math.max(0, currentEnd - MIN_CLIP_SECONDS),
         )
         setStartSeconds(next)
         seekVideo(next)
-        emitChange(next, endSeconds)
+        emitChange(next, currentEnd)
       } else if (activeDrag.kind === 'end') {
+        const currentStart = startSecondsRef.current
         const next = clampSeconds(
           activeDrag.originEnd + deltaSeconds,
-          Math.min(safeDuration, startSeconds + MIN_CLIP_SECONDS),
+          Math.min(safeDuration, currentStart + MIN_CLIP_SECONDS),
           safeDuration,
         )
         setEndSeconds(next)
         seekVideo(next)
-        emitChange(startSeconds, next)
+        emitChange(currentStart, next)
       } else if (activeDrag.kind === 'move') {
         const length = activeDrag.originEnd - activeDrag.originStart
         const nextStart = clampSeconds(
@@ -587,8 +630,6 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     effectiveIsLive,
     viewport.viewDuration,
     safeDuration,
-    startSeconds,
-    endSeconds,
     seekVideo,
     emitChange,
     pointerToTime,

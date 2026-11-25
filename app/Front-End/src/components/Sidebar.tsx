@@ -103,7 +103,7 @@ const Sidebar: React.FC = () => {
               {isActive && (
                 <motion.div
                   layoutId="sidebar-active-indicator"
-                  className="absolute inset-0 bg-sky-500/10 border border-sky-400/30 rounded-xl"
+                  className="nav-active-indicator"
                   initial={false}
                   transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                 />

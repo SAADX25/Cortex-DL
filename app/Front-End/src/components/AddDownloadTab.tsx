@@ -1,6 +1,6 @@
 // Main download composer: URL drop/paste, format & quality selection, visual trimmer, and batch queue
 import { primaryAnalysis } from '../lib/analysisSession'
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { formatMessage, translations } from '../translations'
 import {
@@ -14,8 +14,10 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
-import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer/AdvancedTrimmer'
+import type { TrimRange } from './AdvancedTrimmer/AdvancedTrimmer'
 import { getTrimmerContext } from './AdvancedTrimmer/trimSource'
+
+const AdvancedTrimmer = lazy(() => import('./AdvancedTrimmer/AdvancedTrimmer'))
 import UrlInputBar from './UrlInputBar'
 import SmartImage from './SmartImage'
 import { YouTubeMusicIcon } from './icons/YouTubeMusicIcon'
@@ -221,6 +223,8 @@ const AddDownloadTab: React.FC = () => {
               maxBatchItems={MAX_BATCH_ITEMS}
               placeholderText={t.url_placeholder}
               pasteAndGoText={t.paste_and_go || 'Paste & Go'}
+              analyzeText={t.analyze_btn}
+              batchFullText={formatMessage(t.batch_full_placeholder, { max: MAX_BATCH_ITEMS })}
               onPasteAndAnalyze={onPasteAndAnalyze}
               onAnalyze={handleAnalyzeUrlDirectly}
               onClear={() => setUrl('')}
@@ -253,12 +257,12 @@ const AddDownloadTab: React.FC = () => {
             </div>
 
             <div className="chip-group flex flex-row items-center gap-3">
-              <div className="cortex-pill cursor-pointer" onClick={onPickFolder}>
+              <button type="button" className="cortex-pill cursor-pointer" onClick={onPickFolder}>
                 <span className="text-lg">📁</span>
                 <span className="text-white text-sm font-medium">
                   {directory ? directory.split(/[\\/]/).pop() : t.save_to}
                 </span>
-              </div>
+              </button>
 
               <div className="cortex-pill">
                 <FolderPlus size={16} className="text-cyan-400" />
@@ -430,29 +434,37 @@ const AddDownloadTab: React.FC = () => {
                       className={`trimmer-collapse${isTrimmerOpen ? ' trimmer-collapse--open' : ''}`}
                     >
                       {isTrimmerOpen && (
-                        <AdvancedTrimmer
-                          key={url}
-                          videoUrl={trimmerSource.videoUrl}
-                          originalUrl={url}
-                          duration={trimmerSource.duration}
-                          isLive={trimmerSource.isLive}
-                          initialStreamType={trimmerSource.streamType}
-                          lang={lang}
-                          initialStartTime={startTime}
-                          initialEndTime={endTime}
-                          trimMode={trimMode}
-                          onTrimModeChange={setTrimMode}
-                          onChange={applyTrimRange}
-                          onConfirm={range => {
-                            applyTrimRange(range)
-                            showToast(
-                              formatMessage(t.trimmer.trimSaved, {
-                                start: range.startTime,
-                                end: range.endTime,
-                              }),
-                            )
-                          }}
-                        />
+                        <Suspense
+                          fallback={
+                            <div className="advanced-trimmer__loading-overlay" role="status">
+                              <span>{t.trimmer.preparingPreview}</span>
+                            </div>
+                          }
+                        >
+                          <AdvancedTrimmer
+                            key={url}
+                            videoUrl={trimmerSource.videoUrl}
+                            originalUrl={url}
+                            duration={trimmerSource.duration}
+                            isLive={trimmerSource.isLive}
+                            initialStreamType={trimmerSource.streamType}
+                            lang={lang}
+                            initialStartTime={startTime}
+                            initialEndTime={endTime}
+                            trimMode={trimMode}
+                            onTrimModeChange={setTrimMode}
+                            onChange={applyTrimRange}
+                            onConfirm={range => {
+                              applyTrimRange(range)
+                              showToast(
+                                formatMessage(t.trimmer.trimSaved, {
+                                  start: range.startTime,
+                                  end: range.endTime,
+                                }),
+                              )
+                            }}
+                          />
+                        </Suspense>
                       )}
                     </div>
                   </>
@@ -503,7 +515,7 @@ const AddDownloadTab: React.FC = () => {
                       analyzeResult.items.filter((i: any) => i.selected).length === 0)
                   }
                 >
-                  🚀 Download Now
+                  {t.start_download}
                 </button>
                 <button
                   style={{
@@ -555,7 +567,7 @@ const AddDownloadTab: React.FC = () => {
                     e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
                   }}
                 >
-                  ➕ Add to Batch List
+                  {t.add_to_batch}
                 </button>
               </div>
             </div>
@@ -604,12 +616,19 @@ const AddDownloadTab: React.FC = () => {
                         className="spinner-sm"
                         style={{ width: 16, height: 16, borderWidth: 2 }}
                       ></div>
-                      Processing Batch…
+                      {t.processing_batch}
                     </span>
                   ) : errorCount > 0 ? (
-                    `Retry ${errorCount} Failed · Start Batch Download (${batchItems.length} / ${MAX_BATCH_ITEMS})`
+                    formatMessage(t.retry_failed_batch, {
+                      failed: errorCount,
+                      count: batchItems.length,
+                      max: MAX_BATCH_ITEMS,
+                    })
                   ) : (
-                    `Start Batch Download (${batchItems.length} / ${MAX_BATCH_ITEMS} items)`
+                    formatMessage(t.start_batch_download, {
+                      count: batchItems.length,
+                      max: MAX_BATCH_ITEMS,
+                    })
                   )}
                 </button>
               )

@@ -55,6 +55,8 @@ export default function MediaPlayerModal({
     return localStorage.getItem('cortexdl_media_muted') === 'true'
   })
   const lastNonZeroVolumeRef = useRef<number>(volume > 0 ? volume : 0.8)
+  const volumeRef = useRef<number>(volume)
+  volumeRef.current = volume
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [showSettings, setShowSettings] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -74,7 +76,16 @@ export default function MediaPlayerModal({
   } = useFloatingPlayer(title || '', dir)
   const [floatingError, setFloatingError] = useState(false)
   useEffect(() => {
-    void window.cortexDl.getBuildInfo?.().then(info => setSafeMode(info.safeMode))
+    let active = true
+    void window.cortexDl
+      .getBuildInfo?.()
+      .then(info => {
+        if (active && info) setSafeMode(info.safeMode)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
   }, [])
   const mediaEndpoint = useMediaEndpoint()
 
@@ -165,19 +176,26 @@ export default function MediaPlayerModal({
   })
 
   const togglePlay = useCallback(() => {
-    if (!mediaRef.current || sessionClosedRef.current || mediaSuspended) return
-    if (isPlaying) {
-      mediaRef.current.pause()
+    const media = mediaRef.current
+    if (!media || sessionClosedRef.current || mediaSuspended) return
+    if (!media.paused) {
+      media.pause()
+      setIsPlaying(false)
     } else {
       if (audioContextRef.current?.state === 'suspended') {
-        audioContextRef.current.resume()
+        void audioContextRef.current.resume().catch(() => {})
       }
-      mediaRef.current.play().catch(error => {
-        if (error?.name !== 'AbortError' && !sessionClosedRef.current) console.error(error)
-      })
+      void media
+        .play()
+        .then(() => {
+          if (!sessionClosedRef.current) setIsPlaying(true)
+        })
+        .catch(error => {
+          if (!sessionClosedRef.current) setIsPlaying(false)
+          if (error?.name !== 'AbortError' && !sessionClosedRef.current) console.error(error)
+        })
     }
-    setIsPlaying(p => !p)
-  }, [isPlaying, mediaSuspended])
+  }, [mediaSuspended])
 
   const suspendForArtwork = async () => {
     const media = mediaRef.current
@@ -244,23 +262,24 @@ export default function MediaPlayerModal({
   }, [releasePlayerSession, onClose, restoreFloating])
 
   const toggleMute = useCallback(() => {
-    setIsMuted(prevMuted => {
-      if (prevMuted || volume === 0) {
-        if (volume === 0) {
-          setVolume(lastNonZeroVolumeRef.current > 0.02 ? lastNonZeroVolumeRef.current : 0.8)
-        }
-        return false
+    if (isMuted || volume === 0) {
+      if (volume === 0) {
+        setVolume(lastNonZeroVolumeRef.current > 0.02 ? lastNonZeroVolumeRef.current : 0.8)
       }
-      if (volume > 0) lastNonZeroVolumeRef.current = volume
-      return true
-    })
-  }, [volume])
+      setIsMuted(false)
+      return
+    }
+    if (volume > 0) lastNonZeroVolumeRef.current = volume
+    setIsMuted(true)
+  }, [isMuted, volume])
 
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return
-    document.fullscreenElement
-      ? document.exitFullscreen()
-      : containerRef.current.requestFullscreen()
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {})
+    } else {
+      void containerRef.current.requestFullscreen().catch(() => {})
+    }
   }, [])
 
   usePlayerHotkeys({
@@ -270,6 +289,7 @@ export default function MediaPlayerModal({
     isFullscreen,
     mediaType,
     mediaRef,
+    volumeRef,
     lastNonZeroVolumeRef,
     setVolume,
     setIsMuted,
@@ -536,7 +556,7 @@ export default function MediaPlayerModal({
                 className="unsupported-media"
                 style={{ color: 'white', textAlign: 'center', marginTop: '20%' }}
               >
-                <p>Unsupported file format</p>
+                <p>{translations[dir === 'rtl' ? 'ar' : 'en'].unsupported_format}</p>
               </div>
             )}
             {floatingError && (

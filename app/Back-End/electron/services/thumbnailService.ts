@@ -450,7 +450,7 @@ export class ThumbnailCache {
       if (
         !response.ok ||
         !type ||
-        !TYPES[type] ||
+        !Object.prototype.hasOwnProperty.call(TYPES, type) ||
         !response.body ||
         Number(response.headers.get('content-length')) > MAX_BYTES
       ) {

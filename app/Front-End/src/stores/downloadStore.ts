@@ -101,7 +101,13 @@ function countActive(state: DownloadStoreState): number {
   let count = 0
   for (const id of state.taskIds) {
     const t = state.tasks.get(id)
-    if (t && (t.status === 'downloading' || t.status === 'queued' || t.status === 'converting'))
+    if (
+      t &&
+      (t.status === 'downloading' ||
+        t.status === 'queued' ||
+        t.status === 'merging' ||
+        t.status === 'converting')
+    )
       count++
   }
   return count

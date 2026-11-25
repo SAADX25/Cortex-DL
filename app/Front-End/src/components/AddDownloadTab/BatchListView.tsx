@@ -99,7 +99,7 @@ const BatchListView: React.FC<BatchListViewProps> = ({ batchItems, setBatchItems
                       color: isItemError ? '#f87171' : '#9ca3af',
                     }}
                   >
-                    {isItemError ? '⚠️' : item.format === 'mp3' ? '🎵' : '🎬'}
+                    {isItemError ? '⚠️' : AUDIO_FORMATS.includes(item.format) ? '🎵' : '🎬'}
                   </div>
                 )}
                 <div

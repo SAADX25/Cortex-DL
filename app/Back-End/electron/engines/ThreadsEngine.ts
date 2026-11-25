@@ -233,6 +233,7 @@ export class ThreadsEngine implements IEngine {
       let lastUpdate = nowMs()
       let throttleWindowStart = nowMs()
       let throttleWindowBytes = 0
+      let throttleTimer: ReturnType<typeof setTimeout> | null = null
 
       const progressTransform = new Transform({
         transform(chunk: Buffer, _encoding, callback) {
@@ -255,7 +256,14 @@ export class ThreadsEngine implements IEngine {
             const expectedMs = (throttleWindowBytes / speedLimitBps) * 1000
             if (expectedMs > elapsedMs + 20) {
               const waitMs = Math.min(1000, Math.round(expectedMs - elapsedMs))
-              setTimeout(() => callback(null, chunk), waitMs)
+              throttleTimer = setTimeout(() => {
+                throttleTimer = null
+                if (nowMs() - throttleWindowStart >= 1000) {
+                  throttleWindowStart = nowMs()
+                  throttleWindowBytes = 0
+                }
+                callback(null, chunk)
+              }, waitMs)
               return
             }
             if (elapsedMs >= 1000) {
@@ -265,6 +273,13 @@ export class ThreadsEngine implements IEngine {
           }
 
           callback(null, chunk)
+        },
+        destroy(err, callback) {
+          if (throttleTimer) {
+            clearTimeout(throttleTimer)
+            throttleTimer = null
+          }
+          callback(err)
         },
       })
 

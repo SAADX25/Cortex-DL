@@ -3,6 +3,20 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import path from 'node:path'
 import { validateSubtitleRequest } from '../../Shared/localSubtitles'
 
+const SESSION_ID_RE = /^[a-zA-Z0-9-]{1,80}$/
+const TRIM_SESSION_ID_RE = /^trim-[a-zA-Z0-9-]{1,75}$/
+
+function isUnsafePath(value: unknown): boolean {
+  return (
+    typeof value !== 'string' ||
+    value.length > 32767 ||
+    value.includes('\0') ||
+    !path.isAbsolute(value) ||
+    /^\\\\/.test(value) ||
+    /^\/\//.test(value)
+  )
+}
+
 export function validateIpcArguments(channel: string, args: unknown[]): void {
   const first = args[0]
   if (channel.startsWith('cortexdl:library:')) {
@@ -22,13 +36,7 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
         args.length !== 1 ||
         !Array.isArray(first) ||
         first.length > 10000 ||
-        first.some(
-          value =>
-            typeof value !== 'string' ||
-            value.length > 32767 ||
-            value.includes('\0') ||
-            !path.isAbsolute(value),
-        )
+        first.some(value => isUnsafePath(value))
       )
         throw new Error('Invalid library paths')
     } else if (['artwork-select', 'artwork-remove', 'artwork-embed'].includes(operation)) {
@@ -90,26 +98,50 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
     (!Array.isArray(args[1]) || args[1].length > 50000 || !['srt', 'vtt'].includes(String(args[2])))
   )
     throw new Error('Invalid subtitle export')
-  if (channel === 'cortexdl:analyze-url' && args.length > 2)
+  if (
+    channel === 'cortexdl:analyze-url' &&
+    (args.length > 2 ||
+      (args[1] !== undefined && (typeof args[1] !== 'string' || args[1].length > 128)))
+  )
+    throw new Error('Invalid analysis arguments')
+  if (
+    channel === 'cortexdl:cancel-analysis' &&
+    (args.length !== 1 || typeof first !== 'string' || first.length > 128)
+  )
     throw new Error('Invalid analysis arguments')
   const paths = ['open-folder', 'open-file', 'get-media-fps', 'get-subtitles']
   if (paths.some(name => channel === `cortexdl:${name}`)) {
-    if (
-      typeof first !== 'string' ||
-      first.length > 32767 ||
-      first.includes('\0') ||
-      !path.isAbsolute(first)
-    )
-      throw new Error('Invalid file path')
+    if (isUnsafePath(first)) throw new Error('Invalid file path')
     // Allowlist media/text extensions so open-file can never launch executables or scripts.
     if (
       channel.endsWith('open-file') &&
       !/\.(?:mp4|mkv|webm|avi|mov|ogv|m4v|gif|mp3|m4a|aac|opus|flac|wav|ogg|wma|srt|vtt|txt)$/i.test(
-        first,
+        first as string,
       )
     )
       throw new Error('Only media and text files can be opened')
+    if (
+      (channel === 'cortexdl:get-media-fps' || channel === 'cortexdl:get-subtitles') &&
+      (args.length !== 2 || typeof args[1] !== 'string' || !SESSION_ID_RE.test(args[1]))
+    )
+      throw new Error('Invalid media session')
   }
+  if (
+    channel === 'cortexdl:close-media-session' &&
+    (args.length !== 1 || typeof first !== 'string' || !SESSION_ID_RE.test(first))
+  )
+    throw new Error('Invalid media session')
+  if (
+    channel === 'cortexdl:get-trim-preview-streams' &&
+    (args.length !== 2 || typeof args[1] !== 'string' || !TRIM_SESSION_ID_RE.test(args[1]))
+  )
+    throw new Error('Invalid trim session')
+  if (
+    channel === 'cortexdl:get-direct-stream-url' &&
+    (args.length > 2 ||
+      (args[1] !== undefined && (typeof args[1] !== 'string' || !SESSION_ID_RE.test(args[1]))))
+  )
+    throw new Error('Invalid media session')
   if (
     channel === 'cortexdl:set-concurrency' &&
     (!Number.isInteger(first) || Number(first) < 1 || Number(first) > 20)
@@ -134,8 +166,13 @@ export function validateIpcArguments(channel: string, args: unknown[]): void {
   if (channel === 'cortexdl:downloads:delete' && typeof args[1] !== 'boolean')
     throw new Error('Invalid delete flag')
   if (
-    ['cortexdl:secure-save', 'cortexdl:secure-get'].includes(channel) &&
-    args.some(arg => typeof arg !== 'string' || arg.length > 65536)
+    channel === 'cortexdl:secure-save' &&
+    (args.length !== 2 || args.some(arg => typeof arg !== 'string' || arg.length > 65536))
+  )
+    throw new Error('Invalid secure data')
+  if (
+    channel === 'cortexdl:secure-get' &&
+    (args.length !== 1 || typeof first !== 'string' || first.length > 65536)
   )
     throw new Error('Invalid secure data')
   if (

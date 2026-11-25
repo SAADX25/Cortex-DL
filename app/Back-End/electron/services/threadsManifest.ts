@@ -52,19 +52,23 @@ export function isHttpStreamUrl(value: unknown): value is string {
 
 export function decodeXmlEntities(value: string): string {
   return value
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;|&#0*39;/g, "'")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
       const code = parseInt(hex, 16)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : _
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : match
     })
-    .replace(/&#(\d+);/g, (_, dec) => {
+    .replace(/&#(\d+);/g, (match, dec) => {
       const code = parseInt(dec, 10)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : _
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : match
     })
+    .replace(/&amp;/g, '&')
 }
 
 export function parseIsoDuration(value: string | undefined | null): number | undefined {

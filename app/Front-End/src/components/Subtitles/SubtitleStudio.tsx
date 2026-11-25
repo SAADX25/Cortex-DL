@@ -1,5 +1,5 @@
 // On-device speech-to-subtitle studio: model setup, GPU/CPU toggle, cue review, and SRT/VTT/video export
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Captions,
   FolderOpen,
@@ -41,8 +41,23 @@ export default function SubtitleStudio() {
     t = translations[lang].subtitles.studio,
     ar = lang === 'ar'
   const errorLabel = (msg: string) => t.errors[msg] ?? msg
-  const languageName = (code: string, fallback: string) =>
-    new Intl.DisplayNames([lang], { type: 'language' }).of(code) || fallback
+  const displayNames = useMemo(() => {
+    try {
+      return new Intl.DisplayNames([lang], { type: 'language' })
+    } catch {
+      return null
+    }
+  }, [lang])
+  const languageName = useCallback(
+    (code: string, fallback: string) => {
+      try {
+        return displayNames?.of(code) || fallback
+      } catch {
+        return fallback
+      }
+    },
+    [displayNames],
+  )
   const source = useSubtitleStudioStore(s => s.source),
     setSource = useSubtitleStudioStore(s => s.setSource)
   const [spoken, setSpoken] = useState<SubtitleLanguage | 'auto'>('auto')
@@ -101,7 +116,7 @@ export default function SubtitleStudio() {
     }
   }, [])
   useEffect(() => {
-    if (busy) return
+    if (busy || activeTab !== 'subtitles') return
     let disposed = false,
       inFlight = false,
       refreshQueued = false,

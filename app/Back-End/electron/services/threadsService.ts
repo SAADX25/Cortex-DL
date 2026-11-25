@@ -139,6 +139,7 @@ function buildResolvedMedia(
 
   if (Array.isArray(mediaNode.video_versions)) {
     const seenProg = new Set<string>()
+    const hasDashVideo = videoFormats.length > 0
     const origW =
       typeof mediaNode.original_width === 'number' ? mediaNode.original_width : undefined
     const origH =
@@ -158,10 +159,10 @@ function buildResolvedMedia(
         version.width > 0 &&
         typeof version.height === 'number' &&
         version.height > 0
-      const width = hasExplicitDims ? version.width : !videoFormats.length ? origW : undefined
-      const height = hasExplicitDims ? version.height : !videoFormats.length ? origH : undefined
+      const width = hasExplicitDims ? version.width : !hasDashVideo ? origW : undefined
+      const height = hasExplicitDims ? version.height : !hasDashVideo ? origH : undefined
       const inferredFallback =
-        videoFormats.length > 0 && fallbackQualityHeight && fallbackQualityHeight > 720
+        hasDashVideo && fallbackQualityHeight && fallbackQualityHeight > 720
           ? 720
           : fallbackQualityHeight
       const qualityHeight = efg.height ?? normalizeQualityHeight(width, height) ?? inferredFallback

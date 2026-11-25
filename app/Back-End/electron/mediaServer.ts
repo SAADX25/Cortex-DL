@@ -49,7 +49,7 @@ const MIME_TYPES: Record<string, string> = {
 function isUnderRoot(target: string, root: string): boolean {
   const rel = path.relative(root, target)
   if (!rel) return false
-  return !rel.startsWith('..') && !path.isAbsolute(rel)
+  return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
 }
 
 // Reject DNS-rebinding Host headers and cross-origin browser requests to the local media server.
@@ -157,14 +157,22 @@ export function createMediaStreamingServer(
     return roots
   }
 
-  const isServablePath = async (target: string): Promise<boolean> => {
+  const isServablePath = async (requestedPath: string, target: string): Promise<boolean> => {
     const resolved = path.resolve(target)
     const cachedRoots = await getMediaRoots(false)
     if (cachedRoots.some(root => isUnderRoot(resolved, root))) return true
+    if (await isLibraryMediaPath(requestedPath, target)) return true
 
     const freshRoots = await getMediaRoots(true)
     return freshRoots.some(root => isUnderRoot(resolved, root))
   }
+
+  const isRequestClosed = (
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    playerSession: string | null,
+  ): boolean =>
+    req.destroyed || res.destroyed || res.writableEnded || requests.isClosed(playerSession)
 
   const streamEmbeddedSubtitle = async (
     req: http.IncomingMessage,
@@ -175,6 +183,7 @@ export function createMediaStreamingServer(
     playerSession: string | null,
   ): Promise<void> => {
     await ensureEnginesReady(['ffmpeg'])
+    if (isRequestClosed(req, res, playerSession)) return
 
     const streamIndex = rawStreamIndex && /^\d{1,3}$/.test(rawStreamIndex) ? rawStreamIndex : '0'
     res.writeHead(200, {
@@ -230,6 +239,7 @@ export function createMediaStreamingServer(
       log.warn(`[MediaServer] Subtitle extraction timed out for stream ${streamIndex}`)
       finish()
     }, SUBTITLE_EXTRACT_TIMEOUT_MS)
+    timer.unref?.()
 
     // Drain stderr to keep FFmpeg from blocking on a full pipe.
     let stderrTail = ''
@@ -380,19 +390,22 @@ export function createMediaStreamingServer(
       try {
         filePath = await fsPromises.realpath(requestedPath)
       } catch {
-        res.writeHead(404)
-        res.end('File not found')
+        if (!isRequestClosed(req, res, playerSession)) {
+          res.writeHead(404)
+          res.end('File not found')
+        }
         return
       }
+      if (isRequestClosed(req, res, playerSession)) return
 
-      if (
-        !(await isServablePath(filePath)) &&
-        !(await isLibraryMediaPath(requestedPath, filePath))
-      ) {
-        res.writeHead(403)
-        res.end('Forbidden path')
+      if (!(await isServablePath(requestedPath, filePath))) {
+        if (!isRequestClosed(req, res, playerSession)) {
+          res.writeHead(403)
+          res.end('Forbidden path')
+        }
         return
       }
+      if (isRequestClosed(req, res, playerSession)) return
 
       const ext = path.extname(filePath).toLowerCase()
       const contentType = MIME_TYPES[ext]
@@ -406,10 +419,13 @@ export function createMediaStreamingServer(
       try {
         stat = await fsPromises.stat(filePath)
       } catch {
-        res.writeHead(404)
-        res.end('File not found')
+        if (!isRequestClosed(req, res, playerSession)) {
+          res.writeHead(404)
+          res.end('File not found')
+        }
         return
       }
+      if (isRequestClosed(req, res, playerSession)) return
 
       if (!stat.isFile()) {
         res.writeHead(403)

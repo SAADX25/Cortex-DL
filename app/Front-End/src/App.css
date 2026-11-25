@@ -291,6 +291,15 @@ body {
   filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
 }
 
+.nav-active-indicator {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 0.75rem;
+  pointer-events: none;
+}
+
 .nav-icon {
   font-size: 1.2rem;
   transition: all 0.3s ease;
