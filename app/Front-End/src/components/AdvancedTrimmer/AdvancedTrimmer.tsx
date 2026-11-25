@@ -115,11 +115,6 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     return 60
   })
 
-  const [startDraft, setStartDraft] = useState(() => formatTimecode(startSeconds))
-  const [endDraft, setEndDraft] = useState(() => formatTimecode(endSeconds))
-  const [durationDraft, setDurationDraft] = useState(() =>
-    formatTimecode(Math.max(0, endSeconds - startSeconds)),
-  )
   const [liveDraft, setLiveDraft] = useState(() => formatTimecode(liveClipSeconds))
 
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
@@ -159,12 +154,6 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     () => (effectiveIsLive ? buildRange(0, liveClipSeconds) : buildRange(startSeconds, endSeconds)),
     [effectiveIsLive, liveClipSeconds, startSeconds, endSeconds],
   )
-
-  useEffect(() => {
-    setStartDraft(formatTimecode(startSeconds))
-    setEndDraft(formatTimecode(endSeconds))
-    setDurationDraft(formatTimecode(Math.max(0, endSeconds - startSeconds)))
-  }, [startSeconds, endSeconds])
 
   useEffect(() => {
     setLiveDraft(formatTimecode(liveClipSeconds))
@@ -635,33 +624,6 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     pointerToTime,
   ])
 
-  const commitStartDraft = () => {
-    const parsed = parseTimecode(startDraft)
-    if (parsed == null) {
-      setStartDraft(formatTimecode(startSeconds))
-      return
-    }
-    updateStart(parsed)
-  }
-
-  const commitEndDraft = () => {
-    const parsed = parseTimecode(endDraft)
-    if (parsed == null) {
-      setEndDraft(formatTimecode(endSeconds))
-      return
-    }
-    updateEnd(parsed)
-  }
-
-  const commitDurationDraft = () => {
-    const parsed = parseTimecode(durationDraft)
-    if (parsed == null || parsed < MIN_CLIP_SECONDS) {
-      setDurationDraft(formatTimecode(Math.max(0, endSeconds - startSeconds)))
-      return
-    }
-    updateEnd(Math.min(safeDuration, startSeconds + parsed))
-  }
-
   const commitLiveDraft = () => {
     const parsed = parseTimecode(liveDraft)
     if (parsed == null || parsed < 5) {
@@ -963,26 +925,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             onUpdateEnd={updateEnd}
           />
 
-          <TrimmerPrecisionPanel
-            tr={tr}
-            safeDuration={safeDuration}
-            currentTime={currentTime}
-            startSeconds={startSeconds}
-            endSeconds={endSeconds}
-            startDraft={startDraft}
-            endDraft={endDraft}
-            durationDraft={durationDraft}
-            trimMode={trimMode}
-            onTrimModeChange={onTrimModeChange}
-            onStartDraftChange={setStartDraft}
-            onEndDraftChange={setEndDraft}
-            onDurationDraftChange={setDurationDraft}
-            onCommitStartDraft={commitStartDraft}
-            onCommitEndDraft={commitEndDraft}
-            onCommitDurationDraft={commitDurationDraft}
-            onUpdateStart={updateStart}
-            onUpdateEnd={updateEnd}
-          />
+          <TrimmerPrecisionPanel tr={tr} trimMode={trimMode} onTrimModeChange={onTrimModeChange} />
         </>
       )}
 
