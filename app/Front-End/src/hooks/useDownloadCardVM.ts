@@ -43,6 +43,7 @@ interface DownloadCardData {
   sourceUrl: string
   thumbnail: string | null
   formatTag: string
+  trimRangeLabel: string | null
 
   phase: DisplayPhase
   phaseLabel: string
@@ -62,7 +63,6 @@ interface DownloadCardData {
   showCancel: boolean
   showPlay: boolean
   showOpenFolder: boolean
-
 
   filePath: string
 }
@@ -141,7 +141,8 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
     const isDownloading = phase === 'downloading'
     const isActivePhase = isDownloading || isPostProcessing
     let sizeLabel = ''
-    if (task.status === 'completed' && task.outputBytes != null) sizeLabel = formatBytes(task.outputBytes)
+    if (task.status === 'completed' && task.outputBytes != null)
+      sizeLabel = formatBytes(task.outputBytes)
     else if (isActivePhase || task.status === 'completed') {
       if (knownTotal) {
         sizeLabel = `${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes!)}`
@@ -150,21 +151,28 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       }
     }
 
-    const speedLabel = isDownloading
-      ? formatSpeed(task.speedBytesPerSec, lang)
-      : ''
+    const speedLabel =
+      isDownloading || phase === 'trimming' ? formatSpeed(task.speedBytesPerSec, lang) : ''
 
-    const etaLabel = isDownloading && knownTotal
-      ? formatEta(remaining, 1)
-      : ''
+    const etaLabel = isDownloading && knownTotal ? formatEta(remaining, 1) : ''
 
-    const phaseEmoji = phase === 'merging' ? '⚙️' : phase === 'trimming' ? '✂️' : phase === 'converting' ? '🔄' : ''
+    const trimRangeLabel =
+      task.startTime || task.endTime
+        ? `${task.startTime || '00:00:00'} → ${task.endTime || 'END'}`
+        : null
+
+    const phaseEmoji =
+      phase === 'merging' ? '⚙️' : phase === 'trimming' ? '✂️' : phase === 'converting' ? '🔄' : ''
     const phaseBadge = isPostProcessing
       ? `${phaseEmoji} ${convPct !== null ? `${phaseLabels[phase]} ${Math.round(convPct)}%` : phaseLabels[phase]}`
       : ''
     const finalPhaseLabel = isPostProcessing ? phaseBadge : phaseLabels[phase]
 
-    const showPause = task.status === 'downloading' || task.status === 'queued' || task.status === 'merging' || task.status === 'converting'
+    const showPause =
+      task.status === 'downloading' ||
+      task.status === 'queued' ||
+      task.status === 'merging' ||
+      task.status === 'converting'
     const showResume = task.status === 'paused' || task.status === 'error'
     const showCancel = task.status !== 'completed' && task.status !== 'canceled'
     const showPlay = task.status === 'completed'
@@ -176,6 +184,7 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       sourceUrl: task.url,
       thumbnail: task.thumbnail ?? null,
       formatTag: task.targetFormat,
+      trimRangeLabel,
       phase,
       phaseLabel: finalPhaseLabel,
       phaseColor: phaseColors[phase],
@@ -185,34 +194,42 @@ export function useDownloadCardVM(opts: UseDownloadCardVMOptions): DownloadCardV
       sizeLabel,
       speedLabel,
       etaLabel,
-      errorMessage: youtubeErrorMessage(task.errorMessage, t) ?? threadsErrorMessage(task.errorMessage, t) ?? task.errorMessage ?? null,
+      errorMessage:
+        youtubeErrorMessage(task.errorMessage, t) ??
+        threadsErrorMessage(task.errorMessage, t) ??
+        task.errorMessage ??
+        null,
       showPause,
       showResume,
       showCancel,
       showPlay,
       showOpenFolder,
       filePath: task.filePath,
-
-
-
-
-
     }
   }, [task, lang, t])
 
   const handlePause = useCallback(async () => {
-    try { await window.cortexDl.pauseDownload(id) }
-    catch (err) { onError(err instanceof Error ? err.message : t.pause_failed) }
+    try {
+      await window.cortexDl.pauseDownload(id)
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t.pause_failed)
+    }
   }, [id, onError, t.pause_failed])
 
   const handleResume = useCallback(async () => {
-    try { await window.cortexDl.resumeDownload(id) }
-    catch (err) { onError(err instanceof Error ? err.message : t.resume_failed) }
+    try {
+      await window.cortexDl.resumeDownload(id)
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t.resume_failed)
+    }
   }, [id, onError, t.resume_failed])
 
   const handleCancel = useCallback(async () => {
-    try { await window.cortexDl.cancelDownload(id) }
-    catch (err) { onError(err instanceof Error ? err.message : t.cancel_failed) }
+    try {
+      await window.cortexDl.cancelDownload(id)
+    } catch (err) {
+      onError(err instanceof Error ? err.message : t.cancel_failed)
+    }
   }, [id, onError, t.cancel_failed])
 
   const handlePlay = useCallback(() => {

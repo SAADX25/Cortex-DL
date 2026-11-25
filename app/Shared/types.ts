@@ -11,7 +11,8 @@ export type DownloadStatus =
   | 'canceled'
 
 export type DownloadEngine = 'direct' | 'ffmpeg' | 'ytdlp'
-export type DownloadPhase = DownloadStatus | 'starting' | 'preparing' | 'trimming' | 'validating' | 'finalizing'
+export type DownloadPhase =
+  DownloadStatus | 'starting' | 'preparing' | 'trimming' | 'validating' | 'finalizing'
 
 export type VideoFormat = 'mp4' | 'mkv' | 'avi' | 'mov' | 'webm' | 'ogv' | 'm4v' | 'gif'
 export type AudioFormat = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'flac' | 'aac' | 'opus' | 'wma'
@@ -25,8 +26,26 @@ export type TrimSelection = {
   endTime: string
 }
 
-export const VIDEO_FORMATS: VideoFormat[] = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'ogv', 'm4v', 'gif']
-export const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'opus', 'wma']
+export const VIDEO_FORMATS: VideoFormat[] = [
+  'mp4',
+  'mkv',
+  'avi',
+  'mov',
+  'webm',
+  'ogv',
+  'm4v',
+  'gif',
+]
+export const AUDIO_FORMATS: AudioFormat[] = [
+  'mp3',
+  'wav',
+  'm4a',
+  'ogg',
+  'flac',
+  'aac',
+  'opus',
+  'wma',
+]
 
 export const UPDATE_CHANNEL = 'cortexdl:download-updated'
 export const PROGRESS_CHANNEL = 'cortexdl:download-progress'
@@ -126,7 +145,11 @@ export type AnalyzeResult =
       qualityStatus?: 'restricted' | 'limited' | 'available'
       comments?: { author: string; text: string; likeCount: number }[]
     }
-  | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
+  | {
+      kind: 'playlist'
+      title: string
+      items: { id: string; title: string; url: string; thumbnail?: string }[]
+    }
 
 export type JsRuntimeStatus = {
   available: boolean

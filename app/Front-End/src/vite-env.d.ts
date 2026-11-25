@@ -52,21 +52,25 @@ declare global {
     | { kind: 'hls-media'; url: string }
     | { kind: 'hls-master'; variants: HlsVariant[] }
     | {
-      kind: 'ytdlp'
-      preview?: boolean
-      title: string
-      thumbnail?: string
-      formats: YtdlpFormat[]
-      views?: number
-      likes?: number
-      dislikes?: number
-      duration?: number
-      isLive?: boolean
-      wasLive?: boolean
-      qualityStatus?: 'restricted' | 'limited' | 'available'
-      comments?: { author: string; text: string; likeCount: number }[]
-    }
-    | { kind: 'playlist'; title: string; items: { id: string; title: string; url: string; thumbnail?: string }[] }
+        kind: 'ytdlp'
+        preview?: boolean
+        title: string
+        thumbnail?: string
+        formats: YtdlpFormat[]
+        views?: number
+        likes?: number
+        dislikes?: number
+        duration?: number
+        isLive?: boolean
+        wasLive?: boolean
+        qualityStatus?: 'restricted' | 'limited' | 'available'
+        comments?: { author: string; text: string; likeCount: number }[]
+      }
+    | {
+        kind: 'playlist'
+        title: string
+        items: { id: string; title: string; url: string; thumbnail?: string }[]
+      }
 
   interface DownloadProgressData {
     id?: string
@@ -77,8 +81,7 @@ declare global {
   type UpdateStatusData = SharedAppUpdateState
 
   type DownloadCommentsResult =
-    | boolean
-    | { success: boolean; canceled?: boolean; error?: string; filePath?: string }
+    boolean | { success: boolean; canceled?: boolean; error?: string; filePath?: string }
 
   interface Window {
     __cortexMediaDiagnostics?: () => Promise<unknown>
@@ -86,17 +89,40 @@ declare global {
       readonly customTitleBar: boolean
       getDroppedMediaPaths: (files: File[]) => string[]
       listMediaLibrary: () => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
-      checkMediaLibraryFiles: (ids: string[]) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      checkMediaLibraryFiles: (
+        ids: string[],
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
       getMediaLibraryThumbnail: (id: string) => Promise<string | null>
-      getMediaLibraryArtworkInfo: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryArtworkInfo>
-      selectMediaLibraryArtwork: (id: string, refreshPlayer?: boolean) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
-      removeMediaLibraryArtwork: (id: string, refreshPlayer?: boolean) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
-      embedMediaLibraryArtwork: (id: string, refreshPlayer?: boolean) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
-      selectMediaLibraryFiles: () => Promise<import('../../Shared/mediaLibrary').LibraryImportResult | null>
-      addMediaLibraryFiles: (files: string[]) => Promise<import('../../Shared/mediaLibrary').LibraryImportResult>
-      removeMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
-      playMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem>
-      relocateMediaLibraryItem: (id: string) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
+      getMediaLibraryArtworkInfo: (
+        id: string,
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryArtworkInfo>
+      selectMediaLibraryArtwork: (
+        id: string,
+        refreshPlayer?: boolean,
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
+      removeMediaLibraryArtwork: (
+        id: string,
+        refreshPlayer?: boolean,
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      embedMediaLibraryArtwork: (
+        id: string,
+        refreshPlayer?: boolean,
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      selectMediaLibraryFiles: () => Promise<
+        import('../../Shared/mediaLibrary').LibraryImportResult | null
+      >
+      addMediaLibraryFiles: (
+        files: string[],
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryImportResult>
+      removeMediaLibraryItem: (
+        id: string,
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[]>
+      playMediaLibraryItem: (
+        id: string,
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem>
+      relocateMediaLibraryItem: (
+        id: string,
+      ) => Promise<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>
       reportFirstUiRender(): void
       analysisDebug: boolean
 
@@ -110,7 +136,13 @@ declare global {
       onCommentsProgress: (callback: (current: number, total: number) => void) => () => void
 
       cancelAnalysis: (id: string) => Promise<void>
-      onAnalysisUpdate: (callback: (update: { id: string; stage: string; data: { title?: string; dislikes?: number } }) => void) => () => void
+      onAnalysisUpdate: (
+        callback: (update: {
+          id: string
+          stage: string
+          data: { title?: string; dislikes?: number }
+        }) => void,
+      ) => () => void
       analyzeUrl: (url: string, id?: string) => Promise<AnalyzeResult>
 
       listDownloads: () => Promise<DownloadTask[]>
@@ -132,24 +164,26 @@ declare global {
         endTime?: string
         trimMode?: 'fast' | 'exact'
       }) => Promise<DownloadTask>
-      addBatchDownloads: (inputs: {
-        url: string
-        directory: string
-        subfolderName?: string
-        filename?: string
-        engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
-        targetFormat?: TargetFormat
-        ytdlpFormatId?: string
-        title?: string
-        thumbnail?: string
-        isLive?: boolean
-        username?: string
-        password?: string
-        speedLimit?: string
-        startTime?: string
-        endTime?: string
-        trimMode?: 'fast' | 'exact'
-      }[]) => Promise<DownloadTask[]>
+      addBatchDownloads: (
+        inputs: {
+          url: string
+          directory: string
+          subfolderName?: string
+          filename?: string
+          engine?: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp'
+          targetFormat?: TargetFormat
+          ytdlpFormatId?: string
+          title?: string
+          thumbnail?: string
+          isLive?: boolean
+          username?: string
+          password?: string
+          speedLimit?: string
+          startTime?: string
+          endTime?: string
+          trimMode?: 'fast' | 'exact'
+        }[],
+      ) => Promise<DownloadTask[]>
       pauseDownload: (id: string) => Promise<DownloadTask>
       resumeDownload: (id: string) => Promise<DownloadTask>
       cancelDownload: (id: string) => Promise<DownloadTask>
@@ -191,30 +225,67 @@ declare global {
       fetchThumbnail: (url: string) => Promise<string>
       getMediaFps: (filePath: string, session: string) => Promise<number | null>
       getDirectStreamUrl: (url: string, previewSession?: string) => Promise<string>
-      getTrimPreviewStreams: (url: string, previewSession: string) => Promise<{ videoUrl: string; audioUrl?: string; streamType?: 'progressive' | 'hls'; isLive?: boolean; duration?: number } | null>
+      getTrimPreviewStreams: (
+        url: string,
+        previewSession: string,
+      ) => Promise<{
+        videoUrl: string
+        audioUrl?: string
+        streamType?: 'progressive' | 'hls'
+        isLive?: boolean
+        duration?: number
+      } | null>
       logPreviewError: (message: string) => void
 
-      getSubtitles: (filePath: string, session: string) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>
-      listDownloadSubtitleFiles: (id: string) => Promise<import('../../Shared/downloadSubtitles').DownloadSubtitleFile[]>
-      mergeDownloadSubtitle: (id: string, fileName: string, format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat) => Promise<string | null>
+      getSubtitles: (
+        filePath: string,
+        session: string,
+      ) => Promise<import('../../Shared/types').PlayerSubtitleTrack[]>
+      listDownloadSubtitleFiles: (
+        id: string,
+      ) => Promise<import('../../Shared/downloadSubtitles').DownloadSubtitleFile[]>
+      mergeDownloadSubtitle: (
+        id: string,
+        fileName: string,
+        format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat,
+      ) => Promise<string | null>
       cancelDownloadSubtitleMerge: (id: string) => Promise<void>
       getLocalSubtitleState: () => Promise<import('../../Shared/localSubtitles').SubtitleState>
-      getLocalSubtitleReadiness: () => Promise<import('../../Shared/localSubtitles').SubtitleReadiness>
+      getLocalSubtitleReadiness: () => Promise<
+        import('../../Shared/localSubtitles').SubtitleReadiness
+      >
       selectSubtitleMedia: () => Promise<string | null>
-      installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null, compute?: 'auto' | 'cpu') => Promise<string>
-      startLocalSubtitles: (request: import('../../Shared/localSubtitles').SubtitleRequest) => Promise<string>
+      installSubtitleModels: (
+        speech: import('../../Shared/localSubtitles').SpeechModel,
+        translation: import('../../Shared/localSubtitles').TranslationModel | null,
+        compute?: 'auto' | 'cpu',
+      ) => Promise<string>
+      startLocalSubtitles: (
+        request: import('../../Shared/localSubtitles').SubtitleRequest,
+      ) => Promise<string>
       cancelLocalSubtitles: (id: string) => Promise<void>
-      clearLocalSubtitles: (id: string) => Promise<import('../../Shared/localSubtitles').SubtitleState>
-      exportLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[], format: 'srt' | 'vtt') => Promise<string | null>
-      embedLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[]) => Promise<string | null>
+      clearLocalSubtitles: (
+        id: string,
+      ) => Promise<import('../../Shared/localSubtitles').SubtitleState>
+      exportLocalSubtitles: (
+        id: string,
+        cues: import('../../Shared/localSubtitles').SubtitleCue[],
+        format: 'srt' | 'vtt',
+      ) => Promise<string | null>
+      embedLocalSubtitles: (
+        id: string,
+        cues: import('../../Shared/localSubtitles').SubtitleCue[],
+      ) => Promise<string | null>
 
       onUpdateStatus: (callback: (status: UpdateStatusData) => void) => () => void
       onDownloadUpdated: (callback: (task: DownloadTask) => void) => () => void
       onDownloadProgress: (callback: (data: DownloadProgressData) => void) => () => void
       onStatsUpdated: (callback: (data: { id: string; addedBytes: number }) => void) => () => void
-      onSetupProgress: (callback: (state: { status: string; progress: number; message: string }) => void) => () => void
+      onSetupProgress: (
+        callback: (state: { status: string; progress: number; message: string }) => void,
+      ) => () => void
     }
   }
 }
 
-export { }
+export {}

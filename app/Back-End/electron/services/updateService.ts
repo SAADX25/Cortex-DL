@@ -122,8 +122,14 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       updateState({
         phase: 'available',
         latestVersion: info?.version || null,
-        releaseName: typeof info?.releaseName === 'string' && info.releaseName.trim() ? info.releaseName.trim() : null,
-        releaseDate: typeof info?.releaseDate === 'string' && info.releaseDate.trim() ? info.releaseDate.trim() : null,
+        releaseName:
+          typeof info?.releaseName === 'string' && info.releaseName.trim()
+            ? info.releaseName.trim()
+            : null,
+        releaseDate:
+          typeof info?.releaseDate === 'string' && info.releaseDate.trim()
+            ? info.releaseDate.trim()
+            : null,
         releaseNotes: parseReleaseNotes(info?.releaseNotes),
         totalSizeBytes,
         progress: null,
@@ -183,14 +189,25 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
       if (disposed) return
       activeToken = null
       cancelling = false
-      const totalBytes = extractUpdateSize(info?.files) ?? state.totalSizeBytes ?? state.progress?.totalBytes ?? 0
-      deps.logger.info(`[Updater] Update v${info?.version ?? state.latestVersion ?? 'unknown'} downloaded and ready`)
+      const totalBytes =
+        extractUpdateSize(info?.files) ?? state.totalSizeBytes ?? state.progress?.totalBytes ?? 0
+      deps.logger.info(
+        `[Updater] Update v${info?.version ?? state.latestVersion ?? 'unknown'} downloaded and ready`,
+      )
       updateState({
         phase: 'downloaded',
         latestVersion: info?.version || state.latestVersion,
-        releaseName: typeof info?.releaseName === 'string' && info.releaseName.trim() ? info.releaseName.trim() : state.releaseName,
-        releaseDate: typeof info?.releaseDate === 'string' && info.releaseDate.trim() ? info.releaseDate.trim() : state.releaseDate,
-        releaseNotes: info?.releaseNotes ? parseReleaseNotes(info.releaseNotes) : state.releaseNotes,
+        releaseName:
+          typeof info?.releaseName === 'string' && info.releaseName.trim()
+            ? info.releaseName.trim()
+            : state.releaseName,
+        releaseDate:
+          typeof info?.releaseDate === 'string' && info.releaseDate.trim()
+            ? info.releaseDate.trim()
+            : state.releaseDate,
+        releaseNotes: info?.releaseNotes
+          ? parseReleaseNotes(info.releaseNotes)
+          : state.releaseNotes,
         totalSizeBytes: totalBytes > 0 ? totalBytes : state.totalSizeBytes,
         progress: {
           percent: 100,
@@ -241,21 +258,28 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
   const ensureLoaded = async () => {
     if (loaded) return loaded
     if (!loadPromise) {
-      loadPromise = deps.loadUpdater().then((result) => {
-        attachListeners(result.autoUpdater)
-        loaded = result
-        return result
-      }).catch((err) => {
-        loadPromise = null
-        throw err
-      })
+      loadPromise = deps
+        .loadUpdater()
+        .then(result => {
+          attachListeners(result.autoUpdater)
+          loaded = result
+          return result
+        })
+        .catch(err => {
+          loadPromise = null
+          throw err
+        })
     }
     return await loadPromise
   }
 
   const checkForUpdates = async (manual = false): Promise<AppUpdateState> => {
     if (disposed) return state
-    if (state.phase === 'checking' || state.phase === 'downloading' || state.phase === 'downloaded') {
+    if (
+      state.phase === 'checking' ||
+      state.phase === 'downloading' ||
+      state.phase === 'downloaded'
+    ) {
       if (manual && !state.manualCheck) {
         updateState({ manualCheck: true })
       }
@@ -401,7 +425,9 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
     if (disposed || !loaded || state.phase !== 'downloaded') {
       return false
     }
-    deps.logger.info(`[Updater] Installing downloaded update v${state.latestVersion ?? 'unknown'}...`)
+    deps.logger.info(
+      `[Updater] Installing downloaded update v${state.latestVersion ?? 'unknown'}...`,
+    )
     deps.onBeforeQuitForInstall()
     loaded.autoUpdater.quitAndInstall(false, true)
     return true
@@ -410,7 +436,11 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
   const dispose = (): void => {
     disposed = true
     if (activeToken) {
-      try { activeToken.cancel() } catch { /* ignore */ }
+      try {
+        activeToken.cancel()
+      } catch {
+        /* ignore */
+      }
       activeToken = null
     }
     loaded?.autoUpdater.removeAllListeners()
@@ -429,7 +459,10 @@ export function createAppUpdateController(deps: ControllerDeps): AppUpdateContro
 export function createElectronUpdateService(options: {
   currentVersion: string
   isPackaged: () => boolean
-  getWindow: () => { isDestroyed: () => boolean; webContents: { send: (channel: string, payload: unknown) => void } } | null
+  getWindow: () => {
+    isDestroyed: () => boolean
+    webContents: { send: (channel: string, payload: unknown) => void }
+  } | null
   onBeforeQuitForInstall: () => void
   logger: UpdateLogger
 }): AppUpdateController {
@@ -443,7 +476,7 @@ export function createElectronUpdateService(options: {
         createCancellationToken: () => new mod.CancellationToken(),
       }
     },
-    emitState: (state) => {
+    emitState: state => {
       const win = options.getWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send(APP_UPDATE_CHANNEL, state)

@@ -5,11 +5,20 @@ import { createHash, randomUUID } from 'node:crypto'
 import os from 'node:os'
 import AdmZip from 'adm-zip'
 import { SUBTITLE_ASSETS, type SubtitleAsset } from './manifest'
-import { type SpeechModel, type TranslationModel, type SubtitleReadiness } from '../../../Shared/localSubtitles'
+import {
+  type SpeechModel,
+  type TranslationModel,
+  type SubtitleReadiness,
+} from '../../../Shared/localSubtitles'
 import { detectNvidiaGpu } from './gpu'
 import { SubtitleProcesses } from './process'
 
-type Receipt = { id: string; sha256: string; executable?: string; files: { name: string; size: number; mtimeMs: number }[] }
+type Receipt = {
+  id: string
+  sha256: string
+  executable?: string
+  files: { name: string; size: number; mtimeMs: number }[]
+}
 
 export async function sha256(file: string): Promise<string> {
   const hash = createHash('sha256')
@@ -19,79 +28,179 @@ export async function sha256(file: string): Promise<string> {
 
 export class SubtitleAssets {
   constructor(readonly root: string) {}
-  private receiptPath(asset: SubtitleAsset): string { return path.join(this.root, `${asset.id}.receipt.json`) }
+  private receiptPath(asset: SubtitleAsset): string {
+    return path.join(this.root, `${asset.id}.receipt.json`)
+  }
   async locate(key: string): Promise<string | null> {
     const asset = SUBTITLE_ASSETS[key]
     try {
       const receipt: Receipt = JSON.parse(await fs.readFile(this.receiptPath(asset), 'utf8'))
-      if (receipt.id !== asset.id || receipt.sha256 !== asset.sha256 || !receipt.files?.length) return null
+      if (receipt.id !== asset.id || receipt.sha256 !== asset.sha256 || !receipt.files?.length)
+        return null
       // Confirm every receipted file stays inside root and matches recorded size/mtime without following symlinks.
       for (const file of receipt.files) {
         const target = path.resolve(this.root, file.name)
         if (!target.startsWith(path.resolve(this.root) + path.sep)) return null
         const stat = await fs.lstat(target)
-        if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== file.size || stat.mtimeMs !== file.mtimeMs) return null
+        if (
+          !stat.isFile() ||
+          stat.isSymbolicLink() ||
+          stat.size !== file.size ||
+          stat.mtimeMs !== file.mtimeMs
+        )
+          return null
       }
       const name = asset.archive ? receipt.executable : asset.file
       if (!name || !receipt.files.some(f => f.name === name)) return null
       return path.join(this.root, name)
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
   async readiness(): Promise<SubtitleReadiness> {
-    const keys = ['whisper', 'vad', 'accurate', 'fast', 'llama', 'standard', 'quality', 'whisperGpu', 'cudaLibraries', 'llamaGpu', 'accurateGpu']
-    const found = Object.fromEntries(await Promise.all(keys.map(async key => [key, !!await this.locate(key)])))
+    const keys = [
+      'whisper',
+      'vad',
+      'accurate',
+      'fast',
+      'llama',
+      'standard',
+      'quality',
+      'whisperGpu',
+      'cudaLibraries',
+      'llamaGpu',
+      'accurateGpu',
+    ]
+    const found = Object.fromEntries(
+      await Promise.all(keys.map(async key => [key, !!(await this.locate(key))])),
+    )
     const gpu = await detectNvidiaGpu()
     const cpuName = os.cpus()[0]?.model.replace(/\s+/g, ' ').trim()
-    return { speech: { accurate: found.whisper && found.vad && found.accurate, fast: found.whisper && found.vad && found.fast },
-      translation: { standard: found.llama && found.standard, quality: found.llama && found.quality }, ramGB: os.totalmem() / 1073741824,
+    return {
+      speech: {
+        accurate: found.whisper && found.vad && found.accurate,
+        fast: found.whisper && found.vad && found.fast,
+      },
+      translation: {
+        standard: found.llama && found.standard,
+        quality: found.llama && found.quality,
+      },
+      ramGB: os.totalmem() / 1073741824,
       cpu: cpuName ? { name: cpuName } : undefined,
-      gpu: gpu ? { name: gpu.name, memoryMB: gpu.memoryMB, speech: { accurate: found.whisperGpu && found.cudaLibraries && found.accurateGpu, fast: found.whisperGpu && found.cudaLibraries && found.fast }, translation: found.llamaGpu } : undefined }
+      gpu: gpu
+        ? {
+            name: gpu.name,
+            memoryMB: gpu.memoryMB,
+            speech: {
+              accurate: found.whisperGpu && found.cudaLibraries && found.accurateGpu,
+              fast: found.whisperGpu && found.cudaLibraries && found.fast,
+            },
+            translation: found.llamaGpu,
+          }
+        : undefined,
+    }
   }
-  async install(speech: SpeechModel, translation: TranslationModel | null, signal: AbortSignal, progress: (percent: number, name: string) => void, compute: 'auto' | 'cpu' = 'auto'): Promise<void> {
-    if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('LOCAL_SUBTITLES_WINDOWS_X64')
+  async install(
+    speech: SpeechModel,
+    translation: TranslationModel | null,
+    signal: AbortSignal,
+    progress: (percent: number, name: string) => void,
+    compute: 'auto' | 'cpu' = 'auto',
+  ): Promise<void> {
+    if (process.platform !== 'win32' || process.arch !== 'x64')
+      throw new Error('LOCAL_SUBTITLES_WINDOWS_X64')
     await fs.mkdir(this.root, { recursive: true })
     const gpu = compute === 'auto' ? await detectNvidiaGpu(signal) : null
-    const selected = ['whisper', 'vad', speech, ...(translation ? ['llama', translation] : []),
-      ...(gpu ? ['whisperGpu', 'cudaLibraries', ...(speech === 'accurate' ? ['accurateGpu'] : []), ...(translation ? ['llamaGpu'] : [])] : [])]
+    const selected = [
+      'whisper',
+      'vad',
+      speech,
+      ...(translation ? ['llama', translation] : []),
+      ...(gpu
+        ? [
+            'whisperGpu',
+            'cudaLibraries',
+            ...(speech === 'accurate' ? ['accurateGpu'] : []),
+            ...(translation ? ['llamaGpu'] : []),
+          ]
+        : []),
+    ]
     const missing: SubtitleAsset[] = []
-    for (const key of selected) { signal.throwIfAborted(); if (!await this.locate(key)) missing.push(SUBTITLE_ASSETS[key]) }
+    for (const key of selected) {
+      signal.throwIfAborted()
+      if (!(await this.locate(key))) missing.push(SUBTITLE_ASSETS[key])
+    }
     const total = missing.reduce((n, a) => n + a.bytes, 0)
 
     // Require enough free space for downloads, archive expansion, plus a 100 MB buffer.
     const space = await fs.statfs(this.root)
-    const extraction = missing.reduce((n, a) => n + (a.archive ? a.expandedLimit ?? 200 * 1024 * 1024 : 0), 0)
-    if (Number(space.bavail) * Number(space.bsize) < total + extraction + 100 * 1024 * 1024) throw new Error('LOCAL_SUBTITLES_DISK_SPACE')
+    const extraction = missing.reduce(
+      (n, a) => n + (a.archive ? (a.expandedLimit ?? 200 * 1024 * 1024) : 0),
+      0,
+    )
+    if (Number(space.bavail) * Number(space.bsize) < total + extraction + 100 * 1024 * 1024)
+      throw new Error('LOCAL_SUBTITLES_DISK_SPACE')
     let done = 0
     for (const asset of missing) {
       // Quantize the already-verified full accurate model locally instead of downloading another ~1 GB for GPU.
-      if (asset === SUBTITLE_ASSETS.accurateGpu && await this.locate('accurate') && await this.locate('whisper')) {
-        progress(Math.min(99, done / total * 100), 'optimizing-gpu-model')
-        const model = (await this.locate('accurate'))!, executable = (await this.locate('whisper'))!
-        if (await sha256(model) !== SUBTITLE_ASSETS.accurate.sha256) throw new Error('Model checksum verification failed')
+      if (
+        asset === SUBTITLE_ASSETS.accurateGpu &&
+        (await this.locate('accurate')) &&
+        (await this.locate('whisper'))
+      ) {
+        progress(Math.min(99, (done / total) * 100), 'optimizing-gpu-model')
+        const model = (await this.locate('accurate'))!,
+          executable = (await this.locate('whisper'))!
+        if ((await sha256(model)) !== SUBTITLE_ASSETS.accurate.sha256)
+          throw new Error('Model checksum verification failed')
         const processes = new SubtitleProcesses(signal)
         try {
-          await processes.run(path.join(path.dirname(executable), 'whisper-quantize.exe'), [model, path.join(this.root, `${asset.id}.download.part`), 'q5_0'])
-        } finally { await processes.stop() }
+          await processes.run(path.join(path.dirname(executable), 'whisper-quantize.exe'), [
+            model,
+            path.join(this.root, `${asset.id}.download.part`),
+            'q5_0',
+          ])
+        } finally {
+          await processes.stop()
+        }
       }
-      await this.installAsset(asset, signal, bytes => progress(Math.min(99, (done + bytes) / total * 100), asset.id))
+      await this.installAsset(asset, signal, bytes =>
+        progress(Math.min(99, ((done + bytes) / total) * 100), asset.id),
+      )
       done += asset.bytes
     }
     progress(100, 'ready')
   }
-  private async installAsset(asset: SubtitleAsset, signal: AbortSignal, progress: (bytes: number) => void): Promise<void> {
+  private async installAsset(
+    asset: SubtitleAsset,
+    signal: AbortSignal,
+    progress: (bytes: number) => void,
+  ): Promise<void> {
     const partial = path.join(this.root, `${asset.id}.download.part`)
-    let offset = await fs.stat(partial).then(s => s.size, () => 0)
-    if (offset > asset.bytes) { await fs.rm(partial, { force: true }); offset = 0 }
+    let offset = await fs.stat(partial).then(
+      s => s.size,
+      () => 0,
+    )
+    if (offset > asset.bytes) {
+      await fs.rm(partial, { force: true })
+      offset = 0
+    }
     // Resume interrupted model downloads via HTTP Range when a partial file exists.
     if (offset < asset.bytes) {
-      const response = await fetch(asset.url, { headers: offset ? { Range: `bytes=${offset}-` } : {}, signal })
-      if (!response.ok || !response.body) throw new Error(`Model download failed (${response.status})`)
+      const response = await fetch(asset.url, {
+        headers: offset ? { Range: `bytes=${offset}-` } : {},
+        signal,
+      })
+      if (!response.ok || !response.body)
+        throw new Error(`Model download failed (${response.status})`)
       if (offset && response.status === 206) {
-        if (!response.headers.get('content-range')?.startsWith(`bytes ${offset}-`)) throw new Error('Invalid model download range')
+        if (!response.headers.get('content-range')?.startsWith(`bytes ${offset}-`))
+          throw new Error('Invalid model download range')
       } else offset = 0
       const handle = await fs.open(partial, offset ? 'a' : 'w')
       const reader = response.body.getReader()
-      let bytes = offset, emitted = 0
+      let bytes = offset,
+        emitted = 0
       try {
         for (;;) {
           signal.throwIfAborted()
@@ -100,14 +209,22 @@ export class SubtitleAssets {
           bytes += value.length
           if (bytes > asset.bytes) throw new Error('Model download exceeds expected size')
           let written = 0
-          while (written < value.length) written += (await handle.write(value, written, value.length - written)).bytesWritten
-          if (Date.now() - emitted > 200) { progress(bytes); emitted = Date.now() }
+          while (written < value.length)
+            written += (await handle.write(value, written, value.length - written)).bytesWritten
+          if (Date.now() - emitted > 200) {
+            progress(bytes)
+            emitted = Date.now()
+          }
         }
-      } finally { await reader.cancel().catch(() => {}); await handle.close() }
+      } finally {
+        await reader.cancel().catch(() => {})
+        await handle.close()
+      }
     }
     signal.throwIfAborted()
-    if ((await fs.stat(partial)).size !== asset.bytes || await sha256(partial) !== asset.sha256) {
-      await fs.rm(partial, { force: true }); throw new Error('Model checksum verification failed')
+    if ((await fs.stat(partial)).size !== asset.bytes || (await sha256(partial)) !== asset.sha256) {
+      await fs.rm(partial, { force: true })
+      throw new Error('Model checksum verification failed')
     }
     signal.throwIfAborted()
     const names: string[] = []
@@ -123,27 +240,40 @@ export class SubtitleAssets {
           const relative = entry.entryName.replace(/\\/g, '/')
           const target = path.resolve(stage, relative)
           // Reject Zip Slip path traversal and symlink entries (POSIX mode 0xA000) before extracting.
-          if (!target.startsWith(stage + path.sep) || ((entry.header.attr >>> 16) & 0xF000) === 0xA000) throw new Error('Unsafe engine archive')
+          if (
+            !target.startsWith(stage + path.sep) ||
+            ((entry.header.attr >>> 16) & 0xf000) === 0xa000
+          )
+            throw new Error('Unsafe engine archive')
           if (entry.isDirectory) continue
           expanded += entry.header.size
-          if (expanded > (asset.expandedLimit ?? 200 * 1024 * 1024)) throw new Error('Engine archive exceeds size limit')
+          if (expanded > (asset.expandedLimit ?? 200 * 1024 * 1024))
+            throw new Error('Engine archive exceeds size limit')
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, entry.getData(), { flag: 'wx' })
           names.push(path.join(asset.file, relative))
-          if (path.basename(target) === asset.executable) executable = path.join(asset.file, relative)
+          if (path.basename(target) === asset.executable)
+            executable = path.join(asset.file, relative)
         }
         if (!executable) throw new Error('Engine executable missing from archive')
         const destination = path.join(this.root, asset.file)
 
         await fs.rm(destination, { recursive: true, force: true })
         await fs.rename(stage, destination)
-      } finally { await fs.rm(stage, { recursive: true, force: true }) }
+      } finally {
+        await fs.rm(stage, { recursive: true, force: true })
+      }
       await fs.rm(partial, { force: true })
     } else {
       await fs.rename(partial, path.join(this.root, asset.file))
       names.push(asset.file)
     }
-    const files = await Promise.all(names.map(async name => { const stat = await fs.stat(path.join(this.root, name)); return { name, size: stat.size, mtimeMs: stat.mtimeMs } }))
+    const files = await Promise.all(
+      names.map(async name => {
+        const stat = await fs.stat(path.join(this.root, name))
+        return { name, size: stat.size, mtimeMs: stat.mtimeMs }
+      }),
+    )
     const receipt: Receipt = { id: asset.id, sha256: asset.sha256, executable, files }
     await fs.writeFile(this.receiptPath(asset) + '.tmp', JSON.stringify(receipt))
     await fs.rename(this.receiptPath(asset) + '.tmp', this.receiptPath(asset))

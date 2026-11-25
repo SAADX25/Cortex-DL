@@ -36,19 +36,33 @@ async function main() {
     assert.equal(info.sha512, hash.digest('base64'))
     assert.equal(yaml.sha512, info.sha512)
     assert.ok(fs.statSync(`${file}.blockmap`).size > 0)
-    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'win-unpacked/resources/build-manifest.json')))
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dir, 'win-unpacked/resources/build-manifest.json')),
+    )
     assert.equal(manifest.engineDelivery, 'download-on-first-run')
-    assert.equal(fs.existsSync(path.join(dir, 'win-unpacked/resources/engines')), false, 'Installer must not bundle engines')
+    assert.equal(
+      fs.existsSync(path.join(dir, 'win-unpacked/resources/engines')),
+      false,
+      'Installer must not bundle engines',
+    )
     assert.equal(manifest.version, pkg.version)
     assert.equal(manifest.commit, git('rev-parse', 'HEAD'))
     assert.equal(manifest.dirty, false, 'Candidate is not publishable until committed and rebuilt')
     if (process.platform === 'win32') {
       const exe = path.join(dir, 'win-unpacked', 'Cortex DL.exe').replace(/'/g, "''")
-      const metadata = execFileSync('powershell.exe', ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${exe}').VersionInfo.FileVersion`], { encoding: 'utf8' }).trim()
+      const metadata = execFileSync(
+        'powershell.exe',
+        ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${exe}').VersionInfo.FileVersion`],
+        { encoding: 'utf8' },
+      ).trim()
       assert.equal(metadata, pkg.version, 'Windows executable metadata version mismatch')
     }
   }
   console.log(`Release version ${pkg.version} verified`)
 }
-if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1 })
+if (require.main === module)
+  main().catch(error => {
+    console.error(error.message)
+    process.exitCode = 1
+  })
 module.exports = { verifyVersion }

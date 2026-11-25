@@ -11,9 +11,17 @@ export class AnalysisSession {
     this.start = performance.now()
     return this.generation
   }
-  current(id: number): boolean { return id === this.generation }
-  elapsed(): number { return Math.round(performance.now() - this.start) }
-  cancel(): void { this.generation++; this.dispose?.(); this.dispose = undefined }
+  current(id: number): boolean {
+    return id === this.generation
+  }
+  elapsed(): number {
+    return Math.round(performance.now() - this.start)
+  }
+  cancel(): void {
+    this.generation++
+    this.dispose?.()
+    this.dispose = undefined
+  }
 }
 
 export const primaryAnalysis = new AnalysisSession()

@@ -15,7 +15,8 @@ suite('App update model and backend controller', test => {
   const { validateIpcArguments } = require('../Back-End/electron/ipcSecurity.ts')
 
   test('release notes parser strips HTML safely, decodes entities and skips filler text', () => {
-    const html = '<p><strong>Highlights</strong></p><ul><li>Faster YouTube &amp; Threads analysis</li><li>Fixed RTL subtitle alignment</li><li>No content.</li><li>Full Changelog: https://github.com/SAADX25/Cortex-DL</li></ul><script>alert(1)</script>'
+    const html =
+      '<p><strong>Highlights</strong></p><ul><li>Faster YouTube &amp; Threads analysis</li><li>Fixed RTL subtitle alignment</li><li>No content.</li><li>Full Changelog: https://github.com/SAADX25/Cortex-DL</li></ul><script>alert(1)</script>'
     const notes = parseReleaseNotes(html)
     assert.deepEqual(notes, [
       'Highlights',
@@ -23,22 +24,35 @@ suite('App update model and backend controller', test => {
       'Fixed RTL subtitle alignment',
     ])
     assert.deepEqual(parseReleaseNotes('No content.'), [])
-    assert.deepEqual(parseReleaseNotes([{ version: '2.3.5', note: '- Added new updater UI\n- Fixed crash' }]), [
-      'Added new updater UI',
-      'Fixed crash',
-    ])
+    assert.deepEqual(
+      parseReleaseNotes([{ version: '2.3.5', note: '- Added new updater UI\n- Fixed crash' }]),
+      ['Added new updater UI', 'Fixed crash'],
+    )
   })
 
   test('progress snapshot, ETA and error classification handle common update failure modes', () => {
-    assert.equal(extractUpdateSize([{ url: 'Cortex-DL-Setup-2.3.5.exe', size: 124596622 }]), 124596622)
+    assert.equal(
+      extractUpdateSize([{ url: 'Cortex-DL-Setup-2.3.5.exe', size: 124596622 }]),
+      124596622,
+    )
     assert.equal(computeUpdateEta(50_000_000, 100_000_000, 5_000_000), 10)
     assert.equal(computeUpdateEta(100, 100, 50), null)
 
-    const snap = createProgressSnapshot({ percent: 42.6, transferred: 426, total: 1000, bytesPerSecond: 100 }, null)
+    const snap = createProgressSnapshot(
+      { percent: 42.6, transferred: 426, total: 1000, bytesPerSecond: 100 },
+      null,
+    )
     assert.equal(snap.percent, 42.6)
     assert.equal(snap.etaSeconds, 6)
 
-    assert.equal(classifyUpdateError(new Error('Cannot find latest.yml in the latest release artifacts (https://github.com/x): HttpError: 404')).code, 'not-published')
+    assert.equal(
+      classifyUpdateError(
+        new Error(
+          'Cannot find latest.yml in the latest release artifacts (https://github.com/x): HttpError: 404',
+        ),
+      ).code,
+      'not-published',
+    )
     assert.equal(classifyUpdateError(new Error('net::ERR_INTERNET_DISCONNECTED')).code, 'offline')
     assert.equal(classifyUpdateError(new Error('sha512 checksum mismatch')).code, 'integrity')
     assert.equal(classifyUpdateError(new Error('ENOENT: app-update.yml')).code, 'unsupported')
@@ -75,7 +89,8 @@ suite('App update model and backend controller', test => {
           version: '2.3.6',
           files: [{ url: 'Cortex-DL-Setup-2.3.6.exe', size: 120_000_000 }],
           releaseDate: '2026-11-23T08:00:00.000Z',
-          releaseNotes: '<ul><li>New dark in-app update dialog</li><li>Improved stability</li></ul>',
+          releaseNotes:
+            '<ul><li>New dark in-app update dialog</li><li>Improved stability</li></ul>',
         })
         return null
       }
@@ -133,7 +148,9 @@ suite('App update model and backend controller', test => {
         },
       }),
       emitState: state => events.push({ ...state }),
-      onBeforeQuitForInstall: () => { beforeQuitCalled = true },
+      onBeforeQuitForInstall: () => {
+        beforeQuitCalled = true
+      },
       logger: { info() {}, warn() {}, error() {} },
       now: () => (tick += 250),
     })
@@ -176,7 +193,9 @@ suite('App update model and backend controller', test => {
     const devController = createAppUpdateController({
       currentVersion: '2.3.5',
       isPackaged: () => false,
-      loadUpdater: async () => { throw new Error('should not load updater in dev') },
+      loadUpdater: async () => {
+        throw new Error('should not load updater in dev')
+      },
       emitState() {},
       onBeforeQuitForInstall() {},
       logger: { info() {}, warn() {}, error() {} },
@@ -189,11 +208,15 @@ suite('App update model and backend controller', test => {
 
     class FailingUpdater extends EventEmitter {
       async checkForUpdates() {
-        const err = new Error('Cannot find latest.yml in the latest release artifacts: HttpError: 404')
+        const err = new Error(
+          'Cannot find latest.yml in the latest release artifacts: HttpError: 404',
+        )
         this.emit('error', err)
         throw err
       }
-      async downloadUpdate() { return [] }
+      async downloadUpdate() {
+        return []
+      }
       quitAndInstall() {}
     }
 
@@ -222,22 +245,25 @@ suite('UpdateModal and sidebar visual layout', test => {
   const os = require('node:os')
   const { spawn } = require('node:child_process')
 
-  test('UpdateModal and sidebar pill render cleanly in English and Arabic across all phases', { skip: process.platform !== 'win32', timeout: 30000 }, async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-update-ui-'))
-    const root = path.resolve(__dirname, '..')
-    try {
-      const esbuild = require('esbuild')
-      esbuild.buildSync({
-        entryPoints: [path.join(root, 'Back-End/electron/windowChrome.ts')],
-        bundle: true,
-        platform: 'node',
-        external: ['electron'],
-        format: 'cjs',
-        outfile: path.join(directory, 'chrome.cjs'),
-      })
-      esbuild.buildSync({
-        stdin: {
-          contents: `
+  test(
+    'UpdateModal and sidebar pill render cleanly in English and Arabic across all phases',
+    { skip: process.platform !== 'win32', timeout: 30000 },
+    async () => {
+      const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-update-ui-'))
+      const root = path.resolve(__dirname, '..')
+      try {
+        const esbuild = require('esbuild')
+        esbuild.buildSync({
+          entryPoints: [path.join(root, 'Back-End/electron/windowChrome.ts')],
+          bundle: true,
+          platform: 'node',
+          external: ['electron'],
+          format: 'cjs',
+          outfile: path.join(directory, 'chrome.cjs'),
+        })
+        esbuild.buildSync({
+          stdin: {
+            contents: `
             import React from 'react';
             import { createRoot } from 'react-dom/client';
             import Sidebar from './Front-End/src/components/Sidebar';
@@ -293,24 +319,24 @@ suite('UpdateModal and sidebar visual layout', test => {
 
             createRoot(document.getElementById('root')).render(<Shell />);
           `,
-          resolveDir: root,
-          loader: 'jsx',
-        },
-        bundle: true,
-        outfile: path.join(directory, 'renderer.js'),
-        define: {
-          'process.env.NODE_ENV': '"production"',
-          __APP_VERSION__: '"2.2.5"',
-          __BUILD_SHA__: '"5d7f72a9ce17"',
-        },
-      })
-      await fs.writeFile(
-        path.join(directory, 'index.html'),
-        '<!doctype html><html><head><meta charset="utf-8"><title>Cortex DL</title><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script src="renderer.js"></script></body></html>',
-      )
-      await fs.writeFile(
-        path.join(directory, 'electron.cjs'),
-        `
+            resolveDir: root,
+            loader: 'jsx',
+          },
+          bundle: true,
+          outfile: path.join(directory, 'renderer.js'),
+          define: {
+            'process.env.NODE_ENV': '"production"',
+            __APP_VERSION__: '"2.2.5"',
+            __BUILD_SHA__: '"5d7f72a9ce17"',
+          },
+        })
+        await fs.writeFile(
+          path.join(directory, 'index.html'),
+          '<!doctype html><html><head><meta charset="utf-8"><title>Cortex DL</title><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script src="renderer.js"></script></body></html>',
+        )
+        await fs.writeFile(
+          path.join(directory, 'electron.cjs'),
+          `
           const { app, BrowserWindow } = require('electron');
           const assert = require('node:assert/strict');
           const fs = require('node:fs');
@@ -404,25 +430,39 @@ suite('UpdateModal and sidebar visual layout', test => {
             app.quit();
           }).catch((err) => { console.error(err); app.exit(1); });
         `,
-      )
-      const env = { ...process.env }
-      delete env.ELECTRON_RUN_AS_NODE
-      const result = await new Promise((resolve, reject) => {
-        const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], {
-          windowsHide: true,
-          env,
-          stdio: ['ignore', 'pipe', 'pipe'],
+        )
+        const env = { ...process.env }
+        delete env.ELECTRON_RUN_AS_NODE
+        const result = await new Promise((resolve, reject) => {
+          const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], {
+            windowsHide: true,
+            env,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+          let output = ''
+          child.stdout.on('data', chunk => {
+            output += chunk
+          })
+          child.stderr.on('data', chunk => {
+            output += chunk
+          })
+          const timer = setTimeout(() => {
+            child.kill()
+            reject(new Error('Update UI test timed out: ' + output))
+          }, 25000)
+          child.once('error', error => {
+            clearTimeout(timer)
+            reject(error)
+          })
+          child.once('close', code => {
+            clearTimeout(timer)
+            resolve({ code, output })
+          })
         })
-        let output = ''
-        child.stdout.on('data', (chunk) => { output += chunk })
-        child.stderr.on('data', (chunk) => { output += chunk })
-        const timer = setTimeout(() => { child.kill(); reject(new Error('Update UI test timed out: ' + output)) }, 25000)
-        child.once('error', (error) => { clearTimeout(timer); reject(error) })
-        child.once('close', (code) => { clearTimeout(timer); resolve({ code, output }) })
-      })
-      assert.equal(result.code, 0, result.output)
-    } finally {
-      await fs.rm(directory, { recursive: true, force: true })
-    }
-  })
+        assert.equal(result.code, 0, result.output)
+      } finally {
+        await fs.rm(directory, { recursive: true, force: true })
+      }
+    },
+  )
 })

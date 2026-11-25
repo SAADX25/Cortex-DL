@@ -1,16 +1,13 @@
 // URL matching and canonicalization for Kick, Threads, and YouTube before analysis.
-const KICK_HOSTS = new Set([
-  'kick.com',
-  'www.kick.com',
-  'm.kick.com',
-  'player.kick.com',
-])
+const KICK_HOSTS = new Set(['kick.com', 'www.kick.com', 'm.kick.com', 'player.kick.com'])
 
 export function isKickUrl(input: string): boolean {
   try {
     const url = new URL(input.trim())
     return ['https:', 'http:'].includes(url.protocol) && KICK_HOSTS.has(url.hostname.toLowerCase())
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 const THREADS_HOSTS = new Set([
@@ -25,22 +22,32 @@ const THREADS_HOSTS = new Set([
 export function isThreadsUrl(input: string): boolean {
   try {
     const url = new URL(input.trim())
-    return ['https:', 'http:'].includes(url.protocol) && THREADS_HOSTS.has(url.hostname.toLowerCase())
-  } catch { return false }
+    return (
+      ['https:', 'http:'].includes(url.protocol) && THREADS_HOSTS.has(url.hostname.toLowerCase())
+    )
+  } catch {
+    return false
+  }
 }
 
 export function threadsPostCode(input: string): string | null {
   try {
     const url = new URL(input.trim())
-    if (!['https:', 'http:'].includes(url.protocol) || !THREADS_HOSTS.has(url.hostname.toLowerCase())) return null
+    if (
+      !['https:', 'http:'].includes(url.protocol) ||
+      !THREADS_HOSTS.has(url.hostname.toLowerCase())
+    )
+      return null
     const path = url.pathname.replace(/\/+$/, '')
     // Threads posts use /@user/post/<code>, /t/<code>, or /post/<code>.
     const match =
-      /^\/@[^/]+\/post\/([A-Za-z0-9_-]+)(?:\/media)?$/i.exec(path)
-      ?? /^\/t\/([A-Za-z0-9_-]+)$/i.exec(path)
-      ?? /^\/post\/([A-Za-z0-9_-]+)(?:\/media)?$/i.exec(path)
+      /^\/@[^/]+\/post\/([A-Za-z0-9_-]+)(?:\/media)?$/i.exec(path) ??
+      /^\/t\/([A-Za-z0-9_-]+)$/i.exec(path) ??
+      /^\/post\/([A-Za-z0-9_-]+)(?:\/media)?$/i.exec(path)
     return match?.[1] ?? null
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 export function threadsCarouselIndex(input: string): number | null {
@@ -51,7 +58,9 @@ export function threadsCarouselIndex(input: string): number | null {
     if (raw === null || !/^\d+$/.test(raw)) return null
     const index = Number(raw)
     return Number.isSafeInteger(index) && index >= 0 && index < 100 ? index : null
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 export function youtubeVideoId(input: string): string | null {
@@ -60,12 +69,18 @@ export function youtubeVideoId(input: string): string | null {
     if (!['https:', 'http:'].includes(url.protocol)) return null
     let id: string | null = null
     if (url.hostname === 'youtu.be') id = url.pathname.slice(1).split('/')[0]
-    else if (['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'].includes(url.hostname)) {
+    else if (
+      ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'].includes(
+        url.hostname,
+      )
+    ) {
       if (url.pathname === '/watch') id = url.searchParams.get('v')
       else id = /^\/(?:shorts|embed|live)\/([^/]+)\/?$/.exec(url.pathname)?.[1] ?? null
     }
     return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 export function normalizeAnalysisUrl(input: string): string {

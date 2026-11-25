@@ -3,14 +3,25 @@ const path = require('node:path')
 
 const appRoot = path.resolve(__dirname, '..')
 const generated = [
-  'dist-electron', 'Front-End/dist', 'smoke-results', 'installer-validation',
-  'bin', 'build-manifest.json', 'THIRD-PARTY-NOTICES.txt',
-  'tsconfig.node.tsbuildinfo', 'vite.config.js', 'vite.config.d.ts',
+  'dist-electron',
+  'Front-End/dist',
+  'smoke-results',
+  'installer-validation',
+  'bin',
+  'build-manifest.json',
+  'THIRD-PARTY-NOTICES.txt',
+  'tsconfig.node.tsbuildinfo',
+  'vite.config.js',
+  'vite.config.d.ts',
 ]
 
 async function statIfPresent(file) {
-  try { return await fs.lstat(file) }
-  catch (error) { if (error.code !== 'ENOENT') throw error; return null }
+  try {
+    return await fs.lstat(file)
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    return null
+  }
 }
 
 // Refuse junctions/symlinks before removing anything, including redirected parents.
@@ -53,7 +64,8 @@ async function cleanProject(root = appRoot, { dryRun = false, packaged = false }
     await assertLocal(root, release)
     if (await statIfPresent(release)) {
       for (const version of await fs.readdir(release)) {
-        if (/^\d+\.\d+\.\d+$/.test(version)) targets.push(path.join(release, version, 'win-unpacked'))
+        if (/^\d+\.\d+\.\d+$/.test(version))
+          targets.push(path.join(release, version, 'win-unpacked'))
       }
     }
   }
@@ -61,10 +73,11 @@ async function cleanProject(root = appRoot, { dryRun = false, packaged = false }
   const plan = []
   for (const target of targets) {
     await assertLocal(root, target)
-    plan.push({ target, ...await inspect(target) })
+    plan.push({ target, ...(await inspect(target)) })
   }
   for (const { target } of plan) {
-    if (!dryRun) await fs.rm(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    if (!dryRun)
+      await fs.rm(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
   return plan
 }
@@ -77,11 +90,21 @@ if (require.main === module) {
     process.exitCode = 1
   } else {
     const dryRun = args.includes('--dry-run')
-    cleanProject(appRoot, { dryRun, packaged: args.includes('--packaged') }).then(plan => {
-      for (const entry of plan) console.log(`${dryRun ? 'Would remove' : 'Removed'} ${path.relative(appRoot, entry.target)} (${entry.files} files, ${(entry.bytes / 1024 ** 2).toFixed(2)} MiB)`)
-      const bytes = plan.reduce((sum, entry) => sum + entry.bytes, 0)
-      console.log(`${dryRun ? 'Reclaimable' : 'Reclaimed'}: ${(bytes / 1024 ** 3).toFixed(2)} GiB`)
-    }).catch(error => { console.error(error.message); process.exitCode = 1 })
+    cleanProject(appRoot, { dryRun, packaged: args.includes('--packaged') })
+      .then(plan => {
+        for (const entry of plan)
+          console.log(
+            `${dryRun ? 'Would remove' : 'Removed'} ${path.relative(appRoot, entry.target)} (${entry.files} files, ${(entry.bytes / 1024 ** 2).toFixed(2)} MiB)`,
+          )
+        const bytes = plan.reduce((sum, entry) => sum + entry.bytes, 0)
+        console.log(
+          `${dryRun ? 'Reclaimable' : 'Reclaimed'}: ${(bytes / 1024 ** 3).toFixed(2)} GiB`,
+        )
+      })
+      .catch(error => {
+        console.error(error.message)
+        process.exitCode = 1
+      })
   }
 }
 

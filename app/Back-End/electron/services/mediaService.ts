@@ -1,5 +1,13 @@
 // Media format specs, remux/transcode planning, FFmpeg/ffprobe runners, and playback request tracking.
-import { type AudioFormat, type TargetFormat, type VideoFormat, AUDIO_FORMATS, type DownloadTask, VIDEO_FORMATS, type EngineContext } from '../types'
+import {
+  type AudioFormat,
+  type TargetFormat,
+  type VideoFormat,
+  AUDIO_FORMATS,
+  type DownloadTask,
+  VIDEO_FORMATS,
+  type EngineContext,
+} from '../types'
 import { ensureEnginesReady, engineExecutionFailed } from '../engines/engineManager'
 import { promises as fs } from 'node:fs'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -18,20 +26,65 @@ type AudioSpec = {
 
 // Pairs yt-dlp format names with accepted container/codec probes so remuxes can skip re-encoding.
 export const AUDIO_SPECS: Record<AudioFormat, AudioSpec> = {
-  mp3: { ytDlpFormat: 'mp3', codec: 'mp3', containers: ['mp3'], ffmpegArgs: ['-c:a', 'libmp3lame', '-q:a', '0'] },
-  wav: { ytDlpFormat: 'wav', codec: 'pcm_s16le', containers: ['wav'], ffmpegArgs: ['-c:a', 'pcm_s16le'] },
-  m4a: { ytDlpFormat: 'm4a', codec: 'aac', containers: ['mov', 'mp4', 'm4a'], ffmpegArgs: ['-c:a', 'aac', '-b:a', '256k', '-f', 'ipod'] },
-  ogg: { ytDlpFormat: 'vorbis', codec: 'vorbis', containers: ['ogg'], ffmpegArgs: ['-c:a', 'libvorbis', '-q:a', '6', '-f', 'ogg'] },
+  mp3: {
+    ytDlpFormat: 'mp3',
+    codec: 'mp3',
+    containers: ['mp3'],
+    ffmpegArgs: ['-c:a', 'libmp3lame', '-q:a', '0'],
+  },
+  wav: {
+    ytDlpFormat: 'wav',
+    codec: 'pcm_s16le',
+    containers: ['wav'],
+    ffmpegArgs: ['-c:a', 'pcm_s16le'],
+  },
+  m4a: {
+    ytDlpFormat: 'm4a',
+    codec: 'aac',
+    containers: ['mov', 'mp4', 'm4a'],
+    ffmpegArgs: ['-c:a', 'aac', '-b:a', '256k', '-f', 'ipod'],
+  },
+  ogg: {
+    ytDlpFormat: 'vorbis',
+    codec: 'vorbis',
+    containers: ['ogg'],
+    ffmpegArgs: ['-c:a', 'libvorbis', '-q:a', '6', '-f', 'ogg'],
+  },
   flac: { ytDlpFormat: 'flac', codec: 'flac', containers: ['flac'], ffmpegArgs: ['-c:a', 'flac'] },
-  aac: { ytDlpFormat: 'aac', codec: 'aac', containers: ['aac'], ffmpegArgs: ['-c:a', 'aac', '-b:a', '256k', '-f', 'adts'] },
-  opus: { ytDlpFormat: 'opus', codec: 'opus', containers: ['ogg'], ffmpegArgs: ['-c:a', 'libopus', '-b:a', '192k', '-f', 'opus'] },
-  wma: { ytDlpFormat: 'wav', codec: 'wmav2', containers: ['asf'], ffmpegArgs: ['-c:a', 'wmav2', '-b:a', '192k', '-f', 'asf'] },
+  aac: {
+    ytDlpFormat: 'aac',
+    codec: 'aac',
+    containers: ['aac'],
+    ffmpegArgs: ['-c:a', 'aac', '-b:a', '256k', '-f', 'adts'],
+  },
+  opus: {
+    ytDlpFormat: 'opus',
+    codec: 'opus',
+    containers: ['ogg'],
+    ffmpegArgs: ['-c:a', 'libopus', '-b:a', '192k', '-f', 'opus'],
+  },
+  wma: {
+    ytDlpFormat: 'wav',
+    codec: 'wmav2',
+    containers: ['asf'],
+    ffmpegArgs: ['-c:a', 'wmav2', '-b:a', '192k', '-f', 'asf'],
+  },
 }
 
 export type MediaProbe = {
   format?: { format_name?: string; duration?: string; start_time?: string }
-  streams?: { codec_type?: string; codec_name?: string; duration?: string; start_time?: string; width?: number; height?: number;
-    avg_frame_rate?: string; r_frame_rate?: string; tags?: { language?: string; title?: string; handler_name?: string }; disposition?: { attached_pic?: number } }[]
+  streams?: {
+    codec_type?: string
+    codec_name?: string
+    duration?: string
+    start_time?: string
+    width?: number
+    height?: number
+    avg_frame_rate?: string
+    r_frame_rate?: string
+    tags?: { language?: string; title?: string; handler_name?: string }
+    disposition?: { attached_pic?: number }
+  }[]
 }
 
 export type StreamStartTimes = {
@@ -41,42 +94,178 @@ export type StreamStartTimes = {
 }
 
 export function subtitleLanguageTag(language: string): string {
-  const codes: Record<string, string> = { en: 'eng', ar: 'ara', fr: 'fra', de: 'deu', es: 'spa', it: 'ita', pt: 'por',
-    ru: 'rus', ja: 'jpn', ko: 'kor', zh: 'zho', hi: 'hin', tr: 'tur', nl: 'nld', pl: 'pol', uk: 'ukr',
-    fa: 'fas', he: 'heb', id: 'ind', vi: 'vie', th: 'tha', sv: 'swe', da: 'dan', no: 'nor', fi: 'fin',
-    cs: 'ces', el: 'ell', ro: 'ron', hu: 'hun', bn: 'ben', ur: 'urd', ta: 'tam', te: 'tel', ms: 'msa' }
+  const codes: Record<string, string> = {
+    en: 'eng',
+    ar: 'ara',
+    fr: 'fra',
+    de: 'deu',
+    es: 'spa',
+    it: 'ita',
+    pt: 'por',
+    ru: 'rus',
+    ja: 'jpn',
+    ko: 'kor',
+    zh: 'zho',
+    hi: 'hin',
+    tr: 'tur',
+    nl: 'nld',
+    pl: 'pol',
+    uk: 'ukr',
+    fa: 'fas',
+    he: 'heb',
+    id: 'ind',
+    vi: 'vie',
+    th: 'tha',
+    sv: 'swe',
+    da: 'dan',
+    no: 'nor',
+    fi: 'fin',
+    cs: 'ces',
+    el: 'ell',
+    ro: 'ron',
+    hu: 'hun',
+    bn: 'ben',
+    ur: 'urd',
+    ta: 'tam',
+    te: 'tel',
+    ms: 'msa',
+  }
   const base = language.split('-')[0]
   return codes[base] ?? (/^[a-z]{3}$/.test(base) ? base : 'und')
 }
 
-export function validateSubtitleMedia(source: MediaProbe, output: MediaProbe, language?: string): void {
+export function validateSubtitleMedia(
+  source: MediaProbe,
+  output: MediaProbe,
+  language?: string,
+): void {
   const before = source.streams?.find(s => s.codec_type === 'video' && !s.disposition?.attached_pic)
   const after = output.streams?.find(s => s.codec_type === 'video' && !s.disposition?.attached_pic)
-  if (before && (!after || before.width !== after.width || before.height !== after.height)) throw new Error('Subtitle processing changed video resolution')
-  const rate = (value?: string) => { const [n, d = '1'] = (value ?? '0').split('/'); return Number(n) / Number(d) }
-  if (before && rate(before.avg_frame_rate) > 0 && Math.abs(rate(before.avg_frame_rate) - rate(after?.avg_frame_rate)) > 0.01) throw new Error('Subtitle processing changed video FPS')
-  if (source.streams?.some(s => s.codec_type === 'audio') && !output.streams?.some(s => s.codec_type === 'audio')) throw new Error('Subtitle processing removed audio')
-  if (!output.streams?.some(s => s.codec_type === 'subtitle' && (!language || s.tags?.language === language
-    || s.tags?.title === language || s.tags?.handler_name === language || (subtitleLanguageTag(language) !== 'und' && s.tags?.language === subtitleLanguageTag(language))))) throw new Error('SUBTITLE_TRACK_UNAVAILABLE')
+  if (before && (!after || before.width !== after.width || before.height !== after.height))
+    throw new Error('Subtitle processing changed video resolution')
+  const rate = (value?: string) => {
+    const [n, d = '1'] = (value ?? '0').split('/')
+    return Number(n) / Number(d)
+  }
+  if (
+    before &&
+    rate(before.avg_frame_rate) > 0 &&
+    Math.abs(rate(before.avg_frame_rate) - rate(after?.avg_frame_rate)) > 0.01
+  )
+    throw new Error('Subtitle processing changed video FPS')
+  if (
+    source.streams?.some(s => s.codec_type === 'audio') &&
+    !output.streams?.some(s => s.codec_type === 'audio')
+  )
+    throw new Error('Subtitle processing removed audio')
+  if (
+    !output.streams?.some(
+      s =>
+        s.codec_type === 'subtitle' &&
+        (!language ||
+          s.tags?.language === language ||
+          s.tags?.title === language ||
+          s.tags?.handler_name === language ||
+          (subtitleLanguageTag(language) !== 'und' &&
+            s.tags?.language === subtitleLanguageTag(language))),
+    )
+  )
+    throw new Error('SUBTITLE_TRACK_UNAVAILABLE')
 }
 
 type VideoSpec = { containers: string[]; video: string[]; audio?: string[]; args: string[] }
 
 const VIDEO_SPECS: Record<VideoFormat, VideoSpec> = {
-  mp4: { containers: ['mov', 'mp4'], video: ['h264', 'hevc', 'mpeg4', 'av1', 'vp9'], audio: ['aac', 'mp3', 'alac'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', '-f', 'mp4'] },
-  m4v: { containers: ['mov', 'mp4'], video: ['h264', 'hevc', 'mpeg4'], audio: ['aac', 'alac'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'mp4'] },
-  mov: { containers: ['mov'], video: ['h264', 'hevc', 'mpeg4', 'prores', 'mjpeg'], audio: ['aac', 'alac', 'pcm_s16le'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'mov'] },
-  mkv: { containers: ['matroska'], video: ['h264', 'hevc', 'vp8', 'vp9', 'av1', 'mpeg4', 'theora', 'mjpeg', 'prores'], args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'matroska'] },
-  webm: { containers: ['webm'], video: ['vp8', 'vp9', 'av1'], audio: ['opus', 'vorbis'], args: ['-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-cpu-used', '5', '-c:a', 'libopus', '-f', 'webm'] },
-  avi: { containers: ['avi'], video: ['mpeg4', 'h264', 'mjpeg'], audio: ['mp3', 'pcm_s16le'], args: ['-c:v', 'mpeg4', '-c:a', 'libmp3lame', '-f', 'avi'] },
-  ogv: { containers: ['ogg'], video: ['theora'], audio: ['vorbis'], args: ['-c:v', 'libtheora', '-c:a', 'libvorbis', '-f', 'ogg'] },
-  gif: { containers: ['gif'], video: ['gif'], args: ['-an', '-vf', 'fps=15,scale=480:-1:flags=lanczos', '-f', 'gif'] },
+  mp4: {
+    containers: ['mov', 'mp4'],
+    video: ['h264', 'hevc', 'mpeg4', 'av1', 'vp9'],
+    audio: ['aac', 'mp3', 'alac'],
+    args: ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', '-f', 'mp4'],
+  },
+  m4v: {
+    containers: ['mov', 'mp4'],
+    video: ['h264', 'hevc', 'mpeg4'],
+    audio: ['aac', 'alac'],
+    args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'mp4'],
+  },
+  mov: {
+    containers: ['mov'],
+    video: ['h264', 'hevc', 'mpeg4', 'prores', 'mjpeg'],
+    audio: ['aac', 'alac', 'pcm_s16le'],
+    args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'mov'],
+  },
+  mkv: {
+    containers: ['matroska'],
+    video: ['h264', 'hevc', 'vp8', 'vp9', 'av1', 'mpeg4', 'theora', 'mjpeg', 'prores'],
+    args: ['-c:v', 'libx264', '-c:a', 'aac', '-f', 'matroska'],
+  },
+  webm: {
+    containers: ['webm'],
+    video: ['vp8', 'vp9', 'av1'],
+    audio: ['opus', 'vorbis'],
+    args: [
+      '-c:v',
+      'libvpx-vp9',
+      '-deadline',
+      'realtime',
+      '-cpu-used',
+      '5',
+      '-c:a',
+      'libopus',
+      '-f',
+      'webm',
+    ],
+  },
+  avi: {
+    containers: ['avi'],
+    video: ['mpeg4', 'h264', 'mjpeg'],
+    audio: ['mp3', 'pcm_s16le'],
+    args: ['-c:v', 'mpeg4', '-c:a', 'libmp3lame', '-f', 'avi'],
+  },
+  ogv: {
+    containers: ['ogg'],
+    video: ['theora'],
+    audio: ['vorbis'],
+    args: ['-c:v', 'libtheora', '-c:a', 'libvorbis', '-f', 'ogg'],
+  },
+  gif: {
+    containers: ['gif'],
+    video: ['gif'],
+    args: ['-an', '-vf', 'fps=15,scale=480:-1:flags=lanczos', '-f', 'gif'],
+  },
 }
 
 export const MediaFormatRegistry = Object.fromEntries([
-  ...Object.entries(AUDIO_SPECS).map(([extension, spec]) => [extension, { extension, container: spec.containers, videoCodec: null, audioCodec: [spec.codec], ffmpegArgs: ['-vn', ...spec.ffmpegArgs] }]),
-  ...Object.entries(VIDEO_SPECS).map(([extension, spec]) => [extension, { extension, container: spec.containers, videoCodec: spec.video, audioCodec: spec.audio, ffmpegArgs: spec.args }]),
-]) as Record<TargetFormat, { extension: string; container: readonly string[]; videoCodec: string[] | null; audioCodec?: readonly string[]; ffmpegArgs: readonly string[] }>
+  ...Object.entries(AUDIO_SPECS).map(([extension, spec]) => [
+    extension,
+    {
+      extension,
+      container: spec.containers,
+      videoCodec: null,
+      audioCodec: [spec.codec],
+      ffmpegArgs: ['-vn', ...spec.ffmpegArgs],
+    },
+  ]),
+  ...Object.entries(VIDEO_SPECS).map(([extension, spec]) => [
+    extension,
+    {
+      extension,
+      container: spec.containers,
+      videoCodec: spec.video,
+      audioCodec: spec.audio,
+      ffmpegArgs: spec.args,
+    },
+  ]),
+]) as Record<
+  TargetFormat,
+  {
+    extension: string
+    container: readonly string[]
+    videoCodec: string[] | null
+    audioCodec?: readonly string[]
+    ffmpegArgs: readonly string[]
+  }
+>
 
 export function matchesMediaFormat(format: TargetFormat, probe: MediaProbe): boolean {
   const spec = MediaFormatRegistry[format]
@@ -85,23 +274,41 @@ export function matchesMediaFormat(format: TargetFormat, probe: MediaProbe): boo
   const streams = probe.streams ?? []
   const video = streams.filter(s => s.codec_type === 'video' && !s.disposition?.attached_pic)
   const audio = streams.filter(s => s.codec_type === 'audio')
-  if (spec.videoCodec === null) return video.length === 0 && audio.length > 0 && audio.every(s => spec.audioCodec?.includes(s.codec_name ?? ''))
-  return video.length > 0 && video.every(s => spec.videoCodec!.includes(s.codec_name ?? '')) &&
+  if (spec.videoCodec === null)
+    return (
+      video.length === 0 &&
+      audio.length > 0 &&
+      audio.every(s => spec.audioCodec?.includes(s.codec_name ?? ''))
+    )
+  return (
+    video.length > 0 &&
+    video.every(s => spec.videoCodec!.includes(s.codec_name ?? '')) &&
     (!spec.audioCodec || audio.every(s => spec.audioCodec!.includes(s.codec_name ?? '')))
+  )
 }
 
-export type MediaConversion = 'direct' | 'remux' | 'audio-encode' | 'video-encode' | 'full-transcode'
+export type MediaConversion =
+  'direct' | 'remux' | 'audio-encode' | 'video-encode' | 'full-transcode'
 
 // Pick the cheapest pipeline: leave matching files untouched, stream-copy compatible codecs, or re-encode only mismatched tracks.
-export function decideMediaConversion(format: TargetFormat, source?: MediaProbe, trim = false): MediaConversion {
+export function decideMediaConversion(
+  format: TargetFormat,
+  source?: MediaProbe,
+  trim = false,
+): MediaConversion {
   const spec = MediaFormatRegistry[format]
-  if (!source || trim || format === 'gif') return spec.videoCodec ? 'full-transcode' : 'audio-encode'
+  if (!source || trim || format === 'gif')
+    return spec.videoCodec ? 'full-transcode' : 'audio-encode'
   if (matchesMediaFormat(format, source)) return 'direct'
-  const video = source.streams?.filter(s => s.codec_type === 'video' && !s.disposition?.attached_pic) ?? []
+  const video =
+    source.streams?.filter(s => s.codec_type === 'video' && !s.disposition?.attached_pic) ?? []
   const audio = source.streams?.filter(s => s.codec_type === 'audio') ?? []
-  const audioCompatible = spec.audioCodec ? audio.length > 0 && audio.every(s => spec.audioCodec!.includes(s.codec_name ?? '')) : true
+  const audioCompatible = spec.audioCodec
+    ? audio.length > 0 && audio.every(s => spec.audioCodec!.includes(s.codec_name ?? ''))
+    : true
   if (!spec.videoCodec) return audioCompatible ? 'remux' : 'audio-encode'
-  const videoCompatible = video.length > 0 && video.every(s => spec.videoCodec!.includes(s.codec_name ?? ''))
+  const videoCompatible =
+    video.length > 0 && video.every(s => spec.videoCodec!.includes(s.codec_name ?? ''))
 
   const copyAudio = audio.length === 0 || audioCompatible
   if (videoCompatible && copyAudio) return 'remux'
@@ -124,25 +331,71 @@ export function mediaOutputArgs(
   const subtitleArgs: string[] = []
   if (spec.videoCodec && format !== 'gif') {
     mapping.push('-map', '0:v:0', '-map', `${audioInputIndex}:a?`)
-    if (source?.streams?.some(s => s.codec_type === 'subtitle') && ['mp4', 'mov', 'm4v', 'mkv', 'webm'].includes(format)) {
+    if (
+      source?.streams?.some(s => s.codec_type === 'subtitle') &&
+      ['mp4', 'mov', 'm4v', 'mkv', 'webm'].includes(format)
+    ) {
       mapping.push('-map', '0:s?')
-      subtitleArgs.push('-c:s', format === 'mkv' ? 'copy' : format === 'webm' ? 'webvtt' : 'mov_text')
-      source.streams.filter(s => s.codec_type === 'subtitle').forEach((stream, index) => {
-        const language = stream.tags?.title || stream.tags?.language
-        if (language) subtitleArgs.push(`-metadata:s:s:${index}`, `language=${['mp4', 'mov', 'm4v'].includes(format) ? subtitleLanguageTag(language) : language}`,
-          `-metadata:s:s:${index}`, `title=${language}`, `-metadata:s:s:${index}`, `handler_name=${language}`)
-      })
+      subtitleArgs.push(
+        '-c:s',
+        format === 'mkv' ? 'copy' : format === 'webm' ? 'webvtt' : 'mov_text',
+      )
+      source.streams
+        .filter(s => s.codec_type === 'subtitle')
+        .forEach((stream, index) => {
+          const language = stream.tags?.title || stream.tags?.language
+          if (language)
+            subtitleArgs.push(
+              `-metadata:s:s:${index}`,
+              `language=${['mp4', 'mov', 'm4v'].includes(format) ? subtitleLanguageTag(language) : language}`,
+              `-metadata:s:s:${index}`,
+              `title=${language}`,
+              `-metadata:s:s:${index}`,
+              `handler_name=${language}`,
+            )
+        })
     }
   }
   const timestampArgs = options?.avoidNegativeTs || trim ? ['-avoid_negative_ts', 'make_zero'] : []
   // AVI expects Annex-B H.264 framing, so convert MP4/MKV length-prefixed NALUs when stream-copying H.264.
   const needsH264AnnexB =
     format === 'avi' &&
-    Boolean(source?.streams?.some(s => s.codec_type === 'video' && !s.disposition?.attached_pic && s.codec_name === 'h264'))
+    Boolean(
+      source?.streams?.some(
+        s => s.codec_type === 'video' && !s.disposition?.attached_pic && s.codec_name === 'h264',
+      ),
+    )
   if (decision === 'direct' || decision === 'remux') {
-    const muxer = format === 'm4v' ? 'mp4' : format === 'm4a' ? 'ipod' : format === 'mkv' ? 'matroska' : format === 'aac' ? 'adts' : format === 'wma' ? 'asf' : format === 'ogv' ? 'ogg' : format
+    const muxer =
+      format === 'm4v'
+        ? 'mp4'
+        : format === 'm4a'
+          ? 'ipod'
+          : format === 'mkv'
+            ? 'matroska'
+            : format === 'aac'
+              ? 'adts'
+              : format === 'wma'
+                ? 'asf'
+                : format === 'ogv'
+                  ? 'ogg'
+                  : format
     const faststartArgs = ['mp4', 'm4v', 'mov'].includes(format) ? ['-movflags', '+faststart'] : []
-    return [...mapping, ...(spec.videoCodec === null ? ['-vn'] : []), '-c', 'copy', ...(needsH264AnnexB ? ['-bsf:v', 'h264_mp4toannexb'] : []), ...subtitleArgs, ...timestampArgs, ...faststartArgs, '-map_metadata', '0', '-f', muxer, output]
+    return [
+      ...mapping,
+      ...(spec.videoCodec === null ? ['-vn'] : []),
+      '-c',
+      'copy',
+      ...(needsH264AnnexB ? ['-bsf:v', 'h264_mp4toannexb'] : []),
+      ...subtitleArgs,
+      ...timestampArgs,
+      ...faststartArgs,
+      '-map_metadata',
+      '0',
+      '-f',
+      muxer,
+      output,
+    ]
   }
 
   const encoding = [...spec.ffmpegArgs]
@@ -152,7 +405,8 @@ export function mediaOutputArgs(
     if (flag) {
       const index = encoding.indexOf(flag)
       if (index >= 0) encoding[index + 1] = 'copy'
-      if (decision === 'audio-encode' && needsH264AnnexB) encoding.push('-bsf:v', 'h264_mp4toannexb')
+      if (decision === 'audio-encode' && needsH264AnnexB)
+        encoding.push('-bsf:v', 'h264_mp4toannexb')
     }
   }
   return [...mapping, ...encoding, ...subtitleArgs, ...timestampArgs, '-map_metadata', '0', output]
@@ -168,15 +422,32 @@ export function isSupportedMediaPath(filePath: string): boolean {
   return supported.has(path.extname(filePath).slice(1).toLowerCase())
 }
 
-export async function findTaskMediaFile(task: DownloadTask, detected: string | null): Promise<string | null> {
-  if (detected && path.dirname(detected) === task.directory &&
-      path.basename(detected).startsWith(`${task.id}.`) && isSupportedMediaPath(detected) &&
-      await fs.stat(detected).then(s => s.isFile() && s.size > 0).catch(() => false)) return detected
+export async function findTaskMediaFile(
+  task: DownloadTask,
+  detected: string | null,
+): Promise<string | null> {
+  if (
+    detected &&
+    path.dirname(detected) === task.directory &&
+    path.basename(detected).startsWith(`${task.id}.`) &&
+    isSupportedMediaPath(detected) &&
+    (await fs
+      .stat(detected)
+      .then(s => s.isFile() && s.size > 0)
+      .catch(() => false))
+  )
+    return detected
   const files = await fs.readdir(task.directory).catch(() => [])
   for (const name of files) {
     if (!name.startsWith(`${task.id}.`) || !isSupportedMediaPath(name)) continue
     const filePath = path.join(task.directory, name)
-    if (await fs.stat(filePath).then(s => s.isFile() && s.size > 0).catch(() => false)) return filePath
+    if (
+      await fs
+        .stat(filePath)
+        .then(s => s.isFile() && s.size > 0)
+        .catch(() => false)
+    )
+      return filePath
   }
   return null
 }
@@ -190,7 +461,9 @@ async function runFfprobeJson(
   const child = spawn(getBinaryPath('ffprobe'), args, { windowsHide: true, detached: false })
   child.on('error', error => engineExecutionFailed('ffprobe', error))
   track?.(child)
-  const onAbort = () => { child.kill() }
+  const onAbort = () => {
+    child.kill()
+  }
   signal?.addEventListener('abort', onAbort, { once: true })
   if (signal?.aborted) onAbort()
   let output = ''
@@ -201,7 +474,7 @@ async function runFfprobeJson(
   child.stderr.resume()
   const timeout = setTimeout(() => child.kill(), 15_000)
   try {
-    const exitCode = await new Promise<number>((resolve) => {
+    const exitCode = await new Promise<number>(resolve => {
       child.on('close', code => resolve(code ?? 1))
       child.on('error', () => resolve(1))
     })
@@ -230,11 +503,23 @@ export async function probeMediaFile(
   const stat = await fs.stat(filePath)
   signal?.throwIfAborted()
   if (!stat.isFile() || stat.size <= 0) throw new Error('Media output is empty')
-  return await runFfprobeJson([
-    '-v', 'error', '-analyzeduration', '30000000', '-probesize', '50000000',
-    '-show_entries', 'format=format_name,duration,start_time:stream=codec_type,codec_name,duration,start_time,width,height,avg_frame_rate,r_frame_rate:stream_tags=language,title,handler_name:stream_disposition=attached_pic',
-    '-of', 'json', filePath,
-  ], track, signal) as MediaProbe
+  return (await runFfprobeJson(
+    [
+      '-v',
+      'error',
+      '-analyzeduration',
+      '30000000',
+      '-probesize',
+      '50000000',
+      '-show_entries',
+      'format=format_name,duration,start_time:stream=codec_type,codec_name,duration,start_time,width,height,avg_frame_rate,r_frame_rate:stream_tags=language,title,handler_name:stream_disposition=attached_pic',
+      '-of',
+      'json',
+      filePath,
+    ],
+    track,
+    signal,
+  )) as MediaProbe
 }
 
 // Reads the true first-packet PTS for video and audio (MKV container headers often report the same start_time for both).
@@ -246,14 +531,30 @@ export async function probeStreamStartTimes(
   signal?.throwIfAborted()
   await ensureEnginesReady(['ffprobe'])
   signal?.throwIfAborted()
-  const firstPts = async (streamSelector: string): Promise<{ formatStart: number; pts: number | null }> => {
-    const data = await runFfprobeJson([
-      '-v', 'error', '-analyzeduration', '30000000', '-probesize', '50000000',
-      '-select_streams', streamSelector,
-      '-read_intervals', '%+#1',
-      '-show_entries', 'format=start_time:packet=pts_time,dts_time',
-      '-of', 'json', filePath,
-    ], track, signal) as { format?: { start_time?: string }; packets?: { pts_time?: string; dts_time?: string }[] }
+  const firstPts = async (
+    streamSelector: string,
+  ): Promise<{ formatStart: number; pts: number | null }> => {
+    const data = (await runFfprobeJson(
+      [
+        '-v',
+        'error',
+        '-analyzeduration',
+        '30000000',
+        '-probesize',
+        '50000000',
+        '-select_streams',
+        streamSelector,
+        '-read_intervals',
+        '%+#1',
+        '-show_entries',
+        'format=start_time:packet=pts_time,dts_time',
+        '-of',
+        'json',
+        filePath,
+      ],
+      track,
+      signal,
+    )) as { format?: { start_time?: string }; packets?: { pts_time?: string; dts_time?: string }[] }
     const fmt = Number(data.format?.start_time)
     const pkt = data.packets?.[0]
     const rawPts = pkt?.pts_time ?? pkt?.dts_time
@@ -273,7 +574,10 @@ export async function probeStreamStartTimes(
   }
 }
 
-export function trimBounds(task: Pick<DownloadTask, 'startTime' | 'endTime'>): { start: number; end?: number } {
+export function trimBounds(task: Pick<DownloadTask, 'startTime' | 'endTime'>): {
+  start: number
+  end?: number
+} {
   const parse = (value: string) => {
     if (!/^\d+(?::\d{1,2}){0,2}(?:\.\d+)?$/.test(value.trim())) throw new Error('Invalid trim time')
     const pieces = value.trim().split(':').map(Number)
@@ -288,7 +592,12 @@ export function trimBounds(task: Pick<DownloadTask, 'startTime' | 'endTime'>): {
   return { start, end }
 }
 
-export async function runMediaProcess(args: string[], task: DownloadTask, ctx: EngineContext, duration?: number): Promise<void> {
+export async function runMediaProcess(
+  args: string[],
+  task: DownloadTask,
+  ctx: EngineContext,
+  duration?: number,
+): Promise<void> {
   await ensureEnginesReady(['ffmpeg', 'ffprobe'])
   const signal = ctx.runtime.abortController?.signal
   signal?.throwIfAborted()
@@ -297,11 +606,35 @@ export async function runMediaProcess(args: string[], task: DownloadTask, ctx: E
   const budget = Math.max(2, Math.min(4, Math.floor(availableParallelism() / 2)))
   const decoderThreads = String(Math.max(1, Math.floor(budget / 3)))
   const encoderThreads = String(Math.max(1, budget - Number(decoderThreads)))
-  const proc = spawn(getBinaryPath('ffmpeg'), ['-y', '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', decoderThreads, '-filter_threads', '1', '-filter_complex_threads', '1', '-progress', 'pipe:1', ...args.slice(0, -1), '-threads', encoderThreads, args[args.length - 1]], { windowsHide: true, detached: process.platform !== 'win32' })
+  const proc = spawn(
+    getBinaryPath('ffmpeg'),
+    [
+      '-y',
+      '-nostdin',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-threads',
+      decoderThreads,
+      '-filter_threads',
+      '1',
+      '-filter_complex_threads',
+      '1',
+      '-progress',
+      'pipe:1',
+      ...args.slice(0, -1),
+      '-threads',
+      encoderThreads,
+      args[args.length - 1],
+    ],
+    { windowsHide: true, detached: process.platform !== 'win32' },
+  )
   proc.on('error', error => engineExecutionFailed('ffmpeg', error))
   ctx.runtime.child = proc
   let teardown: Promise<void> | undefined
-  const terminate = () => { teardown ??= killProcessTree(proc) }
+  const terminate = () => {
+    teardown ??= killProcessTree(proc)
+  }
   let errors = ''
   let lastActivity = Date.now()
   let stalled = false
@@ -323,12 +656,21 @@ export async function runMediaProcess(args: string[], task: DownloadTask, ctx: E
     for (const line of lines) {
       const match = /^out_time_us=(\d+)$/.exec(line)
       if (match && duration && duration > 0) {
-        task.convertingPercent = Math.min(100, Number(match[1]) / 1e6 / duration * 100)
+        const pct = Math.min(100, (Number(match[1]) / 1e6 / duration) * 100)
+        if (task.phase === 'downloading') {
+          task.downloadPercent = pct
+        } else {
+          task.convertingPercent = pct
+          if (task.phase === 'trimming' && task.status === 'downloading') task.downloadPercent = pct
+        }
         ctx.sendUpdate(task)
       }
     }
   })
-  proc.stderr.on('data', (chunk: Buffer) => { lastActivity = Date.now(); errors = (errors + chunk.toString()).slice(-8192) })
+  proc.stderr.on('data', (chunk: Buffer) => {
+    lastActivity = Date.now()
+    errors = (errors + chunk.toString()).slice(-8192)
+  })
   try {
     const code = await new Promise<number>(resolve => {
       proc.on('error', () => resolve(1))
@@ -348,12 +690,40 @@ export async function runMediaProcess(args: string[], task: DownloadTask, ctx: E
 }
 
 // Run a fast container-level pass first, then decode 2s at the start and end to catch corrupt tail frames.
-export async function validateMediaOutput(file: string, task: DownloadTask, ctx: EngineContext, duration?: number): Promise<void> {
-  await runMediaProcess(['-xerror', '-i', file, '-map', '0:v?', '-map', '0:a?', '-c', 'copy', '-f', 'null', '-'], task, ctx, duration)
+export async function validateMediaOutput(
+  file: string,
+  task: DownloadTask,
+  ctx: EngineContext,
+  duration?: number,
+): Promise<void> {
+  await runMediaProcess(
+    ['-xerror', '-i', file, '-map', '0:v?', '-map', '0:a?', '-c', 'copy', '-f', 'null', '-'],
+    task,
+    ctx,
+    duration,
+  )
   const offsets = [0]
   if (duration && Number.isFinite(duration) && duration > 4) offsets.push(duration - 2)
   for (const offset of offsets) {
-    await runMediaProcess(['-xerror', ...(offset ? ['-ss', String(offset)] : []), '-i', file, '-t', '2', '-map', '0:v?', '-map', '0:a?', '-f', 'null', '-'], task, ctx)
+    await runMediaProcess(
+      [
+        '-xerror',
+        ...(offset ? ['-ss', String(offset)] : []),
+        '-i',
+        file,
+        '-t',
+        '2',
+        '-map',
+        '0:v?',
+        '-map',
+        '0:a?',
+        '-f',
+        'null',
+        '-',
+      ],
+      task,
+      ctx,
+    )
   }
 }
 
@@ -365,13 +735,23 @@ export function parseMediaRange(header: string, size: number): [number, number] 
   if (!match[1] && (!Number.isSafeInteger(suffix) || suffix <= 0)) return null
   const start = match[1] ? Number(match[1]) : Math.max(0, size - suffix)
   const requestedEnd = match[1] && match[2] ? Number(match[2]) : size - 1
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start < 0 || requestedEnd < start || start >= size) return null
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(requestedEnd) ||
+    start < 0 ||
+    requestedEnd < start ||
+    start >= size
+  )
+    return null
   return [start, Math.min(requestedEnd, size - 1)]
 }
 
 // Tracks in-flight media streams and ffmpeg/ffprobe children per UI session so closing a view cleans them up cleanly.
 export class MediaRequestRegistry {
-  private readonly active = new Map<() => void, { session: string | null; kind: 'stream' | 'subtitle' | 'probe' }>()
+  private readonly active = new Map<
+    () => void,
+    { session: string | null; kind: 'stream' | 'subtitle' | 'probe' }
+  >()
   private readonly closedSessions = new Set<string>()
   private readonly idleWaiters = new Set<{ session: string | null; resolve: () => void }>()
   private stopping = false
@@ -380,7 +760,11 @@ export class MediaRequestRegistry {
     return this.stopping || (session !== null && this.closedSessions.has(session))
   }
 
-  track(session: string | null, kind: 'stream' | 'subtitle' | 'probe', stop: () => void): () => void {
+  track(
+    session: string | null,
+    kind: 'stream' | 'subtitle' | 'probe',
+    stop: () => void,
+  ): () => void {
     if (this.isClosed(session)) {
       stop()
       return () => {}
@@ -396,7 +780,8 @@ export class MediaRequestRegistry {
     if (!session || !/^[a-zA-Z0-9-]{1,80}$/.test(session)) return Promise.resolve()
     this.closedSessions.add(session)
 
-    if (this.closedSessions.size > 512) this.closedSessions.delete(this.closedSessions.values().next().value!)
+    if (this.closedSessions.size > 512)
+      this.closedSessions.delete(this.closedSessions.values().next().value!)
     for (const [stop, entry] of this.active) {
       if (entry.session === session) {
         stop()
@@ -417,7 +802,9 @@ export class MediaRequestRegistry {
 
   private waitForIdle(session: string | null): Promise<void> {
     if (!this.hasActive(session)) return Promise.resolve()
-    return new Promise(resolve => { this.idleWaiters.add({ session, resolve }) })
+    return new Promise(resolve => {
+      this.idleWaiters.add({ session, resolve })
+    })
   }
 
   private notifyIdle(): void {
@@ -429,7 +816,12 @@ export class MediaRequestRegistry {
     }
   }
 
-  snapshot(): { streams: number; ffmpegProcesses: number; probeProcesses: number; sessions: number } {
+  snapshot(): {
+    streams: number
+    ffmpegProcesses: number
+    probeProcesses: number
+    sessions: number
+  } {
     const entries = [...this.active.values()]
     return {
       streams: entries.filter(entry => entry.kind === 'stream').length,

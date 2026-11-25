@@ -49,16 +49,32 @@ export function useHighFrequencyIPC(taskId: string | undefined, options: Registe
 
     // Expose getters over optionsRef so the registry sees current refs without re-registering on every render.
     const refs: RegisteredDom = {
-      get progressBarRef() { return optionsRef.current.progressBarRef },
-      get speedTextRef() { return optionsRef.current.speedTextRef },
-      get percentTextRef() { return optionsRef.current.percentTextRef },
+      get progressBarRef() {
+        return optionsRef.current.progressBarRef
+      },
+      get speedTextRef() {
+        return optionsRef.current.speedTextRef
+      },
+      get percentTextRef() {
+        return optionsRef.current.percentTextRef
+      },
     }
     domRegistry.set(taskId, refs)
-    return () => { domRegistry.delete(taskId) }
+    return () => {
+      domRegistry.delete(taskId)
+    }
   }, [taskId])
 }
 
-const PHASE_CLASSES = ['downloading', 'merging', 'converting', 'completed', 'error', 'paused', 'queued']
+const PHASE_CLASSES = [
+  'downloading',
+  'merging',
+  'converting',
+  'completed',
+  'error',
+  'paused',
+  'queued',
+]
 
 function updateTaskDom(task: DownloadTask): void {
   const refs = domRegistry.get(task.id)
@@ -66,15 +82,19 @@ function updateTaskDom(task: DownloadTask): void {
   const progress = getProgressView(task)
   const bar = refs.progressBarRef?.current
   if (bar) {
-    bar.style.width = `${progress.isIndeterminate ? 100 : progress.overallProgress ?? 0}%`
+    bar.style.width = `${progress.isIndeterminate ? 100 : (progress.overallProgress ?? 0)}%`
     bar.classList.toggle('indeterminate', progress.isIndeterminate)
     // Collapse granular backend sub-phases onto the CSS classes styled for the progress bar.
-    const target = ['trimming', 'validating', 'finalizing'].includes(progress.phase) ? 'converting'
-      : ['starting', 'preparing'].includes(progress.phase) ? 'downloading' : progress.phase
+    const target = ['trimming', 'validating', 'finalizing'].includes(progress.phase)
+      ? 'converting'
+      : ['starting', 'preparing'].includes(progress.phase)
+        ? 'downloading'
+        : progress.phase
     for (const cls of PHASE_CLASSES) bar.classList.toggle(cls, cls === target)
   }
   if (refs.percentTextRef?.current) refs.percentTextRef.current.innerText = progress.percentLabel
-  if (refs.speedTextRef?.current) refs.speedTextRef.current.innerText = formatSpeed(task.speedBytesPerSec)
+  if (refs.speedTextRef?.current)
+    refs.speedTextRef.current.innerText = formatSpeed(task.speedBytesPerSec)
 }
 
 function structuralKey(task: DownloadTask): string {
@@ -88,7 +108,13 @@ function publishTask(task: DownloadTask, opts: { upsertTask: (task: DownloadTask
   const key = structuralKey(task)
   const previous = lastStructure.get(task.id)
   const last = lastSent.get(task.id) ?? 0
-  if (!TERMINAL.has(task.status) && key === previous && last !== 0 && now - last < ZUSTAND_THROTTLE_MS) return
+  if (
+    !TERMINAL.has(task.status) &&
+    key === previous &&
+    last !== 0 &&
+    now - last < ZUSTAND_THROTTLE_MS
+  )
+    return
   lastStructure.set(task.id, key)
   lastSent.set(task.id, now)
   opts.upsertTask({ ...task })
@@ -99,7 +125,10 @@ function formatSpeed(bytesPerSec: number | null): string {
   const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
   let value = bytesPerSec
   let i = 0
-  while (value >= 1024 && i < units.length - 1) { value /= 1024; i++ }
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024
+    i++
+  }
   const digits = i === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0
   return `${value.toFixed(digits)} ${units[i]}`
 }

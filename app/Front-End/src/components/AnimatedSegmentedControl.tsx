@@ -15,11 +15,21 @@ type Props = {
 
 const HIGH_TRANS = { type: 'spring', stiffness: 500, damping: 30 }
 
-export default function AnimatedSegmentedControl({ options, value, onChange, size = 'md', wrap = false, className }: Props) {
+export default function AnimatedSegmentedControl({
+  options,
+  value,
+  onChange,
+  size = 'md',
+  wrap = false,
+  className,
+}: Props) {
   const paddingX = size === 'sm' ? 6 : 10
 
   return (
-    <div style={{ display: wrap ? 'block' : 'inline-block', width: wrap ? '100%' : undefined }} className={className}>
+    <div
+      style={{ display: wrap ? 'block' : 'inline-block', width: wrap ? '100%' : undefined }}
+      className={className}
+    >
       <div
         role="tablist"
         style={{
@@ -34,7 +44,7 @@ export default function AnimatedSegmentedControl({ options, value, onChange, siz
           alignItems: 'center',
         }}
       >
-        {options.map((opt) => {
+        {options.map(opt => {
           const active = opt.value === value
           return (
             <div key={String(opt.value)} style={{ position: 'relative', zIndex: 1 }}>
@@ -47,7 +57,8 @@ export default function AnimatedSegmentedControl({ options, value, onChange, siz
                     position: 'absolute',
                     inset: 0,
                     borderRadius: 999,
-                    background: 'linear-gradient(90deg, rgba(79,70,229,0.95), rgba(14,165,233,0.95))',
+                    background:
+                      'linear-gradient(90deg, rgba(79,70,229,0.95), rgba(14,165,233,0.95))',
                     boxShadow: '0 6px 18px rgba(14,165,233,0.12)',
                   }}
                 />

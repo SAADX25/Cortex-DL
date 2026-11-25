@@ -1,71 +1,201 @@
 const { suite } = require('./register-ts.cjs')
 
 suite('Floating player policy', test => {
-  const assert = require('node:assert/strict'), Module = require('node:module'), { EventEmitter } = require('node:events')
-  const originalLoad = Module._load, external = []
+  const assert = require('node:assert/strict'),
+    Module = require('node:module'),
+    { EventEmitter } = require('node:events')
+  const originalLoad = Module._load,
+    external = []
   Module._load = function (name, ...args) {
-    if (name === 'electron') return { screen: { getDisplayMatching: () => ({ workArea: { x: 100, y: 100, width: 1200, height: 800 } }) }, shell: { openExternal: async url => { external.push(url) } } }
+    if (name === 'electron')
+      return {
+        screen: {
+          getDisplayMatching: () => ({ workArea: { x: 100, y: 100, width: 1200, height: 800 } }),
+        },
+        shell: {
+          openExternal: async url => {
+            external.push(url)
+          },
+        },
+      }
     return originalLoad.call(this, name, ...args)
   }
   const { installFloatingPlayerWindow } = require('../Back-End/electron/floatingPlayer.ts')
   Module._load = originalLoad
 
   test('floating window policy permits one trusted surface, blocks navigation and restores background throttling', () => {
-    const owner = { getBounds: () => ({}), webContents: new EventEmitter() }, content = owner.webContents
-    let handler, childHandler, throttled = true, menu
-    Object.assign(content, { setWindowOpenHandler: value => { handler = value }, getBackgroundThrottling: () => throttled, setBackgroundThrottling: value => { throttled = value }, isDestroyed: () => false })
+    const owner = { getBounds: () => ({}), webContents: new EventEmitter() },
+      content = owner.webContents
+    let handler,
+      childHandler,
+      throttled = true,
+      menu
+    Object.assign(content, {
+      setWindowOpenHandler: value => {
+        handler = value
+      },
+      getBackgroundThrottling: () => throttled,
+      setBackgroundThrottling: value => {
+        throttled = value
+      },
+      isDestroyed: () => false,
+    })
     installFloatingPlayerWindow(owner)
     const request = { url: 'about:blank', frameName: 'cortex-floating-player' }
     const result = handler(request)
-    assert.equal(result.action, 'allow'); assert.equal(result.overrideBrowserWindowOptions.alwaysOnTop, true)
-    assert.equal(result.overrideBrowserWindowOptions.frame, false, 'Floating player must use one integrated header')
-    assert.equal(result.overrideBrowserWindowOptions.webPreferences, undefined, 'About-blank window must inherit the protected renderer preferences')
+    assert.equal(result.action, 'allow')
+    assert.equal(result.overrideBrowserWindowOptions.alwaysOnTop, true)
+    assert.equal(
+      result.overrideBrowserWindowOptions.frame,
+      false,
+      'Floating player must use one integrated header',
+    )
+    assert.equal(
+      result.overrideBrowserWindowOptions.webPreferences,
+      undefined,
+      'About-blank window must inherit the protected renderer preferences',
+    )
     assert.equal(handler({ ...request, frameName: 'other' }).action, 'deny')
     assert.equal(handler({ ...request, url: 'file:///private.txt' }).action, 'deny')
-    assert.equal(handler({ ...request, url: 'https://example.test/' }).action, 'deny'); assert.deepEqual(external, ['https://example.test/'])
-    const child = new EventEmitter(); child.webContents = new EventEmitter(); child.setMenu = value => { menu = value }
-    child.webContents.setWindowOpenHandler = value => { childHandler = value }
+    assert.equal(handler({ ...request, url: 'https://example.test/' }).action, 'deny')
+    assert.deepEqual(external, ['https://example.test/'])
+    const child = new EventEmitter()
+    child.webContents = new EventEmitter()
+    child.setMenu = value => {
+      menu = value
+    }
+    child.webContents.setWindowOpenHandler = value => {
+      childHandler = value
+    }
     content.emit('did-create-window', child, { frameName: request.frameName })
-    assert.equal(menu, null); assert.equal(throttled, false); assert.equal(handler(request).action, 'deny'); assert.equal(childHandler(request).action, 'deny')
-    for (const name of ['will-navigate', 'will-redirect']) { let prevented = false; child.webContents.emit(name, { preventDefault: () => { prevented = true } }); assert.equal(prevented, true) }
-    child.emit('closed'); assert.equal(throttled, true); assert.equal(handler(request).action, 'allow')
+    assert.equal(menu, null)
+    assert.equal(throttled, false)
+    assert.equal(handler(request).action, 'deny')
+    assert.equal(childHandler(request).action, 'deny')
+    for (const name of ['will-navigate', 'will-redirect']) {
+      let prevented = false
+      child.webContents.emit(name, {
+        preventDefault: () => {
+          prevented = true
+        },
+      })
+      assert.equal(prevented, true)
+    }
+    child.emit('closed')
+    assert.equal(throttled, true)
+    assert.equal(handler(request).action, 'allow')
   })
 })
 
 suite('Floating playback', test => {
-  const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os')
+  const assert = require('node:assert/strict'),
+    fs = require('node:fs/promises'),
+    path = require('node:path'),
+    os = require('node:os')
   const { spawn, execFileSync } = require('node:child_process')
   const http = require('node:http')
 
-  test('floating player preserves real playback and Arabic cues, frees downloads, restores and releases native windows', { timeout: 55000 }, async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-floating-player-'))
-    let server
-    try {
-      execFileSync(path.resolve(__dirname, '../engine-baseline/ffmpeg.exe'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24:duration=30', '-f', 'lavfi', '-i', 'sine=duration=30', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', path.join(directory, 'video.mp4')], { windowsHide: true, timeout: 15000 })
-      const media = await fs.readFile(path.join(directory, 'video.mp4'))
-      execFileSync(path.resolve(__dirname, '../engine-baseline/ffmpeg.exe'), ['-y', '-hide_banner', '-loglevel', 'error', '-i', path.join(directory, 'video.mp4'), '-vn', '-c:a', 'libmp3lame', path.join(directory, 'audio.mp3')], { windowsHide: true, timeout: 15000 })
-      const audio = await fs.readFile(path.join(directory, 'audio.mp3'))
-      server = http.createServer((req, res) => {
-        res.setHeader('Access-Control-Allow-Origin', '*')
-        const name = new URL(req.url, 'http://localhost').searchParams.get('path')
-        if (name !== 'video.mp4' && name !== 'audio.mp3') {
-          res.setHeader('Content-Type', 'text/vtt')
-          res.end(`WEBVTT\n\n00:00:00.000 --> 00:00:29.000\n${name === 'ar.vtt' ? 'ترجمة عربية في النافذة العائمة' : 'English floating subtitles'}\n`)
-          return
-        }
-        const data = name === 'audio.mp3' ? audio : media
-        const match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || ''), start = match ? Number(match[1]) : 0, end = match?.[2] ? Math.min(Number(match[2]), data.length - 1) : data.length - 1
-        res.setHeader('Content-Type', name === 'audio.mp3' ? 'audio/mpeg' : 'video/mp4'); res.setHeader('Accept-Ranges', 'bytes')
-        res.setHeader('Content-Length', end - start + 1)
-        if (match) { res.statusCode = 206; res.setHeader('Content-Range', `bytes ${start}-${end}/${data.length}`) }
-        res.end(data.subarray(start, end + 1))
-      })
-      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-      const esbuild = require('esbuild')
-      esbuild.buildSync({ entryPoints: [path.join(__dirname, 'fixtures/floatingPlayer.jsx')], bundle: true, outfile: path.join(directory, 'renderer.js'), define: { 'process.env.NODE_ENV': '"production"', __MEDIA_PORT__: String(server.address().port) } })
-      esbuild.buildSync({ entryPoints: [path.resolve(__dirname, '../Back-End/electron/floatingPlayer.ts')], bundle: true, platform: 'node', external: ['electron'], format: 'cjs', outfile: path.join(directory, 'policy.cjs') })
-      await fs.writeFile(path.join(directory, 'index.html'), '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="renderer.css"></head><body style="margin:0;background:#0b1424;color:white;font-family:Arial"><div id="root"></div><script src="renderer.js"></script></body></html>')
-      await fs.writeFile(path.join(directory, 'electron.cjs'), `
+  test(
+    'floating player preserves real playback and Arabic cues, frees downloads, restores and releases native windows',
+    { timeout: 55000 },
+    async () => {
+      const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-floating-player-'))
+      let server
+      try {
+        execFileSync(
+          path.resolve(__dirname, '../engine-baseline/ffmpeg.exe'),
+          [
+            '-y',
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-f',
+            'lavfi',
+            '-i',
+            'testsrc2=size=640x360:rate=24:duration=30',
+            '-f',
+            'lavfi',
+            '-i',
+            'sine=duration=30',
+            '-c:v',
+            'libx264',
+            '-preset',
+            'ultrafast',
+            '-c:a',
+            'aac',
+            '-movflags',
+            '+faststart',
+            path.join(directory, 'video.mp4'),
+          ],
+          { windowsHide: true, timeout: 15000 },
+        )
+        const media = await fs.readFile(path.join(directory, 'video.mp4'))
+        execFileSync(
+          path.resolve(__dirname, '../engine-baseline/ffmpeg.exe'),
+          [
+            '-y',
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-i',
+            path.join(directory, 'video.mp4'),
+            '-vn',
+            '-c:a',
+            'libmp3lame',
+            path.join(directory, 'audio.mp3'),
+          ],
+          { windowsHide: true, timeout: 15000 },
+        )
+        const audio = await fs.readFile(path.join(directory, 'audio.mp3'))
+        server = http.createServer((req, res) => {
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          const name = new URL(req.url, 'http://localhost').searchParams.get('path')
+          if (name !== 'video.mp4' && name !== 'audio.mp3') {
+            res.setHeader('Content-Type', 'text/vtt')
+            res.end(
+              `WEBVTT\n\n00:00:00.000 --> 00:00:29.000\n${name === 'ar.vtt' ? 'ترجمة عربية في النافذة العائمة' : 'English floating subtitles'}\n`,
+            )
+            return
+          }
+          const data = name === 'audio.mp3' ? audio : media
+          const match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || ''),
+            start = match ? Number(match[1]) : 0,
+            end = match?.[2] ? Math.min(Number(match[2]), data.length - 1) : data.length - 1
+          res.setHeader('Content-Type', name === 'audio.mp3' ? 'audio/mpeg' : 'video/mp4')
+          res.setHeader('Accept-Ranges', 'bytes')
+          res.setHeader('Content-Length', end - start + 1)
+          if (match) {
+            res.statusCode = 206
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${data.length}`)
+          }
+          res.end(data.subarray(start, end + 1))
+        })
+        await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+        const esbuild = require('esbuild')
+        esbuild.buildSync({
+          entryPoints: [path.join(__dirname, 'fixtures/floatingPlayer.jsx')],
+          bundle: true,
+          outfile: path.join(directory, 'renderer.js'),
+          define: {
+            'process.env.NODE_ENV': '"production"',
+            __MEDIA_PORT__: String(server.address().port),
+          },
+        })
+        esbuild.buildSync({
+          entryPoints: [path.resolve(__dirname, '../Back-End/electron/floatingPlayer.ts')],
+          bundle: true,
+          platform: 'node',
+          external: ['electron'],
+          format: 'cjs',
+          outfile: path.join(directory, 'policy.cjs'),
+        })
+        await fs.writeFile(
+          path.join(directory, 'index.html'),
+          '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="renderer.css"></head><body style="margin:0;background:#0b1424;color:white;font-family:Arial"><div id="root"></div><script src="renderer.js"></script></body></html>',
+        )
+        await fs.writeFile(
+          path.join(directory, 'electron.cjs'),
+          `
         const {app,BrowserWindow}=require('electron'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
         app.disableHardwareAcceleration();app.setPath('userData',path.join(__dirname,'profile'));
         const delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -270,35 +400,95 @@ suite('Floating playback', test => {
           assert.equal(await js('(async()=> (await window.__cortexMediaDiagnostics()).renderer.audioContexts)()'),0,'Closing must release the visualizer audio graph');
           win.destroy();app.quit();
         }).catch(error=>{console.error(error);app.exit(1)});
-      `)
-      const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
-      const result = await new Promise((resolve, reject) => {
-        const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], { windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
-        let output = ''; child.stdout.on('data', chunk => { output += chunk }); child.stderr.on('data', chunk => { output += chunk })
-        let timedOut = false
-        const timer = setTimeout(() => { timedOut = true; if (process.platform === 'win32') { try { execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }) } catch { child.kill() } } else child.kill() }, 45000)
-        child.once('error', error => { clearTimeout(timer); reject(error) }); child.once('close', code => { clearTimeout(timer); timedOut ? reject(new Error('Floating test timed out: ' + output)) : resolve({ code, output }) })
-      })
-      assert.equal(result.code, 0, result.output)
-    } finally {
-      if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
-      if (path.dirname(directory) === path.resolve(os.tmpdir()) && path.basename(directory).startsWith('cortex-floating-player-')) await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
-    }
-  })
+      `,
+        )
+        const env = { ...process.env }
+        delete env.ELECTRON_RUN_AS_NODE
+        const result = await new Promise((resolve, reject) => {
+          const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], {
+            windowsHide: true,
+            env,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+          let output = ''
+          child.stdout.on('data', chunk => {
+            output += chunk
+          })
+          child.stderr.on('data', chunk => {
+            output += chunk
+          })
+          let timedOut = false
+          const timer = setTimeout(() => {
+            timedOut = true
+            if (process.platform === 'win32') {
+              try {
+                execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+                  windowsHide: true,
+                  stdio: 'ignore',
+                })
+              } catch {
+                child.kill()
+              }
+            } else child.kill()
+          }, 45000)
+          child.once('error', error => {
+            clearTimeout(timer)
+            reject(error)
+          })
+          child.once('close', code => {
+            clearTimeout(timer)
+            timedOut
+              ? reject(new Error('Floating test timed out: ' + output))
+              : resolve({ code, output })
+          })
+        })
+        assert.equal(result.code, 0, result.output)
+      } finally {
+        if (server) {
+          server.closeAllConnections()
+          await new Promise(resolve => server.close(resolve))
+        }
+        if (
+          path.dirname(directory) === path.resolve(os.tmpdir()) &&
+          path.basename(directory).startsWith('cortex-floating-player-')
+        )
+          await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+      }
+    },
+  )
 })
 
 suite('Window chrome', test => {
-  const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os')
+  const assert = require('node:assert/strict'),
+    fs = require('node:fs/promises'),
+    path = require('node:path'),
+    os = require('node:os')
   const { spawn } = require('node:child_process')
 
-  test('Windows header retains native caption controls and reserves a draggable area above English and Arabic content', { skip: process.platform !== 'win32', timeout: 20000 }, async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-window-chrome-')), root = path.resolve(__dirname, '..')
-    try {
-      const esbuild = require('esbuild')
-      for (const [source, output] of [['Back-End/electron/windowChrome.ts', 'chrome.cjs'], ['Back-End/electron/preload.ts', 'preload.cjs']]) {
-        esbuild.buildSync({ entryPoints: [path.join(root, source)], bundle: true, platform: 'node', external: ['electron'], format: 'cjs', outfile: path.join(directory, output) })
-      }
-      esbuild.buildSync({ stdin: { contents: `
+  test(
+    'Windows header retains native caption controls and reserves a draggable area above English and Arabic content',
+    { skip: process.platform !== 'win32', timeout: 20000 },
+    async () => {
+      const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-window-chrome-')),
+        root = path.resolve(__dirname, '..')
+      try {
+        const esbuild = require('esbuild')
+        for (const [source, output] of [
+          ['Back-End/electron/windowChrome.ts', 'chrome.cjs'],
+          ['Back-End/electron/preload.ts', 'preload.cjs'],
+        ]) {
+          esbuild.buildSync({
+            entryPoints: [path.join(root, source)],
+            bundle: true,
+            platform: 'node',
+            external: ['electron'],
+            format: 'cjs',
+            outfile: path.join(directory, output),
+          })
+        }
+        esbuild.buildSync({
+          stdin: {
+            contents: `
         import React from 'react';import {createRoot} from 'react-dom/client';
         import Sidebar from './Front-End/src/components/Sidebar';
         import AddDownloadTab from './Front-End/src/components/AddDownloadTab';
@@ -308,9 +498,25 @@ suite('Window chrome', test => {
         function View(){const lang=useSettingsStore(s=>s.lang);return <div className={'app-container'+(window.cortexDl.customTitleBar?' has-titlebar':'')} dir={lang==='ar'?'rtl':'ltr'}>
           <div className="app-titlebar" aria-hidden="true"><div className="app-titlebar-drag"/></div><Sidebar/><main className="main-content"><AddDownloadTab/></main></div>}
         useSettingsStore.setState({lang:'en'});createRoot(document.getElementById('root')).render(<View/>);
-      `, resolveDir: root, loader: 'jsx' }, bundle: true, outfile: path.join(directory, 'renderer.js'), define: { 'process.env.NODE_ENV': '"production"', __APP_VERSION__: '"test"', __BUILD_SHA__: '"test-build"' } })
-      await fs.writeFile(path.join(directory, 'index.html'), '<!doctype html><html><head><meta charset="utf-8"><title>Cortex DL</title><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script src="renderer.js"></script></body></html>')
-      await fs.writeFile(path.join(directory, 'electron.cjs'), `
+      `,
+            resolveDir: root,
+            loader: 'jsx',
+          },
+          bundle: true,
+          outfile: path.join(directory, 'renderer.js'),
+          define: {
+            'process.env.NODE_ENV': '"production"',
+            __APP_VERSION__: '"test"',
+            __BUILD_SHA__: '"test-build"',
+          },
+        })
+        await fs.writeFile(
+          path.join(directory, 'index.html'),
+          '<!doctype html><html><head><meta charset="utf-8"><title>Cortex DL</title><link rel="stylesheet" href="renderer.css"></head><body><div id="root"></div><script src="renderer.js"></script></body></html>',
+        )
+        await fs.writeFile(
+          path.join(directory, 'electron.cjs'),
+          `
         const {app,BrowserWindow}=require('electron'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
         app.disableHardwareAcceleration();app.setPath('userData',path.join(__dirname,'profile'));
         app.whenReady().then(async()=>{
@@ -333,37 +539,90 @@ suite('Window chrome', test => {
           }
           win.destroy();app.quit();
         }).catch(error=>{console.error(error);app.exit(1)});
-      `)
-      const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
-      const result = await new Promise((resolve, reject) => {
-        const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], { windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
-        let output = ''; child.stdout.on('data', chunk => { output += chunk }); child.stderr.on('data', chunk => { output += chunk })
-        const timer = setTimeout(() => { child.kill(); reject(new Error('Window chrome timed out: ' + output)) }, 15000)
-        child.once('error', error => { clearTimeout(timer); reject(error) }); child.once('close', code => { clearTimeout(timer); resolve({ code, output }) })
-      })
-      assert.equal(result.code, 0, result.output)
-    } finally { await fs.rm(directory, { recursive: true, force: true }) }
-  })
+      `,
+        )
+        const env = { ...process.env }
+        delete env.ELECTRON_RUN_AS_NODE
+        const result = await new Promise((resolve, reject) => {
+          const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], {
+            windowsHide: true,
+            env,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+          let output = ''
+          child.stdout.on('data', chunk => {
+            output += chunk
+          })
+          child.stderr.on('data', chunk => {
+            output += chunk
+          })
+          const timer = setTimeout(() => {
+            child.kill()
+            reject(new Error('Window chrome timed out: ' + output))
+          }, 15000)
+          child.once('error', error => {
+            clearTimeout(timer)
+            reject(error)
+          })
+          child.once('close', code => {
+            clearTimeout(timer)
+            resolve({ code, output })
+          })
+        })
+        assert.equal(result.code, 0, result.output)
+      } finally {
+        await fs.rm(directory, { recursive: true, force: true })
+      }
+    },
+  )
 })
 
 suite('Player chrome', test => {
-  const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os')
+  const assert = require('node:assert/strict'),
+    fs = require('node:fs/promises'),
+    path = require('node:path'),
+    os = require('node:os')
   const { spawn } = require('node:child_process')
 
-  test('video and audio headers stay below native Windows controls, fit long titles and return from fullscreen', { skip: process.platform !== 'win32', timeout: 30000 }, async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-player-chrome-')), root = path.resolve(__dirname, '..')
-    try {
-      const esbuild = require('esbuild')
-      esbuild.buildSync({ entryPoints: [path.join(root, 'Back-End/electron/windowChrome.ts')], bundle: true, platform: 'node', external: ['electron'], format: 'cjs', outfile: path.join(directory, 'chrome.cjs') })
-      esbuild.buildSync({ stdin: { contents: `
+  test(
+    'video and audio headers stay below native Windows controls, fit long titles and return from fullscreen',
+    { skip: process.platform !== 'win32', timeout: 30000 },
+    async () => {
+      const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-player-chrome-')),
+        root = path.resolve(__dirname, '..')
+      try {
+        const esbuild = require('esbuild')
+        esbuild.buildSync({
+          entryPoints: [path.join(root, 'Back-End/electron/windowChrome.ts')],
+          bundle: true,
+          platform: 'node',
+          external: ['electron'],
+          format: 'cjs',
+          outfile: path.join(directory, 'chrome.cjs'),
+        })
+        esbuild.buildSync({
+          stdin: {
+            contents: `
         import './tests/fixtures/floatingPlayer.jsx';
         import './Front-End/src/App.css';
         import {useSettingsStore} from './Front-End/src/stores/useSettingsStore';
         window.cortexDl.customTitleBar=true;
         window.fixture.language=lang=>useSettingsStore.setState({lang});
-      `, resolveDir: root, loader: 'jsx' }, bundle: true, outfile: path.join(directory, 'renderer.js'), define: { 'process.env.NODE_ENV': '"production"', __MEDIA_PORT__: '9' } })
-      await fs.writeFile(path.join(directory, 'index.html'), '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="renderer.css"></head><body><div class="app-container has-titlebar" style="position:fixed;inset:0"><div class="app-titlebar" aria-hidden="true"><div class="app-titlebar-drag"></div></div></div><div id="root"></div><script src="renderer.js"></script></body></html>')
-      await fs.writeFile(path.join(directory, 'electron.cjs'), `
+      `,
+            resolveDir: root,
+            loader: 'jsx',
+          },
+          bundle: true,
+          outfile: path.join(directory, 'renderer.js'),
+          define: { 'process.env.NODE_ENV': '"production"', __MEDIA_PORT__: '9' },
+        })
+        await fs.writeFile(
+          path.join(directory, 'index.html'),
+          '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="renderer.css"></head><body><div class="app-container has-titlebar" style="position:fixed;inset:0"><div class="app-titlebar" aria-hidden="true"><div class="app-titlebar-drag"></div></div></div><div id="root"></div><script src="renderer.js"></script></body></html>',
+        )
+        await fs.writeFile(
+          path.join(directory, 'electron.cjs'),
+          `
         const {app,BrowserWindow}=require('electron'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
         app.disableHardwareAcceleration();app.setPath('userData',path.join(__dirname,'profile'));
         const delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -395,17 +654,42 @@ suite('Player chrome', test => {
           await js('document.querySelector(".player-back").click()');await wait('!document.querySelector("audio")');assert.equal(await js('window.fixture.result().closed.length'),2);
           win.destroy();app.quit();
         }).catch(error=>{console.error(error);app.exit(1)});
-      `)
-      const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
-      const result = await new Promise((resolve, reject) => {
-        const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], { windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
-        let output = ''; child.stdout.on('data', chunk => { output += chunk }); child.stderr.on('data', chunk => { output += chunk })
-        const timer = setTimeout(() => { child.kill(); reject(new Error('Player chrome timed out: ' + output)) }, 23000)
-        child.once('error', error => { clearTimeout(timer); reject(error) }); child.once('close', code => { clearTimeout(timer); resolve({ code, output }) })
-      })
-      assert.equal(result.code, 0, result.output)
-    } finally { await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
-  })
+      `,
+        )
+        const env = { ...process.env }
+        delete env.ELECTRON_RUN_AS_NODE
+        const result = await new Promise((resolve, reject) => {
+          const child = spawn(require('electron'), [path.join(directory, 'electron.cjs')], {
+            windowsHide: true,
+            env,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+          let output = ''
+          child.stdout.on('data', chunk => {
+            output += chunk
+          })
+          child.stderr.on('data', chunk => {
+            output += chunk
+          })
+          const timer = setTimeout(() => {
+            child.kill()
+            reject(new Error('Player chrome timed out: ' + output))
+          }, 23000)
+          child.once('error', error => {
+            clearTimeout(timer)
+            reject(error)
+          })
+          child.once('close', code => {
+            clearTimeout(timer)
+            resolve({ code, output })
+          })
+        })
+        assert.equal(result.code, 0, result.output)
+      } finally {
+        await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+      }
+    },
+  )
 })
 
 suite('Trim preview', test => {
@@ -417,94 +701,307 @@ suite('Trim preview', test => {
   const cp = require('node:child_process')
   const Module = require('node:module')
   const load = Module._load
-  Module._load = function(request,parent,...rest) {
-    if (request.endsWith('/engineManager')) return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
-    if(request==='electron-log')return {info(){},warn(){},error(){}}
-    if(request==='electron')return {Notification:{},BrowserWindow:{}}
-    return load.call(this,request,parent,...rest)
+  Module._load = function (request, parent, ...rest) {
+    if (request.endsWith('/engineManager'))
+      return {
+        ensureEnginesReady: async () => {},
+        engineExecutionFailed() {},
+        engineReceipts: {
+          inspect: async name => ({
+            name,
+            available: true,
+            version: '2.9.4',
+            state: 'cached-ready',
+          }),
+        },
+      }
+    if (request === 'electron-log') return { info() {}, warn() {}, error() {} }
+    if (request === 'electron') return { Notification: {}, BrowserWindow: {} }
+    return load.call(this, request, parent, ...rest)
   }
-  const { TrimPreview, validatePreviewUrl, videoFailure, seekPreview } = require('../Front-End/src/components/AdvancedTrimmer/trimPreview.ts')
-  const { getTrimPreviewSource, getTrimmerContext } = require('../Front-End/src/components/AdvancedTrimmer/trimSource.ts')
-  const { parseTimecode, formatTimecode, computeZoomViewport, computeRulerTicks } = require('../Front-End/src/components/AdvancedTrimmer/trimTime.ts')
-  const { playablePreviewUrl, playablePreviewStreams, extractPreview, extractPreviewStreams, PREVIEW_FORMAT, TRIM_PREVIEW_FORMAT } = require('../Back-End/electron/services/thumbnailService.ts')
+  const {
+    TrimPreview,
+    validatePreviewUrl,
+    videoFailure,
+    seekPreview,
+  } = require('../Front-End/src/components/AdvancedTrimmer/trimPreview.ts')
+  const {
+    getTrimPreviewSource,
+    getTrimmerContext,
+  } = require('../Front-End/src/components/AdvancedTrimmer/trimSource.ts')
+  const {
+    parseTimecode,
+    formatTimecode,
+    computeZoomViewport,
+    computeRulerTicks,
+  } = require('../Front-End/src/components/AdvancedTrimmer/trimTime.ts')
+  const {
+    playablePreviewUrl,
+    playablePreviewStreams,
+    extractPreview,
+    extractPreviewStreams,
+    PREVIEW_FORMAT,
+    TRIM_PREVIEW_FORMAT,
+  } = require('../Back-End/electron/services/thumbnailService.ts')
   const { syncTrimAudio } = require('../Front-End/src/components/AdvancedTrimmer/trimAudio.ts')
   const { MediaRequestRegistry } = require('../Back-End/electron/services/mediaService.ts')
-  const valid = {url:'https://example.com/video.mp4',ext:'mp4',vcodec:'avc1.64001f',acodec:'mp4a.40.2',protocol:'https'}
+  const valid = {
+    url: 'https://example.com/video.mp4',
+    ext: 'mp4',
+    vcodec: 'avc1.64001f',
+    acodec: 'mp4a.40.2',
+    protocol: 'https',
+  }
   test('Visual Trim validates progressive Chromium codec/container, expiration and media error details', () => {
-    assert.equal(playablePreviewUrl(valid),valid.url)
-    for(const bad of [{vcodec:'av01'}, {ext:'mkv'},{protocol:'m3u8_native'}, {acodec:'ac3'}, {acodec:'none'}, {acodec:undefined}, {requested_formats:[{},{}]}, {url:valid.url+'?expire=1'}])assert.throws(()=>playablePreviewUrl({...valid,...bad}))
-    assert.throws(()=>validatePreviewUrl(valid.url+'?expires=1'),/Expired/)
-    assert.match(PREVIEW_FORMAT,/avc1/)
-    assert.match(PREVIEW_FORMAT,/vcodec\^=vp09/)
-    assert.match(PREVIEW_FORMAT,/acodec!=none/)
-    assert.doesNotMatch(PREVIEW_FORMAT,/\bbv\[/)
-    assert.equal(playablePreviewUrl({...valid,ext:'webm',vcodec:'vp09.00.51.08',acodec:'opus'}),valid.url)
-    for(const code of [1,2,3,4])assert.match(videoFailure({error:{code,message:'specific decoder/network detail'}}),/specific decoder\/network detail/)
+    assert.equal(playablePreviewUrl(valid), valid.url)
+    for (const bad of [
+      { vcodec: 'av01' },
+      { ext: 'mkv' },
+      { protocol: 'm3u8_native' },
+      { acodec: 'ac3' },
+      { acodec: 'none' },
+      { acodec: undefined },
+      { requested_formats: [{}, {}] },
+      { url: valid.url + '?expire=1' },
+    ])
+      assert.throws(() => playablePreviewUrl({ ...valid, ...bad }))
+    assert.throws(() => validatePreviewUrl(valid.url + '?expires=1'), /Expired/)
+    assert.match(PREVIEW_FORMAT, /avc1/)
+    assert.match(PREVIEW_FORMAT, /vcodec\^=vp09/)
+    assert.match(PREVIEW_FORMAT, /acodec!=none/)
+    assert.doesNotMatch(PREVIEW_FORMAT, /\bbv\[/)
+    assert.equal(
+      playablePreviewUrl({ ...valid, ext: 'webm', vcodec: 'vp09.00.51.08', acodec: 'opus' }),
+      valid.url,
+    )
+    for (const code of [1, 2, 3, 4])
+      assert.match(
+        videoFailure({ error: { code, message: 'specific decoder/network detail' } }),
+        /specific decoder\/network detail/,
+      )
   })
   test('Visual Trim always chooses a supported muxed source with audio', () => {
-    const silentHighResolution = {...valid, formatId:'1080-silent', height:1080, acodec:'none'}
-    const audibleLowResolution = {...valid, formatId:'720-muxed', height:720}
-    const modernVp9 = {...valid, url:'https://example.com/modern.webm', formatId:'modern-vp09', ext:'webm', vcodec:'vp09.00.51.08', acodec:'opus', height:1080}
-    assert.deepEqual(getTrimPreviewSource([silentHighResolution, audibleLowResolution], '1080p', 120), {videoUrl:valid.url, duration:120})
-    assert.deepEqual(getTrimPreviewSource([modernVp9], '1080p', 120), {videoUrl:modernVp9.url, duration:120})
-    assert.deepEqual(getTrimPreviewSource([silentHighResolution], '1080p', 120), {videoUrl:'', duration:120})
-    assert.deepEqual(getTrimPreviewSource([], '1080p', 120), {videoUrl:'', duration:120})
+    const silentHighResolution = { ...valid, formatId: '1080-silent', height: 1080, acodec: 'none' }
+    const audibleLowResolution = { ...valid, formatId: '720-muxed', height: 720 }
+    const modernVp9 = {
+      ...valid,
+      url: 'https://example.com/modern.webm',
+      formatId: 'modern-vp09',
+      ext: 'webm',
+      vcodec: 'vp09.00.51.08',
+      acodec: 'opus',
+      height: 1080,
+    }
+    assert.deepEqual(
+      getTrimPreviewSource([silentHighResolution, audibleLowResolution], '1080p', 120),
+      { videoUrl: valid.url, duration: 120 },
+    )
+    assert.deepEqual(getTrimPreviewSource([modernVp9], '1080p', 120), {
+      videoUrl: modernVp9.url,
+      duration: 120,
+    })
+    assert.deepEqual(getTrimPreviewSource([silentHighResolution], '1080p', 120), {
+      videoUrl: '',
+      duration: 120,
+    })
+    assert.deepEqual(getTrimPreviewSource([], '1080p', 120), { videoUrl: '', duration: 120 })
     assert.equal(getTrimPreviewSource([audibleLowResolution], '720p', 0), null)
   })
   test('Visual Trim supports adaptive video/audio, rejects manifests and synchronizes the audio clock', async () => {
-    const video = {...valid, format_id:'video', acodec:'none', height:720}
-    const audio = {...valid, format_id:'audio', vcodec:'none', ext:'m4a', url:'https://example.com/audio.m4a'}
-    assert.deepEqual(playablePreviewStreams({requested_formats:[video,audio]}), {videoUrl:video.url,audioUrl:audio.url})
-    assert.throws(()=>playablePreviewStreams({requested_formats:[video,{...audio,protocol:'m3u8_native'}]}), /progressive/)
-    assert.throws(()=>playablePreviewStreams({requested_formats:[video]}), /exactly one/)
-    const clock={currentTime:12,volume:.35,muted:false,playbackRate:1.5,paused:false,seeking:false,readyState:4}
-    const sound={currentTime:0,duration:100,readyState:4,getAttribute:()=>audio.url,play:async()=>{sound.paused=false},pause:()=>{sound.paused=true}}
-    await syncTrimAudio(clock,sound,true)
-    assert.equal(sound.currentTime,12); assert.equal(sound.volume,.35); assert.equal(sound.playbackRate,1.5); assert.equal(sound.paused,false)
-    clock.paused=true; clock.muted=true; await syncTrimAudio(clock,sound)
-    assert.equal(sound.paused,true); assert.equal(sound.muted,true)
-    const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cortex-adaptive-selector-'))
+    const video = { ...valid, format_id: 'video', acodec: 'none', height: 720 }
+    const audio = {
+      ...valid,
+      format_id: 'audio',
+      vcodec: 'none',
+      ext: 'm4a',
+      url: 'https://example.com/audio.m4a',
+    }
+    assert.deepEqual(playablePreviewStreams({ requested_formats: [video, audio] }), {
+      videoUrl: video.url,
+      audioUrl: audio.url,
+    })
+    assert.throws(
+      () =>
+        playablePreviewStreams({
+          requested_formats: [video, { ...audio, protocol: 'm3u8_native' }],
+        }),
+      /progressive/,
+    )
+    assert.throws(() => playablePreviewStreams({ requested_formats: [video] }), /exactly one/)
+    const clock = {
+      currentTime: 12,
+      volume: 0.35,
+      muted: false,
+      playbackRate: 1.5,
+      paused: false,
+      seeking: false,
+      readyState: 4,
+    }
+    const sound = {
+      currentTime: 0,
+      duration: 100,
+      readyState: 4,
+      getAttribute: () => audio.url,
+      play: async () => {
+        sound.paused = false
+      },
+      pause: () => {
+        sound.paused = true
+      },
+    }
+    await syncTrimAudio(clock, sound, true)
+    assert.equal(sound.currentTime, 12)
+    assert.equal(sound.volume, 0.35)
+    assert.equal(sound.playbackRate, 1.5)
+    assert.equal(sound.paused, false)
+    clock.paused = true
+    clock.muted = true
+    await syncTrimAudio(clock, sound)
+    assert.equal(sound.paused, true)
+    assert.equal(sound.muted, true)
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-adaptive-selector-'))
     try {
-      const info=path.join(dir,'info.json')
-      await fs.writeFile(info,JSON.stringify({id:'adaptive',title:'adaptive',extractor:'fixture',webpage_url:'https://example.com/watch',formats:[video,audio]}))
-      assert.deepEqual(await extractPreviewStreams(path.join(process.cwd(),'engine-baseline','yt-dlp.exe'),['--load-info-json',info,'--dump-single-json','--skip-download','-f',TRIM_PREVIEW_FORMAT]),{videoUrl:video.url,audioUrl:audio.url})
-    } finally { await fs.rm(dir,{recursive:true,force:true}) }
+      const info = path.join(dir, 'info.json')
+      await fs.writeFile(
+        info,
+        JSON.stringify({
+          id: 'adaptive',
+          title: 'adaptive',
+          extractor: 'fixture',
+          webpage_url: 'https://example.com/watch',
+          formats: [video, audio],
+        }),
+      )
+      assert.deepEqual(
+        await extractPreviewStreams(path.join(process.cwd(), 'engine-baseline', 'yt-dlp.exe'), [
+          '--load-info-json',
+          info,
+          '--dump-single-json',
+          '--skip-download',
+          '-f',
+          TRIM_PREVIEW_FORMAT,
+        ]),
+        { videoUrl: video.url, audioUrl: audio.url },
+      )
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
   })
   test('Visual Trim suppresses late extraction results and queues seek until metadata', async () => {
-    let resolve; const updates=[]
-    const preview=new TrimPreview(valid.url,(...args)=>updates.push(args))
-    const pending=preview.start(()=>new Promise(r=>resolve=r)); preview.dispose(); resolve(valid.url); await pending
-    assert.equal(updates.length,1)
-    const video={readyState:0,currentTime:0,duration:664}
-    assert.equal(seekPreview(video,120),false); video.readyState=1
-    assert.equal(seekPreview(video,120),true); assert.equal(video.currentTime,120)
+    let resolve
+    const updates = []
+    const preview = new TrimPreview(valid.url, (...args) => updates.push(args))
+    const pending = preview.start(() => new Promise(r => (resolve = r)))
+    preview.dispose()
+    resolve(valid.url)
+    await pending
+    assert.equal(updates.length, 1)
+    const video = { readyState: 0, currentTime: 0, duration: 664 }
+    assert.equal(seekPreview(video, 120), false)
+    video.readyState = 1
+    assert.equal(seekPreview(video, 120), true)
+    assert.equal(video.currentTime, 120)
   })
   test('Visual Trim cancels and retires real extraction processes across 20 close cycles', async () => {
-    for(let i=0;i<20;i++) {
-      const registry=new MediaRequestRegistry(); const session='trim-'+i
-      const extraction=extractPreview(process.execPath,['-e','setTimeout(()=>{},60000)'],{isClosed:()=>registry.isClosed(session),track:stop=>registry.track(session,'probe',stop)})
-      const rejection=assert.rejects(extraction,/cancelled/)
-      await registry.closeSession(session); await rejection
-      assert.equal(registry.snapshot().probeProcesses,0)
-      await assert.rejects(extractPreview(process.execPath,[],{isClosed:()=>true}),/cancelled/)
+    for (let i = 0; i < 20; i++) {
+      const registry = new MediaRequestRegistry()
+      const session = 'trim-' + i
+      const extraction = extractPreview(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], {
+        isClosed: () => registry.isClosed(session),
+        track: stop => registry.track(session, 'probe', stop),
+      })
+      const rejection = assert.rejects(extraction, /cancelled/)
+      await registry.closeSession(session)
+      await rejection
+      assert.equal(registry.snapshot().probeProcesses, 0)
+      await assert.rejects(
+        extractPreview(process.execPath, [], { isClosed: () => true }),
+        /cancelled/,
+      )
     }
   })
   test('Visual Trim extraction preserves actual yt-dlp stderr failure', async () => {
-    await assert.rejects(extractPreview(process.execPath,['-e',"console.error('HTTP Error 403: expired signed URL');process.exit(1)"]),/HTTP Error 403: expired signed URL/)
-    assert.equal(await extractPreview(process.execPath,['-e',`console.log(${JSON.stringify(JSON.stringify(valid))})`]),valid.url)
-    const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cortex-selector-'))
+    await assert.rejects(
+      extractPreview(process.execPath, [
+        '-e',
+        "console.error('HTTP Error 403: expired signed URL');process.exit(1)",
+      ]),
+      /HTTP Error 403: expired signed URL/,
+    )
+    assert.equal(
+      await extractPreview(process.execPath, [
+        '-e',
+        `console.log(${JSON.stringify(JSON.stringify(valid))})`,
+      ]),
+      valid.url,
+    )
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-selector-'))
     try {
-      const info=path.join(dir,'info.json')
-      await fs.writeFile(info,JSON.stringify({id:'preview',title:'preview',extractor:'fixture',webpage_url:'https://example.com/watch',formats:[
-        {...valid,format_id:'silent-high-resolution',height:1080,acodec:'none'},
-        {...valid,format_id:'compatible',height:360},
-        {...valid,format_id:'incompatible',height:1080,ext:'webm',vcodec:'av01.0.12M.08'},
-      ]}))
-      assert.equal(await extractPreview(path.join(process.cwd(),'engine-baseline','yt-dlp.exe'),['--load-info-json',info,'--dump-single-json','--skip-download','-f',PREVIEW_FORMAT]),valid.url)
-      const modern = {...valid, url:'https://example.com/modern.webm', ext:'webm', vcodec:'vp09.00.51.08', acodec:'opus', format_id:'modern-vp09', height:1080}
-      await fs.writeFile(info,JSON.stringify({id:'modern-preview',title:'modern preview',extractor:'fixture',webpage_url:'https://example.com/watch',formats:[modern]}))
-      assert.equal(await extractPreview(path.join(process.cwd(),'engine-baseline','yt-dlp.exe'),['--load-info-json',info,'--dump-single-json','--skip-download','-f',PREVIEW_FORMAT]),modern.url)
-    } finally { await fs.rm(dir,{recursive:true,force:true}) }
+      const info = path.join(dir, 'info.json')
+      await fs.writeFile(
+        info,
+        JSON.stringify({
+          id: 'preview',
+          title: 'preview',
+          extractor: 'fixture',
+          webpage_url: 'https://example.com/watch',
+          formats: [
+            { ...valid, format_id: 'silent-high-resolution', height: 1080, acodec: 'none' },
+            { ...valid, format_id: 'compatible', height: 360 },
+            {
+              ...valid,
+              format_id: 'incompatible',
+              height: 1080,
+              ext: 'webm',
+              vcodec: 'av01.0.12M.08',
+            },
+          ],
+        }),
+      )
+      assert.equal(
+        await extractPreview(path.join(process.cwd(), 'engine-baseline', 'yt-dlp.exe'), [
+          '--load-info-json',
+          info,
+          '--dump-single-json',
+          '--skip-download',
+          '-f',
+          PREVIEW_FORMAT,
+        ]),
+        valid.url,
+      )
+      const modern = {
+        ...valid,
+        url: 'https://example.com/modern.webm',
+        ext: 'webm',
+        vcodec: 'vp09.00.51.08',
+        acodec: 'opus',
+        format_id: 'modern-vp09',
+        height: 1080,
+      }
+      await fs.writeFile(
+        info,
+        JSON.stringify({
+          id: 'modern-preview',
+          title: 'modern preview',
+          extractor: 'fixture',
+          webpage_url: 'https://example.com/watch',
+          formats: [modern],
+        }),
+      )
+      assert.equal(
+        await extractPreview(path.join(process.cwd(), 'engine-baseline', 'yt-dlp.exe'), [
+          '--load-info-json',
+          info,
+          '--dump-single-json',
+          '--skip-download',
+          '-f',
+          PREVIEW_FORMAT,
+        ]),
+        modern.url,
+      )
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
   })
   test('Visual Trim supports Kick HLS live/VOD streams, long-video zoom ruler, and timecode helpers', () => {
     const kickLive = {
@@ -533,22 +1030,50 @@ suite('Trim preview', test => {
       duration: 21600,
     })
 
-    const liveCtx = getTrimmerContext({
-      kind: 'ytdlp',
-      title: 'Kick Live',
-      isLive: true,
-      formats: [{ formatId: '4', ext: 'mp4', protocol: 'm3u8_native', height: 720, resolution: '1280x720', filesize: null, description: '', url: kickLive.url }],
-    }, '')
+    const liveCtx = getTrimmerContext(
+      {
+        kind: 'ytdlp',
+        title: 'Kick Live',
+        isLive: true,
+        formats: [
+          {
+            formatId: '4',
+            ext: 'mp4',
+            protocol: 'm3u8_native',
+            height: 720,
+            resolution: '1280x720',
+            filesize: null,
+            description: '',
+            url: kickLive.url,
+          },
+        ],
+      },
+      '',
+    )
     assert.equal(liveCtx?.isLive, true)
     assert.equal(liveCtx?.streamType, 'hls')
     assert.equal(liveCtx?.videoUrl, kickLive.url)
 
-    const vodCtx = getTrimmerContext({
-      kind: 'ytdlp',
-      title: 'Kick 6h VOD',
-      duration: 21600,
-      formats: [{ formatId: '4', ext: 'mp4', protocol: 'm3u8_native', height: 720, resolution: '1280x720', filesize: null, description: '', url: kickVod.url }],
-    }, '')
+    const vodCtx = getTrimmerContext(
+      {
+        kind: 'ytdlp',
+        title: 'Kick 6h VOD',
+        duration: 21600,
+        formats: [
+          {
+            formatId: '4',
+            ext: 'mp4',
+            protocol: 'm3u8_native',
+            height: 720,
+            resolution: '1280x720',
+            filesize: null,
+            description: '',
+            url: kickVod.url,
+          },
+        ],
+      },
+      '',
+    )
     assert.equal(vodCtx?.isLive, false)
     assert.equal(vodCtx?.streamType, 'hls')
     assert.equal(vodCtx?.duration, 21600)
@@ -586,43 +1111,98 @@ suite('Trim preview', test => {
       acodec: 'mp4a.40.2',
       url: 'https://manifest.googlevideo.com/api/manifest/hls_playlist/audio_only.m3u8',
     }
-    const ytCtx = getTrimmerContext({
-      kind: 'ytdlp',
-      title: 'YouTube Modern Video',
-      duration: 678,
-      formats: [silentYoutubeHls, audioOnlyHls],
-    }, '720p')
+    const ytCtx = getTrimmerContext(
+      {
+        kind: 'ytdlp',
+        title: 'YouTube Modern Video',
+        duration: 678,
+        formats: [silentYoutubeHls, audioOnlyHls],
+      },
+      '720p',
+    )
     assert.equal(ytCtx?.videoUrl, '')
     assert.equal(ytCtx?.streamType, undefined)
 
     assert.throws(() => playablePreviewStreams({ ...silentYoutubeHls }), /video-only|audio/i)
     assert.throws(() => playablePreviewStreams({ ...audioOnlyHls }), /audio-only/i)
 
-    const vp9Video = { url: 'https://example.com/vp9.webm', ext: 'webm', vcodec: 'vp09.00.51.08', acodec: 'none', protocol: 'https', format_id: '247', height: 720 }
-    const opusAudio = { url: 'https://example.com/opus.webm', ext: 'webm', vcodec: 'none', acodec: 'opus', protocol: 'https', format_id: '251' }
+    const vp9Video = {
+      url: 'https://example.com/vp9.webm',
+      ext: 'webm',
+      vcodec: 'vp09.00.51.08',
+      acodec: 'none',
+      protocol: 'https',
+      format_id: '247',
+      height: 720,
+    }
+    const opusAudio = {
+      url: 'https://example.com/opus.webm',
+      ext: 'webm',
+      vcodec: 'none',
+      acodec: 'opus',
+      protocol: 'https',
+      format_id: '251',
+    }
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-vp9-adaptive-'))
     try {
       const info = path.join(dir, 'info.json')
-      await fs.writeFile(info, JSON.stringify({ id: 'vp9-adaptive', title: 'vp9', extractor: 'fixture', webpage_url: 'https://example.com/watch', formats: [vp9Video, opusAudio] }))
+      await fs.writeFile(
+        info,
+        JSON.stringify({
+          id: 'vp9-adaptive',
+          title: 'vp9',
+          extractor: 'fixture',
+          webpage_url: 'https://example.com/watch',
+          formats: [vp9Video, opusAudio],
+        }),
+      )
       assert.deepEqual(
-        await extractPreviewStreams(path.join(process.cwd(), 'engine-baseline', 'yt-dlp.exe'), ['--load-info-json', info, '--dump-single-json', '--skip-download', '-f', TRIM_PREVIEW_FORMAT]),
+        await extractPreviewStreams(path.join(process.cwd(), 'engine-baseline', 'yt-dlp.exe'), [
+          '--load-info-json',
+          info,
+          '--dump-single-json',
+          '--skip-download',
+          '-f',
+          TRIM_PREVIEW_FORMAT,
+        ]),
         { videoUrl: vp9Video.url, audioUrl: opusAudio.url },
       )
-    } finally { await fs.rm(dir, { recursive: true, force: true }) }
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
 
-    let seeks = 0, plays = 0
-    const clock = { currentTime: 25.0, volume: 0.5, muted: false, playbackRate: 1, paused: false, seeking: false, readyState: 4 }
+    let seeks = 0,
+      plays = 0
+    const clock = {
+      currentTime: 25.0,
+      volume: 0.5,
+      muted: false,
+      playbackRate: 1,
+      paused: false,
+      seeking: false,
+      readyState: 4,
+    }
     let audioTime = 24.4
     const sound = {
-      get currentTime() { return audioTime },
-      set currentTime(value) { seeks++; audioTime = value },
+      get currentTime() {
+        return audioTime
+      },
+      set currentTime(value) {
+        seeks++
+        audioTime = value
+      },
       duration: 100,
       readyState: 4,
       paused: false,
       seeking: true,
       getAttribute: () => opusAudio.url,
-      play: async () => { plays++; sound.paused = false },
-      pause: () => { sound.paused = true },
+      play: async () => {
+        plays++
+        sound.paused = false
+      },
+      pause: () => {
+        sound.paused = true
+      },
     }
     // While audio is actively seeking with < 2.5s drift, syncTrimAudio must not abort/re-seek or spam play()
     await syncTrimAudio(clock, sound, true)
@@ -639,47 +1219,154 @@ suite('Trim preview', test => {
     sound.seeking = false
     sound.paused = true
     let abortCalls = 0
-    const abortErr = Object.assign(new Error('The play() request was interrupted'), { name: 'AbortError' })
-    sound.play = async () => { abortCalls++; throw abortErr }
+    const abortErr = Object.assign(new Error('The play() request was interrupted'), {
+      name: 'AbortError',
+    })
+    sound.play = async () => {
+      abortCalls++
+      throw abortErr
+    }
     await syncTrimAudio(clock, sound, true)
     assert.equal(abortCalls, 1)
   })
 
-  test('Visual Trim Electron plays adaptive audio, falls back, seeks and releases 28 sessions', {timeout:90000}, async () => {
-    const dir=await fs.mkdtemp(path.join(os.tmpdir(),'cortex-trim-'))
-    let server
-    try {
-      const fixture=path.join(dir,'video.mp4')
-      const ffmpeg=cp.spawnSync(path.join(process.cwd(),'engine-baseline','ffmpeg.exe'),['-y','-loglevel','error','-f','lavfi','-i','testsrc2=size=64x64:rate=20:duration=3','-f','lavfi','-i','sine=duration=3','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',fixture])
-      assert.equal(ffmpeg.status,0,String(ffmpeg.stderr))
-      for(const [filename,map] of [['silent.mp4','0:v'],['audio.m4a','0:a']]) {
-        const split=cp.spawnSync(path.join(process.cwd(),'engine-baseline','ffmpeg.exe'),['-y','-loglevel','error','-i',fixture,'-map',map,'-c','copy',path.join(dir,filename)])
-        assert.equal(split.status,0,String(split.stderr))
-      }
-      const bundle=await require('esbuild').build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import {Simulate} from 'react-dom/test-utils';import Trimmer from './Front-End/src/components/AdvancedTrimmer/AdvancedTrimmer';import AddTab from './Front-End/src/components/AddDownloadTab';import {useUIStore} from './Front-End/src/stores/useUIStore';import {useFormStore} from './Front-End/src/stores/useFormStore';let root;window.mountAdd=(url)=>{useUIStore.setState({url,analyzeResult:{kind:'ytdlp',title:'fixture',duration:664,formats:[],subtitles:[]}});useFormStore.setState({isAudioMode:false});root=createRoot(document.getElementById('root'));flushSync(()=>root.render(React.createElement(AddTab)))};window.mount=props=>{root=createRoot(document.getElementById('root'));flushSync(()=>root.render(React.createElement(Trimmer,props)))};window.unmount=()=>{flushSync(()=>root.unmount())};window.change=(label,value)=>{const input=document.querySelector('[aria-label="'+label+'"]');input.value=value;flushSync(()=>Simulate.change(input))}`,resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,loader:{'.css':'empty'},format:'iife',define:{'process.env.NODE_ENV':'"development"'}})
-      const video=await fs.readFile(fixture)
-      const assets={'/video.mp4':video,'/silent.mp4':await fs.readFile(path.join(dir,'silent.mp4')),'/audio.m4a':await fs.readFile(path.join(dir,'audio.m4a'))}
-      server=http.createServer((req,res)=>{
-        if(req.url==='/bundle.js'){res.setHeader('Content-Type','text/javascript');res.end(bundle.outputFiles[0].contents);return}
-        if(req.url.startsWith('/bad.mp4')){res.writeHead(403);res.end('Expired');return}
-        const bytes=assets[req.url.split('?')[0]]
-        if(bytes) {
-          const start=Number((req.headers.range||'bytes=0-').match(/bytes=(\d+)/)?.[1]||0)
-          res.writeHead(req.headers.range?206:200,{'Content-Type':req.url.startsWith('/audio')?'audio/mp4':'video/mp4','Accept-Ranges':'bytes','Content-Length':bytes.length-start,...(req.headers.range?{'Content-Range':`bytes ${start}-${bytes.length-1}/${bytes.length}`}:{})});res.end(bytes.subarray(start));return
+  test(
+    'Visual Trim Electron plays adaptive audio, falls back, seeks and releases 28 sessions',
+    { timeout: 90000 },
+    async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-trim-'))
+      let server
+      try {
+        const fixture = path.join(dir, 'video.mp4')
+        const ffmpeg = cp.spawnSync(path.join(process.cwd(), 'engine-baseline', 'ffmpeg.exe'), [
+          '-y',
+          '-loglevel',
+          'error',
+          '-f',
+          'lavfi',
+          '-i',
+          'testsrc2=size=64x64:rate=20:duration=3',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=duration=3',
+          '-c:v',
+          'libx264',
+          '-pix_fmt',
+          'yuv420p',
+          '-c:a',
+          'aac',
+          '-movflags',
+          '+faststart',
+          fixture,
+        ])
+        assert.equal(ffmpeg.status, 0, String(ffmpeg.stderr))
+        for (const [filename, map] of [
+          ['silent.mp4', '0:v'],
+          ['audio.m4a', '0:a'],
+        ]) {
+          const split = cp.spawnSync(path.join(process.cwd(), 'engine-baseline', 'ffmpeg.exe'), [
+            '-y',
+            '-loglevel',
+            'error',
+            '-i',
+            fixture,
+            '-map',
+            map,
+            '-c',
+            'copy',
+            path.join(dir, filename),
+          ])
+          assert.equal(split.status, 0, String(split.stderr))
         }
-        res.setHeader('Content-Type','text/html');res.end('<div id="root"></div><script src="/bundle.js"></script>')
-      }); await new Promise(r=>server.listen(0,'127.0.0.1',r))
-      const env={...process.env}; delete env.ELECTRON_RUN_AS_NODE
-      const electron=path.join(process.cwd(),'node_modules','electron','dist','electron.exe')
-      const child=cp.spawn(electron,['--no-sandbox','--disable-gpu',path.join(__dirname,'fixtures','trimPreviewElectron.cjs'),`http://127.0.0.1:${server.address().port}/`],{env,windowsHide:true})
-      let output=''; child.stdout.on('data',d=>output+=d);child.stderr.on('data',d=>output+=d)
-      const timer=setTimeout(()=>child.kill(),80000)
-      const code=await new Promise((r,j)=>{child.on('error',j);child.on('close',r)});clearTimeout(timer)
-      assert.equal(code,0,output); assert.match(output,/TRIM_RESULT=.*"electronPlayback":true/)
-      const source=await fs.readFile(path.join(process.cwd(),'Front-End/src/components/AddDownloadTab.tsx'),'utf8')
-      assert.match(source,/originalUrl=\{url\}/)
-    } finally { if(server)await new Promise(r=>server.close(r));await fs.rm(dir,{recursive:true,force:true}) }
-  })
+        const bundle = await require('esbuild').build({
+          stdin: {
+            contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {flushSync} from 'react-dom';import {Simulate} from 'react-dom/test-utils';import Trimmer from './Front-End/src/components/AdvancedTrimmer/AdvancedTrimmer';import AddTab from './Front-End/src/components/AddDownloadTab';import {useUIStore} from './Front-End/src/stores/useUIStore';import {useFormStore} from './Front-End/src/stores/useFormStore';let root;window.mountAdd=(url)=>{useUIStore.setState({url,analyzeResult:{kind:'ytdlp',title:'fixture',duration:664,formats:[],subtitles:[]}});useFormStore.setState({isAudioMode:false});root=createRoot(document.getElementById('root'));flushSync(()=>root.render(React.createElement(AddTab)))};window.mount=props=>{root=createRoot(document.getElementById('root'));flushSync(()=>root.render(React.createElement(Trimmer,props)))};window.unmount=()=>{flushSync(()=>root.unmount())};window.change=(label,value)=>{const input=document.querySelector('[aria-label="'+label+'"]');input.value=value;flushSync(()=>Simulate.change(input))}`,
+            resolveDir: process.cwd(),
+            loader: 'tsx',
+          },
+          bundle: true,
+          write: false,
+          loader: { '.css': 'empty' },
+          format: 'iife',
+          define: { 'process.env.NODE_ENV': '"development"' },
+        })
+        const video = await fs.readFile(fixture)
+        const assets = {
+          '/video.mp4': video,
+          '/silent.mp4': await fs.readFile(path.join(dir, 'silent.mp4')),
+          '/audio.m4a': await fs.readFile(path.join(dir, 'audio.m4a')),
+        }
+        server = http.createServer((req, res) => {
+          if (req.url === '/bundle.js') {
+            res.setHeader('Content-Type', 'text/javascript')
+            res.end(bundle.outputFiles[0].contents)
+            return
+          }
+          if (req.url.startsWith('/bad.mp4')) {
+            res.writeHead(403)
+            res.end('Expired')
+            return
+          }
+          const bytes = assets[req.url.split('?')[0]]
+          if (bytes) {
+            const start = Number((req.headers.range || 'bytes=0-').match(/bytes=(\d+)/)?.[1] || 0)
+            res.writeHead(req.headers.range ? 206 : 200, {
+              'Content-Type': req.url.startsWith('/audio') ? 'audio/mp4' : 'video/mp4',
+              'Accept-Ranges': 'bytes',
+              'Content-Length': bytes.length - start,
+              ...(req.headers.range
+                ? { 'Content-Range': `bytes ${start}-${bytes.length - 1}/${bytes.length}` }
+                : {}),
+            })
+            res.end(bytes.subarray(start))
+            return
+          }
+          res.setHeader('Content-Type', 'text/html')
+          res.end('<div id="root"></div><script src="/bundle.js"></script>')
+        })
+        await new Promise(r => server.listen(0, '127.0.0.1', r))
+        const env = { ...process.env }
+        delete env.ELECTRON_RUN_AS_NODE
+        const electron = path.join(
+          process.cwd(),
+          'node_modules',
+          'electron',
+          'dist',
+          'electron.exe',
+        )
+        const child = cp.spawn(
+          electron,
+          [
+            '--no-sandbox',
+            '--disable-gpu',
+            path.join(__dirname, 'fixtures', 'trimPreviewElectron.cjs'),
+            `http://127.0.0.1:${server.address().port}/`,
+          ],
+          { env, windowsHide: true },
+        )
+        let output = ''
+        child.stdout.on('data', d => (output += d))
+        child.stderr.on('data', d => (output += d))
+        const timer = setTimeout(() => child.kill(), 80000)
+        const code = await new Promise((r, j) => {
+          child.on('error', j)
+          child.on('close', r)
+        })
+        clearTimeout(timer)
+        assert.equal(code, 0, output)
+        assert.match(output, /TRIM_RESULT=.*"electronPlayback":true/)
+        const source = await fs.readFile(
+          path.join(process.cwd(), 'Front-End/src/components/AddDownloadTab.tsx'),
+          'utf8',
+        )
+        assert.match(source, /originalUrl=\{url\}/)
+      } finally {
+        if (server) await new Promise(r => server.close(r))
+        await fs.rm(dir, { recursive: true, force: true })
+      }
+    },
+  )
 })
 
 suite('Media lifecycle', test => {
@@ -691,7 +1378,12 @@ suite('Media lifecycle', test => {
   const { createReadStream } = require('node:fs')
   const { Transform } = require('node:stream')
   const { MediaRequestRegistry } = require('../Back-End/electron/services/mediaService.ts')
-  const { releaseMediaElement, clearMediaCanvas, releaseAudioGraph, stopPlayerFrame } = require('../Front-End/src/components/MediaPlayer/mediaSession.ts')
+  const {
+    releaseMediaElement,
+    clearMediaCanvas,
+    releaseAudioGraph,
+    stopPlayerFrame,
+  } = require('../Front-End/src/components/MediaPlayer/mediaSession.ts')
 
   test('video and audio elements release their sources and canvas buffers across 20 sessions each', () => {
     for (const kind of ['video', 'audio']) {
@@ -725,8 +1417,17 @@ suite('Media lifecycle', test => {
       const canceled = []
       const calls = []
       const analyser = { disconnect: () => calls.push('analyser') }
-      const source = { disconnect: node => { assert.equal(node, analyser); calls.push('source') } }
-      const context = { close: async () => { calls.push('close') } }
+      const source = {
+        disconnect: node => {
+          assert.equal(node, analyser)
+          calls.push('source')
+        },
+      }
+      const context = {
+        close: async () => {
+          calls.push('close')
+        },
+      }
       stopPlayerFrame(i + 1, id => canceled.push(id))
       stopPlayerFrame(i + 100, id => canceled.push(id))
       await releaseAudioGraph(context, source, analyser)
@@ -742,13 +1443,19 @@ suite('Media lifecycle', test => {
     await fs.writeFile(fixture, Buffer.alloc(1024 * 1024, 7))
     const server = http.createServer((req, res) => {
       const session = req.url.slice(1)
-      if (registry.isClosed(session)) { res.writeHead(410); res.end(); return }
+      if (registry.isClosed(session)) {
+        res.writeHead(410)
+        res.end()
+        return
+      }
       assert.equal(req.headers.range, 'bytes=0-65535')
       res.writeHead(206, { 'Content-Range': 'bytes 0-65535/1048576', 'Content-Length': 65536 })
       const file = createReadStream(fixture, { start: 0, end: 65535, highWaterMark: 1024 })
-      const slow = new Transform({ transform(chunk, _encoding, callback) {
-        setTimeout(() => callback(null, chunk), 2)
-      } })
+      const slow = new Transform({
+        transform(chunk, _encoding, callback) {
+          setTimeout(() => callback(null, chunk), 2)
+        },
+      })
       let ended = false
       let untrack = () => {}
       const stop = () => {
@@ -759,7 +1466,10 @@ suite('Media lifecycle', test => {
         res.destroy()
       }
       res.on('close', stop)
-      file.on('close', () => { untrack(); stop() })
+      file.on('close', () => {
+        untrack()
+        stop()
+      })
       untrack = registry.track(session, 'stream', stop)
       file.pipe(slow).pipe(res)
     })
@@ -768,7 +1478,11 @@ suite('Media lifecycle', test => {
       for (let i = 0; i < 20; i++) {
         const session = `session-${i}`
         const response = await new Promise((resolve, reject) => {
-          const request = http.get(`http://127.0.0.1:${server.address().port}/${session}`, { headers: { Range: 'bytes=0-65535' } }, resolve)
+          const request = http.get(
+            `http://127.0.0.1:${server.address().port}/${session}`,
+            { headers: { Range: 'bytes=0-65535' } },
+            resolve,
+          )
           request.on('error', reject)
         })
         response.pause()
@@ -776,10 +1490,16 @@ suite('Media lifecycle', test => {
         assert.equal(registry.snapshot().streams, 1)
         let childStopped = 0
         let untrackSubtitle = () => {}
-        untrackSubtitle = registry.track(session, 'subtitle', () => { childStopped++; untrackSubtitle() })
+        untrackSubtitle = registry.track(session, 'subtitle', () => {
+          childStopped++
+          untrackSubtitle()
+        })
         assert.equal(registry.snapshot().ffmpegProcesses, 1)
         let untrackProbe = () => {}
-        untrackProbe = registry.track(session, 'probe', () => { childStopped++; untrackProbe() })
+        untrackProbe = registry.track(session, 'probe', () => {
+          childStopped++
+          untrackProbe()
+        })
         assert.equal(registry.snapshot().probeProcesses, 1)
         await registry.closeSession(session)
         response.destroy()
@@ -789,7 +1509,9 @@ suite('Media lifecycle', test => {
         assert.equal(childStopped, 2)
         assert.equal(registry.isClosed(session), true)
         let lateStopped = 0
-        registry.track(session, 'stream', () => { lateStopped++ })
+        registry.track(session, 'stream', () => {
+          lateStopped++
+        })
         assert.equal(lateStopped, 1, 'late requests must not restart a closed session')
       }
       await registry.closeAll()

@@ -12,31 +12,46 @@ export class FfmpegEngine implements IEngine {
     const runtime = context.runtime
     this.runtime = runtime
     runtime.abortController ??= new AbortController()
+    const trimming = Boolean(task.startTime || task.endTime)
     task.totalBytes = null
     task.downloadedBytes = 0
     task.downloadPercent = undefined
     task.convertingPercent = undefined
-    task.phase = 'downloading'
+    task.phase = trimming ? 'trimming' : 'downloading'
     context.sendUpdate(task)
     log.info(`[FfmpegEngine] Starting download for task ${task.id}`)
 
-    const trimming = Boolean(task.startTime || task.endTime)
     const bounds = trimming ? trimBounds(task) : null
-    const clipDuration = bounds?.end !== undefined ? Math.max(0.1, bounds.end - bounds.start) : undefined
+    const clipDuration =
+      bounds?.end !== undefined ? Math.max(0.1, bounds.end - bounds.start) : undefined
     // Place -ss before -i for fast input seeking and -t after -i to cap clip duration.
     const inputArgs = [
       ...(bounds && bounds.start > 0 ? ['-ss', String(bounds.start)] : []),
-      '-i', task.url,
+      '-i',
+      task.url,
       ...(clipDuration !== undefined ? ['-t', String(clipDuration)] : []),
     ]
 
     try {
-      await runMediaProcess([...inputArgs, ...mediaOutputArgs(task.targetFormat, task.filePath, undefined, trimming)], task, context, clipDuration)
+      await runMediaProcess(
+        [...inputArgs, ...mediaOutputArgs(task.targetFormat, task.filePath, undefined, trimming)],
+        task,
+        context,
+        clipDuration,
+      )
       // Mark sectionTrimmed so post-processing doesn't re-apply the trim window a second time.
-      return { kind: 'success', candidate: task.filePath, ...(trimming ? { sectionTrimmed: true } : {}) }
+      return {
+        kind: 'success',
+        candidate: task.filePath,
+        ...(trimming ? { sectionTrimmed: true } : {}),
+      }
     } catch (error) {
       if (runtime.abortController.signal.aborted) return { kind: 'paused' }
-      return { kind: 'retryable-error', message: error instanceof Error ? error.message : String(error), delayMs: 3000 * (runtime.retries + 1) }
+      return {
+        kind: 'retryable-error',
+        message: error instanceof Error ? error.message : String(error),
+        delayMs: 3000 * (runtime.retries + 1),
+      }
     }
   }
 

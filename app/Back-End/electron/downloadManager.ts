@@ -5,11 +5,36 @@ import { existsSync, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { db, taskDb } from './db'
-import { type DownloadTask, type TaskRuntime, type AttemptRuntime, type EngineResult, type StartInput, type EngineContext, type DownloadEngine, type AudioFormat, type TargetFormat, STATS_CHANNEL, AUDIO_FORMATS } from './types'
+import {
+  type DownloadTask,
+  type TaskRuntime,
+  type AttemptRuntime,
+  type EngineResult,
+  type StartInput,
+  type EngineContext,
+  type DownloadEngine,
+  type AudioFormat,
+  type TargetFormat,
+  AUDIO_FORMATS,
+} from './types'
 import { updateTaskProgress } from '../../Shared/progressModel'
-import { mediaOutputArgs, matchesMediaFormat, decideMediaConversion, runMediaProcess, trimBounds, validateMediaOutput, probeMediaFile, probeStreamStartTimes, isAudioFormat } from './services/mediaService'
-import { youtubeDiagnostic } from './engines/ytdlpService'
-import { sanitizeFilename, ensureDirectoryExists, nowMs, isHttpUrl, isM3u8Url, withExtension, getDefaultFilename, sendUpdate, throttledSendUpdate, killProcessTree, clearPendingTrailing, sendNotification } from './utils'
+import { trimBounds } from './services/mediaService'
+import { finalizeDownload } from './download/finalizer'
+import { removeTaskTempFragments } from './download/tempCleanup'
+import {
+  sanitizeFilename,
+  ensureDirectoryExists,
+  nowMs,
+  isHttpUrl,
+  isM3u8Url,
+  withExtension,
+  getDefaultFilename,
+  sendUpdate,
+  throttledSendUpdate,
+  killProcessTree,
+  clearPendingTrailing,
+  sendNotification,
+} from './utils'
 import { type IEngine } from './engines/IEngine'
 import { DirectEngine } from './engines/DirectEngine'
 import { YoutubeEngine } from './engines/YoutubeEngine'
@@ -27,7 +52,7 @@ const engines = new Map<DownloadEngine, EngineEntry>([
 ])
 
 const filenameTransforms: Partial<Record<DownloadEngine, (filename: string) => string>> = {
-  ytdlp: (name) => name.replace(/\s+/g, '_'),
+  ytdlp: name => name.replace(/\s+/g, '_'),
 }
 
 export class DownloadManager {
@@ -50,7 +75,8 @@ export class DownloadManager {
 
   private hydrateConcurrency(): void {
     try {
-      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('maxConcurrent') as { value: string } | undefined
+      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('maxConcurrent') as
+        { value: string } | undefined
       if (row) {
         const parsed = parseInt(row.value, 10)
         if ([3, 5, 10].includes(parsed)) this.maxConcurrent = parsed
@@ -65,7 +91,10 @@ export class DownloadManager {
     this.maxConcurrent = value
     try {
       db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('maxConcurrent', String(value))
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
+        'maxConcurrent',
+        String(value),
+      )
     } catch (err) {
       log.error('[DM] Failed to persist maxConcurrent:', err)
     }
@@ -85,11 +114,20 @@ export class DownloadManager {
           if (!task.id || !task.url) continue
 
           // Any task left in-flight or missing its validated output on restart drops back to paused.
-          if (task.status === 'downloading' || task.status === 'merging' || task.status === 'converting' || task.status === 'pausing' || task.status === 'queued') {
+          if (
+            task.status === 'downloading' ||
+            task.status === 'merging' ||
+            task.status === 'converting' ||
+            task.status === 'pausing' ||
+            task.status === 'queued'
+          ) {
             task.status = 'paused'
             task.speedBytesPerSec = null
           }
-          if (task.status === 'completed' && (!task.validatedAttemptId || !existsSync(task.filePath))) {
+          if (
+            task.status === 'completed' &&
+            (!task.validatedAttemptId || !existsSync(task.filePath))
+          ) {
             task.status = 'paused'
             task.speedBytesPerSec = null
           }
@@ -134,7 +172,7 @@ export class DownloadManager {
       size: t.totalBytes || 0,
       thumbnail: t.thumbnail || '',
       engine: t.engine,
-      full_payload: JSON.stringify(t)
+      full_payload: JSON.stringify(t),
     })
   }
 
@@ -237,9 +275,7 @@ export class DownloadManager {
     const targetFormat = input.targetFormat ?? 'mp4'
     const requestedEngine = input.engine ?? 'auto'
     const engine: DownloadEngine =
-      requestedEngine === 'auto'
-        ? this.detectEngine(input.url, targetFormat)
-        : requestedEngine
+      requestedEngine === 'auto' ? this.detectEngine(input.url, targetFormat) : requestedEngine
 
     let filename = sanitizeFilename(input.filename || input.title || getDefaultFilename(input.url))
     filename = filenameTransforms[engine]?.(filename) ?? filename
@@ -280,7 +316,9 @@ export class DownloadManager {
     this.tasks.set(id, task)
     this.runtime.set(id, this.freshRuntime())
     this.saveStateImmediate()
-    log.info(`[DM] Task added: ${id} engine=${engine} format=${targetFormat} url=${input.url.slice(0, 60)}`)
+    log.info(
+      `[DM] Task added: ${id} engine=${engine} format=${targetFormat} url=${input.url.slice(0, 60)}`,
+    )
     sendUpdate(this.win, task)
     this.schedule()
     return task
@@ -305,11 +343,11 @@ export class DownloadManager {
       const targetFormat = input.targetFormat ?? 'mp4'
       const requestedEngine = input.engine ?? 'auto'
       const engine: DownloadEngine =
-        requestedEngine === 'auto'
-          ? this.detectEngine(input.url, targetFormat)
-          : requestedEngine
+        requestedEngine === 'auto' ? this.detectEngine(input.url, targetFormat) : requestedEngine
 
-      let filename = sanitizeFilename(input.filename || input.title || getDefaultFilename(input.url))
+      let filename = sanitizeFilename(
+        input.filename || input.title || getDefaultFilename(input.url),
+      )
       filename = filenameTransforms[engine]?.(filename) ?? filename
       filename = withExtension(filename, targetFormat)
 
@@ -363,7 +401,13 @@ export class DownloadManager {
   async pause(id: string): Promise<DownloadTask> {
     const task = this.mustGet(id)
     this.clearRetryTimer(id)
-    if (task.status === 'completed' || task.status === 'canceled' || task.status === 'error' || task.status === 'paused') return task
+    if (
+      task.status === 'completed' ||
+      task.status === 'canceled' ||
+      task.status === 'error' ||
+      task.status === 'paused'
+    )
+      return task
     const attempt = this.attempts.get(id)
     task.status = attempt ? 'pausing' : 'paused'
     task.speedBytesPerSec = null
@@ -444,7 +488,11 @@ export class DownloadManager {
     this.dirtyIds.delete(id)
     this.countedStats.delete(id)
     clearPendingTrailing(id)
-    try { taskDb.deleteTask.run(id) } catch { log.error('DB delete failed') }
+    try {
+      taskDb.deleteTask.run(id)
+    } catch {
+      log.error('DB delete failed')
+    }
     this.schedule()
   }
 
@@ -462,7 +510,11 @@ export class DownloadManager {
       this.countedStats.delete(id)
       this.dirtyIds.delete(id)
     }
-    try { taskDb.clearCompleted.run() } catch { log.error('DB clearCompleted failed') }
+    try {
+      taskDb.clearCompleted.run()
+    } catch {
+      log.error('DB clearCompleted failed')
+    }
   }
 
   async cleanupSettledFragments(): Promise<void> {
@@ -475,7 +527,14 @@ export class DownloadManager {
   async pauseAll(): Promise<void> {
     this.pausingAll = true
     const activeIds = Array.from(this.tasks.values())
-      .filter(t => t.status === 'downloading' || t.status === 'queued' || t.status === 'merging' || t.status === 'converting' || t.status === 'pausing')
+      .filter(
+        t =>
+          t.status === 'downloading' ||
+          t.status === 'queued' ||
+          t.status === 'merging' ||
+          t.status === 'converting' ||
+          t.status === 'pausing',
+      )
       .map(t => t.id)
 
     try {
@@ -499,12 +558,20 @@ export class DownloadManager {
     const low = url.toLowerCase()
     if (isM3u8Url(url)) return 'ffmpeg'
     if (
-      low.includes('youtube.com') || low.includes('youtu.be') ||
-      low.includes('facebook.com') || low.includes('instagram.com') ||
-      low.includes('threads.com') || low.includes('threads.net') ||
-      low.includes('kick.com') || low.includes('twitch.tv') || low.includes('reddit.com') ||
-      low.includes('twitter.com') || low.includes('x.com') || low.includes('tiktok.com')
-    ) return 'ytdlp'
+      low.includes('youtube.com') ||
+      low.includes('youtu.be') ||
+      low.includes('facebook.com') ||
+      low.includes('instagram.com') ||
+      low.includes('threads.com') ||
+      low.includes('threads.net') ||
+      low.includes('kick.com') ||
+      low.includes('twitch.tv') ||
+      low.includes('reddit.com') ||
+      low.includes('twitter.com') ||
+      low.includes('x.com') ||
+      low.includes('tiktok.com')
+    )
+      return 'ytdlp'
 
     if (targetFormat && AUDIO_FORMATS.includes(targetFormat as AudioFormat)) {
       return 'ffmpeg'
@@ -522,7 +589,8 @@ export class DownloadManager {
     const parsed = path.parse(filename)
     let candidate = path.join(directory, filename)
     let suffix = 1
-    const reserved = (filePath: string) => existsSync(filePath) ||
+    const reserved = (filePath: string) =>
+      existsSync(filePath) ||
       Array.from(this.tasks.values()).some(t => t.id !== exceptId && t.filePath === filePath)
     while (reserved(candidate)) {
       candidate = path.join(directory, `${parsed.name}_${suffix++}${parsed.ext}`)
@@ -530,7 +598,11 @@ export class DownloadManager {
     return candidate
   }
 
-  private createContext(taskId: string, attempt: AttemptRuntime, draft: DownloadTask): EngineContext {
+  private createContext(
+    taskId: string,
+    attempt: AttemptRuntime,
+    draft: DownloadTask,
+  ): EngineContext {
     const current = () => this.isCurrent(taskId, attempt)
     return {
       runtime: attempt,
@@ -540,12 +612,31 @@ export class DownloadManager {
         const task = this.mustGet(taskId)
         const previousPhase = task.phase
 
-        for (const key of ['totalBytes', 'downloadedBytes', 'speedBytesPerSec', 'downloadPercent', 'convertingPercent', 'resumeChunks', 'supportsRanges', 'etag', 'lastModified', 'title', 'thumbnail', 'ytdlpStreams', 'ytdlpExpectedBytes', 'ytdlpExpectedStreamCount'] as const) {
+        for (const key of [
+          'totalBytes',
+          'downloadedBytes',
+          'speedBytesPerSec',
+          'downloadPercent',
+          'convertingPercent',
+          'resumeChunks',
+          'supportsRanges',
+          'etag',
+          'lastModified',
+          'title',
+          'thumbnail',
+          'ytdlpStreams',
+          'ytdlpExpectedBytes',
+          'ytdlpExpectedStreamCount',
+        ] as const) {
           Object.assign(task, { [key]: t[key] })
         }
         if (t.status === 'merging' || t.status === 'converting') task.status = t.status
-        task.phase = t.phase === 'trimming' || t.phase === 'validating' || t.phase === 'finalizing'
-          ? t.phase : task.status === 'merging' || task.status === 'converting' ? task.status : 'downloading'
+        task.phase =
+          t.phase === 'trimming' || t.phase === 'validating' || t.phase === 'finalizing'
+            ? t.phase
+            : task.status === 'merging' || task.status === 'converting'
+              ? task.status
+              : 'downloading'
         task.updatedAtMs = nowMs()
         updateTaskProgress(task)
         if (task.phase !== previousPhase) {
@@ -557,15 +648,24 @@ export class DownloadManager {
         }
         this.markDirty(taskId)
       },
-      saveState: () => { if (current()) this.markDirty(taskId) },
-      flushSave: () => { if (current()) this.saveStateImmediate(taskId) },
+      saveState: () => {
+        if (current()) this.markDirty(taskId)
+      },
+      flushSave: () => {
+        if (current()) this.saveStateImmediate(taskId)
+      },
     }
   }
 
   private isCurrent(id: string, attempt: AttemptRuntime): boolean {
     const task = this.tasks.get(id)
-    return this.attempts.get(id) === attempt && task?.attemptId === attempt.attemptId &&
-      !attempt.stopReason && !attempt.abortController?.signal.aborted && task.status !== 'canceled'
+    return (
+      this.attempts.get(id) === attempt &&
+      task?.attemptId === attempt.attemptId &&
+      !attempt.stopReason &&
+      !attempt.abortController?.signal.aborted &&
+      task.status !== 'canceled'
+    )
   }
 
   private assertCurrent(id: string, attempt: AttemptRuntime): void {
@@ -628,8 +728,10 @@ export class DownloadManager {
     const previousRuntime = this.runtime.get(id)
     const attemptId = randomUUID()
     const attempt: AttemptRuntime = {
-      ...this.freshRuntime(), retries: previousRuntime?.retries ?? 0,
-      abortController: new AbortController(), attemptId,
+      ...this.freshRuntime(),
+      retries: previousRuntime?.retries ?? 0,
+      abortController: new AbortController(),
+      attemptId,
       directory: path.join(task.directory, '.cortex_temp', task.id, attemptId),
     }
     this.runtime.set(id, attempt)
@@ -637,7 +739,7 @@ export class DownloadManager {
     this.active.add(id)
     task.attemptId = attemptId
     task.status = 'downloading'
-    task.phase = 'preparing'
+    task.phase = task.startTime || task.endTime ? 'trimming' : 'preparing'
     task.overallProgress = null
     task.phaseProgress = null
     task.convertingPercent = undefined
@@ -665,7 +767,10 @@ export class DownloadManager {
 
       // Carry over fragments from the previous attempt directory so range/yt-dlp resumes continue cleanly.
       const prior = task.resumeDirectory
-      if (prior && path.dirname(path.resolve(prior)) === path.dirname(path.resolve(attempt.directory))) {
+      if (
+        prior &&
+        path.dirname(path.resolve(prior)) === path.dirname(path.resolve(attempt.directory))
+      ) {
         await fs.rename(prior, attempt.directory).catch((error: NodeJS.ErrnoException) => {
           if (error.code !== 'ENOENT') throw error
         })
@@ -682,8 +787,18 @@ export class DownloadManager {
       const result = await entry.start(engine, draft, context)
       this.assertCurrent(id, attempt)
       if (result.kind === 'success') {
-        await this.finalize(task, draft, attempt, context, result.candidate, Boolean(result.sectionTrimmed))
-      } else if (result.kind === 'retryable-error' && attempt.retries < (task.engine === 'ytdlp' ? 5 : 3)) {
+        await this.finalize(
+          task,
+          draft,
+          attempt,
+          context,
+          result.candidate,
+          Boolean(result.sectionTrimmed),
+        )
+      } else if (
+        result.kind === 'retryable-error' &&
+        attempt.retries < (task.engine === 'ytdlp' ? 5 : 3)
+      ) {
         attempt.retries++
         task.status = 'queued'
         task.errorMessage = result.message
@@ -709,7 +824,8 @@ export class DownloadManager {
         await this.removeTaskFragments(task).catch(e => log.warn('[DM] Temp cleanup:', e))
       }
       if (this.attempts.get(id) === attempt) {
-        if (task.status === 'error' && this.isCurrent(id, attempt)) sendNotification('Download Failed', task.errorMessage || task.filename)
+        if (task.status === 'error' && this.isCurrent(id, attempt))
+          sendNotification('Download Failed', task.errorMessage || task.filename)
         if (attempt.stopReason === 'paused' && task.status === 'pausing') task.status = 'paused'
         if (task.status === 'paused' || task.status === 'queued' || task.status === 'error') {
           if (existsSync(attempt.directory)) task.resumeDirectory = attempt.directory
@@ -740,202 +856,30 @@ export class DownloadManager {
     }
   }
 
-  private async finalize(task: DownloadTask, draft: DownloadTask, attempt: AttemptRuntime, ctx: EngineContext, source: string, sectionTrimmed = false): Promise<void> {
-    const check = () => this.assertCurrent(task.id, attempt)
-    if (path.dirname(path.resolve(source)) !== path.resolve(attempt.directory)) throw new Error('Candidate is not attempt-owned')
-    const phase = (value: 'validating' | 'trimming' | 'converting' | 'merging' | 'finalizing') => {
-      check()
-      draft.phase = value
-      draft.status = value === 'merging' ? 'merging' : value === 'trimming' || value === 'converting' ? 'converting' : draft.status
-      draft.convertingPercent = undefined
-      ctx.sendUpdate(draft)
-    }
-    phase('validating')
-    const probe = await probeMediaFile(source, child => { attempt.child = child }, attempt.abortController!.signal)
-    check()
-    const bounds = trimBounds(task)
-    const trimming = Boolean(task.startTime || task.endTime)
-    const duration = Number(probe.format?.duration)
-    let expectedDuration: number | undefined
-    let localTrimStart = bounds.start
-    let needsLocalTrim = false
-    let alignAudioSkip: number | null = null
-    let needsTimestampReset = false
-    let alignedProgressDuration: number | undefined
-
-    if (trimming) {
-      if (sectionTrimmed) {
-        if (bounds.end !== undefined) {
-          expectedDuration = Math.max(0.1, bounds.end - bounds.start)
-          if (task.trimMode === 'exact' && Number.isFinite(duration) && duration > expectedDuration + 0.75) {
-            localTrimStart = 0
-            needsLocalTrim = true
-          }
-        }
-        if (!isAudioFormat(task.targetFormat) && task.targetFormat !== 'gif') {
-          const hasVideo = Boolean(probe.streams?.some(s => s.codec_type === 'video' && !s.disposition?.attached_pic))
-          const hasAudio = Boolean(probe.streams?.some(s => s.codec_type === 'audio'))
-          if (hasVideo && hasAudio) {
-            const starts = await probeStreamStartTimes(source, child => { attempt.child = child }, attempt.abortController!.signal)
-            check()
-            if (starts.videoStart !== null && starts.audioStart !== null) {
-              if (!needsLocalTrim && starts.videoStart > starts.audioStart + 0.1) {
-                // Fast-cut audio pre-roll starts ahead of the video keyframe; trim leading audio losslessly to match video.
-                alignAudioSkip = Math.max(0, starts.videoStart - starts.formatStart)
-                if (Number.isFinite(duration) && duration > starts.videoStart) {
-                  alignedProgressDuration = Math.max(0.1, duration - starts.videoStart)
-                }
-              } else if (starts.audioStart > starts.videoStart + 0.15) {
-                // Audio starts after video (silent lead-in); trim from audio start so the output has sound from 00:00.
-                localTrimStart = Math.max(0, starts.audioStart - starts.formatStart)
-                needsLocalTrim = true
-              } else if (!needsLocalTrim && starts.formatStart > 0.25) {
-                // Single muxed stream downloaded with -copyts; remux cleanly to reset container timestamps to 00:00.
-                needsTimestampReset = true
-              }
-            }
-          }
-        }
-      } else {
-        if (!Number.isFinite(duration) || duration <= bounds.start) throw new Error('Trim start exceeds media duration')
-        expectedDuration = Math.min(bounds.end ?? duration, duration) - bounds.start
-        needsLocalTrim = true
-      }
-    }
-
-    let candidate = source
-    const sourceExt = path.extname(source).slice(1).toLowerCase()
-    const needsContainerRemux =
-      (task.targetFormat === 'webm' && sourceExt !== 'webm') ||
-      (task.targetFormat === 'mov' && sourceExt !== 'mov') ||
-      (task.targetFormat === 'mp4' && sourceExt !== 'mp4')
-    if (needsLocalTrim || alignAudioSkip !== null || needsTimestampReset || needsContainerRemux || !matchesMediaFormat(task.targetFormat, probe)) {
-      const conversion = decideMediaConversion(task.targetFormat, probe, needsLocalTrim)
-      const phaseDecision = conversion === 'direct' && (needsContainerRemux || alignAudioSkip !== null || needsTimestampReset) ? 'remux' : conversion
-      if (task.engine === 'ytdlp') youtubeDiagnostic('conversion', { decision: phaseDecision, targetFormat: task.targetFormat, trimming: needsLocalTrim || alignAudioSkip !== null })
-      log.info(`[Finalize] ${task.id}: ${phaseDecision} to ${task.targetFormat}`)
-      phase(needsLocalTrim || alignAudioSkip !== null ? 'trimming' : phaseDecision === 'remux' ? 'merging' : 'converting')
-      candidate = path.join(attempt.directory, `candidate.${task.targetFormat}`)
-      const args = needsLocalTrim
-        ? [
-            ...(localTrimStart > 0 ? ['-ss', String(localTrimStart)] : []),
-            '-i', source,
-            ...(expectedDuration !== undefined ? ['-t', String(expectedDuration)] : []),
-            ...mediaOutputArgs(task.targetFormat, candidate, probe, true, { avoidNegativeTs: true }),
-          ]
-        : alignAudioSkip !== null
-          ? [
-              '-analyzeduration', '30000000', '-probesize', '50000000',
-              '-itsoffset', String(-alignAudioSkip), '-i', source,
-              '-analyzeduration', '30000000', '-probesize', '50000000',
-              '-ss', String(alignAudioSkip), '-i', source,
-              ...mediaOutputArgs(task.targetFormat, candidate, probe, false, { audioInputIndex: 1, avoidNegativeTs: true }),
-            ]
-          : [
-              ...(needsTimestampReset ? ['-analyzeduration', '30000000', '-probesize', '50000000'] : []),
-              '-i', source,
-              ...mediaOutputArgs(task.targetFormat, candidate, probe, false, { avoidNegativeTs: needsTimestampReset }),
-            ]
-      await runMediaProcess(args, draft, ctx, alignedProgressDuration ?? expectedDuration ?? (Number.isFinite(duration) ? duration : undefined))
-      check()
-    }
-    phase('validating')
-    const finalProbe = await probeMediaFile(candidate, child => { attempt.child = child }, attempt.abortController!.signal)
-    if (task.engine === 'ytdlp') {
-      const summarize = (streams: typeof probe.streams) => streams?.map(stream => ({ type: stream.codec_type, codec: stream.codec_name,
-        width: stream.width, height: stream.height, fps: stream.avg_frame_rate, language: stream.tags?.language }))
-      youtubeDiagnostic('output-validation', { source: summarize(probe.streams), final: summarize(finalProbe.streams) })
-    }
-    check()
-    if (!matchesMediaFormat(task.targetFormat, finalProbe)) throw new Error(`Invalid ${task.targetFormat} container or codec`)
-    const actualDuration = Number(finalProbe.format?.duration ?? finalProbe.streams?.find(s => s.duration)?.duration)
-    // Live and keyframe-fast section trims cut on looser boundaries than exact re-encodes, so widen tolerance accordingly.
-    const durationTolerance = sectionTrimmed && (task.isLive || draft.isLive)
-      ? Math.max(2, Math.min(6, (expectedDuration ?? 0) * 0.15))
-      : sectionTrimmed && task.trimMode !== 'exact'
-        ? Math.max(10, Math.min(15, (expectedDuration ?? 0) * 0.2))
-        : sectionTrimmed
-          ? Math.max(0.5, Math.min(1.5, (expectedDuration ?? 0) * 0.03))
-          : Math.max(0.25, Math.min(1, (expectedDuration ?? 0) * 0.02))
-    if (expectedDuration !== undefined && (!Number.isFinite(actualDuration) || Math.abs(actualDuration - expectedDuration) > durationTolerance)) throw new Error('Trim duration failed validation')
-    await validateMediaOutput(candidate, draft, ctx, Number.isFinite(actualDuration) && actualDuration > 0 ? actualDuration : undefined)
-    check()
-    const size = (await fs.stat(candidate)).size
-    check()
-    phase('finalizing')
-
-    const target = this.reserveOutputPath(task.directory, task.filename, task.id)
-    check()
-    // link() refuses an existing destination; rename() can overwrite it.
-
-    await fs.link(candidate, target)
-    const promoted = [target]
-    try {
-      check()
-      const files = await fs.readdir(attempt.directory)
-      check()
-      for (const name of files) {
-        if (!name.startsWith(`${task.id}.`) || !/\.(vtt|srt)$/i.test(name)) continue
-        check()
-        const subtitle = path.join(task.directory, path.parse(target).name + name.slice(task.id.length))
-        try {
-          await fs.link(path.join(attempt.directory, name), subtitle)
-          promoted.push(subtitle)
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-        }
-        check()
-      }
-    } catch (error) {
-      for (const file of promoted) await fs.unlink(file).catch(e => log.error('[DM] Promotion rollback failed:', e))
-      throw error
-    }
-
-    check()
-    task.filePath = target
-    task.filename = path.basename(target)
-    task.ownedFiles = [...(task.ownedFiles ?? []), ...promoted]
-    task.outputBytes = size
-    task.validatedAttemptId = attempt.attemptId
-    task.status = 'completed'
-    task.phase = 'completed'
-    task.updatedAtMs = nowMs()
-    task.speedBytesPerSec = null
-    task.errorMessage = null
-    task.resumeChunks = undefined
-    task.resumeDirectory = undefined
-    attempt.retries = 0
-    updateTaskProgress(task)
-    this.saveStateImmediate(task.id)
-    clearPendingTrailing(task.id)
-    sendUpdate(this.win, task)
-    if (!this.countedStats.has(task.id)) {
-      this.countedStats.add(task.id)
-      if (this.win && !this.win.isDestroyed()) this.win.webContents.send(STATS_CHANNEL, { id: task.id, addedBytes: size })
-    }
-    sendNotification('Download Complete', `${task.title || task.filename} downloaded successfully.`)
+  private async finalize(
+    task: DownloadTask,
+    draft: DownloadTask,
+    attempt: AttemptRuntime,
+    ctx: EngineContext,
+    source: string,
+    sectionTrimmed = false,
+  ): Promise<void> {
+    await finalizeDownload({
+      task,
+      draft,
+      attempt,
+      ctx,
+      source,
+      sectionTrimmed,
+      win: this.win,
+      countedStats: this.countedStats,
+      assertCurrent: () => this.assertCurrent(task.id, attempt),
+      reserveOutputPath: (dir, name, exceptId) => this.reserveOutputPath(dir, name, exceptId),
+      saveStateImmediate: id => this.saveStateImmediate(id),
+    })
   }
 
   private async removeTaskFragments(task: DownloadTask): Promise<void> {
-    if (!path.isAbsolute(task.directory) || !/^[\w-]+$/.test(task.id)) return
-    const root = path.resolve(task.directory, '.cortex_temp')
-    const owned = path.resolve(root, task.id)
-    if (path.dirname(owned) !== root) throw new Error('Unsafe task temp directory')
-
-    // Verify .cortex_temp is a real directory under task.directory before recursive deletion to prevent symlink traversal.
-    const rootStat = await fs.lstat(root).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return null
-      throw error
-    })
-    if (!rootStat) return
-    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Unsafe temp root')
-    const realRoot = await fs.realpath(root)
-    const realDirectory = await fs.realpath(task.directory)
-    if (path.relative(realDirectory, realRoot) !== '.cortex_temp') throw new Error('Unsafe temp root')
-    await fs.rm(owned, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-
-    await fs.rmdir(root).catch((error: NodeJS.ErrnoException) => {
-      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code || '')) throw error
-    })
+    await removeTaskTempFragments(task)
   }
 }

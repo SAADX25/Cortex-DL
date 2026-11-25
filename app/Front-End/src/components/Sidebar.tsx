@@ -1,6 +1,18 @@
 // Primary navigation sidebar with live download badge and external links
 import React from 'react'
-import { Plus, DownloadCloud, Settings, Github, Captions, Library, Coffee, ArrowUpRight, Sparkles, ArrowDownToLine, CheckCircle2 } from 'lucide-react'
+import {
+  Plus,
+  DownloadCloud,
+  Settings,
+  Github,
+  Captions,
+  Library,
+  Coffee,
+  ArrowUpRight,
+  Sparkles,
+  ArrowDownToLine,
+  CheckCircle2,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 import { formatMessage, translations } from '../translations'
 import { useUIStore, type ActiveTab } from '../stores/useUIStore'
@@ -12,15 +24,15 @@ const Sidebar: React.FC = () => {
   const t = translations[lang]
   const s = t.sidebar
 
-  const activeTab = useUIStore((s) => s.activeTab)
-  const setActiveTab = useUIStore((s) => s.setActiveTab)
+  const activeTab = useUIStore(s => s.activeTab)
+  const setActiveTab = useUIStore(s => s.setActiveTab)
 
   const activeCount = useActiveDownloadCount()
   const totalCount = useTotalDownloadCount()
   const badgeCount = activeCount > 0 ? activeCount : totalCount
 
-  const updateState = useSettingsStore((s) => s.updateState)
-  const openUpdateModal = useSettingsStore((s) => s.openUpdateModal)
+  const updateState = useSettingsStore(s => s.updateState)
+  const openUpdateModal = useSettingsStore(s => s.openUpdateModal)
   const showUpdatePill =
     updateState.phase === 'available' ||
     updateState.phase === 'downloading' ||
@@ -72,13 +84,12 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className="sidebar" role="complementary" aria-label={s.sidebarAria}>
-
       <div className="brand">
         <h1 className="cortex-logo-text">Cortex DL</h1>
       </div>
 
       <nav className="nav-menu" role="navigation" aria-label={s.mainNavAria}>
-        {navItems.map((item) => {
+        {navItems.map(item => {
           const Icon = item.icon
           const isActive = activeTab === item.id
           return (
@@ -140,19 +151,26 @@ const Sidebar: React.FC = () => {
                   ? formatMessage(u.sidebarDownloadingTitle, { percent: updatePercent })
                   : updateState.phase === 'downloaded'
                     ? u.sidebarReadyTitle
-                    : formatMessage(u.sidebarAvailableTitle, { version: updateState.latestVersion || '' })}
+                    : formatMessage(u.sidebarAvailableTitle, {
+                        version: updateState.latestVersion || '',
+                      })}
               </span>
               <span className="sidebar-link-detail">
                 {updateState.phase === 'downloading'
                   ? u.sidebarDownloadingDetail
                   : updateState.phase === 'downloaded'
-                    ? formatMessage(u.sidebarReadyDetail, { version: updateState.latestVersion || '' })
+                    ? formatMessage(u.sidebarReadyDetail, {
+                        version: updateState.latestVersion || '',
+                      })
                     : u.sidebarAvailableDetail}
               </span>
             </span>
             {updateState.phase === 'downloading' && (
               <span className="sidebar-update-progress" aria-hidden="true">
-                <span className="sidebar-update-progress-fill" style={{ width: `${updatePercent}%` }} />
+                <span
+                  className="sidebar-update-progress-fill"
+                  style={{ width: `${updatePercent}%` }}
+                />
               </span>
             )}
           </button>
@@ -164,8 +182,15 @@ const Sidebar: React.FC = () => {
           className="sidebar-link sidebar-link-support"
           aria-label={s.supportAria}
         >
-          <span className="sidebar-link-icon" aria-hidden="true"><Coffee size={18} /></span>
-          <span className="sidebar-link-copy"><span className="sidebar-link-title">{s.supportTitle}</span><span className="sidebar-link-detail" dir="ltr">Ko-fi</span></span>
+          <span className="sidebar-link-icon" aria-hidden="true">
+            <Coffee size={18} />
+          </span>
+          <span className="sidebar-link-copy">
+            <span className="sidebar-link-title">{s.supportTitle}</span>
+            <span className="sidebar-link-detail" dir="ltr">
+              Ko-fi
+            </span>
+          </span>
           <ArrowUpRight className="sidebar-link-arrow" size={15} aria-hidden="true" />
         </a>
         <a
@@ -175,8 +200,17 @@ const Sidebar: React.FC = () => {
           className="sidebar-link sidebar-link-github"
           aria-label={s.githubAria}
         >
-          <span className="sidebar-link-icon" aria-hidden="true"><Github size={18} /></span>
-          <span className="sidebar-link-copy"><span className="sidebar-link-title" dir="ltr">SAADX25</span><span className="sidebar-link-detail" dir="ltr">GitHub</span></span>
+          <span className="sidebar-link-icon" aria-hidden="true">
+            <Github size={18} />
+          </span>
+          <span className="sidebar-link-copy">
+            <span className="sidebar-link-title" dir="ltr">
+              SAADX25
+            </span>
+            <span className="sidebar-link-detail" dir="ltr">
+              GitHub
+            </span>
+          </span>
           <ArrowUpRight className="sidebar-link-arrow" size={15} aria-hidden="true" />
         </a>
       </div>

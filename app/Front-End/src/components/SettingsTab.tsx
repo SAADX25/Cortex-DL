@@ -1,6 +1,13 @@
 // Application settings, engine readiness checks, updates, and uninstall controls
 import React from 'react'
-import { RefreshCw, AlertTriangle, ShieldAlert, Sparkles, ArrowDownToLine, RotateCcw } from 'lucide-react'
+import {
+  RefreshCw,
+  AlertTriangle,
+  ShieldAlert,
+  Sparkles,
+  ArrowDownToLine,
+  RotateCcw,
+} from 'lucide-react'
 import { formatMessage, languageNames, translations, type Language } from '../translations'
 import { formatBytes } from '../hooks/useDownloadCardVM'
 import { useLang, useSettingsStore } from '../stores/useSettingsStore'
@@ -11,28 +18,28 @@ const SettingsTab: React.FC = () => {
   const lang = useLang()
   const t = translations[lang]
 
-  const setLang = useSettingsStore((s) => s.setLang)
-  const totalDownloadedBytes = useSettingsStore((s) => s.totalDownloadedBytes)
-  const onResetStats = useSettingsStore((s) => s.onResetStats)
-  const useInAppPlayer = useSettingsStore((s) => s.useInAppPlayer)
-  const setUseInAppPlayer = useSettingsStore((s) => s.setUseInAppPlayer)
-  const refreshWindowsArtwork = useSettingsStore((s) => s.refreshWindowsPlayerArtwork)
-  const setRefreshWindowsArtwork = useSettingsStore((s) => s.setRefreshWindowsPlayerArtwork)
-  const healthCheck = useSettingsStore((s) => s.healthCheck)
-  const healthChecking = useSettingsStore((s) => s.healthChecking)
-  const refreshHealth = useSettingsStore((s) => s.refreshHealth)
-  const concurrentDownloads = useSettingsStore((s) => s.concurrentDownloads)
-  const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
-  const updateState = useSettingsStore((s) => s.updateState)
-  const onCheckForUpdates = useSettingsStore((s) => s.onCheckForUpdates)
-  const onRestartAndInstall = useSettingsStore((s) => s.onRestartAndInstall)
-  const openUpdateModal = useSettingsStore((s) => s.openUpdateModal)
+  const setLang = useSettingsStore(s => s.setLang)
+  const totalDownloadedBytes = useSettingsStore(s => s.totalDownloadedBytes)
+  const onResetStats = useSettingsStore(s => s.onResetStats)
+  const useInAppPlayer = useSettingsStore(s => s.useInAppPlayer)
+  const setUseInAppPlayer = useSettingsStore(s => s.setUseInAppPlayer)
+  const refreshWindowsArtwork = useSettingsStore(s => s.refreshWindowsPlayerArtwork)
+  const setRefreshWindowsArtwork = useSettingsStore(s => s.setRefreshWindowsPlayerArtwork)
+  const healthCheck = useSettingsStore(s => s.healthCheck)
+  const healthChecking = useSettingsStore(s => s.healthChecking)
+  const refreshHealth = useSettingsStore(s => s.refreshHealth)
+  const concurrentDownloads = useSettingsStore(s => s.concurrentDownloads)
+  const setConcurrentDownloads = useSettingsStore(s => s.setConcurrentDownloads)
+  const updateState = useSettingsStore(s => s.updateState)
+  const onCheckForUpdates = useSettingsStore(s => s.onCheckForUpdates)
+  const onRestartAndInstall = useSettingsStore(s => s.onRestartAndInstall)
+  const openUpdateModal = useSettingsStore(s => s.openUpdateModal)
   const u = t.updater
   const updatePercent = Math.min(100, Math.max(0, Math.round(updateState.progress?.percent ?? 0)))
-  const engineUpdateStatus = useSettingsStore((s) => s.engineUpdateStatus)
-  const engineVersion = useSettingsStore((s) => s.engineVersion)
-  const onUpdateEngine = useSettingsStore((s) => s.onUpdateEngine)
-  const onUninstall = useSettingsStore((s) => s.onUninstall)
+  const engineUpdateStatus = useSettingsStore(s => s.engineUpdateStatus)
+  const engineVersion = useSettingsStore(s => s.engineVersion)
+  const onUpdateEngine = useSettingsStore(s => s.onUpdateEngine)
+  const onUninstall = useSettingsStore(s => s.onUninstall)
 
   const healthRows = healthCheck
     ? [
@@ -44,17 +51,23 @@ const SettingsTab: React.FC = () => {
         {
           label: t.health_ffmpeg,
           ok: healthCheck.ffmpeg.available,
-          detail: healthCheck.ffmpeg.available ? healthCheck.ffmpeg.version || t.health_available : t.health_missing,
+          detail: healthCheck.ffmpeg.available
+            ? healthCheck.ffmpeg.version || t.health_available
+            : t.health_missing,
         },
         {
           label: t.health_js_runtime,
           ok: healthCheck.jsRuntime.available,
-          detail: healthCheck.jsRuntime.available ? healthCheck.jsRuntime.name + ' — Supported' : 'No supported yt-dlp JS runtime',
+          detail: healthCheck.jsRuntime.available
+            ? healthCheck.jsRuntime.name + ' — Supported'
+            : 'No supported yt-dlp JS runtime',
         },
         {
           label: t.health_download_directory,
           ok: healthCheck.downloadDirectory.writable,
-          detail: healthCheck.downloadDirectory.writable ? t.health_writable : t.health_not_writable,
+          detail: healthCheck.downloadDirectory.writable
+            ? t.health_writable
+            : t.health_not_writable,
           title: healthCheck.downloadDirectory.path,
         },
       ]
@@ -68,7 +81,6 @@ const SettingsTab: React.FC = () => {
       </header>
 
       <section className="minimal-panel" style={{ gap: '3rem' }}>
-
         <div className="settings-hero-stats">
           <div className="hero-stat-value gradient-text-large">
             {formatBytes(totalDownloadedBytes)}
@@ -93,13 +105,21 @@ const SettingsTab: React.FC = () => {
                 <select
                   className="custom-select"
                   value={lang}
-                  onChange={(e) => setLang(e.target.value as Language)}
+                  onChange={e => setLang(e.target.value as Language)}
                 >
-                  <option value="en" className="bg-[#1e293b] text-white">{languageNames.en}</option>
-                  <option value="ar" className="bg-[#1e293b] text-white">{languageNames.ar}</option>
+                  <option value="en" className="bg-[#1e293b] text-white">
+                    {languageNames.en}
+                  </option>
+                  <option value="ar" className="bg-[#1e293b] text-white">
+                    {languageNames.ar}
+                  </option>
                 </select>
                 <div className="custom-select-icon">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <svg
+                    className="fill-current h-4 w-4"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                  >
                     <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                   </svg>
                 </div>
@@ -151,14 +171,18 @@ const SettingsTab: React.FC = () => {
                 <select
                   className="custom-select"
                   value={concurrentDownloads}
-                  onChange={(e) => setConcurrentDownloads(Number(e.target.value))}
+                  onChange={e => setConcurrentDownloads(Number(e.target.value))}
                 >
                   <option value={3}>3</option>
                   <option value={5}>5</option>
                   <option value={10}>10</option>
                 </select>
                 <div className="custom-select-icon">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <svg
+                    className="fill-current h-4 w-4"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                  >
                     <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                   </svg>
                 </div>
@@ -186,12 +210,16 @@ const SettingsTab: React.FC = () => {
                 )}
                 {updateState.phase === 'downloaded' && (
                   <span style={{ color: '#4ade80' }}>
-                    {formatMessage(u.downloadedInline, { version: updateState.latestVersion || '' })}
+                    {formatMessage(u.downloadedInline, {
+                      version: updateState.latestVersion || '',
+                    })}
                   </span>
                 )}
                 {updateState.phase === 'up-to-date' && (
                   <span style={{ color: '#4ade80' }}>
-                    {formatMessage(u.upToDate, { version: updateState.currentVersion || __APP_VERSION__ })}
+                    {formatMessage(u.upToDate, {
+                      version: updateState.currentVersion || __APP_VERSION__,
+                    })}
                   </span>
                 )}
                 {updateState.phase === 'error' && (
@@ -203,7 +231,10 @@ const SettingsTab: React.FC = () => {
               </span>
               {updateState.phase === 'downloading' && (
                 <div className="settings-update-bar" aria-hidden="true">
-                  <div className="settings-update-bar-fill" style={{ width: `${updatePercent}%` }} />
+                  <div
+                    className="settings-update-bar-fill"
+                    style={{ width: `${updatePercent}%` }}
+                  />
                 </div>
               )}
             </div>
@@ -241,8 +272,12 @@ const SettingsTab: React.FC = () => {
               <span className="row-title">Engine (yt-dlp)</span>
               <span className="row-subtitle">
                 {engineUpdateStatus?.updating && engineUpdateStatus.message}
-                {engineUpdateStatus?.success === true && <span className="text-green-400">{engineUpdateStatus.message}</span>}
-                {engineUpdateStatus?.success === false && <span className="text-red-400">{engineUpdateStatus.message}</span>}
+                {engineUpdateStatus?.success === true && (
+                  <span className="text-green-400">{engineUpdateStatus.message}</span>
+                )}
+                {engineUpdateStatus?.success === false && (
+                  <span className="text-red-400">{engineUpdateStatus.message}</span>
+                )}
                 {!engineUpdateStatus && engineVersion}
               </span>
             </div>
@@ -260,16 +295,23 @@ const SettingsTab: React.FC = () => {
         </div>
 
         <div className="settings-section">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+            }}
+          >
             <div>
-              <h3 className="section-header" style={{ marginBottom: '0.35rem' }}>{t.health_title}</h3>
-              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>{t.health_desc}</p>
+              <h3 className="section-header" style={{ marginBottom: '0.35rem' }}>
+                {t.health_title}
+              </h3>
+              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+                {t.health_desc}
+              </p>
             </div>
-            <button
-              className="btn-ghost-primary"
-              onClick={refreshHealth}
-              disabled={healthChecking}
-            >
+            <button className="btn-ghost-primary" onClick={refreshHealth} disabled={healthChecking}>
               <RefreshCw size={16} className={healthChecking ? 'spin' : ''} />
               <span>{healthChecking ? t.health_checking : t.health_refresh}</span>
             </button>
@@ -291,15 +333,36 @@ const SettingsTab: React.FC = () => {
                   : t.health_attention}
             </div>
 
-            <div className="about-row muted">v{__APP_VERSION__} · {__BUILD_SHA__.slice(0, 12)}</div>
-            <div className="about-row muted">ffprobe: {healthCheck?.ffprobe?.version || healthCheck?.ffprobe?.message || 'Unchecked'} · Database: {healthCheck?.database?.healthy ? 'Healthy' : 'Unchecked'}</div>
-            <div className="about-row muted">Media server: {healthCheck?.mediaServer?.healthy ? 'Healthy' : 'Unchecked'} · Update service: {healthCheck?.updateService || 'Unchecked'}</div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button className="btn-ghost-primary" onClick={() => void window.cortexDl.repairEngines().then(refreshHealth)}>Repair Engines</button>
-              <button className="btn-ghost-primary" onClick={() => void window.cortexDl.exportDiagnostics()}>Export Diagnostics</button>
-              <button className="btn-ghost-primary" onClick={() => void window.cortexDl.openLogs()}>Open Logs</button>
+            <div className="about-row muted">
+              v{__APP_VERSION__} · {__BUILD_SHA__.slice(0, 12)}
             </div>
-            {healthRows.map((row) => (
+            <div className="about-row muted">
+              ffprobe:{' '}
+              {healthCheck?.ffprobe?.version || healthCheck?.ffprobe?.message || 'Unchecked'} ·
+              Database: {healthCheck?.database?.healthy ? 'Healthy' : 'Unchecked'}
+            </div>
+            <div className="about-row muted">
+              Media server: {healthCheck?.mediaServer?.healthy ? 'Healthy' : 'Unchecked'} · Update
+              service: {healthCheck?.updateService || 'Unchecked'}
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                className="btn-ghost-primary"
+                onClick={() => void window.cortexDl.repairEngines().then(refreshHealth)}
+              >
+                Repair Engines
+              </button>
+              <button
+                className="btn-ghost-primary"
+                onClick={() => void window.cortexDl.exportDiagnostics()}
+              >
+                Export Diagnostics
+              </button>
+              <button className="btn-ghost-primary" onClick={() => void window.cortexDl.openLogs()}>
+                Open Logs
+              </button>
+            </div>
+            {healthRows.map(row => (
               <div
                 key={row.label}
                 title={'title' in row ? row.title : undefined}
@@ -321,7 +384,9 @@ const SettingsTab: React.FC = () => {
         <div className="settings-section">
           <h3 className="section-header">{t.settings_about}</h3>
           <div className="about-minimal">
-            <p className="about-row"><strong>Cortex DL</strong> v{__APP_VERSION__}</p>
+            <p className="about-row">
+              <strong>Cortex DL</strong> v{__APP_VERSION__}
+            </p>
             <p className="about-row">{t.settings_developed_by} SAADX25</p>
             <p className="about-row muted">{t.settings_powered_by} yt-dlp &amp; FFmpeg</p>
           </div>
@@ -345,7 +410,6 @@ const SettingsTab: React.FC = () => {
             </div>
           </div>
         </div>
-
       </section>
     </div>
   )

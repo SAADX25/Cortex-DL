@@ -15,7 +15,9 @@ export function getErrorText(value: unknown): string {
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>
     return ['code', 'message', 'stderr', 'stdout']
-      .map(key => record[key]).filter((item): item is string => typeof item === 'string').join('\n')
+      .map(key => record[key])
+      .filter((item): item is string => typeof item === 'string')
+      .join('\n')
   }
   return String(value ?? '')
 }
@@ -24,14 +26,39 @@ export function youtubeErrorCode(value: unknown): string | null {
   const text = getErrorText(value)
 
   // Rate limits and network errors take precedence over generic auth/format hints in stderr.
-  if (/YOUTUBE_RATE_LIMITED|HTTP (?:Error )?429|too many requests|rate[-_\s]?limit(?:ed|ing)?|requests?[^\r\n]{0,40}limit exceeded|temporarily blocked[^\r\n]{0,40}(?:request|traffic|youtube)/i.test(text)) {
+  if (
+    /YOUTUBE_RATE_LIMITED|HTTP (?:Error )?429|too many requests|rate[-_\s]?limit(?:ed|ing)?|requests?[^\r\n]{0,40}limit exceeded|temporarily blocked[^\r\n]{0,40}(?:request|traffic|youtube)/i.test(
+      text,
+    )
+  ) {
     return YOUTUBE_RATE_LIMITED_CODE
   }
-  if (/YOUTUBE_NETWORK_ERROR|Failed to resolve|Name or service not known|Temporary failure in name resolution|Connection (?:reset|refused)|network is unreachable|timed out|TLS|SSL:|certificate verify failed/i.test(text)) return YOUTUBE_NETWORK_ERROR_CODE
-  if (/YOUTUBE_BOT_VERIFICATION|not a bot|confirm[^\r\n]*bot|CAPTCHA/i.test(text)) return YOUTUBE_BOT_VERIFICATION_CODE
-  if (/YOUTUBE_AUTH_REQUIRED|sign in to confirm|LOGIN_REQUIRED|age[- ]restricted|login required|members.only|private video/i.test(text)) return YOUTUBE_AUTH_REQUIRED_CODE
-  if (/YOUTUBE_PO_TOKEN_REQUIRED|(?:PO|proof.of.origin) token[^\r\n]*(?:required|not provided|missing)|require[^\r\n]*(?:PO|proof.of.origin) token/i.test(text)) return YOUTUBE_PO_TOKEN_REQUIRED_CODE
-  if (/YOUTUBE_FORMATS_RESTRICTED|formats have been skipped|only images are available|requested format is not available|DRM protected/i.test(text)) return YOUTUBE_FORMATS_RESTRICTED_CODE
+  if (
+    /YOUTUBE_NETWORK_ERROR|Failed to resolve|Name or service not known|Temporary failure in name resolution|Connection (?:reset|refused)|network is unreachable|timed out|TLS|SSL:|certificate verify failed/i.test(
+      text,
+    )
+  )
+    return YOUTUBE_NETWORK_ERROR_CODE
+  if (/YOUTUBE_BOT_VERIFICATION|not a bot|confirm[^\r\n]*bot|CAPTCHA/i.test(text))
+    return YOUTUBE_BOT_VERIFICATION_CODE
+  if (
+    /YOUTUBE_AUTH_REQUIRED|sign in to confirm|LOGIN_REQUIRED|age[- ]restricted|login required|members.only|private video/i.test(
+      text,
+    )
+  )
+    return YOUTUBE_AUTH_REQUIRED_CODE
+  if (
+    /YOUTUBE_PO_TOKEN_REQUIRED|(?:PO|proof.of.origin) token[^\r\n]*(?:required|not provided|missing)|require[^\r\n]*(?:PO|proof.of.origin) token/i.test(
+      text,
+    )
+  )
+    return YOUTUBE_PO_TOKEN_REQUIRED_CODE
+  if (
+    /YOUTUBE_FORMATS_RESTRICTED|formats have been skipped|only images are available|requested format is not available|DRM protected/i.test(
+      text,
+    )
+  )
+    return YOUTUBE_FORMATS_RESTRICTED_CODE
   return null
 }
 
@@ -42,7 +69,11 @@ export function isYouTubeAuthRequiredError(value: unknown): boolean {
 export function isYouTubeUrl(input: string): boolean {
   try {
     const { hostname, protocol } = new URL(input)
-    return ['http:', 'https:'].includes(protocol)
-      && (hostname === 'youtu.be' || hostname === 'youtube.com' || hostname.endsWith('.youtube.com'))
-  } catch { return false }
+    return (
+      ['http:', 'https:'].includes(protocol) &&
+      (hostname === 'youtu.be' || hostname === 'youtube.com' || hostname.endsWith('.youtube.com'))
+    )
+  } catch {
+    return false
+  }
 }

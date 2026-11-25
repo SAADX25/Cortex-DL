@@ -22,13 +22,13 @@ interface DownloadStoreState {
   clearCompleted: () => void
 }
 
-export const useDownloadStore = create<DownloadStoreState>((set) => ({
+export const useDownloadStore = create<DownloadStoreState>(set => ({
   tasks: new Map(),
   taskIds: [],
   version: 0,
 
-  upsertTask: (task) =>
-    set((state) => {
+  upsertTask: task =>
+    set(state => {
       const isNew = !state.tasks.has(task.id)
 
       // Mutate the Map in place to avoid copying on every tick; bump version to notify dependent views.
@@ -41,18 +41,18 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
       }
     }),
 
-  removeTask: (id) =>
-    set((state) => {
+  removeTask: id =>
+    set(state => {
       state.tasks.delete(id)
       return {
         tasks: state.tasks,
-        taskIds: state.taskIds.filter((tid) => tid !== id),
+        taskIds: state.taskIds.filter(tid => tid !== id),
         version: state.version + 1,
       }
     }),
 
-  addMultipleTasks: (tasks) =>
-    set((state) => {
+  addMultipleTasks: tasks =>
+    set(state => {
       const newIds: string[] = []
       for (const t of tasks) {
         if (!state.tasks.has(t.id)) newIds.push(t.id)
@@ -65,8 +65,8 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
       }
     }),
 
-  loadTasks: (tasks) =>
-    set((state) => {
+  loadTasks: tasks =>
+    set(state => {
       state.tasks.clear()
       const ids: string[] = []
       for (const t of tasks) {
@@ -77,7 +77,7 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     }),
 
   clearCompleted: () =>
-    set((state) => {
+    set(state => {
       const nextIds: string[] = []
       for (const id of state.taskIds) {
         const t = state.tasks.get(id)
@@ -91,32 +91,29 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     }),
 }))
 
-export const useTask = (id: string) =>
-  useDownloadStore((s) => s.tasks.get(id))
+export const useTask = (id: string) => useDownloadStore(s => s.tasks.get(id))
 
-export const useTaskIds = () =>
-  useDownloadStore((s) => s.taskIds)
+export const useTaskIds = () => useDownloadStore(s => s.taskIds)
 
-export const useTasksVersion = () =>
-  useDownloadStore((s) => s.version)
+export const useTasksVersion = () => useDownloadStore(s => s.version)
 
 function countActive(state: DownloadStoreState): number {
   let count = 0
   for (const id of state.taskIds) {
     const t = state.tasks.get(id)
-    if (t && (t.status === 'downloading' || t.status === 'queued' || t.status === 'converting')) count++
+    if (t && (t.status === 'downloading' || t.status === 'queued' || t.status === 'converting'))
+      count++
   }
   return count
 }
 
 export const useActiveDownloadCount = () => useDownloadStore(countActive)
 
-export const useTotalDownloadCount = () => useDownloadStore((s) => s.taskIds.length)
+export const useTotalDownloadCount = () => useDownloadStore(s => s.taskIds.length)
 
 export const getActiveDownloadCount = () => countActive(useDownloadStore.getState())
 
-export const getTasksSnapshot = () =>
-  useDownloadStore.getState().tasks
+export const getTasksSnapshot = () => useDownloadStore.getState().tasks
 
 // Prevent duplicate IPC listeners across React StrictMode remounts.
 let ipcInitialized = false
@@ -136,11 +133,17 @@ export function initDownloadStore(): () => void {
   // Coalesce overlapping history loads and re-sync once engine setup reaches ready.
   const refreshHistory = (): Promise<void> => {
     if (pendingRefresh) return pendingRefresh
-    pendingRefresh = window.cortexDl.listDownloads().then((initial) => {
-      if (!disposed) for (const t of initial as DownloadTask[]) upsertTask(t)
-    }).catch(error => {
-      if (!disposed) console.error('[Downloads] Failed to load history:', error)
-    }).finally(() => { pendingRefresh = null })
+    pendingRefresh = window.cortexDl
+      .listDownloads()
+      .then(initial => {
+        if (!disposed) for (const t of initial as DownloadTask[]) upsertTask(t)
+      })
+      .catch(error => {
+        if (!disposed) console.error('[Downloads] Failed to load history:', error)
+      })
+      .finally(() => {
+        pendingRefresh = null
+      })
     return pendingRefresh
   }
   const disposeSetup = window.cortexDl.onSetupProgress(state => {
@@ -160,6 +163,11 @@ export function initDownloadStore(): () => void {
   }
 }
 
-export const useDownloadSnapshot = () => useDownloadStore(useShallow(state => ({
-  tasks: state.tasks, ids: state.taskIds, version: state.version,
-})))
+export const useDownloadSnapshot = () =>
+  useDownloadStore(
+    useShallow(state => ({
+      tasks: state.tasks,
+      ids: state.taskIds,
+      version: state.version,
+    })),
+  )

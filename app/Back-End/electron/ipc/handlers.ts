@@ -1,26 +1,18 @@
-// Main IPC handler registry for downloads, URL analysis, media probing, credentials, and app health
+// Main IPC handler registry orchestrating downloads, system/update/credentials, analysis, media, and library channels
 import { app, dialog, ipcMain, shell, safeStorage } from 'electron'
-import { existsSync, promises as fsPromises } from 'node:fs'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 import log from 'electron-log'
 import { spawn } from 'node:child_process'
 import { type DownloadManager } from '../downloadManager'
-import { type StartInput, type AppHealthCheck } from '../types'
-import { isDirectMedia, analysisTiming, fetchBoundedJson } from '../services/analysisService'
-import { randomUUID } from 'node:crypto'
-import { ThumbnailCache } from '../services/thumbnailService'
-import { isThreadsUrl, normalizeAnalysisUrl, youtubeVideoId } from '../../../Shared/analysisUrl'
-import { analyzeThreadsUrl, getThreadsDirectStreamUrl, getThreadsPreviewStreams } from '../services/threadsService'
-import { analyzeUrlForHls } from '../hls'
-import { analyzeWithYtdlp, assertAnalysisAllowed, updateYtdlp, getYtdlpVersion, getDirectStreamUrl, getTrimPreviewStreams, checkJsRuntime } from '../engines/ytdlpService'
-import { extractAndSaveComments } from '../commentsExtractor'
+import { type StartInput } from '../types'
+import { updateYtdlp, getYtdlpVersion, checkJsRuntime } from '../engines/ytdlpService'
 import { db } from '../db'
-import { getBinaryPath } from '../paths'
-import { ensureEnginesReady, engineExecutionFailed, engineHealth } from '../engines/engineManager'
-import { buildInfo } from '../diagnostics'
 import { registerDownloadSubtitleIpc } from '../subtitles/downloadMergeIpc'
 import { registerMediaLibraryIpc } from './mediaLibraryIpc'
+import { registerAnalysisIpcHandlers } from './analysisHandlers'
+import { registerMediaIpcHandlers } from './mediaHandlers'
+import { getAppHealthCheck } from './healthCheck'
 import { type AppUpdateController } from '../services/updateService'
 
 export interface IpcDependencies {
@@ -28,10 +20,14 @@ export interface IpcDependencies {
   getDownloads: () => DownloadManager | null
   getUpdateService: () => AppUpdateController
   getMediaPort: () => number
-
   getMediaToken: () => string
   closeMediaSession: (session: string) => Promise<void>
-  getMediaRequestStats: () => { streams: number; ffmpegProcesses: number; probeProcesses: number; sessions: number }
+  getMediaRequestStats: () => {
+    streams: number
+    ffmpegProcesses: number
+    probeProcesses: number
+    sessions: number
+  }
   trackMediaProcess: (session: string, kind: 'ffmpeg' | 'probe', stop: () => void) => () => void
   isMediaSessionClosed: (session: string) => boolean
   serviceReadyPromise: Promise<void>
@@ -39,113 +35,88 @@ export interface IpcDependencies {
   mediaReadyPromise?: Promise<unknown>
 }
 
-// Probe write permission via an exclusive temp file instead of fs.access (unreliable on Windows ACLs)
-async function isDirectoryWritable(directory: string): Promise<boolean> {
-  const testPath = path.join(directory, `.cortex-dl-write-test-${process.pid}-${Date.now()}`)
-  let handle: Awaited<ReturnType<typeof fsPromises.open>> | null = null
-
-  try {
-    handle = await fsPromises.open(testPath, 'wx')
-    return true
-  } catch {
-    return false
-  } finally {
-    await handle?.close().catch(() => {})
-    await fsPromises.unlink(testPath).catch(() => {})
-  }
-}
-
-async function getAppHealthCheck(mediaPort: number, mediaToken: string, uiReady?: Promise<unknown>): Promise<AppHealthCheck> {
-  let downloadDirectory = app.getPath('downloads')
-
-  try {
-    const directoryRow = db.prepare('SELECT value FROM settings WHERE key = ?').get('downloadDirectory') as { value: string } | undefined
-    downloadDirectory = directoryRow?.value || downloadDirectory
-  } catch (err) {
-    log.warn('[health] Failed to read persisted settings:', err)
-  }
-
-  const engines = await engineHealth()
-  const ffmpegPath = getBinaryPath('ffmpeg')
-  const [ytDlpVersion, jsRuntime, directoryWritable] = await Promise.all([
-    getYtdlpVersion(),
-    checkJsRuntime(),
-    isDirectoryWritable(downloadDirectory),
-  ])
-  const ytDlpAvailable = !['Not Installed', 'Unknown', 'Error'].includes(ytDlpVersion)
-  const ffmpegAvailable = engines.find(engine => engine.name === 'ffmpeg')?.available === true
-  const probe = engines.find(engine => engine.name === 'ffprobe')!
-  const database = db.pragma('quick_check', { simple: true }) === 'ok'
-  const mediaServer = await fetch(`http://127.0.0.1:${mediaPort}/health?token=${encodeURIComponent(mediaToken)}`, { method: 'HEAD', signal: AbortSignal.timeout(2000) }).then(response => response.status === 204, () => false)
-  await uiReady
-  const updateService = await fetchBoundedJson('https://api.github.com/repos/SAADX25/Cortex-DL/releases/latest', undefined, 3000).then(() => 'reachable' as const, () => 'unavailable' as const)
-
-  return {
-    checkedAt: Date.now(),
-    healthy: mediaServer && database && probe.available && ytDlpAvailable && ffmpegAvailable && jsRuntime.available && directoryWritable,
-    ytDlp: { available: ytDlpAvailable, version: ytDlpVersion },
-    ffmpeg: { available: ffmpegAvailable, path: ffmpegPath, version: engines.find(e => e.name === 'ffmpeg')?.version },
-    ffprobe: probe,
-    database: { healthy: database },
-    build: buildInfo(),
-    mediaServer: { healthy: mediaServer },
-    updateService,
-    jsRuntime,
-    downloadDirectory: { writable: directoryWritable, path: downloadDirectory },
-  }
-}
-
 function validateDownloadInput(input: StartInput): void {
-  if (!input || typeof input.url !== 'string' || input.url.length > 16384 || !/^https?:\/\//i.test(input.url)) throw new Error('Invalid download URL')
-  if (typeof input.directory !== 'string' || !path.isAbsolute(input.directory) || input.directory.includes('\0')) throw new Error('Invalid download directory')
-  if (input.filename && (typeof input.filename !== 'string' || (/[/\\]/.test(input.filename) || input.filename.includes('\0')) || input.filename === '..')) throw new Error('Invalid filename')
+  if (
+    !input ||
+    typeof input.url !== 'string' ||
+    input.url.length > 16384 ||
+    !/^https?:\/\//i.test(input.url)
+  ) {
+    throw new Error('Invalid download URL')
+  }
+  if (
+    typeof input.directory !== 'string' ||
+    !path.isAbsolute(input.directory) ||
+    input.directory.includes('\0')
+  ) {
+    throw new Error('Invalid download directory')
+  }
+  if (
+    input.filename &&
+    (typeof input.filename !== 'string' ||
+      /[/\\]/.test(input.filename) ||
+      input.filename.includes('\0') ||
+      input.filename === '..')
+  ) {
+    throw new Error('Invalid filename')
+  }
 }
 
-export function registerIpcHandlers(deps: IpcDependencies) {
+export function registerIpcHandlers(deps: IpcDependencies): void {
   registerDownloadSubtitleIpc(deps)
   registerMediaLibraryIpc(deps.getWin)
-  const { getWin, getDownloads, getUpdateService, getMediaPort, getMediaToken, closeMediaSession, getMediaRequestStats, trackMediaProcess, isMediaSessionClosed, serviceReadyPromise } = deps
+  registerAnalysisIpcHandlers(deps)
+  registerMediaIpcHandlers(deps)
+
+  const {
+    getWin,
+    getDownloads,
+    getUpdateService,
+    getMediaPort,
+    getMediaToken,
+    serviceReadyPromise,
+  } = deps
 
   const waitForEngines = async () => {
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000)
-        timer.unref()
-      })])
+      await Promise.race([
+        serviceReadyPromise,
+        new Promise<void>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Engines are not ready. Use Repair Engines.')),
+            15000,
+          )
+          timer.unref()
+        }),
+      ])
     } finally {
       if (timer) clearTimeout(timer)
     }
   }
 
   ipcMain.on('log-message', (_event, level, message) => {
-    if (_event.sender !== getWin()?.webContents || !['info', 'warn', 'error', 'debug'].includes(level) || typeof message !== 'string' || message.length > 8192) return
-    if (log && log[level as keyof typeof log]) {
-      (log as any)[level](`[Renderer] ${message}`)
+    if (
+      _event.sender !== getWin()?.webContents ||
+      !['info', 'warn', 'error', 'debug'].includes(level) ||
+      typeof message !== 'string' ||
+      message.length > 8192
+    ) {
+      return
+    }
+    const logger = log as unknown as Record<string, ((msg: string) => void) | undefined>
+    if (log && typeof logger[level] === 'function') {
+      logger[level]!(`[Renderer] ${message}`)
     } else {
       log?.info(`[Renderer] ${message}`)
     }
   })
 
-  ipcMain.handle('cortexdl:update:state', async () => {
-    return getUpdateService().getState()
-  })
-
-  ipcMain.handle('cortexdl:check-for-updates', async () => {
-    return await getUpdateService().checkForUpdates(true)
-  })
-
-  ipcMain.handle('cortexdl:update:download', async () => {
-    return await getUpdateService().downloadUpdate()
-  })
-
-  ipcMain.handle('cortexdl:update:cancel', async () => {
-    return await getUpdateService().cancelDownload()
-  })
-
-  ipcMain.handle('cortexdl:restart-app', async () => {
-    return getUpdateService().quitAndInstall()
-  })
+  ipcMain.handle('cortexdl:update:state', async () => getUpdateService().getState())
+  ipcMain.handle('cortexdl:check-for-updates', async () => getUpdateService().checkForUpdates(true))
+  ipcMain.handle('cortexdl:update:download', async () => getUpdateService().downloadUpdate())
+  ipcMain.handle('cortexdl:update:cancel', async () => getUpdateService().cancelDownload())
+  ipcMain.handle('cortexdl:restart-app', async () => getUpdateService().quitAndInstall())
 
   ipcMain.handle('cortexdl:uninstall-app', () => {
     try {
@@ -154,14 +125,13 @@ export function registerIpcHandlers(deps: IpcDependencies) {
         const child = spawn(uninstallerPath, [], {
           detached: true,
           stdio: 'ignore',
-          windowsHide: true
+          windowsHide: true,
         })
         child.unref()
       } else {
         log.error('Uninstaller not found at:', uninstallerPath)
         shell.openExternal('ms-settings:appsfeatures')
       }
-
       log.info('Exiting app...')
       app.quit()
     } catch (error) {
@@ -180,7 +150,10 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     if (selected) {
       try {
         db.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)').run()
-        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('downloadDirectory', selected)
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
+          'downloadDirectory',
+          selected,
+        )
       } catch (err) {
         log.error('[settings] Failed to persist downloadDirectory:', err)
       }
@@ -194,8 +167,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
         log.warn('[safeStorage] Encryption not available. Returning failure.')
         return false
       }
-      const encrypted = safeStorage.encryptString(value)
-      return encrypted.toString('base64')
+      return safeStorage.encryptString(value).toString('base64')
     } catch (error) {
       log.error('[safeStorage] Failed to encrypt data', error)
       return false
@@ -205,8 +177,7 @@ export function registerIpcHandlers(deps: IpcDependencies) {
   ipcMain.handle('cortexdl:secure-get', (_event, base64Value: string) => {
     try {
       if (!safeStorage.isEncryptionAvailable() || !base64Value) return ''
-      const buffer = Buffer.from(base64Value, 'base64')
-      return safeStorage.decryptString(buffer)
+      return safeStorage.decryptString(Buffer.from(base64Value, 'base64'))
     } catch (error) {
       log.error('[safeStorage] Failed to decrypt data', error)
       return ''
@@ -222,13 +193,8 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     return await updateYtdlp()
   })
 
-  ipcMain.handle('cortexdl:get-engine-version', async () => {
-    return getYtdlpVersion()
-  })
-
-  ipcMain.handle('cortexdl:check-js-runtime', async () => {
-    return checkJsRuntime()
-  })
+  ipcMain.handle('cortexdl:get-engine-version', async () => getYtdlpVersion())
+  ipcMain.handle('cortexdl:check-js-runtime', async () => checkJsRuntime())
 
   ipcMain.handle('cortexdl:health-check', async () => {
     await deps.mediaReadyPromise?.catch(() => {})
@@ -258,21 +224,29 @@ export function registerIpcHandlers(deps: IpcDependencies) {
     return downloads.addBatch(inputs)
   })
 
-  ipcMain.handle('cortexdl:downloads:pause', async (_event, id: string) => getDownloads()?.pause(id))
-  ipcMain.handle('cortexdl:downloads:resume', async (_event, id: string) => getDownloads()?.resume(id))
-  ipcMain.handle('cortexdl:downloads:cancel', async (_event, id: string) => getDownloads()?.cancel(id))
-  ipcMain.handle('cortexdl:downloads:delete', async (_event, id: string, deleteFile: boolean) => getDownloads()?.delete(id, deleteFile))
+  ipcMain.handle('cortexdl:downloads:pause', async (_event, id: string) =>
+    getDownloads()?.pause(id),
+  )
+  ipcMain.handle('cortexdl:downloads:resume', async (_event, id: string) =>
+    getDownloads()?.resume(id),
+  )
+  ipcMain.handle('cortexdl:downloads:cancel', async (_event, id: string) =>
+    getDownloads()?.cancel(id),
+  )
+  ipcMain.handle('cortexdl:downloads:delete', async (_event, id: string, deleteFile: boolean) =>
+    getDownloads()?.delete(id, deleteFile),
+  )
   ipcMain.handle('cortexdl:downloads:clear-completed', async () => getDownloads()?.clearCompleted())
   ipcMain.handle('cortexdl:downloads:pause-all', async () => getDownloads()?.pauseAll())
   ipcMain.handle('cortexdl:downloads:resume-all', async () => getDownloads()?.resumeAll())
 
   ipcMain.handle('cortexdl:set-concurrency', async (_event, value: number) => {
-    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
+    if (!getDownloads()) await waitForEngines()
     getDownloads()?.setMaxConcurrent(value)
   })
 
   ipcMain.handle('cortexdl:get-concurrency', async () => {
-    if (!getDownloads()) await Promise.race([serviceReadyPromise, new Promise<void>((_, reject) => { const timer = setTimeout(() => reject(new Error('Engines are not ready. Use Repair Engines.')), 15000); timer.unref() })])
+    if (!getDownloads()) await waitForEngines()
     return getDownloads()?.getMaxConcurrent() ?? 3
   })
 
@@ -339,266 +313,6 @@ export function registerIpcHandlers(deps: IpcDependencies) {
       if (win.isMinimized()) win.restore()
       if (!win.isVisible()) win.show()
       win.focus()
-    }
-  })
-
-  ipcMain.handle('cortexdl:download-comments', async (_event, url: string) => {
-    try {
-      const win = getWin()
-      if (!win) return { success: false, error: 'No main window' }
-      const { canceled, filePath } = await dialog.showSaveDialog(win, {
-        title: 'Save Comments',
-        defaultPath: 'comments.txt',
-        filters: [{ name: 'Text Files', extensions: ['txt'] }]
-      })
-      if (canceled || !filePath) return { success: false, canceled: true }
-
-      win.webContents.send('cortexdl:comments-extraction-started')
-
-      const result = await extractAndSaveComments(url, filePath, (current, total) => {
-        win.webContents.send('cortexdl:comments-progress', current, total)
-      })
-      if (result) {
-        return { success: true, filePath }
-      } else {
-        return { success: false, error: 'Extraction failed' }
-      }
-    } catch (e: any) {
-      log.error('[main] Error in download-comments:', e)
-      return { success: false, error: e.message }
-    }
-  })
-
-  const analyses = new Map<string, AbortController>()
-  const analysisOwners = new Map<number, { controllers: Set<AbortController>; stop: () => void }>()
-  ipcMain.handle('cortexdl:cancel-analysis', (event, id: string) => {
-    analyses.get(`${event.sender.id}:${id}`)?.abort()
-  })
-  ipcMain.handle('cortexdl:analyze-url', async (event, input: string, id?: string) => {
-    const start = Date.now()
-    const url = normalizeAnalysisUrl(input)
-    assertAnalysisAllowed(url)
-    analysisTiming('normalizationMs', start)
-    const controller = new AbortController()
-    const key = `${event.sender.id}:${id ?? randomUUID()}`
-    analyses.get(key)?.abort()
-    analyses.set(key, controller)
-    let owner = analysisOwners.get(event.sender.id)
-    if (!owner) {
-      const controllers = new Set<AbortController>()
-      const stop = () => { for (const active of controllers) active.abort() }
-      owner = { controllers, stop }
-      analysisOwners.set(event.sender.id, owner)
-      event.sender.once('destroyed', stop)
-    }
-    owner.controllers.add(controller)
-    const send = (stage: string, data: unknown) => {
-      if (id && !controller.signal.aborted && !event.sender.isDestroyed()) {
-        event.sender.send('cortexdl:analysis-update', { id, stage, data })
-      }
-    }
-    const videoId = youtubeVideoId(url)
-    analysisTiming('providerDetectionMs', start)
-    const enrichment: Promise<unknown>[] = []
-    if (id && videoId && !['list', 'list_id'].some(key => new URL(url).searchParams.has(key))) {
-      enrichment.push(fetchBoundedJson(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, controller.signal)
-        .then(data => { if (typeof data.title === 'string') send('preview', { title: data.title }) }).catch(() => {}))
-    }
-    try {
-      if (isThreadsUrl(url)) {
-        const result = await analyzeThreadsUrl(url, controller.signal)
-        analysisTiming('totalAnalysisMs', start)
-        return result
-      }
-      if (await isDirectMedia(url, controller.signal)) return { kind: 'direct' }
-      const hlsResult = await analyzeUrlForHls(url, controller.signal)
-      if (hlsResult.kind !== 'unknown' && hlsResult.kind !== 'direct') return hlsResult
-      const result = await analyzeWithYtdlp(url, controller.signal)
-      analysisTiming('totalAnalysisMs', start)
-      if (id && videoId && result.kind === 'ytdlp') {
-        const base = process.env.RYD_API_URL || 'https://returnyoutubedislikeapi.com/votes?videoId='
-        enrichment.push(fetchBoundedJson(`${base}${videoId}`, controller.signal, 2000)
-          .then(data => { if (typeof data.dislikes === 'number') send('enrichment', { dislikes: data.dislikes }) }).catch(() => {}))
-      }
-      return result.kind === 'unknown' ? hlsResult : result
-    } catch (error) {
-      controller.abort()
-      throw error
-    } finally {
-      void Promise.allSettled(enrichment).then(() => {
-        owner.controllers.delete(controller)
-        if (owner.controllers.size === 0 && analysisOwners.get(event.sender.id) === owner) {
-          event.sender.removeListener('destroyed', owner.stop)
-          analysisOwners.delete(event.sender.id)
-        }
-        if (analyses.get(key) === controller) analyses.delete(key)
-      })
-    }
-  })
-
-  ipcMain.on('cortexdl:preview-error', (_event, message: unknown) => {
-    if (typeof message === 'string') log.error('[Visual Trim]', message.slice(0, 8000))
-  })
-
-  ipcMain.handle('cortexdl:get-trim-preview-streams', async (_event, url: string, previewSession: string) => {
-    if (typeof previewSession !== 'string' || !/^trim-[\w-]{1,128}$/.test(previewSession)) throw new Error('Invalid trim session')
-    if (/\.m3u8(\?|#|$)/i.test(url)) return { videoUrl: url, streamType: 'hls' as const }
-    const previewOptions = {
-      isClosed: () => isMediaSessionClosed(previewSession),
-      track: (stop: () => void) => trackMediaProcess(previewSession, 'probe', stop),
-    }
-    if (isThreadsUrl(url)) return getThreadsPreviewStreams(url, previewOptions)
-    return getTrimPreviewStreams(url, previewOptions)
-  })
-
-  ipcMain.handle('cortexdl:get-direct-stream-url', async (_event, url: string, previewSession?: string) => {
-    try {
-      log.info(`[IPC] get-direct-stream-url called for: ${url.slice(0, 80)}...`)
-      const previewOptions = previewSession ? {
-        isClosed: () => isMediaSessionClosed(previewSession),
-        track: (stop: () => void) => trackMediaProcess(previewSession, 'probe', stop),
-      } : {}
-      const directUrl = isThreadsUrl(url)
-        ? await getThreadsDirectStreamUrl(url, previewOptions)
-        : await getDirectStreamUrl(url, previewOptions)
-      return directUrl
-    } catch (err) {
-      log.error('[IPC] get-direct-stream-url error:', err)
-      throw err
-    }
-  })
-
-  ipcMain.handle('cortexdl:get-media-fps', async (_event, filePath: string, playerSession: string) => {
-    if (isMediaSessionClosed(playerSession)) return null
-    let untrack = () => {}
-    try {
-      const { MediaProcessor } = await import('../engines/MediaProcessor')
-      if (isMediaSessionClosed(playerSession)) return null
-      const processor = new MediaProcessor()
-      untrack = trackMediaProcess(playerSession, 'probe', () => processor.killAll())
-      if (isMediaSessionClosed(playerSession)) return null
-      return await processor.getFps(filePath)
-    } catch (err) {
-      log.error('Failed to get media FPS:', err)
-      return null
-    } finally {
-      untrack()
-    }
-  })
-
-  const thumbnails = new ThumbnailCache(path.join(os.tmpdir(), 'cortexdl-thumbs'))
-  ipcMain.handle('cortexdl:fetch-thumbnail', (_event, url: string) => thumbnails.fetch(url))
-
-  ipcMain.handle('cortexdl:get-media-port', async () => {
-    await deps.mediaReadyPromise
-    return getMediaPort()
-  })
-
-  ipcMain.handle('cortexdl:get-media-endpoint', async () => {
-    await deps.mediaReadyPromise
-    return { port: getMediaPort(), token: getMediaToken() }
-  })
-
-  ipcMain.handle('cortexdl:close-media-session', (_event, session: string) => {
-    return closeMediaSession(session)
-  })
-
-  ipcMain.handle('cortexdl:get-media-diagnostics', async () => {
-    if (app.isPackaged && process.env.CORTEX_DL_MEDIA_DIAGNOSTICS !== '1') return null
-    return {
-      processMetrics: app.getAppMetrics().map(metric => ({
-        pid: metric.pid,
-        type: metric.type,
-        memory: metric.memory,
-      })),
-      mainMemory: await process.getProcessMemoryInfo(),
-      requests: getMediaRequestStats(),
-    }
-  })
-
-  ipcMain.handle('cortexdl:get-subtitles', async (_event, videoPath: string, playerSession: string) => {
-    try {
-      if (isMediaSessionClosed(playerSession)) return []
-      if (!videoPath || !existsSync(videoPath)) return []
-
-      const dir = path.dirname(videoPath)
-      const ext = path.extname(videoPath)
-      const baseName = path.basename(videoPath, ext)
-      const files = await fsPromises.readdir(dir)
-
-      const subtitles: import('../../../Shared/types').PlayerSubtitleTrack[] = []
-
-      for (const file of files) {
-        if (file.startsWith(baseName + '.') && (file.endsWith('.vtt') || file.endsWith('.srt'))) {
-          const namePart = file.slice(baseName.length, -path.extname(file).length)
-          const langCode = namePart.replace(/^\./, '') || 'Unknown'
-
-          subtitles.push({
-            label: langCode.toUpperCase(),
-            language: langCode,
-            filePath: path.join(dir, file),
-            isEmbedded: false
-          })
-        }
-      }
-
-      try {
-        await ensureEnginesReady(['ffprobe'])
-        const ffprobePath = getBinaryPath('ffprobe')
-        if (existsSync(ffprobePath) && ['.mp4', '.mkv', '.webm', '.mov', '.m4v'].includes(ext.toLowerCase())) {
-          if (isMediaSessionClosed(playerSession)) return []
-          const probeData = await new Promise<string>((resolve, reject) => {
-            let output = ''
-            const p = spawn(ffprobePath, [
-              '-v', 'error',
-              '-show_entries', 'stream=index,codec_name:stream_tags=language,title,handler_name',
-              '-select_streams', 's',
-              '-of', 'json',
-              videoPath
-            ], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
-            const untrack = trackMediaProcess(playerSession, 'probe', () => p.kill())
-            const timer = setTimeout(() => p.kill(), 15_000)
-
-            p.stdout.on('data', d => {
-              output += d.toString()
-              if (output.length > 1024 * 1024) p.kill()
-            })
-            p.on('close', code => {
-              clearTimeout(timer)
-              untrack()
-              if (code === 0) resolve(output)
-              else reject(new Error('ffprobe failed'))
-            })
-            p.on('error', error => engineExecutionFailed('ffprobe', error))
-            p.on('error', err => {
-              clearTimeout(timer)
-              untrack()
-              reject(err)
-            })
-          })
-
-          const parsed = JSON.parse(probeData)
-          if (parsed && Array.isArray(parsed.streams)) {
-            for (const stream of parsed.streams) {
-              const langCode = stream.tags?.title || stream.tags?.language || 'Unknown'
-              const label = stream.tags?.title || (stream.tags?.handler_name !== 'SubtitleHandler' ? stream.tags?.handler_name : undefined) || langCode.toUpperCase()
-              subtitles.push({
-                label: `[Embedded] ${label}`,
-                language: langCode,
-                isEmbedded: true,
-                streamIndex: stream.index
-              })
-            }
-          }
-        }
-      } catch (err) {
-        if (!isMediaSessionClosed(playerSession)) log.error('[handlers] Failed to probe embedded subtitles:', err)
-      }
-
-      return subtitles
-    } catch (err) {
-      log.error('Failed to get subtitles:', err)
-      return []
     }
   })
 }

@@ -6,10 +6,14 @@ import log from 'electron-log'
 import { getBinaryPath } from './paths'
 import { checkJsRuntime, getJsRuntimeArgs } from './engines/ytdlpService'
 
-export async function extractAndSaveComments(url: string, outputPath: string, onProgress?: (current: number, total: number) => void): Promise<boolean> {
+export async function extractAndSaveComments(
+  url: string,
+  outputPath: string,
+  onProgress?: (current: number, total: number) => void,
+): Promise<boolean> {
   await ensureEnginesReady(['yt-dlp', 'deno'])
   await checkJsRuntime()
-  return new Promise<boolean>((resolve) => {
+  return new Promise<boolean>(resolve => {
     log.info(`[CommentsExtractor] Starting comment extraction for ${url}`)
     const ytDlpPath = getBinaryPath('yt-dlp')
 
@@ -18,23 +22,27 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       '--write-comments',
       '--skip-download',
       // Prevents yt-dlp from expanding playlist URLs when only single-video comments are wanted.
-      '--playlist-items', '0',
+      '--playlist-items',
+      '0',
       '--ignore-config',
 
       ...getJsRuntimeArgs(),
-      url
+      url,
     ]
 
-    const proc = spawn(ytDlpPath, args, { windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
+    const proc = spawn(ytDlpPath, args, {
+      windowsHide: true,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    })
     proc.on('error', error => engineExecutionFailed('yt-dlp', error))
 
     const stdoutChunks: Buffer[] = []
 
-    proc.stdout.on('data', (chunk) => {
+    proc.stdout.on('data', chunk => {
       stdoutChunks.push(Buffer.from(chunk))
     })
 
-    proc.stderr.on('data', (chunk) => {
+    proc.stderr.on('data', chunk => {
       const text = chunk.toString()
 
       // Guard against yt-dlp ignoring --skip-download and starting an actual media download.
@@ -72,7 +80,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       }
     })
 
-    proc.on('close', async (code) => {
+    proc.on('close', async code => {
       try {
         const stdoutData = Buffer.concat(stdoutChunks).toString('utf-8')
         if (!stdoutData.trim()) {
@@ -84,26 +92,29 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
         const info = JSON.parse(stdoutData)
         if (!info.comments || !Array.isArray(info.comments) || info.comments.length === 0) {
           log.warn(`[CommentsExtractor] No comments found in JSON for ${url}`)
-          await fsPromises.writeFile(outputPath, "No comments found.", 'utf-8')
+          await fsPromises.writeFile(outputPath, 'No comments found.', 'utf-8')
           resolve(true)
           return
         }
 
         log.info(`[CommentsExtractor] Found ${info.comments.length} comments. Formatting...`)
 
-        const formattedComments = info.comments.map((c: any) => {
-          const author = c.author || 'Unknown'
-          const text = c.text || ''
-          const likes = c.like_count ? `(👍 ${c.like_count})` : ''
-          const date = c.time_text || ''
+        const formattedComments = info.comments
+          .map((c: any) => {
+            const author = c.author || 'Unknown'
+            const text = c.text || ''
+            const likes = c.like_count ? `(👍 ${c.like_count})` : ''
+            const date = c.time_text || ''
 
-          return `👤 ${author} ${likes} ${date}\n📝 ${text}`
-        }).join('\n\n---------------------------------------\n\n')
+            return `👤 ${author} ${likes} ${date}\n📝 ${text}`
+          })
+          .join('\n\n---------------------------------------\n\n')
 
-        const header = `📋 Comments for: ${info.title || url}\n` +
-                       `🌐 URL: ${url}\n` +
-                       `💬 Total Extracted: ${info.comments.length}\n` +
-                       `---------------------------------------\n\n`
+        const header =
+          `📋 Comments for: ${info.title || url}\n` +
+          `🌐 URL: ${url}\n` +
+          `💬 Total Extracted: ${info.comments.length}\n` +
+          `---------------------------------------\n\n`
 
         await fsPromises.writeFile(outputPath, header + formattedComments, 'utf-8')
         log.info(`[CommentsExtractor] Comments successfully written to ${outputPath}`)
@@ -114,7 +125,7 @@ export async function extractAndSaveComments(url: string, outputPath: string, on
       }
     })
 
-    proc.on('error', (err) => {
+    proc.on('error', err => {
       log.error(`[CommentsExtractor] Spawn error:`, err)
       resolve(false)
     })

@@ -56,7 +56,8 @@ function ensureElectron() {
 
   if (!fs.existsSync(executablePath)) {
     const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
-    const defaultCacheRoot = process.env.electron_config_cache || path.join(localAppData, 'electron', 'Cache')
+    const defaultCacheRoot =
+      process.env.electron_config_cache || path.join(localAppData, 'electron', 'Cache')
     let archivePath = findCachedArchive(defaultCacheRoot)
 
     if (!archivePath) {
@@ -66,7 +67,8 @@ function ensureElectron() {
       const url = `https://github.com/electron/electron/releases/download/v${version}/${archiveName}`
       console.log(`Electron ${version} binary is missing; downloading it now...`)
       run('curl.exe', ['--fail', '--location', '--output', archivePath, url], 'Electron download')
-      if (!isValidArchive(archivePath)) throw new Error('Downloaded Electron archive failed SHA-256 verification.')
+      if (!isValidArchive(archivePath))
+        throw new Error('Downloaded Electron archive failed SHA-256 verification.')
     }
 
     console.log(`Extracting ${archiveName}...`)

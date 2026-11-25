@@ -5,14 +5,32 @@ import { existsSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import log from 'electron-log'
-import { type DownloadTask, type EngineContext, type TaskRuntime, type VideoFormat, type EngineResult, VIDEO_FORMATS } from '../types'
+import {
+  type DownloadTask,
+  type EngineContext,
+  type TaskRuntime,
+  type VideoFormat,
+  type EngineResult,
+  VIDEO_FORMATS,
+} from '../types'
 import { AUDIO_SPECS, isAudioFormat, findTaskMediaFile, trimBounds } from '../services/mediaService'
 import { getBinaryPath } from '../paths'
 import { nowMs, killProcessTree } from '../utils'
-import { parseDownloadProgress, parseFfmpegProgress, parseStateTransition, flushLines, type FfmpegState } from '../progressParser'
+import {
+  parseDownloadProgress,
+  parseFfmpegProgress,
+  parseStateTransition,
+  flushLines,
+  type FfmpegState,
+} from '../progressParser'
 import { type IEngine } from './IEngine'
 import { ThreadsEngine } from './ThreadsEngine'
-import { checkJsRuntime, getJsRuntimeArgs, diagnosticCategories, youtubeDiagnostic } from './ytdlpService'
+import {
+  checkJsRuntime,
+  getJsRuntimeArgs,
+  diagnosticCategories,
+  youtubeDiagnostic,
+} from './ytdlpService'
 import { isYouTubeUrl, youtubeErrorCode } from '../../../Shared/youtubeErrors'
 import { isKickUrl, isThreadsUrl } from '../../../Shared/analysisUrl'
 
@@ -31,7 +49,13 @@ function fastCutAudioPrerollStart(
   sectionBounds?: { start: number; end?: number } | null,
 ): number | null {
   if (!sectionBounds || sectionBounds.start <= 0) return null
-  if (task.trimMode === 'exact' || task.isLive || isAudioFormat(task.targetFormat) || task.targetFormat === 'gif') return null
+  if (
+    task.trimMode === 'exact' ||
+    task.isLive ||
+    isAudioFormat(task.targetFormat) ||
+    task.targetFormat === 'gif'
+  )
+    return null
   return Math.max(0, sectionBounds.start - FAST_CUT_AUDIO_PREROLL_SECONDS)
 }
 
@@ -65,7 +89,8 @@ export class YoutubeEngine implements IEngine {
     this.runtime = runtime
     runtime.abortController ??= new AbortController()
     runtime.abortController.signal.throwIfAborted()
-    if (!existsSync(getBinaryPath('yt-dlp'))) return { kind: 'fatal-error', message: 'yt-dlp binary is missing' }
+    if (!existsSync(getBinaryPath('yt-dlp')))
+      return { kind: 'fatal-error', message: 'yt-dlp binary is missing' }
     task.ytdlpExpectedBytes = undefined
     task.ytdlpExpectedStreamCount = undefined
     task.ytdlpStreams = undefined
@@ -75,29 +100,57 @@ export class YoutubeEngine implements IEngine {
     const publicFirst = isYouTubeUrl(task.url)
     const trimming = Boolean(task.startTime || task.endTime)
     const sectionBounds = trimming ? trimBounds(task) : null
-    if ((!task.title || !task.thumbnail) && !task.isLive) await this.prefetchMetadata(task, context, runtime).catch(e => log.warn('[YoutubeEngine] Metadata:', e))
+    if (trimming) {
+      task.phase = 'trimming'
+      context.sendUpdate(task)
+    }
+    if ((!task.title || !task.thumbnail) && !task.isLive)
+      await this.prefetchMetadata(task, context, runtime).catch(e =>
+        log.warn('[YoutubeEngine] Metadata:', e),
+      )
     runtime.abortController.signal.throwIfAborted()
-    const args = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
+    const args = this.buildYtdlpArgs(
+      task,
+      profile,
+      { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) },
+      runtime,
+    )
     let result = await this.runYtdlpAttempt(task, context, runtime, args, profile, sectionBounds)
     runtime.abortController.signal.throwIfAborted()
 
     // YouTube occasionally 403s HTTPS/DASH fragments on public sessions; retry with m3u8/HLS before failing.
-    if (publicFirst && result.exitCode !== 0 && /HTTP Error 403/i.test(result.stderr)
-      && !youtubeErrorCode(result.stderr)) {
-      const hlsArgs = this.buildYtdlpArgs(task, profile, { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime, true)
+    if (
+      publicFirst &&
+      result.exitCode !== 0 &&
+      /HTTP Error 403/i.test(result.stderr) &&
+      !youtubeErrorCode(result.stderr)
+    ) {
+      const hlsArgs = this.buildYtdlpArgs(
+        task,
+        profile,
+        { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) },
+        runtime,
+        true,
+      )
       result = await this.runYtdlpAttempt(task, context, runtime, hlsArgs, profile, sectionBounds)
     }
     runtime.abortController.signal.throwIfAborted()
     if (result.exitCode === 0) {
       const candidate = await findTaskMediaFile(task, result.detectedFinalPath)
       runtime.abortController.signal.throwIfAborted()
-      if (candidate) return { kind: 'success', candidate, ...(trimming ? { sectionTrimmed: true } : {}) }
+      if (candidate)
+        return { kind: 'success', candidate, ...(trimming ? { sectionTrimmed: true } : {}) }
       return { kind: 'fatal-error', message: 'yt-dlp produced no final media file' }
     }
     const youtubeFailure = publicFirst ? youtubeErrorCode(result.stderr) : null
     if (youtubeFailure) return { kind: 'fatal-error', message: youtubeFailure }
-    if (publicFirst && /HTTP (?:Error )?403/i.test(result.stderr)) return { kind: 'fatal-error', message: 'YOUTUBE_FORMATS_RESTRICTED' }
-    return { kind: 'retryable-error', message: this.buildErrorMessage(result.stderr), delayMs: Math.min(3000 * 2 ** runtime.retries, 60000) }
+    if (publicFirst && /HTTP (?:Error )?403/i.test(result.stderr))
+      return { kind: 'fatal-error', message: 'YOUTUBE_FORMATS_RESTRICTED' }
+    return {
+      kind: 'retryable-error',
+      message: this.buildErrorMessage(result.stderr),
+      delayMs: Math.min(3000 * 2 ** runtime.retries, 60000),
+    }
   }
 
   pause(): void {
@@ -118,11 +171,20 @@ export class YoutubeEngine implements IEngine {
     return 'default'
   }
 
-  private async prefetchMetadata(task: DownloadTask, context: EngineContext, runtime: TaskRuntime): Promise<void> {
+  private async prefetchMetadata(
+    task: DownloadTask,
+    context: EngineContext,
+    runtime: TaskRuntime,
+  ): Promise<void> {
     const ytDlpPath = getBinaryPath('yt-dlp')
 
     // Reuse the exact -f/-S selectors so expected byte counts match the streams yt-dlp will actually fetch.
-    const selection = this.buildYtdlpArgs(task, this.selectProfile(task), { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) }, runtime)
+    const selection = this.buildYtdlpArgs(
+      task,
+      this.selectProfile(task),
+      { ffmpegDir: path.dirname(getBinaryPath('ffmpeg')) },
+      runtime,
+    )
     const selectorArgs: string[] = []
     for (const flag of ['-f', '-S']) {
       const index = selection.indexOf(flag)
@@ -142,14 +204,23 @@ export class YoutubeEngine implements IEngine {
       task.url,
     ]
 
-    const proc = spawn(ytDlpPath, metaArgs, { windowsHide: true, detached: process.platform !== 'win32', env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' } })
+    const proc = spawn(ytDlpPath, metaArgs, {
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+      env: { ...process.env, PYTHONUNBUFFERED: '1', ELECTRON_RUN_AS_NODE: '1' },
+    })
 
     this.childProcess = proc
     runtime.child = proc
-    const onAbort = () => { void killProcessTree(proc) }
+    const onAbort = () => {
+      void killProcessTree(proc)
+    }
     runtime.abortController?.signal.addEventListener('abort', onAbort, { once: true })
     proc.stderr.resume()
-    const closed = new Promise<void>(resolve => { proc.on('close', () => resolve()); proc.on('error', () => resolve()) })
+    const closed = new Promise<void>(resolve => {
+      proc.on('close', () => resolve())
+      proc.on('error', () => resolve())
+    })
     let timeout: ReturnType<typeof setTimeout> | null = null
 
     try {
@@ -184,12 +255,17 @@ export class YoutubeEngine implements IEngine {
       if (!info) return
 
       const selected = Array.isArray(info.requested_formats) ? info.requested_formats : [info]
-      task.ytdlpExpectedStreamCount = selected.length
-      const bytes = selected.map((format: { filesize?: number; filesize_approx?: number }) =>
-        format.filesize ?? format.filesize_approx ?? 0)
-      if (bytes.length && bytes.every((n: number) => Number.isFinite(n) && n > 0)) {
-        task.ytdlpExpectedBytes = bytes.reduce((sum: number, n: number) => sum + n, 0)
-        task.totalBytes = task.ytdlpExpectedBytes ?? null
+      const trimming = Boolean(task.startTime || task.endTime)
+      if (!trimming) {
+        task.ytdlpExpectedStreamCount = selected.length
+        const bytes = selected.map(
+          (format: { filesize?: number; filesize_approx?: number }) =>
+            format.filesize ?? format.filesize_approx ?? 0,
+        )
+        if (bytes.length && bytes.every((n: number) => Number.isFinite(n) && n > 0)) {
+          task.ytdlpExpectedBytes = bytes.reduce((sum: number, n: number) => sum + n, 0)
+          task.totalBytes = task.ytdlpExpectedBytes ?? null
+        }
       }
 
       if (info.title) task.title = String(info.title)
@@ -201,8 +277,7 @@ export class YoutubeEngine implements IEngine {
 
       const thumbs = Array.isArray(info.thumbnails) ? info.thumbnails : null
       const thumb =
-        info.thumbnail
-        ?? (thumbs && thumbs.length ? thumbs[thumbs.length - 1]?.url : null)
+        info.thumbnail ?? (thumbs && thumbs.length ? thumbs[thumbs.length - 1]?.url : null)
 
       if (thumb) task.thumbnail = String(thumb)
 
@@ -235,20 +310,22 @@ export class YoutubeEngine implements IEngine {
     this.childProcess = proc
     runtime.child = proc
 
-    const onAbort = () => { void killProcessTree(proc) }
+    const onAbort = () => {
+      void killProcessTree(proc)
+    }
     runtime.abortController?.signal.addEventListener('abort', onAbort, { once: true })
     if (runtime.abortController?.signal.aborted) onAbort()
 
     log.info(`[YoutubeEngine] Spawned yt-dlp for task ${task.id} (profile=${profile})`)
 
-    const audioPrerollStart = fastCutAudioPrerollStart(task, sectionBounds)
-    const progressOrigin = audioPrerollStart ?? sectionBounds?.start ?? 0
-    const expectedSectionDuration = sectionBounds?.end !== undefined
-      ? Math.max(0.1, sectionBounds.end - progressOrigin)
-      : null
+    // FFmpeg reports elapsed clip time starting at 00:00:00 even with -copyts, so track the clip duration directly.
+    const expectedSectionDuration =
+      sectionBounds?.end !== undefined
+        ? Math.max(0.1, sectionBounds.end - sectionBounds.start)
+        : null
     const ffmpegState: FfmpegState = {
       totalDuration: expectedSectionDuration,
-      ...(audioPrerollStart !== null ? { startOffset: audioPrerollStart } : {}),
+      ...(sectionBounds && sectionBounds.start > 0 ? { sectionStart: sectionBounds.start } : {}),
       stderr: '',
     }
     let stdoutBuf = ''
@@ -320,7 +397,12 @@ export class YoutubeEngine implements IEngine {
       for (const line of lines) {
         if (!line.trim()) continue
 
-        const { transitioned, detectedPath } = parseStateTransition(line, task, ffmpegState, progressCtx)
+        const { transitioned, detectedPath } = parseStateTransition(
+          line,
+          task,
+          ffmpegState,
+          progressCtx,
+        )
         if (detectedPath) detectedFinalPath = detectedPath
         if (transitioned) {
           stateChanged = true
@@ -340,10 +422,10 @@ export class YoutubeEngine implements IEngine {
       }
     })
 
-    const exitCode: number = await new Promise((resolve) => {
-      proc.on('close', (code) => resolve(code ?? 1))
+    const exitCode: number = await new Promise(resolve => {
+      proc.on('close', code => resolve(code ?? 1))
       proc.on('error', error => engineExecutionFailed('yt-dlp', error))
-    proc.on('error', () => resolve(1))
+      proc.on('error', () => resolve(1))
     })
 
     clearInterval(watchdog)
@@ -388,7 +470,8 @@ export class YoutubeEngine implements IEngine {
     const trimming = Boolean(task.startTime || task.endTime)
     const sectionBounds = trimming ? trimBounds(task) : null
     // Exact cuts re-encode at cut points via ffmpeg, so cap encoder threads and skip it on live/Kick-from-0 streams.
-    const isLiveOrKickZero = Boolean(task.isLive) || (isKickUrl(task.url) && sectionBounds?.start === 0)
+    const isLiveOrKickZero =
+      Boolean(task.isLive) || (isKickUrl(task.url) && sectionBounds?.start === 0)
     const forceKeyframes = Boolean(sectionBounds && task.trimMode === 'exact' && !isLiveOrKickZero)
     const threadBudget = Math.max(2, Math.min(4, Math.floor(availableParallelism() / 2)))
 
@@ -400,19 +483,28 @@ export class YoutubeEngine implements IEngine {
       '--geo-bypass',
 
       '--ignore-config',
-      '--retries', trimming || isKickUrl(task.url) ? '3' : '0',
-      '--extractor-retries', trimming || isKickUrl(task.url) ? '2' : '0',
-      '--fragment-retries', trimming || isKickUrl(task.url) ? '5' : '1',
+      '--retries',
+      trimming || isKickUrl(task.url) ? '3' : '0',
+      '--extractor-retries',
+      trimming || isKickUrl(task.url) ? '2' : '0',
+      '--fragment-retries',
+      trimming || isKickUrl(task.url) ? '5' : '1',
       // Skip --continue and chunked HTTP when trimming because ffmpeg section downloads don't support byte-range resume.
       ...(trimming ? [] : ['--continue', '--throttled-rate', YOUTUBE_THROTTLED_RATE]),
-      '--progress-template', 'download:CORTEX_DL|%(info.format_id)s|%(progress.filename)s|%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s',
-      '--progress-template', 'postprocess:CORTEX_PP:%(info.filepath)s',
+      '--progress-template',
+      'download:CORTEX_DL|%(info.format_id)s|%(progress.filename)s|%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s',
+      '--progress-template',
+      'postprocess:CORTEX_PP:%(info.filepath)s',
       '--resize-buffer',
-      '--file-access-retries', '5',
-      '--socket-timeout', trimming || isKickUrl(task.url) ? '20' : '10',
+      '--file-access-retries',
+      '5',
+      '--socket-timeout',
+      trimming || isKickUrl(task.url) ? '20' : '10',
 
-      '-N', '10',
-      '--concurrent-fragments', '6',
+      '-N',
+      '10',
+      '--concurrent-fragments',
+      '6',
       ...(trimming ? [] : ['--http-chunk-size', '10.0M']),
       ...this.buildAuthArgs(task, runtime),
       ...getJsRuntimeArgs(),
@@ -420,20 +512,20 @@ export class YoutubeEngine implements IEngine {
 
     if (sectionBounds) {
       const startSec = formatSectionSeconds(sectionBounds.start)
-      const endSec = sectionBounds.end === undefined
-        ? 'inf'
-        : formatSectionSeconds(sectionBounds.end)
+      const endSec =
+        sectionBounds.end === undefined ? 'inf' : formatSectionSeconds(sectionBounds.end)
       ytArgs.push('--download-sections', `*${startSec}-${endSec}`)
       if (forceKeyframes) {
         ytArgs.push('--force-keyframes-at-cuts')
         if (!isAudioFormat(task.targetFormat)) {
-          const exactCodecArgs = task.targetFormat === 'webm'
-            ? `-threads ${threadBudget} -c:v libvpx-vp9 -deadline realtime -cpu-used 5 -c:a libopus -b:a 192k`
-            : task.targetFormat === 'ogv'
-              ? `-threads ${threadBudget} -c:v libtheora -c:a libvorbis`
-              : task.targetFormat === 'avi'
-                ? `-threads ${threadBudget} -c:v libx264 -preset veryfast -crf 18 -c:a libmp3lame -q:a 2`
-                : `-threads ${threadBudget} -c:v libx264 -preset veryfast -crf 18 -c:a aac -b:a 192k`
+          const exactCodecArgs =
+            task.targetFormat === 'webm'
+              ? `-threads ${threadBudget} -c:v libvpx-vp9 -deadline realtime -cpu-used 5 -c:a libopus -b:a 192k`
+              : task.targetFormat === 'ogv'
+                ? `-threads ${threadBudget} -c:v libtheora -c:a libvorbis`
+                : task.targetFormat === 'avi'
+                  ? `-threads ${threadBudget} -c:v libx264 -preset veryfast -crf 18 -c:a libmp3lame -q:a 2`
+                  : `-threads ${threadBudget} -c:v libx264 -preset veryfast -crf 18 -c:a aac -b:a 192k`
           ytArgs.push('--downloader-args', `ffmpeg_o:${exactCodecArgs}`)
         }
       } else {
@@ -442,12 +534,15 @@ export class YoutubeEngine implements IEngine {
           // Video stream-copy snaps back to the preceding keyframe (often 2-5s earlier); pre-roll input 2 (audio)
           // and preserve original timestamps so finalization can align audio to the exact video keyframe without silence.
           const audioStartSec = formatSectionSeconds(audioPrerollStart)
-          const audioDurArg = sectionBounds.end !== undefined
-            ? ` -t ${formatSectionSeconds(Math.max(0.1, sectionBounds.end - audioPrerollStart))}`
-            : ''
+          const audioDurArg =
+            sectionBounds.end !== undefined
+              ? ` -t ${formatSectionSeconds(Math.max(0.1, sectionBounds.end - audioPrerollStart))}`
+              : ''
           ytArgs.push(
-            '--downloader-args', `ffmpeg_i2:-ss ${audioStartSec}${audioDurArg}`,
-            '--downloader-args', 'ffmpeg_o:-copyts',
+            '--downloader-args',
+            `ffmpeg_i2:-ss ${audioStartSec}${audioDurArg}`,
+            '--downloader-args',
+            'ffmpeg_o:-copyts',
           )
         }
       }
@@ -455,9 +550,17 @@ export class YoutubeEngine implements IEngine {
 
     // Stream-copy on merge for non-exact cuts to avoid re-encoding; exact cuts already encode in the downloader stage.
     if (isAudioFormat(task.targetFormat)) {
-      ytArgs.push('--postprocessor-args', 'ExtractAudio+ffmpeg:-y -hide_banner -threads 2 -max_muxing_queue_size 1024', '--embed-thumbnail', '--add-metadata')
+      ytArgs.push(
+        '--postprocessor-args',
+        'ExtractAudio+ffmpeg:-y -hide_banner -threads 2 -max_muxing_queue_size 1024',
+        '--embed-thumbnail',
+        '--add-metadata',
+      )
     } else if (!forceKeyframes) {
-      ytArgs.push('--postprocessor-args', 'Merger+ffmpeg:-y -hide_banner -threads 2 -c:v copy -c:a copy -max_muxing_queue_size 4096')
+      ytArgs.push(
+        '--postprocessor-args',
+        'Merger+ffmpeg:-y -hide_banner -threads 2 -c:v copy -c:a copy -max_muxing_queue_size 4096',
+      )
     }
 
     const ffmpegExePath = getBinaryPath('ffmpeg')
@@ -469,9 +572,17 @@ export class YoutubeEngine implements IEngine {
     switch (profile) {
       case 'proAudio': {
         const audioFmt = AUDIO_SPECS[task.targetFormat as keyof typeof AUDIO_SPECS].ytDlpFormat
-        ytArgs.push('-x', '--audio-format', audioFmt, '-f', `bestaudio${protocolFilter}/best${protocolFilter}`)
+        ytArgs.push(
+          '-x',
+          '--audio-format',
+          audioFmt,
+          '-f',
+          `bestaudio${protocolFilter}/best${protocolFilter}`,
+        )
         if (task.targetFormat === 'mp3') ytArgs.push('--audio-quality', '0')
-        log.info(`[YoutubeEngine] ProAudio profile applied: format=${audioFmt}, multi-threaded=true, metadata=embedded`)
+        log.info(
+          `[YoutubeEngine] ProAudio profile applied: format=${audioFmt}, multi-threaded=true, metadata=embedded`,
+        )
         break
       }
       case 'bestVideo': {
@@ -479,7 +590,8 @@ export class YoutubeEngine implements IEngine {
         ytArgs.push(
           '-f',
           `bestvideo${protocolFilter}${heightFilter}+bestaudio${protocolFilter}/best${protocolFilter}${heightFilter}`,
-          '-S', 'res,fps,vcodec:h264,acodec:aac'
+          '-S',
+          'res,fps,vcodec:h264,acodec:aac',
         )
         if (heightConstraint) {
           log.info(`[YoutubeEngine] Quality constraint applied: height<=${heightConstraint}`)
@@ -500,9 +612,16 @@ export class YoutubeEngine implements IEngine {
                 : task.targetFormat === 'avi'
                   ? 'res,fps,vcodec:h264'
                   : 'res,fps'
-          ytArgs.push('-f', `bestvideo${protocolFilter}${heightFilter}+bestaudio${protocolFilter}/best${protocolFilter}${heightFilter}`, '-S', sortOrder)
+          ytArgs.push(
+            '-f',
+            `bestvideo${protocolFilter}${heightFilter}+bestaudio${protocolFilter}/best${protocolFilter}${heightFilter}`,
+            '-S',
+            sortOrder,
+          )
           if (heightConstraint) {
-            log.info(`[YoutubeEngine] Quality constraint applied (default): height<=${heightConstraint}`)
+            log.info(
+              `[YoutubeEngine] Quality constraint applied (default): height<=${heightConstraint}`,
+            )
           }
 
           ytArgs.push('--merge-output-format', 'mkv')
@@ -522,7 +641,10 @@ export class YoutubeEngine implements IEngine {
   }
 
   private buildErrorMessage(stderr: string): string {
-    const lines = stderr.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    const lines = stderr
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
     const errorLine = lines.find(l => /ERROR:/.test(l)) || lines.find(l => /yt-dlp error/i.test(l))
     if (errorLine) return errorLine.replace(/^ERROR:\s*/i, '')
     return (lines.slice(-3).join(' ') || 'yt-dlp failed').trim()

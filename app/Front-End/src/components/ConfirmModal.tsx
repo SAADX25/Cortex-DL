@@ -40,7 +40,9 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+          onClick={e => {
+            if (e.target === e.currentTarget) onCancel()
+          }}
         >
           <motion.div
             className="modal-container"
@@ -54,13 +56,11 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 <div className={`modal-icon ${type}`}>
                   <AlertTriangle size={24} />
                 </div>
-                <h3 className="modal-title" id="confirm-modal-title">{title}</h3>
+                <h3 className="modal-title" id="confirm-modal-title">
+                  {title}
+                </h3>
               </div>
-              <button
-                className="modal-close-btn"
-                onClick={onCancel}
-                aria-label="Close dialog"
-              >
+              <button className="modal-close-btn" onClick={onCancel} aria-label="Close dialog">
                 <X size={20} />
               </button>
             </div>

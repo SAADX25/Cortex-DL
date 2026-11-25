@@ -9,7 +9,10 @@ app.commandLine.appendSwitch('js-flags', '--expose-gc')
 app.commandLine.appendSwitch('enable-precise-memory-info')
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ show: false, webPreferences: { contextIsolation: false, nodeIntegration: false } })
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: { contextIsolation: false, nodeIntegration: false },
+  })
   try {
     await win.loadURL(base)
     const result = await win.webContents.executeJavaScript(`(async () => {
@@ -106,7 +109,12 @@ app.whenReady().then(async () => {
       return { scenarios:8, sessions:closes.length, electronPlayback:true }
     })()`)
     assert.equal(result.electronPlayback, true)
-    console.log('TRIM_RESULT='+JSON.stringify(result))
-    win.destroy(); app.quit()
-  } catch(error) { console.error(error); win.destroy(); app.exit(1) }
+    console.log('TRIM_RESULT=' + JSON.stringify(result))
+    win.destroy()
+    app.quit()
+  } catch (error) {
+    console.error(error)
+    win.destroy()
+    app.exit(1)
+  }
 })

@@ -109,7 +109,8 @@ export const ar: Translations = {
   browse_sites: 'تصفح المواقع',
   modal_confirm: 'تأكيد',
   modal_cancel: 'إلغاء',
-  msg_delete_file_confirm: 'هل أنت متأكد أنك تريد حذف هذا الملف نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.',
+  msg_delete_file_confirm:
+    'هل أنت متأكد أنك تريد حذف هذا الملف نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.',
   msg_remove_list_confirm: 'هل تريد إزالة هذه المهمة من القائمة فقط؟',
   msg_clear_completed_confirm: 'هل تريد مسح جميع التنزيلات المكتملة من القائمة؟',
   settings_general: 'عام',
@@ -122,27 +123,34 @@ export const ar: Translations = {
   settings_uninstall_desc: 'حذف التطبيق مع خيار حذف السجل والإعدادات والمحركات بالكامل',
   settings_uninstall_btn: 'حذف التطبيق',
   settings_modal_title: 'حذف Cortex DL',
-  settings_modal_desc: 'سيتم إغلاق البرنامج وتشغيل معالج الحذف. يمكنك حذف جميع بيانات البرنامج، بما فيها المحركات والسجل، أو الاحتفاظ بها. الفيديوهات والأغاني التي نزّلتها تبقى محفوظة.',
+  settings_modal_desc:
+    'سيتم إغلاق البرنامج وتشغيل معالج الحذف. يمكنك حذف جميع بيانات البرنامج، بما فيها المحركات والسجل، أو الاحتفاظ بها. الفيديوهات والأغاني التي نزّلتها تبقى محفوظة.',
   settings_confirm_uninstall: 'تأكيد الحذف',
   settings_cancel: 'إلغاء',
   use_inapp_player: 'مشغل وسائط مدمج',
   use_inapp_player_desc: 'تشغيل الفيديو والصوت داخل التطبيق بدلاً من المشغل الافتراضي',
   refresh_windows_artwork: 'تحديث كاش الأغلفة في Media Player وVLC',
-  refresh_windows_artwork_desc: 'تحديث الأغلفة بعد تغييرها أو حذفها. قد يُغلق Media Player؛ إذا كان VLC مفتوحًا، أعد تشغيله لعرض التغيير.',
+  refresh_windows_artwork_desc:
+    'تحديث الأغلفة بعد تغييرها أو حذفها. قد يُغلق Media Player؛ إذا كان VLC مفتوحًا، أعد تشغيله لعرض التغيير.',
   paste_and_go: 'لصق وانطلاق',
   btn_video: 'فيديو',
   btn_audio: 'صوت',
   new_folder_placeholder: 'مجلد جديد (اختياري)',
   speed_auto: 'تلقائي',
   youtube_auth_required: 'هذا الفيديو يتطلب حسابًا أو صلاحية مشاهدة على YouTube. تعذر تحليل الرابط.',
-  youtube_rate_limited: 'قيّد YouTube الطلبات مؤقتاً (429). انتظر ثم أعد المحاولة؛ هذا الخطأ لا يعني أن ملف الكوكيز مطلوب.',
-  youtube_bot_verification: 'رفض YouTube تحليل الرابط بسبب التحقق الآلي. تحقق من فتح الفيديو في المتصفح، وحدّث محرك yt-dlp ثم أعد المحاولة لاحقًا.',
+  youtube_rate_limited:
+    'قيّد YouTube الطلبات مؤقتاً (429). انتظر ثم أعد المحاولة؛ هذا الخطأ لا يعني أن ملف الكوكيز مطلوب.',
+  youtube_bot_verification:
+    'رفض YouTube تحليل الرابط بسبب التحقق الآلي. تحقق من فتح الفيديو في المتصفح، وحدّث محرك yt-dlp ثم أعد المحاولة لاحقًا.',
   download_retry_required: 'لم يكتمل التنزيل السابق. أعد المحاولة لتنزيل الفيديو بالنظام الحالي.',
-  youtube_formats_restricted: 'قيّد YouTube بعض الصيغ أو لم يوفر صيغة قابلة للتنزيل. حدّث الجودة لاحقاً.',
-  youtube_po_token_required: 'تشير بيانات الاستخراج إلى ضرورة رمز إثبات المصدر لبعض الطلبات. ملف الكوكيز وحده قد لا يحل ذلك.',
+  youtube_formats_restricted:
+    'قيّد YouTube بعض الصيغ أو لم يوفر صيغة قابلة للتنزيل. حدّث الجودة لاحقاً.',
+  youtube_po_token_required:
+    'تشير بيانات الاستخراج إلى ضرورة رمز إثبات المصدر لبعض الطلبات. ملف الكوكيز وحده قد لا يحل ذلك.',
   youtube_network_error: 'تعذر الاتصال بـ YouTube. تحقق من الشبكة ثم أعد المحاولة.',
   threads_no_media: 'هذا المنشور على Threads لا يحتوي على فيديو أو مقطع صوتي قابل للتنزيل.',
-  threads_post_unavailable: 'تعذر الوصول إلى منشور Threads. قد يكون المنشور خاصًا أو محذوفًا أو يتطلب تسجيل الدخول.',
+  threads_post_unavailable:
+    'تعذر الوصول إلى منشور Threads. قد يكون المنشور خاصًا أو محذوفًا أو يتطلب تسجيل الدخول.',
   threads_invalid_url: 'رابط Threads غير صالح. الصق رابط منشور مباشر من Threads.',
   health_title: 'فحص جاهزية التطبيق',
   health_desc: 'يتحقق من المكونات المطلوبة للتحليل والتنزيل على Windows.',
@@ -177,9 +185,11 @@ export const ar: Translations = {
     availableTitle: 'تحديث جديد متاح',
     availableSubtitle: 'يتوفر إصدار أحدث من Cortex DL جاهز للتنزيل مع أحدث التحسينات والإصلاحات.',
     downloadingTitle: 'جارٍ تنزيل التحديث',
-    downloadingSubtitle: 'يجري تنزيل المثبّت الجديد والتحقق منه. يمكنك متابعة استخدام Cortex DL حتى يكتمل.',
+    downloadingSubtitle:
+      'يجري تنزيل المثبّت الجديد والتحقق منه. يمكنك متابعة استخدام Cortex DL حتى يكتمل.',
     downloadedTitle: 'التحديث جاهز للتثبيت',
-    downloadedSubtitle: 'تم تنزيل الإصدار v{version} والتحقق من سلامته. أعد تشغيل Cortex DL لإكمال التثبيت.',
+    downloadedSubtitle:
+      'تم تنزيل الإصدار v{version} والتحقق من سلامته. أعد تشغيل Cortex DL لإكمال التثبيت.',
     errorTitle: 'تعذّر إكمال التحديث',
     whatsNew: 'ما الجديد في هذا الإصدار',
     versionTransition: 'الترقية من v{current} إلى v{latest}',
@@ -423,7 +433,8 @@ export const ar: Translations = {
     coverError: 'اختر صورة صالحة بصيغة JPG أو PNG أو WEBP بحجم لا يتجاوز 8 ميغابايت.',
     embedCover: 'حفظ داخل الملف',
     coverSaved: 'الغلاف محفوظ داخل الملف',
-    coverWriteError: 'تعذّر حفظ الغلاف داخل الملف. أغلقه في المشغلات الأخرى وتأكد أن الملف والمجلد يسمحان بالكتابة.',
+    coverWriteError:
+      'تعذّر حفظ الغلاف داخل الملف. أغلقه في المشغلات الأخرى وتأكد أن الملف والمجلد يسمحان بالكتابة.',
     coverChangedError: 'تغيّر الملف أثناء الحفظ. حدّث المكتبة وحاول مجددًا.',
     coverRecoveryError: 'تعذّر استعادة الملف الأصلي. النسخة الاحتياطية محفوظة هنا:',
     coverPlayingError: 'أغلق مشغل هذا الملف قبل تغيير غلافه.',
@@ -571,7 +582,8 @@ export const ar: Translations = {
       saved: 'تم حفظ الترجمة',
       invalid: 'راجع توقيت المقاطع: مدة موجبة، ترتيب زمني، ومن دون تداخل.',
       error: 'تعذر إكمال الترجمة',
-      preparingHint: 'قد يستغرق تحميل النموذج وقتًا عند أول استخدام. سرعة التعرف على الكلام تعتمد على جهازك.',
+      preparingHint:
+        'قد يستغرق تحميل النموذج وقتًا عند أول استخدام. سرعة التعرف على الكلام تعتمد على جهازك.',
       noReview: 'لا توجد مقاطع معلّمة للمراجعة.',
       content: 'نوع الصوت',
       speechContent: 'كلام وحوار',
@@ -593,7 +605,8 @@ export const ar: Translations = {
       cpuAvailable: 'المعالج متاح',
       gpuSetup: 'تجهيز تسريع كرت الشاشة',
       gpuDownload: 'تجهيز محركات GPU',
-      gpuNote: 'يستخدم كرت الشاشة للتعرف والترجمة. يُستخدم CPU إذا لم تكفِ ذاكرة الكرت أو تعذر تشغيله.',
+      gpuNote:
+        'يستخدم كرت الشاشة للتعرف والترجمة. يُستخدم CPU إذا لم تكفِ ذاكرة الكرت أو تعذر تشغيله.',
       gpuCompact: 'Large v3 Q5 · ذاكرة أقل؛ قد تختلف الدقة قليلًا.',
       gpuFallback: 'تعذر استخدام الكرت لهذه المرحلة؛ تجري المتابعة على CPU.',
       optimizingGpu: 'تهيئة Large v3 الموجود ليتناسب مع ذاكرة الكرت',
@@ -608,10 +621,14 @@ export const ar: Translations = {
         LOCAL_SUBTITLES_DISK_SPACE: 'المساحة المتاحة لا تكفي للنماذج المختارة أو الصوت.',
         LOCAL_SUBTITLES_WINDOWS_X64: 'النماذج المحلية تدعم Windows x64 حاليًا.',
         LOCAL_SUBTITLES_BUSY: 'انتظر العملية الحالية أو ألغها.',
-        LOCAL_SUBTITLES_NO_SPEECH: 'لم تُكتشف كلمات واضحة في الصوت كاملًا. تحقق من لغة الكلام والصوت؛ الموسيقى وحدها لا تُترجم.',
-        'Speech engine returned invalid timing': 'أعاد محرك التعرف على الكلام توقيتًا غير صالح للترجمة. جرّب نموذج الدقة الأعلى أو المعالجة باستخدام CPU.',
-        'Invalid speech engine output': 'تعذّرت قراءة نتيجة محرك التعرف على الكلام. حاول إنشاء الترجمة مجددًا.',
-        'Invalid subtitle timing or text': 'توقيت بعض مقاطع الترجمة أو نصها غير صالح. راجع المقاطع قبل الحفظ.',
+        LOCAL_SUBTITLES_NO_SPEECH:
+          'لم تُكتشف كلمات واضحة في الصوت كاملًا. تحقق من لغة الكلام والصوت؛ الموسيقى وحدها لا تُترجم.',
+        'Speech engine returned invalid timing':
+          'أعاد محرك التعرف على الكلام توقيتًا غير صالح للترجمة. جرّب نموذج الدقة الأعلى أو المعالجة باستخدام CPU.',
+        'Invalid speech engine output':
+          'تعذّرت قراءة نتيجة محرك التعرف على الكلام. حاول إنشاء الترجمة مجددًا.',
+        'Invalid subtitle timing or text':
+          'توقيت بعض مقاطع الترجمة أو نصها غير صالح. راجع المقاطع قبل الحفظ.',
       },
     },
   },

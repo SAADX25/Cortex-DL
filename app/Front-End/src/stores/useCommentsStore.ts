@@ -12,15 +12,15 @@ interface CommentsStoreState {
   setCommentsProgress: (v: { current: number; total: number } | null) => void
 }
 
-export const useCommentsStore = create<CommentsStoreState>((set) => ({
+export const useCommentsStore = create<CommentsStoreState>(set => ({
   isCommentsDownloading: false,
-  setIsCommentsDownloading: (v) => set({ isCommentsDownloading: v }),
+  setIsCommentsDownloading: v => set({ isCommentsDownloading: v }),
 
   commentsSuccessPath: null,
-  setCommentsSuccessPath: (v) => set({ commentsSuccessPath: v }),
+  setCommentsSuccessPath: v => set({ commentsSuccessPath: v }),
 
   commentsProgress: null,
-  setCommentsProgress: (v) => set({ commentsProgress: v }),
+  setCommentsProgress: v => set({ commentsProgress: v }),
 }))
 
 // Singleton guard avoids duplicate IPC subscriptions under StrictMode.

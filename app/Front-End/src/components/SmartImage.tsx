@@ -21,7 +21,10 @@ const SmartImage: React.FC<SmartImageProps> = ({
   fetchPriority,
   ...rest
 }) => {
-  const [resolved, setResolved] = useState<{ source?: string; image?: string }>({ source: src, image: src })
+  const [resolved, setResolved] = useState<{ source?: string; image?: string }>({
+    source: src,
+    image: src,
+  })
   const generation = useRef(0)
   const proxyAttempt = useRef(false)
   const mediaEndpoint = useMediaEndpoint()
@@ -32,20 +35,32 @@ const SmartImage: React.FC<SmartImageProps> = ({
     reference.current++
     proxyAttempt.current = false
     setResolved({ source: src, image: src })
-    return () => { reference.current++ }
+    return () => {
+      reference.current++
+    }
   }, [src])
 
   const finalSrc = (resolved.source === src ? resolved.image : src) || THUMB_FALLBACK_DATA_URI
   const onImageError = () => {
     const owned = generation.current
     // Meta CDN thumbnails often block direct renderer requests; retry once via the main-process proxy first.
-    if (src && /(?:cdninstagram|instagram|fbcdn)\./i.test(new URL(src, window.location.href).hostname) && mediaEndpoint && !proxyAttempt.current) {
+    if (
+      src &&
+      /(?:cdninstagram|instagram|fbcdn)\./i.test(new URL(src, window.location.href).hostname) &&
+      mediaEndpoint &&
+      !proxyAttempt.current
+    ) {
       proxyAttempt.current = true
-      void window.cortexDl.fetchThumbnail(src).then(file => {
-        if (generation.current === owned) setResolved({ source: src, image: buildMediaUrl(file, mediaEndpoint) })
-      }).catch(() => {
-        if (generation.current === owned) setResolved({ source: src, image: THUMB_FALLBACK_DATA_URI })
-      })
+      void window.cortexDl
+        .fetchThumbnail(src)
+        .then(file => {
+          if (generation.current === owned)
+            setResolved({ source: src, image: buildMediaUrl(file, mediaEndpoint) })
+        })
+        .catch(() => {
+          if (generation.current === owned)
+            setResolved({ source: src, image: THUMB_FALLBACK_DATA_URI })
+        })
     } else if (finalSrc !== THUMB_FALLBACK_DATA_URI) {
       setResolved({ source: src, image: THUMB_FALLBACK_DATA_URI })
     }
@@ -54,7 +69,6 @@ const SmartImage: React.FC<SmartImageProps> = ({
   if (withBlurBg) {
     return (
       <>
-
         <img
           src={finalSrc}
           alt=""

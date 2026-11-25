@@ -1,6 +1,21 @@
 // Download task card; high-frequency progress updates mutate DOM refs directly to skip React re-renders
 import React, { useRef, useState } from 'react'
-import { Play, FolderOpen, Trash2, X, Pause, RotateCcw, CheckCircle2, FileVideo, Music2, HardDrive, Gauge, Clock3, Captions } from 'lucide-react'
+import {
+  Play,
+  FolderOpen,
+  Trash2,
+  X,
+  Pause,
+  RotateCcw,
+  CheckCircle2,
+  FileVideo,
+  Music2,
+  HardDrive,
+  Gauge,
+  Clock3,
+  Captions,
+  Scissors,
+} from 'lucide-react'
 import { openSubtitleStudio } from '../stores/useSubtitleStudioStore'
 import { useDownloadCardVM, type DisplayPhase } from '../hooks/useDownloadCardVM'
 import { useHighFrequencyIPC } from '../hooks/useHighFrequencyIPC'
@@ -55,7 +70,7 @@ const ProgressBar: React.FC<{
 })
 ProgressBar.displayName = 'ProgressBar'
 
-const DownloadCard: React.FC<DownloadCardProps> = (props) => {
+const DownloadCard: React.FC<DownloadCardProps> = props => {
   const { id, onOpenFile, onOpenFolder, onDelete, onError } = props
   const lang = useLang()
   const t = translations[lang]
@@ -64,7 +79,9 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   const progressBarRef = useRef<HTMLDivElement>(null)
   const speedTextRef = useRef<HTMLSpanElement>(null)
   const percentTextRef = useRef<HTMLSpanElement>(null)
-  const [thumbnailAspect, setThumbnailAspect] = useState<{ source: string; ratio: number } | null>(null)
+  const [thumbnailAspect, setThumbnailAspect] = useState<{ source: string; ratio: number } | null>(
+    null,
+  )
 
   useHighFrequencyIPC(id, {
     progressBarRef,
@@ -75,16 +92,19 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
   if (!vm) return null
 
   const isActive = vm.phase === 'downloading' || vm.phase === 'starting'
-  const isPostProcessing = vm.phase === 'merging' || vm.phase === 'converting' || vm.phase === 'trimming'
+  const isPostProcessing =
+    vm.phase === 'merging' || vm.phase === 'converting' || vm.phase === 'trimming'
   const aspect = thumbnailAspect?.source === vm.thumbnail ? thumbnailAspect.ratio : null
-  const isShort = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/shorts\//i.test(vm.sourceUrl)
-    || /\/oar(?:default|[123])\.(?:jpg|webp)(?:\?|$)/i.test(vm.thumbnail ?? '')
+  const isShort =
+    /^https?:\/\/(?:www\.|m\.)?youtube\.com\/shorts\//i.test(vm.sourceUrl) ||
+    /\/oar(?:default|[123])\.(?:jpg|webp)(?:\?|$)/i.test(vm.thumbnail ?? '')
   const isPortrait = isShort || (aspect !== null && aspect < 0.9)
 
   return (
     <div className={`dc-card ${vm.phase}`}>
-
-      <div className={`dc-thumb${isPortrait ? ' portrait' : ''}${isShort && aspect !== null && aspect >= 1 ? ' short-letterboxed' : ''}`}>
+      <div
+        className={`dc-thumb${isPortrait ? ' portrait' : ''}${isShort && aspect !== null && aspect >= 1 ? ' short-letterboxed' : ''}`}
+      >
         {vm.thumbnail ? (
           <SmartImage
             src={vm.thumbnail}
@@ -94,22 +114,39 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
               const image = event.currentTarget
               if (vm.thumbnail && image.naturalWidth > 0 && image.naturalHeight > 0) {
                 const ratio = image.naturalWidth / image.naturalHeight
-                setThumbnailAspect(current => current?.source === vm.thumbnail && current.ratio === ratio ? current : { source: vm.thumbnail!, ratio })
+                setThumbnailAspect(current =>
+                  current?.source === vm.thumbnail && current.ratio === ratio
+                    ? current
+                    : { source: vm.thumbnail!, ratio },
+                )
               }
             }}
           />
         ) : (
           <div className="dc-thumb-placeholder">
-            {AUDIO_FORMATS.includes(vm.formatTag as (typeof AUDIO_FORMATS)[number]) ? <Music2 size={30} /> : <FileVideo size={30} />}
+            {AUDIO_FORMATS.includes(vm.formatTag as (typeof AUDIO_FORMATS)[number]) ? (
+              <Music2 size={30} />
+            ) : (
+              <FileVideo size={30} />
+            )}
           </div>
         )}
       </div>
 
       <div className="dc-body">
-
         <div className="dc-header">
-          <h4 className="dc-title" title={vm.title} dir="auto">{vm.title}</h4>
-          <span className={`dc-format-tag ${vm.formatTag}`}>{vm.formatTag}</span>
+          <h4 className="dc-title" title={vm.title} dir="auto">
+            {vm.title}
+          </h4>
+          <div className="dc-tags">
+            {vm.trimRangeLabel && (
+              <span className="dc-trim-tag" dir="ltr" title={vm.trimRangeLabel}>
+                <Scissors size={11} />
+                {vm.trimRangeLabel}
+              </span>
+            )}
+            <span className={`dc-format-tag ${vm.formatTag}`}>{vm.formatTag}</span>
+          </div>
         </div>
 
         <div className="dc-meta">
@@ -133,10 +170,14 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
                 </span>
               )}
               {vm.sizeLabel && (
-                <span className="dc-stat" dir="ltr"><HardDrive size={13} /> {vm.sizeLabel}</span>
+                <span className="dc-stat" dir="ltr">
+                  <HardDrive size={13} /> {vm.sizeLabel}
+                </span>
               )}
               {vm.etaLabel && vm.etaLabel !== '--:--' && (
-                <span className="dc-stat" dir="ltr"><Clock3 size={13} /> {vm.etaLabel}</span>
+                <span className="dc-stat" dir="ltr">
+                  <Clock3 size={13} /> {vm.etaLabel}
+                </span>
               )}
             </div>
           )}
@@ -150,7 +191,9 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
             progressBarRef={progressBarRef}
           />
           <div className="dc-progress-info">
-            <span className="dc-percent" ref={percentTextRef}>{vm.percentLabel}</span>
+            <span className="dc-percent" ref={percentTextRef}>
+              {vm.percentLabel}
+            </span>
           </div>
         </div>
 
@@ -160,43 +203,78 @@ const DownloadCard: React.FC<DownloadCardProps> = (props) => {
           <div className="dc-action-group">
             {vm.showPause && (
               <button className="dc-btn primary" onClick={vm.onPause} aria-label={t.btn_pause}>
-                <Pause size={15} />{t.downloads.pause}
+                <Pause size={15} />
+                {t.downloads.pause}
               </button>
             )}
             {vm.showResume && (
               <button className="dc-btn success" onClick={vm.onResume} aria-label={t.btn_resume}>
-                <RotateCcw size={15} />{t.downloads.resume}
+                <RotateCcw size={15} />
+                {t.downloads.resume}
               </button>
             )}
             {vm.showCancel && (
               <button className="dc-btn danger" onClick={vm.onCancel} aria-label={t.btn_cancel}>
-                <X size={15} />{t.downloads.cancel}
+                <X size={15} />
+                {t.downloads.cancel}
               </button>
             )}
             {vm.showPlay && (
-              <button className="dc-btn primary" onClick={() => openSubtitleStudio(vm.filePath)} title={t.downloads.generateSubtitlesTitle}>
-                <Captions size={15} />{t.downloads.subtitles}
+              <button
+                className="dc-btn primary"
+                onClick={() => openSubtitleStudio(vm.filePath)}
+                title={t.downloads.generateSubtitlesTitle}
+              >
+                <Captions size={15} />
+                {t.downloads.subtitles}
               </button>
             )}
             {vm.showPlay && (
-              <button className="dc-btn dc-play" onClick={vm.onPlay} title={t.btn_play} aria-label={t.btn_play}>
-                <Play size={15} />{t.downloads.play}
+              <button
+                className="dc-btn dc-play"
+                onClick={vm.onPlay}
+                title={t.btn_play}
+                aria-label={t.btn_play}
+              >
+                <Play size={15} />
+                {t.downloads.play}
               </button>
             )}
             {vm.showPlay && /\.(mp4|mkv|webm|mov|avi|m4v|ogv)$/i.test(vm.filePath) && (
-              <DownloadSubtitleMerge id={id} filePath={vm.filePath} title={vm.title} onOpenFile={onOpenFile} onOpenFolder={onOpenFolder} />
+              <DownloadSubtitleMerge
+                id={id}
+                filePath={vm.filePath}
+                title={vm.title}
+                onOpenFile={onOpenFile}
+                onOpenFolder={onOpenFolder}
+              />
             )}
             {vm.showOpenFolder && (
-              <button className="dc-btn-icon ghost-warning" onClick={vm.onOpenFolder} title={t.btn_folder} aria-label={t.btn_folder}>
+              <button
+                className="dc-btn-icon ghost-warning"
+                onClick={vm.onOpenFolder}
+                title={t.btn_folder}
+                aria-label={t.btn_folder}
+              >
                 <FolderOpen size={17} />
               </button>
             )}
           </div>
           <div className="dc-action-group">
-            <button className="dc-btn-icon" onClick={() => vm.onDelete(false)} title={t.downloads.removeFromList} aria-label={t.btn_remove}>
+            <button
+              className="dc-btn-icon"
+              onClick={() => vm.onDelete(false)}
+              title={t.downloads.removeFromList}
+              aria-label={t.btn_remove}
+            >
               <X size={17} />
             </button>
-            <button className="dc-btn-icon ghost-danger" onClick={() => vm.onDelete(true)} title={t.btn_delete} aria-label={t.btn_delete}>
+            <button
+              className="dc-btn-icon ghost-danger"
+              onClick={() => vm.onDelete(true)}
+              title={t.btn_delete}
+              aria-label={t.btn_delete}
+            >
               <Trash2 size={17} />
             </button>
           </div>

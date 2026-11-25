@@ -41,7 +41,11 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
   const ui = useUIStore.getState()
   // Avoid restarting an active analysis for the same normalized URL.
   if (ui.analyzing) {
-    try { if (normalizeAnalysisUrl(ui.url) === normalizeAnalysisUrl(urlToAnalyze)) return } catch { primaryAnalysis.cancel() }
+    try {
+      if (normalizeAnalysisUrl(ui.url) === normalizeAnalysisUrl(urlToAnalyze)) return
+    } catch {
+      primaryAnalysis.cancel()
+    }
   }
   const form = useFormStore.getState()
 
@@ -49,7 +53,11 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
   ui.setAnalyzing(true)
   ui.setAnalyzeResult(null)
   form.resetForNewUrl()
-  try { ui.setUrl(normalizeAnalysisUrl(urlToAnalyze)) } catch { ui.setUrl(urlToAnalyze) }
+  try {
+    ui.setUrl(normalizeAnalysisUrl(urlToAnalyze))
+  } catch {
+    ui.setUrl(urlToAnalyze)
+  }
   ui.setAnalyzing(true)
   const requestId = crypto.randomUUID()
   let detailed = false
@@ -61,7 +69,8 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
     const state = useUIStore.getState()
     if (state.analyzeResult?.kind !== 'ytdlp') return
     if (update.stage === 'preview' && detailed) return
-    if (update.stage === 'preview' && typeof update.data.title === 'string') state.setAnalysisStage('formats')
+    if (update.stage === 'preview' && typeof update.data.title === 'string')
+      state.setAnalysisStage('formats')
     state.setAnalyzeResult({ ...state.analyzeResult, ...update.data })
   })
   const generation = primaryAnalysis.begin(() => {
@@ -70,16 +79,25 @@ async function performAnalysis(urlToAnalyze: string): Promise<void> {
   })
   // Seed an instant YouTube placeholder card before yt-dlp returns full metadata (skip playlist URLs).
   const videoId = youtubeVideoId(urlToAnalyze)
-  if (videoId && !['list', 'list_id'].some(key => new URL(urlToAnalyze.trim()).searchParams.has(key))) {
-    ui.setAnalyzeResult({ kind: 'ytdlp', preview: true, title: 'YouTube',
-      thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`, formats: [] })
+  if (
+    videoId &&
+    !['list', 'list_id'].some(key => new URL(urlToAnalyze.trim()).searchParams.has(key))
+  ) {
+    ui.setAnalyzeResult({
+      kind: 'ytdlp',
+      preview: true,
+      title: 'YouTube',
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      formats: [],
+    })
   }
 
   try {
     const result = await window.cortexDl.analyzeUrl(normalizeAnalysisUrl(urlToAnalyze), requestId)
     if (!primaryAnalysis.current(generation)) return
     detailed = true
-    if (window.cortexDl.analysisDebug) console.debug('[analysis timing] fullFormatsReadyMs=', primaryAnalysis.elapsed())
+    if (window.cortexDl.analysisDebug)
+      console.debug('[analysis timing] fullFormatsReadyMs=', primaryAnalysis.elapsed())
     if (result.kind === 'ytdlp' && dislikes !== undefined) result.dislikes = dislikes
 
     if (result.kind === 'playlist') {
@@ -119,7 +137,10 @@ export async function handleAnalyzeUrlDirectly(inputUrl: string): Promise<void> 
   try {
     const parsedUrl = new URL(inputUrl)
     // Prompt when a YouTube link points to a video inside a playlist so the user can pick scope.
-    if (parsedUrl.searchParams.has('v') && (parsedUrl.searchParams.has('list') || parsedUrl.searchParams.has('list_id'))) {
+    if (
+      parsedUrl.searchParams.has('v') &&
+      (parsedUrl.searchParams.has('list') || parsedUrl.searchParams.has('list_id'))
+    ) {
       useUIStore.getState().setModalConfig({
         isOpen: true,
         title: 'Playlist Detected',
@@ -153,10 +174,28 @@ async function fetchMetadataForBatchItem(id: string, urlToAnalyze: string): Prom
   try {
     const res = await window.cortexDl.analyzeUrl(urlToAnalyze)
     const newTitle = res && 'title' in res ? res.title : undefined
-    const newThumb = res && 'thumbnail' in res ? (res as { thumbnail?: string }).thumbnail : undefined
-    ui.setBatchItems((prev) => prev.map((b) => b.id === id ? { ...b, title: newTitle ?? b.title ?? undefined, thumbnail: newThumb ?? b.thumbnail ?? undefined, loading: false } : b))
+    const newThumb =
+      res && 'thumbnail' in res ? (res as { thumbnail?: string }).thumbnail : undefined
+    ui.setBatchItems(prev =>
+      prev.map(b =>
+        b.id === id
+          ? {
+              ...b,
+              title: newTitle ?? b.title ?? undefined,
+              thumbnail: newThumb ?? b.thumbnail ?? undefined,
+              loading: false,
+            }
+          : b,
+      ),
+    )
   } catch {
-    ui.setBatchItems((prev) => prev.map((b) => b.id === id ? { ...b, loading: false, title: b.title === 'Loading...' ? undefined : b.title } : b))
+    ui.setBatchItems(prev =>
+      prev.map(b =>
+        b.id === id
+          ? { ...b, loading: false, title: b.title === 'Loading...' ? undefined : b.title }
+          : b,
+      ),
+    )
   }
 }
 
@@ -170,7 +209,9 @@ export function onAddToList(): void {
     const selectedItems = analyzeResult.items.filter((item: any) => item.selected)
     const remainingSlots = MAX_BATCH_ITEMS - batchItems.length
     if (remainingSlots <= 0) {
-      ui.showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
+      ui.showToast(
+        `⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`,
+      )
       return
     }
 
@@ -184,7 +225,7 @@ export function onAddToList(): void {
       quality: selectedYtdlpFormatId || selectedQuality || null,
     }))
 
-    ui.setBatchItems((prev) => [...prev, ...itemsToAdd])
+    ui.setBatchItems(prev => [...prev, ...itemsToAdd])
 
     if (selectedItems.length > remainingSlots) {
       ui.showToast(`⚠️ Added ${remainingSlots} items. Batch limit reached!`)
@@ -196,7 +237,9 @@ export function onAddToList(): void {
   const trimmed = url.trim()
   if (!trimmed) return
   if (batchItems.length >= MAX_BATCH_ITEMS) {
-    ui.showToast(`⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`)
+    ui.showToast(
+      `⚠️ Batch limit reached! Please process your current ${MAX_BATCH_ITEMS} items before adding more.`,
+    )
     return
   }
   if (!/^https?:\/\//i.test(trimmed)) {
@@ -206,7 +249,8 @@ export function onAddToList(): void {
   }
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const knownTitle = analyzeResult?.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined
+  const knownTitle =
+    analyzeResult?.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined
   const knownThumb = analyzeResult?.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined
   const item: BatchItem = {
     id,
@@ -218,7 +262,7 @@ export function onAddToList(): void {
     quality: selectedYtdlpFormatId || selectedQuality || null,
   }
 
-  ui.setBatchItems((prev) => [...prev, item])
+  ui.setBatchItems(prev => [...prev, item])
   if (!knownTitle) void fetchMetadataForBatchItem(id, trimmed)
   resetInputState()
 }
@@ -238,10 +282,12 @@ export async function onStartBatchDownload(): Promise<void> {
   const count = currentBatchItems.length
   if (count === 0) return
 
-  ui.setBatchItems((prev) => prev.map((b) => ({ ...b, status: 'processing' as const, errorMessage: undefined })))
+  ui.setBatchItems(prev =>
+    prev.map(b => ({ ...b, status: 'processing' as const, errorMessage: undefined })),
+  )
 
   try {
-    const inputs = currentBatchItems.map((item) => {
+    const inputs = currentBatchItems.map(item => {
       const finalUrl = item.url
       const engine: 'auto' | 'direct' | 'ffmpeg' | 'ytdlp' = isYtdlpUrl(finalUrl) ? 'ytdlp' : 'auto'
       return {
@@ -273,7 +319,7 @@ export async function onStartBatchDownload(): Promise<void> {
   } catch (err) {
     const msg = normalizeIpcError(err, t().download_start_failed, t())
     ui.showToast(`❌ ${msg}`)
-    ui.setBatchItems((prev) => prev.map((b) => ({ ...b, status: 'error', errorMessage: msg })))
+    ui.setBatchItems(prev => prev.map(b => ({ ...b, status: 'error', errorMessage: msg })))
   }
 }
 
@@ -296,7 +342,11 @@ export async function onDownloadNow(): Promise<void> {
       const itemsToDownload = selectedItems.slice(0, remainingSlots)
 
       if (itemsToDownload.length === 0) {
-        ui.showToast(selectedItems.length === 0 ? `⚠️ No items selected for download!` : `⚠️ Max concurrent downloads reached!`)
+        ui.showToast(
+          selectedItems.length === 0
+            ? `⚠️ No items selected for download!`
+            : `⚠️ Max concurrent downloads reached!`,
+        )
         return
       }
 
@@ -344,7 +394,10 @@ export async function onDownloadNow(): Promise<void> {
         engine,
         targetFormat: form.targetFormat,
         ytdlpFormatId: form.selectedYtdlpFormatId || form.selectedQuality || undefined,
-        title: analyzeResult.kind === 'ytdlp' && !analyzeResult.preview ? analyzeResult.title : undefined,
+        title:
+          analyzeResult.kind === 'ytdlp' && !analyzeResult.preview
+            ? analyzeResult.title
+            : undefined,
         thumbnail: analyzeResult.kind === 'ytdlp' ? analyzeResult.thumbnail : undefined,
         isLive: analyzeResult.kind === 'ytdlp' ? Boolean(analyzeResult.isLive) : undefined,
         username: settings.username || undefined,
@@ -384,7 +437,9 @@ export function onDelete(id: string, deleteFile: boolean): void {
         useDownloadStore.getState().removeTask(id)
         useUIStore.getState().closeModal()
       } catch (err) {
-        useUIStore.getState().setGlobalError(normalizeIpcError(err, translated.delete_failed, translated))
+        useUIStore
+          .getState()
+          .setGlobalError(normalizeIpcError(err, translated.delete_failed, translated))
         useUIStore.getState().closeModal()
       }
     },
@@ -413,8 +468,11 @@ export async function onOpenFolder(filePath: string): Promise<void> {
 }
 
 export async function onOpenExternal(url: string): Promise<void> {
-  try { await window.cortexDl.openExternal(url) }
-  catch (err) { console.error('Failed to open external URL:', err) }
+  try {
+    await window.cortexDl.openExternal(url)
+  } catch (err) {
+    console.error('Failed to open external URL:', err)
+  }
 }
 
 export function removeAnalyzedPlaylistVideo(index: number): void {
@@ -433,7 +491,7 @@ export function togglePlaylistItemSelected(index: number): void {
     ui.setAnalyzeResult({
       ...ui.analyzeResult,
       items: ui.analyzeResult.items.map((p: any, i: number) =>
-        i === index ? { ...p, selected: !p.selected } : p
+        i === index ? { ...p, selected: !p.selected } : p,
       ),
     })
   }

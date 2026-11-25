@@ -1,4 +1,3 @@
-
 export function parseFrameRate(value: unknown): number | null {
   if (typeof value !== 'number' && typeof value !== 'string') return null
   const text = String(value).trim()
@@ -8,13 +7,17 @@ export function parseFrameRate(value: unknown): number | null {
   return Number.isFinite(rate) && rate > 0 ? rate : null
 }
 
-export function videoFrameRate(streams: Array<{
-  codec_type?: string
-  avg_frame_rate?: string
-  r_frame_rate?: string
-  disposition?: { attached_pic?: number }
-}>): number | null {
+export function videoFrameRate(
+  streams: Array<{
+    codec_type?: string
+    avg_frame_rate?: string
+    r_frame_rate?: string
+    disposition?: { attached_pic?: number }
+  }>,
+): number | null {
   // Skip embedded cover art and prefer avg_frame_rate over r_frame_rate (which can report timebase on VFR).
-  const video = streams.find(stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic)
-  return video ? parseFrameRate(video.avg_frame_rate) ?? parseFrameRate(video.r_frame_rate) : null
+  const video = streams.find(
+    stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic,
+  )
+  return video ? (parseFrameRate(video.avg_frame_rate) ?? parseFrameRate(video.r_frame_rate)) : null
 }

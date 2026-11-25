@@ -31,8 +31,13 @@ const tabPaneStyle = (isActive: boolean): React.CSSProperties => ({
 function App() {
   useEffect(() => {
     let second = 0
-    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => window.cortexDl.reportFirstUiRender()) })
-    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second) }
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => window.cortexDl.reportFirstUiRender())
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
   }, [])
   useSettingsInit()
   useDownloadInit()
@@ -41,32 +46,39 @@ function App() {
     return () => dispose()
   }, [])
 
-  const lang = useSettingsStore((s) => s.lang)
+  const lang = useSettingsStore(s => s.lang)
   const t = translations[lang]
-  const refreshHealth = useSettingsStore((s) => s.refreshHealth)
+  const refreshHealth = useSettingsStore(s => s.refreshHealth)
 
-  const activeTab = useUIStore((s) => s.activeTab)
-  const toastMsg = useUIStore((s) => s.toastMsg)
-  const modalConfig = useUIStore((s) => s.modalConfig)
-  const closeModal = useUIStore((s) => s.closeModal)
-  const mediaPlayerFile = useUIStore((s) => s.mediaPlayerFile)
-  const setMediaPlayerFile = useUIStore((s) => s.setMediaPlayerFile)
+  const activeTab = useUIStore(s => s.activeTab)
+  const toastMsg = useUIStore(s => s.toastMsg)
+  const modalConfig = useUIStore(s => s.modalConfig)
+  const closeModal = useUIStore(s => s.closeModal)
+  const mediaPlayerFile = useUIStore(s => s.mediaPlayerFile)
+  const setMediaPlayerFile = useUIStore(s => s.setMediaPlayerFile)
 
-  useEffect(() => window.cortexDl.onCloseMediaPlayer(() => setMediaPlayerFile(null)), [setMediaPlayerFile])
+  useEffect(
+    () => window.cortexDl.onCloseMediaPlayer(() => setMediaPlayerFile(null)),
+    [setMediaPlayerFile],
+  )
 
-  const isCommentsDownloading = useCommentsStore((s) => s.isCommentsDownloading)
-  const commentsSuccessPath = useCommentsStore((s) => s.commentsSuccessPath)
-  const commentsProgress = useCommentsStore((s) => s.commentsProgress)
-  const setIsCommentsDownloading = useCommentsStore((s) => s.setIsCommentsDownloading)
-  const setCommentsSuccessPath = useCommentsStore((s) => s.setCommentsSuccessPath)
+  const isCommentsDownloading = useCommentsStore(s => s.isCommentsDownloading)
+  const commentsSuccessPath = useCommentsStore(s => s.commentsSuccessPath)
+  const commentsProgress = useCommentsStore(s => s.commentsProgress)
+  const setIsCommentsDownloading = useCommentsStore(s => s.setIsCommentsDownloading)
+  const setCommentsSuccessPath = useCommentsStore(s => s.setCommentsSuccessPath)
 
-  const [setupState, setSetupState] = useState<{ status: string; progress: number; message: string } | null>(null)
+  const [setupState, setSetupState] = useState<{
+    status: string
+    progress: number
+    message: string
+  } | null>(null)
 
   useEffect(() => {
     if (window.cortexDl && window.cortexDl.onSetupProgress) {
       let disposed = false
       let receivedProgress = false
-      const unsubscribe = window.cortexDl.onSetupProgress((state) => {
+      const unsubscribe = window.cortexDl.onSetupProgress(state => {
         receivedProgress = true
         setSetupState(state)
 
@@ -75,21 +87,36 @@ function App() {
         }
       })
 
-      void window.cortexDl.getSetupState().then(state => {
-        if (!disposed && !receivedProgress) setSetupState(state)
-      }).catch(error => console.error('[Setup] State request failed:', error))
-      return () => { disposed = true; unsubscribe() }
+      void window.cortexDl
+        .getSetupState()
+        .then(state => {
+          if (!disposed && !receivedProgress) setSetupState(state)
+        })
+        .catch(error => console.error('[Setup] State request failed:', error))
+      return () => {
+        disposed = true
+        unsubscribe()
+      }
     }
   }, [refreshHealth])
 
   return (
-    <div className={`app-container${window.cortexDl.customTitleBar ? ' has-titlebar' : ''}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      {window.cortexDl.customTitleBar && <div className="app-titlebar" aria-hidden="true"><div className="app-titlebar-drag" /></div>}
-      {setupState && ['repairing', 'repair-required', 'degraded', 'fatal'].includes(setupState.status) && <SetupOverlay setupState={setupState} />}
+    <div
+      className={`app-container${window.cortexDl.customTitleBar ? ' has-titlebar' : ''}`}
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+    >
+      {window.cortexDl.customTitleBar && (
+        <div className="app-titlebar" aria-hidden="true">
+          <div className="app-titlebar-drag" />
+        </div>
+      )}
+      {setupState &&
+        ['repairing', 'repair-required', 'degraded', 'fatal'].includes(setupState.status) && (
+          <SetupOverlay setupState={setupState} />
+        )}
       <Sidebar />
 
       <main className="main-content">
-
         <AnimatePresence>
           {toastMsg && (
             <motion.div
@@ -115,7 +142,15 @@ function App() {
         </div>
 
         <div style={tabPaneStyle(activeTab === 'library')}>
-          <Suspense fallback={<div className="tab-content" role="status">{t.app.loadingLibrary}</div>}><MediaLibrary /></Suspense>
+          <Suspense
+            fallback={
+              <div className="tab-content" role="status">
+                {t.app.loadingLibrary}
+              </div>
+            }
+          >
+            <MediaLibrary />
+          </Suspense>
         </div>
 
         <div style={tabPaneStyle(activeTab === 'settings')}>
@@ -175,24 +210,73 @@ function App() {
             >
               {!commentsSuccessPath ? (
                 <>
-                  <div className="spinner-sm" style={{ margin: '0 auto 16px auto', borderTopColor: '#3b82f6', width: '36px', height: '36px', borderWidth: '3px' }}></div>
+                  <div
+                    className="spinner-sm"
+                    style={{
+                      margin: '0 auto 16px auto',
+                      borderTopColor: '#3b82f6',
+                      width: '36px',
+                      height: '36px',
+                      borderWidth: '3px',
+                    }}
+                  ></div>
                   <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600 }}>
                     {t.app.downloadingComments}
                   </h3>
-                  <p style={{ marginTop: '12px', color: '#94a3b8', fontSize: '0.95rem', marginBottom: 0, animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
+                  <p
+                    style={{
+                      marginTop: '12px',
+                      color: '#94a3b8',
+                      fontSize: '0.95rem',
+                      marginBottom: 0,
+                      animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }}
+                  >
                     {commentsProgress
-                      ? formatMessage(t.app.extractingComments, { current: commentsProgress.current, total: commentsProgress.total })
+                      ? formatMessage(t.app.extractingComments, {
+                          current: commentsProgress.current,
+                          total: commentsProgress.total,
+                        })
                       : t.app.connecting}
                   </p>
                 </>
               ) : (
                 <>
-                  <div style={{ margin: '0 auto 16px auto', width: '48px', height: '48px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e' }}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <div
+                    style={{
+                      margin: '0 auto 16px auto',
+                      width: '48px',
+                      height: '48px',
+                      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#22c55e',
+                    }}
+                  >
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                   </div>
-                  <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: 600, marginBottom: '24px' }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      color: '#f8fafc',
+                      fontSize: '1.25rem',
+                      fontWeight: 600,
+                      marginBottom: '24px',
+                    }}
+                  >
                     {t.app.commentsDownloaded}
                   </h3>
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
@@ -207,7 +291,20 @@ function App() {
                       }}
                       style={{ padding: '8px 16px', fontSize: '0.9rem' }}
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: lang === 'ar' ? '0' : '6px', marginLeft: lang === 'ar' ? '6px' : '0' }}>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                          marginRight: lang === 'ar' ? '0' : '6px',
+                          marginLeft: lang === 'ar' ? '6px' : '0',
+                        }}
+                      >
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14 2 14 8 20 8"></polyline>
                         <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -222,7 +319,13 @@ function App() {
                         setIsCommentsDownloading(false)
                         setCommentsSuccessPath(null)
                       }}
-                      style={{ padding: '8px 16px', fontSize: '0.9rem', backgroundColor: '#334155', color: '#f8fafc', border: '1px solid #475569' }}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '0.9rem',
+                        backgroundColor: '#334155',
+                        color: '#f8fafc',
+                        border: '1px solid #475569',
+                      }}
                     >
                       {t.app.close}
                     </button>

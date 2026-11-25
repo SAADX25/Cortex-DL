@@ -7,7 +7,11 @@ import { type SubtitlePreview } from '../../../Shared/localSubtitles'
 
 export type ActiveTab = 'add' | 'downloads' | 'library' | 'subtitles' | 'settings'
 
-export type MediaPlayerFile = { filePath: string; title?: string; subtitlePreview?: SubtitlePreview }
+export type MediaPlayerFile = {
+  filePath: string
+  title?: string
+  subtitlePreview?: SubtitlePreview
+}
 
 const DEFAULT_MODAL_CONFIG: ModalConfig = {
   isOpen: false,
@@ -57,31 +61,31 @@ interface UIStoreState {
 
 export const useUIStore = create<UIStoreState>((set, get) => ({
   activeTab: 'add',
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  setActiveTab: tab => set({ activeTab: tab }),
 
   directory: localStorage.getItem('cortex-directory'),
-  setDirectory: (dir) => {
+  setDirectory: dir => {
     if (dir) localStorage.setItem('cortex-directory', dir)
     set({ directory: dir })
   },
 
   globalError: null,
-  setGlobalError: (err) => set({ globalError: err }),
+  setGlobalError: err => set({ globalError: err }),
 
   batchItems: [],
-  setBatchItems: (updater) =>
-    set((state) => ({
+  setBatchItems: updater =>
+    set(state => ({
       batchItems: typeof updater === 'function' ? updater(state.batchItems) : updater,
     })),
 
   toastMsg: null,
-  showToast: (msg) => {
+  showToast: msg => {
     set({ toastMsg: msg })
     setTimeout(() => set({ toastMsg: null }), 2300)
   },
 
   url: '',
-  setUrl: (url) => {
+  setUrl: url => {
     // Cancel any in-flight analysis whenever the URL changes so stale results cannot land later.
     if (get().url !== url) {
       primaryAnalysis.cancel()
@@ -90,44 +94,49 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
   },
 
   analyzeResult: null,
-  setAnalyzeResult: (result) => set({ analyzeResult: result }),
+  setAnalyzeResult: result => set({ analyzeResult: result }),
   analysisStage: 'details',
-  setAnalysisStage: (analysisStage) => set({ analysisStage }),
+  setAnalysisStage: analysisStage => set({ analysisStage }),
   analyzing: false,
-  setAnalyzing: (v) => set({ analyzing: v, analysisStage: 'details' }),
+  setAnalyzing: v => set({ analyzing: v, analysisStage: 'details' }),
 
   modalConfig: DEFAULT_MODAL_CONFIG,
-  setModalConfig: (updater) =>
-    set((state) => ({
+  setModalConfig: updater =>
+    set(state => ({
       modalConfig: typeof updater === 'function' ? updater(state.modalConfig) : updater,
     })),
-  closeModal: () => set((state) => ({ modalConfig: { ...state.modalConfig, isOpen: false } })),
+  closeModal: () => set(state => ({ modalConfig: { ...state.modalConfig, isOpen: false } })),
 
   mediaPlayerFile: null,
   // Keep floating mode only when updating the same file; switching files resets to docked.
-  setMediaPlayerFile: (file) => set(state => ({ mediaPlayerFile: file, mediaPlayerFloating: !!file && file.filePath === state.mediaPlayerFile?.filePath && state.mediaPlayerFloating })),
+  setMediaPlayerFile: file =>
+    set(state => ({
+      mediaPlayerFile: file,
+      mediaPlayerFloating:
+        !!file && file.filePath === state.mediaPlayerFile?.filePath && state.mediaPlayerFloating,
+    })),
   mediaPlayerFloating: false,
-  setMediaPlayerFloating: (floating) => set({ mediaPlayerFloating: floating }),
+  setMediaPlayerFloating: floating => set({ mediaPlayerFloating: floating }),
 }))
 
-export const useActiveTab = () => useUIStore((s) => s.activeTab)
+export const useActiveTab = () => useUIStore(s => s.activeTab)
 
-export const useSetActiveTab = () => useUIStore((s) => s.setActiveTab)
+export const useSetActiveTab = () => useUIStore(s => s.setActiveTab)
 
-export const useDirectory = () => useUIStore((s) => s.directory)
+export const useDirectory = () => useUIStore(s => s.directory)
 
-export const useGlobalError = () => useUIStore((s) => s.globalError)
+export const useGlobalError = () => useUIStore(s => s.globalError)
 
-export const useBatchItems = () => useUIStore((s) => s.batchItems)
+export const useBatchItems = () => useUIStore(s => s.batchItems)
 
-export const useToast = () => useUIStore((s) => s.toastMsg)
+export const useToast = () => useUIStore(s => s.toastMsg)
 
-export const useUrl = () => useUIStore((s) => s.url)
+export const useUrl = () => useUIStore(s => s.url)
 
-export const useAnalyzeResult = () => useUIStore((s) => s.analyzeResult)
+export const useAnalyzeResult = () => useUIStore(s => s.analyzeResult)
 
-export const useAnalyzing = () => useUIStore((s) => s.analyzing)
+export const useAnalyzing = () => useUIStore(s => s.analyzing)
 
-export const useModalConfig = () => useUIStore((s) => s.modalConfig)
+export const useModalConfig = () => useUIStore(s => s.modalConfig)
 
-export const useMediaPlayerFile = () => useUIStore((s) => s.mediaPlayerFile)
+export const useMediaPlayerFile = () => useUIStore(s => s.mediaPlayerFile)

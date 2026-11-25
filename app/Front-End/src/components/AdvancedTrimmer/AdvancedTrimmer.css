@@ -9,7 +9,9 @@
   background:
     radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 45%),
     linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(7, 11, 22, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 42px rgba(0, 0, 0, 0.28);
   outline: none;
 }
 
@@ -78,8 +80,13 @@
 }
 
 @keyframes advanced-trimmer-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.65; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
 }
 
 .advanced-trimmer__time-pair {
@@ -87,7 +94,7 @@
   align-items: center;
   gap: 6px;
   color: #cbd5e1;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -189,7 +196,10 @@
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .advanced-trimmer__icon-btn:hover:not(:disabled) {
@@ -246,7 +256,7 @@
 .advanced-trimmer__volume-pct {
   min-width: 32px;
   color: #94a3b8;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.7rem;
   font-weight: 600;
   text-align: right;
@@ -254,7 +264,7 @@
 
 .advanced-trimmer__clock {
   color: #cbd5e1;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.75rem;
   font-weight: 700;
   padding: 0 4px;
@@ -278,7 +288,9 @@
   font-size: 0.7rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .advanced-trimmer__rate-btn:hover {
@@ -319,7 +331,7 @@
 
 .advanced-trimmer__timeline-meta strong {
   color: #e2e8f0;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
 }
 
 .advanced-trimmer__divider {
@@ -346,7 +358,10 @@
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .advanced-trimmer__mini-btn:hover:not(:disabled) {
@@ -393,7 +408,7 @@
   position: absolute;
   bottom: 10px;
   color: #94a3b8;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.66rem;
   white-space: nowrap;
 }
@@ -403,14 +418,13 @@
   height: 44px;
   margin: 0 6px;
   border-radius: 8px;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      rgba(30, 41, 59, 0.55) 0,
-      rgba(30, 41, 59, 0.55) 1px,
-      rgba(15, 23, 42, 0.72) 1px,
-      rgba(15, 23, 42, 0.72) 18px
-    );
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.55) 0,
+    rgba(30, 41, 59, 0.55) 1px,
+    rgba(15, 23, 42, 0.72) 1px,
+    rgba(15, 23, 42, 0.72) 18px
+  );
   border: 1px solid rgba(148, 163, 184, 0.18);
   cursor: pointer;
   user-select: none;
@@ -442,7 +456,12 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background: linear-gradient(90deg, rgba(34, 211, 238, 0.24), rgba(96, 165, 250, 0.22), rgba(167, 139, 250, 0.24));
+  background: linear-gradient(
+    90deg,
+    rgba(34, 211, 238, 0.24),
+    rgba(96, 165, 250, 0.22),
+    rgba(167, 139, 250, 0.24)
+  );
   border-top: 2px solid #38bdf8;
   border-bottom: 2px solid #818cf8;
   cursor: grab;
@@ -463,19 +482,25 @@
   border: 1px solid #e0f2fe;
   border-radius: 6px;
   background: linear-gradient(180deg, #38bdf8, #0284c7);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18), 0 4px 12px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 0 0 3px rgba(56, 189, 248, 0.18),
+    0 4px 12px rgba(0, 0, 0, 0.45);
   cursor: ew-resize;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 4;
-  transition: transform 0.12s ease, background 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
 }
 
 .advanced-trimmer__handle--end {
   background: linear-gradient(180deg, #a78bfa, #6366f1);
   border-color: #ede9fe;
-  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18), 0 4px 12px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 0 0 3px rgba(167, 139, 250, 0.18),
+    0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .advanced-trimmer__handle:hover,
@@ -539,7 +564,7 @@
 
 .advanced-trimmer__pan-label {
   color: #64748b;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.68rem;
 }
 
@@ -584,7 +609,9 @@
   font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .advanced-trimmer__mark-btn:hover {
@@ -607,12 +634,14 @@
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(2, 6, 23, 0.72);
   color: #f8fafc;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.78rem;
   font-weight: 700;
   text-align: center;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .advanced-trimmer__time-input:focus {
@@ -631,11 +660,13 @@
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(255, 255, 255, 0.04);
   color: #cbd5e1;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .advanced-trimmer__nudge-btn:hover {
@@ -703,7 +734,10 @@
   font-size: 0.74rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .advanced-trimmer__mode-btn:hover {
@@ -832,8 +866,12 @@
 }
 
 @keyframes advanced-trimmer-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .advanced-trimmer__shortcuts-hint {
@@ -853,7 +891,11 @@
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .advanced-trimmer__ghost-btn {
@@ -914,7 +956,11 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .trimmer-toggle-btn:hover {
@@ -938,7 +984,9 @@
 
 .trimmer-toggle-btn svg {
   opacity: 0.75;
-  transition: transform 0.25s ease, opacity 0.2s ease;
+  transition:
+    transform 0.25s ease,
+    opacity 0.2s ease;
 }
 
 .trimmer-toggle-btn:hover svg {
@@ -956,7 +1004,7 @@
   background: rgba(56, 189, 248, 0.16);
   border: 1px solid rgba(56, 189, 248, 0.35);
   color: #7dd3fc;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 0.72rem;
   font-weight: 700;
 }
@@ -965,8 +1013,9 @@
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.3s ease;
+  transition:
+    grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s ease;
 }
 
 .trimmer-collapse > * {

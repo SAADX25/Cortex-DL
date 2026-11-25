@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-electron
+Front-End/dist
+release
+bin
+engine-baseline
+smoke-results
+installer-validation
+.cortex_temp
+package-lock.json
+THIRD-PARTY-NOTICES.txt
+build-manifest.json

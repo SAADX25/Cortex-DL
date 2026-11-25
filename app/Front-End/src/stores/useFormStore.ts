@@ -35,37 +35,37 @@ interface FormStoreState {
   resetForNewUrl: () => void
 }
 
-export const useFormStore = create<FormStoreState>((set) => ({
+export const useFormStore = create<FormStoreState>(set => ({
   startTime: '',
-  setStartTime: (v) => set({ startTime: v }),
+  setStartTime: v => set({ startTime: v }),
   endTime: '',
-  setEndTime: (v) => set({ endTime: v }),
+  setEndTime: v => set({ endTime: v }),
   trimMode: 'fast',
-  setTrimMode: (v) => set({ trimMode: v }),
+  setTrimMode: v => set({ trimMode: v }),
 
   selectedVariantUrl: null,
-  setSelectedVariantUrl: (v) => set({ selectedVariantUrl: v }),
+  setSelectedVariantUrl: v => set({ selectedVariantUrl: v }),
 
   targetFormat: 'mp4',
-  setTargetFormat: (v) => set({ targetFormat: v }),
+  setTargetFormat: v => set({ targetFormat: v }),
 
   isAudioMode: false,
-  setIsAudioMode: (v) => set({ isAudioMode: v }),
+  setIsAudioMode: v => set({ isAudioMode: v }),
 
   selectedQuality: '',
-  setSelectedQuality: (v) => set({ selectedQuality: v }),
+  setSelectedQuality: v => set({ selectedQuality: v }),
 
   selectedYtdlpFormatId: null,
-  setSelectedYtdlpFormatId: (v) => set({ selectedYtdlpFormatId: v }),
+  setSelectedYtdlpFormatId: v => set({ selectedYtdlpFormatId: v }),
 
   speedLimit: localStorage.getItem('cortex-speed-limit') || 'auto',
-  setSpeedLimit: (v) => {
+  setSpeedLimit: v => {
     localStorage.setItem('cortex-speed-limit', v)
     set({ speedLimit: v })
   },
 
   subfolderName: '',
-  setSubfolderName: (v) => set({ subfolderName: v }),
+  setSubfolderName: v => set({ subfolderName: v }),
 
   // Clear per-URL format picks without wiping sticky preferences like target format or speed limit.
   resetForNewUrl: () =>
@@ -77,7 +77,7 @@ export const useFormStore = create<FormStoreState>((set) => ({
 }))
 
 export function useAvailableVideoQualities(): { height: number; fps: number }[] | null {
-  const analyzeResult = useUIStore((s) => s.analyzeResult)
+  const analyzeResult = useUIStore(s => s.analyzeResult)
 
   return useMemo(() => {
     if (analyzeResult?.kind !== 'ytdlp') return null

@@ -59,7 +59,8 @@ export const en: Translations = {
   description: 'Developed to provide the best video and audio download experience.',
   developer: 'Developed by - SAADX25',
   language_label: 'Language',
-  confirm_delete_all: 'Are you sure you want to delete the task and file permanently from your device?',
+  confirm_delete_all:
+    'Are you sure you want to delete the task and file permanently from your device?',
   confirm_remove_only: 'Do you want to remove the task from the list only?',
   error_occurred: 'An error occurred',
   folder_pick_failed: 'Failed to pick folder',
@@ -109,7 +110,8 @@ export const en: Translations = {
   browse_sites: 'Browse Sites',
   modal_confirm: 'Confirm',
   modal_cancel: 'Cancel',
-  msg_delete_file_confirm: 'Are you sure you want to permanently delete this file? This cannot be undone.',
+  msg_delete_file_confirm:
+    'Are you sure you want to permanently delete this file? This cannot be undone.',
   msg_remove_list_confirm: 'Remove this task from the list?',
   msg_clear_completed_confirm: 'Clear all completed downloads from the list?',
   settings_general: 'General',
@@ -119,30 +121,40 @@ export const en: Translations = {
   settings_powered_by: 'Powered by',
   settings_danger_zone: 'DANGER ZONE',
   settings_uninstall_title: 'Uninstall Cortex DL',
-  settings_uninstall_desc: 'Remove the app; choose whether to delete all history, settings and engines',
+  settings_uninstall_desc:
+    'Remove the app; choose whether to delete all history, settings and engines',
   settings_uninstall_btn: 'Uninstall',
   settings_modal_title: 'Uninstall Cortex DL',
-  settings_modal_desc: 'This will close the app and launch the uninstaller. You can delete all app data, including engines and history, or keep it. Downloaded videos and music will be preserved.',
+  settings_modal_desc:
+    'This will close the app and launch the uninstaller. You can delete all app data, including engines and history, or keep it. Downloaded videos and music will be preserved.',
   settings_confirm_uninstall: 'Uninstall',
   settings_cancel: 'Cancel',
   use_inapp_player: 'In-App Media Player',
   use_inapp_player_desc: 'Play videos and audio inside the app instead of system default',
   refresh_windows_artwork: 'Refresh Media Player and VLC cover caches',
-  refresh_windows_artwork_desc: 'Refresh covers after changes or removal. Media Player may close; restart VLC if it is already open to see the change.',
+  refresh_windows_artwork_desc:
+    'Refresh covers after changes or removal. Media Player may close; restart VLC if it is already open to see the change.',
   paste_and_go: 'Paste & Go',
   btn_video: 'Video',
   btn_audio: 'Audio',
   new_folder_placeholder: 'New Folder (Optional)',
   speed_auto: 'Auto',
-  youtube_auth_required: 'This video requires an account or viewing permission on YouTube. The link could not be analyzed.',
-  youtube_rate_limited: 'YouTube temporarily rate-limited requests (429). Wait before trying again.',
-  youtube_bot_verification: 'YouTube blocked link analysis with a bot verification check. Check that the video opens in your browser, update the yt-dlp engine, then try again later.',
-  download_retry_required: 'The previous download did not finish. Retry to download the video with the current system.',
-  youtube_formats_restricted: 'YouTube restricted some formats or reported no downloadable format. Refresh formats later.',
-  youtube_po_token_required: 'The video provider requires an additional access token. Select a local file to generate subtitles.',
+  youtube_auth_required:
+    'This video requires an account or viewing permission on YouTube. The link could not be analyzed.',
+  youtube_rate_limited:
+    'YouTube temporarily rate-limited requests (429). Wait before trying again.',
+  youtube_bot_verification:
+    'YouTube blocked link analysis with a bot verification check. Check that the video opens in your browser, update the yt-dlp engine, then try again later.',
+  download_retry_required:
+    'The previous download did not finish. Retry to download the video with the current system.',
+  youtube_formats_restricted:
+    'YouTube restricted some formats or reported no downloadable format. Refresh formats later.',
+  youtube_po_token_required:
+    'The video provider requires an additional access token. Select a local file to generate subtitles.',
   youtube_network_error: 'YouTube could not be reached. Check your connection and retry.',
   threads_no_media: 'This Threads post does not contain a downloadable video or audio.',
-  threads_post_unavailable: 'Could not access this Threads post. It may be private, deleted, or require login.',
+  threads_post_unavailable:
+    'Could not access this Threads post. It may be private, deleted, or require login.',
   threads_invalid_url: 'Invalid Threads link. Please paste a direct Threads post URL.',
   health_title: 'App readiness',
   health_desc: 'Checks the components required for Windows analysis and downloads.',
@@ -175,11 +187,14 @@ export const en: Translations = {
   updater: {
     dialogAria: 'Software update',
     availableTitle: 'New Update Available',
-    availableSubtitle: 'A newer version of Cortex DL is ready to download with the latest improvements and fixes.',
+    availableSubtitle:
+      'A newer version of Cortex DL is ready to download with the latest improvements and fixes.',
     downloadingTitle: 'Downloading Update',
-    downloadingSubtitle: 'Downloading and verifying the new installer. You can keep using Cortex DL while it finishes.',
+    downloadingSubtitle:
+      'Downloading and verifying the new installer. You can keep using Cortex DL while it finishes.',
     downloadedTitle: 'Update Ready to Install',
-    downloadedSubtitle: 'Version v{version} has been downloaded and verified. Restart Cortex DL to apply the update.',
+    downloadedSubtitle:
+      'Version v{version} has been downloaded and verified. Restart Cortex DL to apply the update.',
     errorTitle: 'Update Interrupted',
     whatsNew: "What's New",
     versionTransition: 'Upgrade from v{current} to v{latest}',
@@ -217,7 +232,8 @@ export const en: Translations = {
     errors: {
       offline: 'Could not reach the update server. Check your internet connection and try again.',
       'not-published': 'Update metadata for the latest release could not be found on GitHub.',
-      integrity: 'The downloaded installer failed integrity verification. Please try downloading again.',
+      integrity:
+        'The downloaded installer failed integrity verification. Please try downloading again.',
       download: 'The update download was interrupted before finishing. You can retry safely.',
       unsupported: 'Automatic updates are available only in the installed version of Cortex DL.',
       unknown: 'Something went wrong while checking for updates. Please try again.',
@@ -380,7 +396,8 @@ export const en: Translations = {
     clearAll: 'Clear All',
     filterGroupLabel: 'Filter downloads',
     clearModalTitle: 'Clear Downloads',
-    clearModalDesc: 'How would you like to clear your download history? Please choose an option below.',
+    clearModalDesc:
+      'How would you like to clear your download history? Please choose an option below.',
     clearHistoryTitle: 'Clear History Only',
     clearHistoryDesc: 'Remove from the list but keep files on your computer.',
     deleteFilesTitle: 'Delete Files Permanently',
@@ -423,7 +440,8 @@ export const en: Translations = {
     coverError: 'Choose a valid JPG, PNG or WEBP image up to 8 MB.',
     embedCover: 'Save to file',
     coverSaved: 'Cover saved to file',
-    coverWriteError: 'Could not save the cover to this file. Close it in other players and check that the file and folder are writable.',
+    coverWriteError:
+      'Could not save the cover to this file. Close it in other players and check that the file and folder are writable.',
     coverChangedError: 'The file changed during saving. Refresh the library and try again.',
     coverRecoveryError: 'Could not restore the original file. Its backup is saved here:',
     coverPlayingError: 'Close this file’s player before changing its cover.',
@@ -571,13 +589,15 @@ export const en: Translations = {
       saved: 'Subtitles saved',
       invalid: 'Check caption timing: positive duration, chronological order, and no overlaps.',
       error: 'Could not complete subtitles',
-      preparingHint: 'First use can take time while the model loads. Recognition speed depends on your computer.',
+      preparingHint:
+        'First use can take time while the model loads. Recognition speed depends on your computer.',
       noReview: 'No captions flagged for review.',
       content: 'Audio content',
       speechContent: 'Speech and dialogue',
       musicContent: 'Music and singing',
       speechHint: 'Recognizes spoken words and dialogue. Best for interviews and conversations.',
-      musicHint: 'Reads the full audio to keep singing. Processing takes longer; review lyrics and timing.',
+      musicHint:
+        'Reads the full audio to keep singing. Processing takes longer; review lyrics and timing.',
       retryingSpeech: 'No words detected yet. Retrying with the full audio.',
       retryingTiming: 'Speech timing was invalid. Retrying with the full audio.',
       device: 'Processing device',
@@ -587,13 +607,15 @@ export const en: Translations = {
       autoHint: 'GPU when available, with CPU fallback',
       cpuHint: 'Use the processor only',
       cpuNote: 'GPU acceleration is off for this session.',
-      autoCpuNote: 'CPU is available. Automatic switches to GPU when its engines and memory are ready.',
+      autoCpuNote:
+        'CPU is available. Automatic switches to GPU when its engines and memory are ready.',
       checkingDevice: 'Checking available hardware…',
       gpuReady: 'GPU ready',
       cpuAvailable: 'CPU available',
       gpuSetup: 'Prepare GPU acceleration',
       gpuDownload: 'Prepare GPU engines',
-      gpuNote: 'Uses your graphics card for recognition and translation. CPU is used if GPU memory or support is unavailable.',
+      gpuNote:
+        'Uses your graphics card for recognition and translation. CPU is used if GPU memory or support is unavailable.',
       gpuCompact: 'Large v3 Q5 · reduced memory; accuracy may differ slightly.',
       gpuFallback: 'GPU unavailable for this step; continuing on CPU.',
       optimizingGpu: 'Optimizing existing Large v3 for GPU memory',
@@ -608,10 +630,14 @@ export const en: Translations = {
         LOCAL_SUBTITLES_DISK_SPACE: 'Not enough free disk space for the selected models or audio.',
         LOCAL_SUBTITLES_WINDOWS_X64: 'Local models currently support Windows x64.',
         LOCAL_SUBTITLES_BUSY: 'Wait for the current operation or cancel it.',
-        LOCAL_SUBTITLES_NO_SPEECH: 'No recognizable words were found in the full audio. Check the spoken language and audio; music alone cannot be translated.',
-        'Speech engine returned invalid timing': 'The speech engine returned invalid caption timing. Try the higher accuracy model or CPU processing.',
-        'Invalid speech engine output': 'Could not read the speech engine output. Try generating subtitles again.',
-        'Invalid subtitle timing or text': 'Some caption timing or text is invalid. Review the captions before saving.',
+        LOCAL_SUBTITLES_NO_SPEECH:
+          'No recognizable words were found in the full audio. Check the spoken language and audio; music alone cannot be translated.',
+        'Speech engine returned invalid timing':
+          'The speech engine returned invalid caption timing. Try the higher accuracy model or CPU processing.',
+        'Invalid speech engine output':
+          'Could not read the speech engine output. Try generating subtitles again.',
+        'Invalid subtitle timing or text':
+          'Some caption timing or text is invalid. Review the captions before saving.',
       },
     },
   },

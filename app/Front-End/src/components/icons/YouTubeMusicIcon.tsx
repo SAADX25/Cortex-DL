@@ -1,6 +1,9 @@
 import React from 'react'
 
-export const YouTubeMusicIcon: React.FC<{ size?: number } & React.SVGProps<SVGSVGElement>> = ({ size = 22, ...props }) => {
+export const YouTubeMusicIcon: React.FC<{ size?: number } & React.SVGProps<SVGSVGElement>> = ({
+  size = 22,
+  ...props
+}) => {
   return (
     <svg
       width={size}

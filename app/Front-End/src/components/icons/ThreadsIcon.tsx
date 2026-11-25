@@ -1,6 +1,9 @@
 import React from 'react'
 
-export const ThreadsIcon: React.FC<{ size?: number } & React.SVGProps<SVGSVGElement>> = ({ size = 20, ...props }) => {
+export const ThreadsIcon: React.FC<{ size?: number } & React.SVGProps<SVGSVGElement>> = ({
+  size = 20,
+  ...props
+}) => {
   return (
     <svg
       width={size}

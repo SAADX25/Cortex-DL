@@ -13,15 +13,26 @@ export class AnalysisCoordinator<T> {
   private cache = new Map<string, { value: T; at: number }>()
   private running = 0
   private queue: (() => void)[] = []
-  invalidate(input: string, scope = ''): void { this.cache.delete(`${normalizeAnalysisUrl(input)}\0${scope}`) }
-  constructor(private limit = 3, private ttl = 300000, private max = 50,
-    private now = Date.now, private cacheable: (value: T) => boolean = () => true, private stable: (value: T) => T = value => value) {}
+  invalidate(input: string, scope = ''): void {
+    this.cache.delete(`${normalizeAnalysisUrl(input)}\0${scope}`)
+  }
+  constructor(
+    private limit = 3,
+    private ttl = 300000,
+    private max = 50,
+    private now = Date.now,
+    private cacheable: (value: T) => boolean = () => true,
+    private stable: (value: T) => T = value => value,
+  ) {}
 
   private async acquire(signal: AbortSignal): Promise<() => void> {
     signal.throwIfAborted()
     if (this.running >= this.limit) {
       await new Promise<void>((resolve, reject) => {
-        const ready = () => { signal.removeEventListener('abort', abort); resolve() }
+        const ready = () => {
+          signal.removeEventListener('abort', abort)
+          resolve()
+        }
         const abort = () => {
           this.queue = this.queue.filter(item => item !== ready)
           reject(signal.reason)
@@ -30,7 +41,10 @@ export class AnalysisCoordinator<T> {
         signal.addEventListener('abort', abort, { once: true })
       })
     } else this.running++
-    if (signal.aborted) { this.release(); signal.throwIfAborted() }
+    if (signal.aborted) {
+      this.release()
+      signal.throwIfAborted()
+    }
     return () => this.release()
   }
 
@@ -40,14 +54,20 @@ export class AnalysisCoordinator<T> {
     else this.running--
   }
 
-  run(input: string, work: (url: string, signal: AbortSignal) => Promise<T>, signal?: AbortSignal, scope = ''): Promise<T> {
+  run(
+    input: string,
+    work: (url: string, signal: AbortSignal) => Promise<T>,
+    signal?: AbortSignal,
+    scope = '',
+  ): Promise<T> {
     if (signal?.aborted) return Promise.reject(signal.reason)
     const normalized = normalizeAnalysisUrl(input)
     const key = `${normalized}\0${scope}`
     const cached = this.cache.get(key)
     if (cached && this.now() - cached.at < this.ttl) {
       // Refresh LRU position and clone so callers can't mutate cached results.
-      this.cache.delete(key); this.cache.set(key, cached)
+      this.cache.delete(key)
+      this.cache.set(key, cached)
       return Promise.resolve(structuredClone(cached.value))
     }
     this.cache.delete(key)
@@ -67,8 +87,12 @@ export class AnalysisCoordinator<T> {
             if (this.cache.size > this.max) this.cache.delete(this.cache.keys().next().value!)
           }
           return value
-        } finally { release() }
-      })().finally(() => { if (this.jobs.get(key) === owned) this.jobs.delete(key) })
+        } finally {
+          release()
+        }
+      })().finally(() => {
+        if (this.jobs.get(key) === owned) this.jobs.delete(key)
+      })
       this.jobs.set(key, job)
     }
     // Coalesce concurrent requests for the same URL and only abort the job once every caller cancels.
@@ -85,13 +109,20 @@ export class AnalysisCoordinator<T> {
       }
       const abort = () => finish(() => reject(signal?.reason))
       signal?.addEventListener('abort', abort, { once: true })
-      owned.promise.then(value => finish(() => resolve(structuredClone(value))), error => finish(() => reject(error)))
+      owned.promise.then(
+        value => finish(() => resolve(structuredClone(value))),
+        error => finish(() => reject(error)),
+      )
       if (signal?.aborted) abort()
     })
   }
 }
 
-export async function fetchBoundedJson(url: string, signal?: AbortSignal, timeoutMs = 3000): Promise<any> {
+export async function fetchBoundedJson(
+  url: string,
+  signal?: AbortSignal,
+  timeoutMs = 3000,
+): Promise<any> {
   const controller = new AbortController()
   const abort = () => controller.abort(signal?.reason)
   signal?.addEventListener('abort', abort, { once: true })
@@ -99,7 +130,10 @@ export async function fetchBoundedJson(url: string, signal?: AbortSignal, timeou
   const timer = setTimeout(() => controller.abort(new Error('Request timed out')), timeoutMs)
   try {
     const response = await fetch(url, { signal: controller.signal, redirect: 'follow' })
-    if (!response.ok) { await response.body?.cancel(); throw new Error(`HTTP ${response.status}`) }
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Error(`HTTP ${response.status}`)
+    }
     if (!response.body) throw new Error('Empty response')
     const reader = response.body.getReader()
     let size = 0
@@ -113,22 +147,38 @@ export async function fetchBoundedJson(url: string, signal?: AbortSignal, timeou
         chunks.push(value)
       }
       return JSON.parse(Buffer.concat(chunks).toString('utf8'))
-    } finally { await reader.cancel().catch(() => {}); reader.releaseLock() }
-  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort) }
+    } finally {
+      await reader.cancel().catch(() => {})
+      reader.releaseLock()
+    }
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
+  }
 }
 
 export function analysisTiming(name: string, start: number): void {
-  if (process.env.CORTEX_ANALYSIS_DEBUG === '1') log.info(`[analysis timing] ${name}=${Date.now() - start}ms`)
+  if (process.env.CORTEX_ANALYSIS_DEBUG === '1')
+    log.info(`[analysis timing] ${name}=${Date.now() - start}ms`)
 }
 
 // Runs yt-dlp with bounded stdout/stderr and full process-tree teardown on abort or timeout.
-export function extractAnalysis(binary: string, args: string[], signal: AbortSignal,
-  maxBytes = 32 * 1024 * 1024, timeoutMs = 90000, diagnostics?: (stderr: string) => void): Promise<string> {
+export function extractAnalysis(
+  binary: string,
+  args: string[],
+  signal: AbortSignal,
+  maxBytes = 32 * 1024 * 1024,
+  timeoutMs = 90000,
+  diagnostics?: (stderr: string) => void,
+): Promise<string> {
   signal.throwIfAborted()
   return new Promise((resolve, reject) => {
     const start = Date.now()
-    const child = spawn(binary, args, { windowsHide: true, detached: process.platform !== 'win32',
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
+    const child = spawn(binary, args, {
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    })
     child.on('error', error => engineExecutionFailed('yt-dlp', error))
     child.once('spawn', () => analysisTiming('ytdlpStartupMs', start))
     let output = ''
@@ -137,27 +187,44 @@ export function extractAnalysis(binary: string, args: string[], signal: AbortSig
     let stderr = ''
     let failure: Error | undefined
     let teardown: Promise<void> | undefined
-    const stop = () => { teardown ??= killProcessTree(child) }
-    const timer = setTimeout(() => { failure = new Error('Analysis timed out'); stop() }, timeoutMs)
+    const stop = () => {
+      teardown ??= killProcessTree(child)
+    }
+    const timer = setTimeout(() => {
+      failure = new Error('Analysis timed out')
+      stop()
+    }, timeoutMs)
     signal.addEventListener('abort', stop, { once: true })
     if (signal.aborted) stop()
     child.stdout.on('data', (data: Buffer) => {
       bytes += data.length
-      if (bytes > maxBytes) { failure ??= new Error('Analysis output exceeds size limit'); stop(); return }
+      if (bytes > maxBytes) {
+        failure ??= new Error('Analysis output exceeds size limit')
+        stop()
+        return
+      }
       if (!failure && !signal.aborted) output += decoder.write(data)
     })
-    child.stderr.on('data', (data: Buffer) => { stderr = (stderr + data.toString()).slice(-8192) })
-    child.on('error', error => { failure = error })
+    child.stderr.on('data', (data: Buffer) => {
+      stderr = (stderr + data.toString()).slice(-8192)
+    })
+    child.on('error', error => {
+      failure = error
+    })
     child.on('close', async code => {
       analysisTiming('ytdlpExtractionMs', start)
       clearTimeout(timer)
       signal.removeEventListener('abort', stop)
       await teardown
-      child.stdout.removeAllListeners(); child.stderr.removeAllListeners()
+      child.stdout.removeAllListeners()
+      child.stderr.removeAllListeners()
       if (signal.aborted) reject(signal.reason)
       else if (failure) reject(failure)
       else if (code !== 0) reject(new Error(stderr || `Analysis exited with code ${code}`))
-      else { diagnostics?.(stderr); resolve(output + decoder.end()) }
+      else {
+        diagnostics?.(stderr)
+        resolve(output + decoder.end())
+      }
     })
   })
 }
@@ -176,5 +243,8 @@ export async function isDirectMedia(url: string, signal: AbortSignal): Promise<b
   } catch {
     signal.throwIfAborted()
     return false
-  } finally { clearTimeout(timer); signal.removeEventListener('abort', abort) }
+  } finally {
+    clearTimeout(timer)
+    signal.removeEventListener('abort', abort)
+  }
 }

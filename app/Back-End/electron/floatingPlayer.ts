@@ -6,13 +6,26 @@ export function installFloatingPlayerWindow(owner: BrowserWindow): void {
   owner.webContents.setWindowOpenHandler(({ url, frameName }) => {
     if (url === 'about:blank' && frameName === 'cortex-floating-player' && !floating) {
       const area = screen.getDisplayMatching(owner.getBounds()).workArea
-      const width = Math.min(560, area.width), height = Math.min(399, area.height)
-      return { action: 'allow', overrideBrowserWindowOptions: {
-        width, height, minWidth: 360, minHeight: 240,
-        x: area.x + Math.max(0, area.width - width - 20), y: area.y + Math.max(0, area.height - height - 20),
-        title: 'Cortex DL', frame: false, alwaysOnTop: true, autoHideMenuBar: true,
-        backgroundColor: '#000000', fullscreenable: false, maximizable: false,
-      } }
+      const width = Math.min(560, area.width),
+        height = Math.min(399, area.height)
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width,
+          height,
+          minWidth: 360,
+          minHeight: 240,
+          x: area.x + Math.max(0, area.width - width - 20),
+          y: area.y + Math.max(0, area.height - height - 20),
+          title: 'Cortex DL',
+          frame: false,
+          alwaysOnTop: true,
+          autoHideMenuBar: true,
+          backgroundColor: '#000000',
+          fullscreenable: false,
+          maximizable: false,
+        },
+      }
     }
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }

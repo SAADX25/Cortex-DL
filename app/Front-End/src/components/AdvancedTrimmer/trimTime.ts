@@ -9,9 +9,9 @@ export function parseTimecode(value?: string | null): number | null {
   const trimmed = value.trim()
   if (!/^\d+(?::\d{1,2}){0,2}(?:\.\d+)?$/.test(trimmed)) return null
   const parts = trimmed.split(':').map(Number)
-  if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null
+  if (parts.some(part => !Number.isFinite(part) || part < 0)) return null
   // Allow raw seconds (e.g. "90"), but enforce <60 on trailing fields in MM:SS / HH:MM:SS.
-  if (parts.length > 1 && parts.slice(1).some((part) => part >= 60)) return null
+  if (parts.length > 1 && parts.slice(1).some(part => part >= 60)) return null
   if (parts.length === 1) return parts[0]
   if (parts.length === 2) return parts[0] * 60 + parts[1]
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
@@ -62,7 +62,11 @@ export interface ZoomViewport {
   viewDuration: number
 }
 
-export function computeZoomViewport(duration: number, zoom: number, viewStartInput: number): ZoomViewport {
+export function computeZoomViewport(
+  duration: number,
+  zoom: number,
+  viewStartInput: number,
+): ZoomViewport {
   const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0
   if (safeDuration <= 0) return { viewStart: 0, viewEnd: 0, viewDuration: 0 }
   const safeZoom = clampSeconds(zoom, 1, 64)
@@ -81,12 +85,16 @@ export interface RulerTick {
 
 const NICE_INTERVALS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200]
 
-export function computeRulerTicks(viewStart: number, viewEnd: number, maxMajorTicks = 7): RulerTick[] {
+export function computeRulerTicks(
+  viewStart: number,
+  viewEnd: number,
+  maxMajorTicks = 7,
+): RulerTick[] {
   const span = viewEnd - viewStart
   if (!Number.isFinite(span) || span <= 0) return []
   // Snap spacing to clock-friendly intervals and use small epsilons to absorb float drift on tick boundaries.
   const rawStep = span / Math.max(2, maxMajorTicks)
-  const majorStep = NICE_INTERVALS.find((step) => step >= rawStep) ?? Math.ceil(rawStep / 3600) * 3600
+  const majorStep = NICE_INTERVALS.find(step => step >= rawStep) ?? Math.ceil(rawStep / 3600) * 3600
   const minorStep = majorStep >= 10 ? majorStep / 5 : majorStep >= 2 ? majorStep / 2 : majorStep
 
   const ticks: RulerTick[] = []
@@ -94,7 +102,7 @@ export function computeRulerTicks(viewStart: number, viewEnd: number, maxMajorTi
   for (let t = first; t <= viewEnd + 1e-6; t += minorStep) {
     const time = Math.min(viewEnd, Math.max(viewStart, Math.round(t * 100) / 100))
     const percent = ((time - viewStart) / span) * 100
-    const isMajor = Math.abs((time / majorStep) - Math.round(time / majorStep)) < 1e-3
+    const isMajor = Math.abs(time / majorStep - Math.round(time / majorStep)) < 1e-3
     ticks.push({
       time,
       percent,

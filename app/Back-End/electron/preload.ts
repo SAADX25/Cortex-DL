@@ -1,6 +1,13 @@
 // Context-isolated preload bridge exposing the renderer-safe window.cortexDl API.
 import { ipcRenderer, contextBridge, webUtils } from 'electron'
-import { type AppHealthCheck, type DownloadTask, type AnalyzeResult, type JsRuntimeStatus, type StartInput, UPDATE_CHANNEL } from './types'
+import {
+  type AppHealthCheck,
+  type DownloadTask,
+  type AnalyzeResult,
+  type JsRuntimeStatus,
+  type StartInput,
+  UPDATE_CHANNEL,
+} from './types'
 import { APP_UPDATE_CHANNEL, type AppUpdateState } from '../../Shared/appUpdate'
 import { customTitleBar } from './windowChrome'
 
@@ -8,11 +15,7 @@ import { customTitleBar } from './windowChrome'
 function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
     const rawMessage =
-      error instanceof Error
-        ? error.message
-        : typeof error === 'string'
-          ? error
-          : ''
+      error instanceof Error ? error.message : typeof error === 'string' ? error : ''
     const cleanMessage = rawMessage
       .replace(/^Error invoking remote method ['"][^'"]+['"]:s*/i, '')
       .replace(/^Error:s*/i, '')
@@ -25,23 +28,81 @@ function invokeRendererSafe<T>(channel: string, ...args: unknown[]): Promise<T> 
 contextBridge.exposeInMainWorld('cortexDl', {
   customTitleBar,
   // Sandboxed renderers can't read File.path directly; resolve dropped files via Electron's webUtils.
-  getDroppedMediaPaths: (files: File[]): string[] => files.map(file => webUtils.getPathForFile(file)).filter(Boolean),
-  listMediaLibrary: () => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:list'),
-  checkMediaLibraryFiles: (ids: string[]) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:check', ids),
-  getMediaLibraryThumbnail: (id: string) => invokeRendererSafe<string | null>('cortexdl:library:thumbnail', id),
-  getMediaLibraryArtworkInfo: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryArtworkInfo>('cortexdl:library:artwork-info', id),
-  selectMediaLibraryArtwork: (id: string, refreshPlayer = false) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>('cortexdl:library:artwork-select', id, refreshPlayer),
-  removeMediaLibraryArtwork: (id: string, refreshPlayer = false) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-remove', id, refreshPlayer),
-  embedMediaLibraryArtwork: (id: string, refreshPlayer = false) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:artwork-embed', id, refreshPlayer),
-  selectMediaLibraryFiles: () => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult | null>('cortexdl:library:select'),
-  addMediaLibraryFiles: (files: string[]) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult>('cortexdl:library:add', files),
-  removeMediaLibraryItem: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>('cortexdl:library:remove', id),
-  playMediaLibraryItem: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem>('cortexdl:library:play', id),
-  relocateMediaLibraryItem: (id: string) => invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>('cortexdl:library:relocate', id),
-  listDownloadSubtitleFiles: (id: string) => invokeRendererSafe<import('../../Shared/downloadSubtitles').DownloadSubtitleFile[]>('cortexdl:subtitle-files:list', id),
-  mergeDownloadSubtitle: (id: string, fileName: string, format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat) => invokeRendererSafe<string | null>('cortexdl:subtitle-files:merge', id, fileName, format),
-  cancelDownloadSubtitleMerge: (id: string) => invokeRendererSafe<void>('cortexdl:subtitle-files:cancel', id),
-  reportFirstUiRender(): void { ipcRenderer.send('cortexdl:first-ui-render') },
+  getDroppedMediaPaths: (files: File[]): string[] =>
+    files.map(file => webUtils.getPathForFile(file)).filter(Boolean),
+  listMediaLibrary: () =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>(
+      'cortexdl:library:list',
+    ),
+  checkMediaLibraryFiles: (ids: string[]) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>(
+      'cortexdl:library:check',
+      ids,
+    ),
+  getMediaLibraryThumbnail: (id: string) =>
+    invokeRendererSafe<string | null>('cortexdl:library:thumbnail', id),
+  getMediaLibraryArtworkInfo: (id: string) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryArtworkInfo>(
+      'cortexdl:library:artwork-info',
+      id,
+    ),
+  selectMediaLibraryArtwork: (id: string, refreshPlayer = false) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>(
+      'cortexdl:library:artwork-select',
+      id,
+      refreshPlayer,
+    ),
+  removeMediaLibraryArtwork: (id: string, refreshPlayer = false) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>(
+      'cortexdl:library:artwork-remove',
+      id,
+      refreshPlayer,
+    ),
+  embedMediaLibraryArtwork: (id: string, refreshPlayer = false) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>(
+      'cortexdl:library:artwork-embed',
+      id,
+      refreshPlayer,
+    ),
+  selectMediaLibraryFiles: () =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult | null>(
+      'cortexdl:library:select',
+    ),
+  addMediaLibraryFiles: (files: string[]) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryImportResult>(
+      'cortexdl:library:add',
+      files,
+    ),
+  removeMediaLibraryItem: (id: string) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[]>(
+      'cortexdl:library:remove',
+      id,
+    ),
+  playMediaLibraryItem: (id: string) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem>(
+      'cortexdl:library:play',
+      id,
+    ),
+  relocateMediaLibraryItem: (id: string) =>
+    invokeRendererSafe<import('../../Shared/mediaLibrary').LibraryMediaItem[] | null>(
+      'cortexdl:library:relocate',
+      id,
+    ),
+  listDownloadSubtitleFiles: (id: string) =>
+    invokeRendererSafe<import('../../Shared/downloadSubtitles').DownloadSubtitleFile[]>(
+      'cortexdl:subtitle-files:list',
+      id,
+    ),
+  mergeDownloadSubtitle: (
+    id: string,
+    fileName: string,
+    format: import('../../Shared/downloadSubtitles').SubtitleMergeFormat,
+  ) => invokeRendererSafe<string | null>('cortexdl:subtitle-files:merge', id, fileName, format),
+  cancelDownloadSubtitleMerge: (id: string) =>
+    invokeRendererSafe<void>('cortexdl:subtitle-files:cancel', id),
+  reportFirstUiRender(): void {
+    ipcRenderer.send('cortexdl:first-ui-render')
+  },
   analysisDebug: process.env.CORTEX_ANALYSIS_DEBUG === '1',
   selectFolder(): Promise<string | null> {
     return ipcRenderer.invoke('cortexdl:select-folder')
@@ -61,7 +122,9 @@ contextBridge.exposeInMainWorld('cortexDl', {
     if (!encryptedBase64) return Promise.resolve('')
     return ipcRenderer.invoke('cortexdl:secure-get', encryptedBase64)
   },
-  downloadComments(url: string): Promise<boolean | { success: boolean; canceled?: boolean; error?: string }> {
+  downloadComments(
+    url: string,
+  ): Promise<boolean | { success: boolean; canceled?: boolean; error?: string }> {
     return ipcRenderer.invoke('cortexdl:download-comments', url)
   },
   onCommentsExtractionStarted(callback: () => void) {
@@ -80,7 +143,13 @@ contextBridge.exposeInMainWorld('cortexDl', {
   cancelAnalysis(id: string): Promise<void> {
     return invokeRendererSafe('cortexdl:cancel-analysis', id)
   },
-  onAnalysisUpdate(callback: (update: { id: string; stage: string; data: { title?: string; dislikes?: number } }) => void) {
+  onAnalysisUpdate(
+    callback: (update: {
+      id: string
+      stage: string
+      data: { title?: string; dislikes?: number }
+    }) => void,
+  ) {
     const listener = (_event: unknown, update: Parameters<typeof callback>[0]) => callback(update)
     ipcRenderer.on('cortexdl:analysis-update', listener)
     return () => ipcRenderer.off('cortexdl:analysis-update', listener)
@@ -142,12 +211,24 @@ contextBridge.exposeInMainWorld('cortexDl', {
   checkJsRuntime(): Promise<JsRuntimeStatus> {
     return ipcRenderer.invoke('cortexdl:check-js-runtime')
   },
-  getSetupState() { return ipcRenderer.invoke('cortexdl:setup-state') },
-  repairEngines() { return ipcRenderer.invoke('cortexdl:repair-engines') },
-  openLogs() { return ipcRenderer.invoke('cortexdl:open-logs') },
-  exitApp() { return ipcRenderer.invoke('cortexdl:exit') },
-  exportDiagnostics() { return ipcRenderer.invoke('cortexdl:export-diagnostics') },
-  getBuildInfo() { return ipcRenderer.invoke('cortexdl:build-info') },
+  getSetupState() {
+    return ipcRenderer.invoke('cortexdl:setup-state')
+  },
+  repairEngines() {
+    return ipcRenderer.invoke('cortexdl:repair-engines')
+  },
+  openLogs() {
+    return ipcRenderer.invoke('cortexdl:open-logs')
+  },
+  exitApp() {
+    return ipcRenderer.invoke('cortexdl:exit')
+  },
+  exportDiagnostics() {
+    return ipcRenderer.invoke('cortexdl:export-diagnostics')
+  },
+  getBuildInfo() {
+    return ipcRenderer.invoke('cortexdl:build-info')
+  },
   getHealthCheck(): Promise<AppHealthCheck> {
     return ipcRenderer.invoke('cortexdl:health-check')
   },
@@ -189,7 +270,9 @@ contextBridge.exposeInMainWorld('cortexDl', {
     ipcRenderer.on('cortexdl:download-stats-updated', listener)
     return () => ipcRenderer.off('cortexdl:download-stats-updated', listener)
   },
-  onSetupProgress(callback: (state: { status: string; progress: number; message: string }) => void): () => void {
+  onSetupProgress(
+    callback: (state: { status: string; progress: number; message: string }) => void,
+  ): () => void {
     const listener = (_event: unknown, state: any) => callback(state)
     ipcRenderer.on('cortexdl:setup-progress', listener)
     return () => ipcRenderer.off('cortexdl:setup-progress', listener)
@@ -220,22 +303,54 @@ contextBridge.exposeInMainWorld('cortexDl', {
   getDirectStreamUrl(url: string, previewSession?: string): Promise<string> {
     return invokeRendererSafe('cortexdl:get-direct-stream-url', url, previewSession)
   },
-  getTrimPreviewStreams(url: string, previewSession: string): Promise<{ videoUrl: string; audioUrl?: string; streamType?: 'progressive' | 'hls'; isLive?: boolean; duration?: number } | null> {
+  getTrimPreviewStreams(
+    url: string,
+    previewSession: string,
+  ): Promise<{
+    videoUrl: string
+    audioUrl?: string
+    streamType?: 'progressive' | 'hls'
+    isLive?: boolean
+    duration?: number
+  } | null> {
     return invokeRendererSafe('cortexdl:get-trim-preview-streams', url, previewSession)
   },
   logPreviewError(message: string): void {
     ipcRenderer.send('cortexdl:preview-error', message)
   },
-  getSubtitles(filePath: string, session: string): Promise<import('../../Shared/types').PlayerSubtitleTrack[]> {
+  getSubtitles(
+    filePath: string,
+    session: string,
+  ): Promise<import('../../Shared/types').PlayerSubtitleTrack[]> {
     return ipcRenderer.invoke('cortexdl:get-subtitles', filePath, session)
   },
-  getLocalSubtitleState: () => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleState>('cortexdl:subtitles:state'),
-  getLocalSubtitleReadiness: () => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleReadiness>('cortexdl:subtitles:readiness'),
+  getLocalSubtitleState: () =>
+    invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleState>(
+      'cortexdl:subtitles:state',
+    ),
+  getLocalSubtitleReadiness: () =>
+    invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleReadiness>(
+      'cortexdl:subtitles:readiness',
+    ),
   selectSubtitleMedia: () => invokeRendererSafe<string | null>('cortexdl:subtitles:select'),
-  installSubtitleModels: (speech: import('../../Shared/localSubtitles').SpeechModel, translation: import('../../Shared/localSubtitles').TranslationModel | null, compute?: 'auto' | 'cpu') => invokeRendererSafe<string>('cortexdl:subtitles:install', speech, translation, compute),
-  startLocalSubtitles: (request: import('../../Shared/localSubtitles').SubtitleRequest) => invokeRendererSafe<string>('cortexdl:subtitles:start', request),
+  installSubtitleModels: (
+    speech: import('../../Shared/localSubtitles').SpeechModel,
+    translation: import('../../Shared/localSubtitles').TranslationModel | null,
+    compute?: 'auto' | 'cpu',
+  ) => invokeRendererSafe<string>('cortexdl:subtitles:install', speech, translation, compute),
+  startLocalSubtitles: (request: import('../../Shared/localSubtitles').SubtitleRequest) =>
+    invokeRendererSafe<string>('cortexdl:subtitles:start', request),
   cancelLocalSubtitles: (id: string) => invokeRendererSafe<void>('cortexdl:subtitles:cancel', id),
-  clearLocalSubtitles: (id: string) => invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleState>('cortexdl:subtitles:clear', id),
-  exportLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[], format: 'srt' | 'vtt') => invokeRendererSafe<string | null>('cortexdl:subtitles:export', id, cues, format),
-  embedLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[]) => invokeRendererSafe<string | null>('cortexdl:subtitles:embed', id, cues),
+  clearLocalSubtitles: (id: string) =>
+    invokeRendererSafe<import('../../Shared/localSubtitles').SubtitleState>(
+      'cortexdl:subtitles:clear',
+      id,
+    ),
+  exportLocalSubtitles: (
+    id: string,
+    cues: import('../../Shared/localSubtitles').SubtitleCue[],
+    format: 'srt' | 'vtt',
+  ) => invokeRendererSafe<string | null>('cortexdl:subtitles:export', id, cues, format),
+  embedLocalSubtitles: (id: string, cues: import('../../Shared/localSubtitles').SubtitleCue[]) =>
+    invokeRendererSafe<string | null>('cortexdl:subtitles:embed', id, cues),
 })

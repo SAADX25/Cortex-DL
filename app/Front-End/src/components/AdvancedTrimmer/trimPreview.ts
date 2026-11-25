@@ -13,7 +13,8 @@ export function validatePreviewUrl(value: string): string {
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid preview stream URL')
   // Reject signed CDN stream URLs whose expire/expires timestamp has already passed.
   const expires = Number(url.searchParams.get('expire') || url.searchParams.get('expires'))
-  if (expires > 0 && expires * 1000 <= Date.now()) throw new Error('Expired preview stream URL; analyze the source again')
+  if (expires > 0 && expires * 1000 <= Date.now())
+    throw new Error('Expired preview stream URL; analyze the source again')
   return url.href
 }
 
@@ -43,14 +44,22 @@ export class TrimPreview {
       try {
         this.activeUrl = validatePreviewUrl(this.fallback)
         this.update(this.activeUrl, null, false)
-      } catch (error) { this.fail(`Invalid fallback preview: ${String(error)}`) }
+      } catch (error) {
+        this.fail(`Invalid fallback preview: ${String(error)}`)
+      }
       return
     }
     try {
       const url = validatePreviewUrl(await extract())
-      if (!this.disposed) { this.activeUrl = url; this.update(url, null, false) }
+      if (!this.disposed) {
+        this.activeUrl = url
+        this.update(url, null, false)
+      }
     } catch (error) {
-      if (!this.disposed) this.fail(`Preview extraction failed: ${error instanceof Error ? error.message : String(error)}`)
+      if (!this.disposed)
+        this.fail(
+          `Preview extraction failed: ${error instanceof Error ? error.message : String(error)}`,
+        )
     }
   }
 
@@ -62,21 +71,35 @@ export class TrimPreview {
       this.fallbackUsed = true
       try {
         const url = validatePreviewUrl(this.fallback)
-        if (url !== this.activeUrl) { this.activeUrl = url; this.update(url, null, false); return }
-      } catch (error) { reason += `; fallback: ${String(error)}`; logPreviewFailure(reason) }
+        if (url !== this.activeUrl) {
+          this.activeUrl = url
+          this.update(url, null, false)
+          return
+        }
+      } catch (error) {
+        reason += `; fallback: ${String(error)}`
+        logPreviewFailure(reason)
+      }
     }
     this.activeUrl = null
     this.update(null, reason, false)
   }
 
-  dispose(): void { this.disposed = true }
+  dispose(): void {
+    this.disposed = true
+  }
 }
 
 export function seekPreview(video: HTMLMediaElement | null, seconds: number): boolean {
   // Wait for HAVE_METADATA (readyState >= 1) before seeking or browsers ignore/throw on currentTime.
   if (!video || video.readyState < 1) return false
   try {
-    video.currentTime = Number.isFinite(video.duration) ? Math.min(seconds, video.duration) : seconds
+    video.currentTime = Number.isFinite(video.duration)
+      ? Math.min(seconds, video.duration)
+      : seconds
     return true
-  } catch (error) { console.error('[Visual Trim] Seek failed:', error); return false }
+  } catch (error) {
+    console.error('[Visual Trim] Seek failed:', error)
+    return false
+  }
 }

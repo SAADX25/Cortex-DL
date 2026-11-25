@@ -2,12 +2,15 @@ import { app } from 'electron'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
 
-
 export function getBaselineDirectory(): string {
-  return app.isPackaged ? path.join(process.resourcesPath, 'engines') : path.join(process.env.APP_ROOT || process.cwd(), 'engine-baseline')
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'engines')
+    : path.join(process.env.APP_ROOT || process.cwd(), 'engine-baseline')
 }
 
-export function getBinDirectory(): string { return path.join(app.getPath('userData'), 'bin') }
+export function getBinDirectory(): string {
+  return path.join(app.getPath('userData'), 'bin')
+}
 
 // Prefer updated binaries in userData/bin over the read-only bundled baseline.
 export function getBinaryPath(name: string): string {

@@ -1,7 +1,7 @@
 {
   "name": "cortex-dl",
   "private": true,
-  "version": "2.3.5",
+  "version": "2.4.0",
   "description": "Cortex DL - Advanced Video and Audio Downloader",
   "repository": {
     "type": "git",
@@ -17,6 +17,8 @@
     "build": "npm run build:candidate",
     "dist": "npm run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "format": "prettier --write \"Front-End/src/**/*.{ts,tsx,css}\" \"Back-End/electron/**/*.ts\" \"Shared/**/*.ts\" \"scripts/**/*.{cjs,js}\" \"tests/**/*.{cjs,js,jsx}\"",
+    "format:check": "prettier --check \"Front-End/src/**/*.{ts,tsx,css}\" \"Back-End/electron/**/*.ts\" \"Shared/**/*.ts\" \"scripts/**/*.{cjs,js}\" \"tests/**/*.{cjs,js,jsx}\"",
     "test": "node --test --test-concurrency=2 tests/*.test.cjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
@@ -65,6 +67,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "js-yaml": "^4.1.0",
+    "prettier": "^3.10.1",
     "rimraf": "^5.0.5",
     "typescript": "5.5.4",
     "vite": "6.4.3",

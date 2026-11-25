@@ -3,7 +3,16 @@ import { primaryAnalysis } from '../lib/analysisSession'
 import React, { useState, useMemo, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { formatMessage, translations } from '../translations'
-import { Youtube, Facebook, Instagram, Clapperboard, FolderPlus, Scissors, UploadCloud, AlertCircle } from 'lucide-react'
+import {
+  Youtube,
+  Facebook,
+  Instagram,
+  Clapperboard,
+  FolderPlus,
+  Scissors,
+  UploadCloud,
+  AlertCircle,
+} from 'lucide-react'
 import AnimatedSegmentedControl from './AnimatedSegmentedControl'
 import AdvancedTrimmer, { type TrimRange } from './AdvancedTrimmer/AdvancedTrimmer'
 import { getTrimmerContext } from './AdvancedTrimmer/trimSource'
@@ -52,44 +61,50 @@ export type BatchItem = {
 }
 
 const AddDownloadTab: React.FC = () => {
-  useEffect(() => () => { primaryAnalysis.cancel(); useUIStore.getState().setAnalyzing(false) }, [])
+  useEffect(
+    () => () => {
+      primaryAnalysis.cancel()
+      useUIStore.getState().setAnalyzing(false)
+    },
+    [],
+  )
   const lang = useLang()
   const t = translations[lang]
 
-  const url = useUIStore((s) => s.url)
-  const setUrl = useUIStore((s) => s.setUrl)
-  const directory = useUIStore((s) => s.directory)
-  const batchItems = useUIStore((s) => s.batchItems)
-  const setBatchItems = useUIStore((s) => s.setBatchItems)
-  const globalError = useUIStore((s) => s.globalError)
-  const analyzeResult = useUIStore((s) => s.analyzeResult)
-  const analyzing = useUIStore((s) => s.analyzing)
-  const analysisStage = useUIStore((s) => s.analysisStage)
-  const showToast = useUIStore((s) => s.showToast)
+  const url = useUIStore(s => s.url)
+  const setUrl = useUIStore(s => s.setUrl)
+  const directory = useUIStore(s => s.directory)
+  const batchItems = useUIStore(s => s.batchItems)
+  const setBatchItems = useUIStore(s => s.setBatchItems)
+  const globalError = useUIStore(s => s.globalError)
+  const analyzeResult = useUIStore(s => s.analyzeResult)
+  const analyzing = useUIStore(s => s.analyzing)
+  const analysisStage = useUIStore(s => s.analysisStage)
+  const showToast = useUIStore(s => s.showToast)
 
-  const subfolderName = useFormStore((s) => s.subfolderName)
-  const setSubfolderName = useFormStore((s) => s.setSubfolderName)
-  const speedLimit = useFormStore((s) => s.speedLimit)
-  const setSpeedLimit = useFormStore((s) => s.setSpeedLimit)
-  const targetFormat = useFormStore((s) => s.targetFormat)
-  const setTargetFormat = useFormStore((s) => s.setTargetFormat)
-  const isAudioMode = useFormStore((s) => s.isAudioMode)
-  const setIsAudioMode = useFormStore((s) => s.setIsAudioMode)
-  const selectedQuality = useFormStore((s) => s.selectedQuality)
-  const setSelectedQuality = useFormStore((s) => s.setSelectedQuality)
-  const selectedVariantUrl = useFormStore((s) => s.selectedVariantUrl)
-  const setSelectedVariantUrl = useFormStore((s) => s.setSelectedVariantUrl)
-  const startTime = useFormStore((s) => s.startTime)
-  const setStartTime = useFormStore((s) => s.setStartTime)
-  const endTime = useFormStore((s) => s.endTime)
-  const setEndTime = useFormStore((s) => s.setEndTime)
-  const trimMode = useFormStore((s) => s.trimMode)
-  const setTrimMode = useFormStore((s) => s.setTrimMode)
-  const setSelectedYtdlpFormatId = useFormStore((s) => s.setSelectedYtdlpFormatId)
+  const subfolderName = useFormStore(s => s.subfolderName)
+  const setSubfolderName = useFormStore(s => s.setSubfolderName)
+  const speedLimit = useFormStore(s => s.speedLimit)
+  const setSpeedLimit = useFormStore(s => s.setSpeedLimit)
+  const targetFormat = useFormStore(s => s.targetFormat)
+  const setTargetFormat = useFormStore(s => s.setTargetFormat)
+  const isAudioMode = useFormStore(s => s.isAudioMode)
+  const setIsAudioMode = useFormStore(s => s.setIsAudioMode)
+  const selectedQuality = useFormStore(s => s.selectedQuality)
+  const setSelectedQuality = useFormStore(s => s.setSelectedQuality)
+  const selectedVariantUrl = useFormStore(s => s.selectedVariantUrl)
+  const setSelectedVariantUrl = useFormStore(s => s.setSelectedVariantUrl)
+  const startTime = useFormStore(s => s.startTime)
+  const setStartTime = useFormStore(s => s.setStartTime)
+  const endTime = useFormStore(s => s.endTime)
+  const setEndTime = useFormStore(s => s.setEndTime)
+  const trimMode = useFormStore(s => s.trimMode)
+  const setTrimMode = useFormStore(s => s.setTrimMode)
+  const setSelectedYtdlpFormatId = useFormStore(s => s.setSelectedYtdlpFormatId)
   const availableVideoQualities = useAvailableVideoQualities()
 
-  const setCommentsSuccessPath = useCommentsStore((s) => s.setCommentsSuccessPath)
-  const setIsCommentsDownloading = useCommentsStore((s) => s.setIsCommentsDownloading)
+  const setCommentsSuccessPath = useCommentsStore(s => s.setCommentsSuccessPath)
+  const setIsCommentsDownloading = useCommentsStore(s => s.setIsCommentsDownloading)
 
   const [isTrimmerOpen, setIsTrimmerOpen] = useState(false)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
@@ -113,7 +128,10 @@ const AddDownloadTab: React.FC = () => {
     e.stopPropagation()
     setIsDraggingOver(false)
 
-    const droppedText = e.dataTransfer.getData('text') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('URL')
+    const droppedText =
+      e.dataTransfer.getData('text') ||
+      e.dataTransfer.getData('text/plain') ||
+      e.dataTransfer.getData('URL')
     if (droppedText) {
       const trimmed = droppedText.trim()
       if (trimmed) {
@@ -144,7 +162,6 @@ const AddDownloadTab: React.FC = () => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-
       <AnimatePresence>
         {isDraggingOver && (
           <motion.div
@@ -158,13 +175,28 @@ const AddDownloadTab: React.FC = () => {
               <motion.div
                 animate={{ y: [0, -10, 0] }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(56, 189, 248, 0.15)', padding: '20px', borderRadius: '50%' }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                  padding: '20px',
+                  borderRadius: '50%',
+                }}
               >
                 <UploadCloud size={54} className="text-cyan-400" />
               </motion.div>
 
               <div style={{ textAlign: 'center' }}>
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f8fafc', margin: 0, marginBottom: '8px' }}>
+                <h2
+                  style={{
+                    fontSize: '1.4rem',
+                    fontWeight: 700,
+                    color: '#f8fafc',
+                    margin: 0,
+                    marginBottom: '8px',
+                  }}
+                >
                   {t.drag_drop_title}
                 </h2>
                 <p style={{ fontSize: '0.95rem', color: '#94a3b8', margin: 0 }}>
@@ -181,7 +213,6 @@ const AddDownloadTab: React.FC = () => {
 
       <section className="minimal-panel">
         <div className="input-group">
-
           <div className="w-full">
             <UrlInputBar
               analyzing={analyzing}
@@ -194,11 +225,10 @@ const AddDownloadTab: React.FC = () => {
               onAnalyze={handleAnalyzeUrlDirectly}
               onClear={() => setUrl('')}
               initialUrl={url}
-             />
+            />
           </div>
 
           <div className="modern-chips-grid flex flex-row justify-between items-center w-full">
-
             <div className="chip-group flex flex-row items-center gap-2">
               <button
                 className={`modern-chip transition-all duration-300 ease-in-out transform hover:scale-105 hover:-translate-y-1 ${!isAudioMode ? 'chip-active-blue hover:shadow-[0_8px_30px_rgba(34,211,238,0.4)]' : ''}`}
@@ -236,14 +266,14 @@ const AddDownloadTab: React.FC = () => {
                   className="cortex-pill-input"
                   placeholder={t.new_folder_placeholder}
                   value={subfolderName}
-                  onChange={(e) => setSubfolderName(e.target.value)}
+                  onChange={e => setSubfolderName(e.target.value)}
                 />
               </div>
 
               <select
                 className="speed-select h-[42px] rounded-full"
                 value={speedLimit}
-                onChange={(e) => setSpeedLimit(e.target.value)}
+                onChange={e => setSpeedLimit(e.target.value)}
                 title="Download Speed Limit"
               >
                 <option value="auto">⚡ {t.speed_auto}</option>
@@ -255,7 +285,9 @@ const AddDownloadTab: React.FC = () => {
             </div>
           </div>
 
-          {analyzing && !analyzeResult && <AnalysisActivity key={url} stage={analysisStage} lang={lang} />}
+          {analyzing && !analyzeResult && (
+            <AnalysisActivity key={url} stage={analysisStage} lang={lang} />
+          )}
 
           {analyzeResult && (
             <div className="fade-in">
@@ -288,34 +320,35 @@ const AddDownloadTab: React.FC = () => {
 
               <div className="advanced-options">
                 <div className="format-quality-row">
-
                   <div className="option-box">
                     <label className="option-label">{t.format_label || 'File Format'}</label>
                     <div className="flex flex-wrap gap-2" style={{ padding: 6 }}>
                       <AnimatedSegmentedControl
                         wrap={true}
-                        options={!isAudioMode
-                          ? [
-                              { value: 'mp4',  label: 'MP4'  },
-                              { value: 'mkv',  label: 'MKV'  },
-                              { value: 'avi',  label: 'AVI'  },
-                              { value: 'mov',  label: 'MOV'  },
-                              { value: 'webm', label: 'WEBM' },
-                              { value: 'ogv',  label: 'OGV'  },
-                              { value: 'm4v',  label: 'M4V'  },
-                            ]
-                          : [
-                              { value: 'mp3',  label: 'MP3'  },
-                              { value: 'wav',  label: 'WAV'  },
-                              { value: 'm4a',  label: 'M4A'  },
-                              { value: 'ogg',  label: 'OGG'  },
-                              { value: 'flac', label: 'FLAC' },
-                              { value: 'aac',  label: 'AAC'  },
-                              { value: 'opus', label: 'OPUS' },
-                              { value: 'wma',  label: 'WMA'  },
-                            ]}
+                        options={
+                          !isAudioMode
+                            ? [
+                                { value: 'mp4', label: 'MP4' },
+                                { value: 'mkv', label: 'MKV' },
+                                { value: 'avi', label: 'AVI' },
+                                { value: 'mov', label: 'MOV' },
+                                { value: 'webm', label: 'WEBM' },
+                                { value: 'ogv', label: 'OGV' },
+                                { value: 'm4v', label: 'M4V' },
+                              ]
+                            : [
+                                { value: 'mp3', label: 'MP3' },
+                                { value: 'wav', label: 'WAV' },
+                                { value: 'm4a', label: 'M4A' },
+                                { value: 'ogg', label: 'OGG' },
+                                { value: 'flac', label: 'FLAC' },
+                                { value: 'aac', label: 'AAC' },
+                                { value: 'opus', label: 'OPUS' },
+                                { value: 'wma', label: 'WMA' },
+                              ]
+                        }
                         value={targetFormat}
-                        onChange={(v) => setTargetFormat(v as any)}
+                        onChange={v => setTargetFormat(v as any)}
                         size="md"
                       />
                     </div>
@@ -324,33 +357,42 @@ const AddDownloadTab: React.FC = () => {
                   {!isAudioMode && (
                     <div className="option-box">
                       <label className="option-label">{t.quality_label}</label>
-                      {analyzing ? <div className="analysis-quality-loading" aria-hidden="true"><span /><span /></div> : <select
-                        className="quality-select"
-                        value={selectedQuality}
-                        onChange={(e) => {
-                          setSelectedQuality(e.target.value)
-                          setSelectedYtdlpFormatId(e.target.value || null)
-                        }}
-                      >
-                        <option value="">
-                          {t.quality_best || 'Best Auto'}
-                          {availableVideoQualities?.[0] ? ` (${availableVideoQualities[0].height}p)` : ''}
-                        </option>
-                        {availableVideoQualities && availableVideoQualities.length > 0 ? (
-                          availableVideoQualities.map((q) => (
-                            <option key={`${q.height}p`} value={`${q.height}p`}>
-                              {q.height}p {q.fps > 0 ? `(${q.fps}fps)` : ''}
-                            </option>
-                          ))
-                        ) : analyzeResult?.kind !== 'ytdlp' && (
-                          <>
-                            <option value="2160p">{t.quality_4k || '4K'}</option>
-                            <option value="1440p">{t.quality_2k || '2K'}</option>
-                            <option value="1080p">{t.quality_1080p || '1080p'}</option>
-                            <option value="720p">{t.quality_720p || '720p'}</option>
-                          </>
-                        )}
-                      </select>}
+                      {analyzing ? (
+                        <div className="analysis-quality-loading" aria-hidden="true">
+                          <span />
+                          <span />
+                        </div>
+                      ) : (
+                        <select
+                          className="quality-select"
+                          value={selectedQuality}
+                          onChange={e => {
+                            setSelectedQuality(e.target.value)
+                            setSelectedYtdlpFormatId(e.target.value || null)
+                          }}
+                        >
+                          <option value="">
+                            {t.quality_best || 'Best Auto'}
+                            {availableVideoQualities?.[0]
+                              ? ` (${availableVideoQualities[0].height}p)`
+                              : ''}
+                          </option>
+                          {availableVideoQualities && availableVideoQualities.length > 0
+                            ? availableVideoQualities.map(q => (
+                                <option key={`${q.height}p`} value={`${q.height}p`}>
+                                  {q.height}p {q.fps > 0 ? `(${q.fps}fps)` : ''}
+                                </option>
+                              ))
+                            : analyzeResult?.kind !== 'ytdlp' && (
+                                <>
+                                  <option value="2160p">{t.quality_4k || '4K'}</option>
+                                  <option value="1440p">{t.quality_2k || '2K'}</option>
+                                  <option value="1080p">{t.quality_1080p || '1080p'}</option>
+                                  <option value="720p">{t.quality_720p || '720p'}</option>
+                                </>
+                              )}
+                        </select>
+                      )}
                     </div>
                   )}
                 </div>
@@ -384,7 +426,9 @@ const AddDownloadTab: React.FC = () => {
                       )}
                     </button>
 
-                    <div className={`trimmer-collapse${isTrimmerOpen ? ' trimmer-collapse--open' : ''}`}>
+                    <div
+                      className={`trimmer-collapse${isTrimmerOpen ? ' trimmer-collapse--open' : ''}`}
+                    >
                       {isTrimmerOpen && (
                         <AdvancedTrimmer
                           key={url}
@@ -399,9 +443,14 @@ const AddDownloadTab: React.FC = () => {
                           trimMode={trimMode}
                           onTrimModeChange={setTrimMode}
                           onChange={applyTrimRange}
-                          onConfirm={(range) => {
+                          onConfirm={range => {
                             applyTrimRange(range)
-                            showToast(formatMessage(t.trimmer.trimSaved, { start: range.startTime, end: range.endTime }))
+                            showToast(
+                              formatMessage(t.trimmer.trimSaved, {
+                                start: range.startTime,
+                                end: range.endTime,
+                              }),
+                            )
                           }}
                         />
                       )}
@@ -415,10 +464,12 @@ const AddDownloadTab: React.FC = () => {
                     <select
                       className="quality-select"
                       value={selectedVariantUrl ?? ''}
-                      onChange={(e) => setSelectedVariantUrl(e.target.value)}
+                      onChange={e => setSelectedVariantUrl(e.target.value)}
                     >
                       {analyzeResult.variants.map((v: any) => (
-                        <option value={v.url} key={v.url}>{variantLabel(v, lang)}</option>
+                        <option value={v.url} key={v.url}>
+                          {variantLabel(v, lang)}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -430,11 +481,27 @@ const AddDownloadTab: React.FC = () => {
                   className="download-main-btn-large"
                   style={{
                     flex: 1,
-                    opacity: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 0.4 : 1,
-                    cursor: analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0) ? 'not-allowed' : 'pointer'
+                    opacity:
+                      analyzeResult?.kind === 'playlist' &&
+                      (analyzeResult.items.filter((i: any) => i.selected).length >
+                        MAX_BATCH_ITEMS ||
+                        analyzeResult.items.filter((i: any) => i.selected).length === 0)
+                        ? 0.4
+                        : 1,
+                    cursor:
+                      analyzeResult?.kind === 'playlist' &&
+                      (analyzeResult.items.filter((i: any) => i.selected).length >
+                        MAX_BATCH_ITEMS ||
+                        analyzeResult.items.filter((i: any) => i.selected).length === 0)
+                        ? 'not-allowed'
+                        : 'pointer',
                   }}
                   onClick={onDownloadNow}
-                  disabled={analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0)}
+                  disabled={
+                    analyzeResult?.kind === 'playlist' &&
+                    (analyzeResult.items.filter((i: any) => i.selected).length > MAX_BATCH_ITEMS ||
+                      analyzeResult.items.filter((i: any) => i.selected).length === 0)
+                  }
                 >
                   🚀 Download Now
                 </button>
@@ -448,14 +515,45 @@ const AddDownloadTab: React.FC = () => {
                     color: '#d1d5db',
                     fontWeight: 600,
                     fontSize: 15,
-                    cursor: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 'not-allowed' : 'pointer',
-                    opacity: (batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))) ? 0.4 : 1,
-                    transition: 'background 0.2s'
+                    cursor:
+                      batchItems.length >= MAX_BATCH_ITEMS ||
+                      (analyzeResult?.kind === 'playlist' &&
+                        (analyzeResult.items.filter((i: any) => i.selected).length >
+                          MAX_BATCH_ITEMS ||
+                          analyzeResult.items.filter((i: any) => i.selected).length === 0))
+                        ? 'not-allowed'
+                        : 'pointer',
+                    opacity:
+                      batchItems.length >= MAX_BATCH_ITEMS ||
+                      (analyzeResult?.kind === 'playlist' &&
+                        (analyzeResult.items.filter((i: any) => i.selected).length >
+                          MAX_BATCH_ITEMS ||
+                          analyzeResult.items.filter((i: any) => i.selected).length === 0))
+                        ? 0.4
+                        : 1,
+                    transition: 'background 0.2s',
                   }}
                   onClick={onAddToList}
-                  disabled={batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0))}
-                  onMouseEnter={(e) => { if (!(batchItems.length >= MAX_BATCH_ITEMS || (analyzeResult?.kind === 'playlist' && (analyzeResult.items.filter((i:any) => i.selected).length > MAX_BATCH_ITEMS || analyzeResult.items.filter((i:any) => i.selected).length === 0)))) e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                  disabled={
+                    batchItems.length >= MAX_BATCH_ITEMS ||
+                    (analyzeResult?.kind === 'playlist' &&
+                      (analyzeResult.items.filter((i: any) => i.selected).length >
+                        MAX_BATCH_ITEMS ||
+                        analyzeResult.items.filter((i: any) => i.selected).length === 0))
+                  }
+                  onMouseEnter={e => {
+                    if (!(
+                      batchItems.length >= MAX_BATCH_ITEMS ||
+                      (analyzeResult?.kind === 'playlist' &&
+                        (analyzeResult.items.filter((i: any) => i.selected).length >
+                          MAX_BATCH_ITEMS ||
+                          analyzeResult.items.filter((i: any) => i.selected).length === 0))
+                    ))
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  }}
                 >
                   ➕ Add to Batch List
                 </button>
@@ -470,79 +568,144 @@ const AddDownloadTab: React.FC = () => {
               SmartImage={SmartImage}
             />
           </div>
-
         </div>
 
-        {globalError ? <div className="global-error-banner" role="alert" dir={lang === 'ar' ? 'rtl' : 'ltr'}><AlertCircle size={19} /><span>{globalError}</span></div> : null}
+        {globalError ? (
+          <div className="global-error-banner" role="alert" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+            <AlertCircle size={19} />
+            <span>{globalError}</span>
+          </div>
+        ) : null}
       </section>
 
-      {batchItems.length > 0 && <div className="w-full mt-auto pt-4 flex-none">
-        <div className="w-full max-w-full mx-auto px-2">
-          {(() => {
-            const isBatchProcessing = batchItems.some(b => b.status === 'processing')
-            const errorCount = batchItems.filter(b => b.status === 'error').length
-            return (
-              <button
-                className="download-main-btn-large fade-in w-full"
-                onClick={onStartBatchDownload}
-                disabled={batchItems.length === 0 || isBatchProcessing}
-                style={{ opacity: isBatchProcessing ? 0.7 : 1, position: 'relative' }}
-              >
-                {isBatchProcessing ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    <div className="spinner-sm" style={{ width: 16, height: 16, borderWidth: 2 }}></div>
-                    Processing Batch…
-                  </span>
-                ) : errorCount > 0 ? (
-                  `Retry ${errorCount} Failed · Start Batch Download (${batchItems.length} / ${MAX_BATCH_ITEMS})`
-                ) : (
-                  `Start Batch Download (${batchItems.length} / ${MAX_BATCH_ITEMS} items)`
-                )}
-              </button>
-            )
-          })()}
+      {batchItems.length > 0 && (
+        <div className="w-full mt-auto pt-4 flex-none">
+          <div className="w-full max-w-full mx-auto px-2">
+            {(() => {
+              const isBatchProcessing = batchItems.some(b => b.status === 'processing')
+              const errorCount = batchItems.filter(b => b.status === 'error').length
+              return (
+                <button
+                  className="download-main-btn-large fade-in w-full"
+                  onClick={onStartBatchDownload}
+                  disabled={batchItems.length === 0 || isBatchProcessing}
+                  style={{ opacity: isBatchProcessing ? 0.7 : 1, position: 'relative' }}
+                >
+                  {isBatchProcessing ? (
+                    <span
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <div
+                        className="spinner-sm"
+                        style={{ width: 16, height: 16, borderWidth: 2 }}
+                      ></div>
+                      Processing Batch…
+                    </span>
+                  ) : errorCount > 0 ? (
+                    `Retry ${errorCount} Failed · Start Batch Download (${batchItems.length} / ${MAX_BATCH_ITEMS})`
+                  ) : (
+                    `Start Batch Download (${batchItems.length} / ${MAX_BATCH_ITEMS} items)`
+                  )}
+                </button>
+              )
+            })()}
+          </div>
         </div>
-      </div>}
+      )}
 
       <div className="quick-access-bar-minimal">
         <div className="quick-access-buttons">
-          <button className="brand-icon-btn youtube" onClick={() => onOpenExternal('https://www.youtube.com')} title="YouTube">
+          <button
+            className="brand-icon-btn youtube"
+            onClick={() => onOpenExternal('https://www.youtube.com')}
+            title="YouTube"
+          >
             <Youtube size={20} />
           </button>
-          <button className="brand-icon-btn ytmusic" onClick={() => onOpenExternal('https://music.youtube.com/')} title="YouTube Music">
+          <button
+            className="brand-icon-btn ytmusic"
+            onClick={() => onOpenExternal('https://music.youtube.com/')}
+            title="YouTube Music"
+          >
             <YouTubeMusicIcon size={22} />
           </button>
-          <button className="brand-icon-btn facebook" onClick={() => onOpenExternal('https://www.facebook.com')} title="Facebook">
+          <button
+            className="brand-icon-btn facebook"
+            onClick={() => onOpenExternal('https://www.facebook.com')}
+            title="Facebook"
+          >
             <Facebook size={20} />
           </button>
-          <button className="brand-icon-btn instagram" onClick={() => onOpenExternal('https://www.instagram.com')} title="Instagram">
+          <button
+            className="brand-icon-btn instagram"
+            onClick={() => onOpenExternal('https://www.instagram.com')}
+            title="Instagram"
+          >
             <Instagram size={20} />
           </button>
-          <button className="brand-icon-btn threads" onClick={() => onOpenExternal('https://www.threads.com')} title="Threads" aria-label="Threads">
+          <button
+            className="brand-icon-btn threads"
+            onClick={() => onOpenExternal('https://www.threads.com')}
+            title="Threads"
+            aria-label="Threads"
+          >
             <ThreadsIcon size={20} />
           </button>
-          <button className="brand-icon-btn reddit" onClick={() => onOpenExternal('https://www.reddit.com')} title="Reddit">
+          <button
+            className="brand-icon-btn reddit"
+            onClick={() => onOpenExternal('https://www.reddit.com')}
+            title="Reddit"
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M24 11.779c0-1.459-1.192-2.645-2.657-2.645-.715 0-1.363.286-1.84.746-1.81-1.191-4.259-1.949-6.971-2.046l1.483-4.669 4.016.941-.006.058c0 1.193.975 2.163 2.174 2.163 1.198 0 2.172-.97 2.172-2.163s-.975-2.164-2.172-2.164c-.92 0-1.704.574-2.021 1.379l-4.329-1.015c-.189-.046-.381.063-.44.249l-1.654 5.207c-2.838.034-5.409.798-7.3 2.025-.474-.438-1.103-.712-1.799-.712-1.465 0-2.656 1.187-2.656 2.646 0 .97.533 1.811 1.317 2.271-.052.282-.086.567-.086.857 0 3.911 4.808 7.093 10.719 7.093s10.72-3.182 10.72-7.093c0-.274-.029-.544-.075-.81.832-.447 1.405-1.312 1.405-2.318zm-17.224 1.816c0-.868.71-1.575 1.582-1.575.872 0 1.581.707 1.581 1.575s-.709 1.574-1.581 1.574-1.582-.706-1.582-1.574zm9.014 4.597c-.45.447-1.288.615-2.82.615-1.567 0-2.438-.179-2.884-.61-.219-.21-.216-.543-.006-.753.21-.21.543-.213.753-.002.112.107.515.228 2.128.228 1.636 0 2.036-.129 2.146-.238.209-.208.541-.205.748.006.208.21.21.542.001.751zm-.055-1.448c-.872 0-1.582-.705-1.582-1.574 0-.868.71-1.575 1.582-1.575.871 0 1.581.707 1.581 1.575s-.71 1.574-1.581 1.574z"/>
+              <path d="M24 11.779c0-1.459-1.192-2.645-2.657-2.645-.715 0-1.363.286-1.84.746-1.81-1.191-4.259-1.949-6.971-2.046l1.483-4.669 4.016.941-.006.058c0 1.193.975 2.163 2.174 2.163 1.198 0 2.172-.97 2.172-2.163s-.975-2.164-2.172-2.164c-.92 0-1.704.574-2.021 1.379l-4.329-1.015c-.189-.046-.381.063-.44.249l-1.654 5.207c-2.838.034-5.409.798-7.3 2.025-.474-.438-1.103-.712-1.799-.712-1.465 0-2.656 1.187-2.656 2.646 0 .97.533 1.811 1.317 2.271-.052.282-.086.567-.086.857 0 3.911 4.808 7.093 10.719 7.093s10.72-3.182 10.72-7.093c0-.274-.029-.544-.075-.81.832-.447 1.405-1.312 1.405-2.318zm-17.224 1.816c0-.868.71-1.575 1.582-1.575.872 0 1.581.707 1.581 1.575s-.709 1.574-1.581 1.574-1.582-.706-1.582-1.574zm9.014 4.597c-.45.447-1.288.615-2.82.615-1.567 0-2.438-.179-2.884-.61-.219-.21-.216-.543-.006-.753.21-.21.543-.213.753-.002.112.107.515.228 2.128.228 1.636 0 2.036-.129 2.146-.238.209-.208.541-.205.748.006.208.21.21.542.001.751zm-.055-1.448c-.872 0-1.582-.705-1.582-1.574 0-.868.71-1.575 1.582-1.575.871 0 1.581.707 1.581 1.575s-.71 1.574-1.581 1.574z" />
             </svg>
           </button>
-          <button className="brand-icon-btn x" onClick={() => onOpenExternal('https://x.com')} title="X">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          <button
+            className="brand-icon-btn x"
+            onClick={() => onOpenExternal('https://x.com')}
+            title="X"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </button>
-          <button className="brand-icon-btn tiktok" onClick={() => onOpenExternal('https://www.tiktok.com')} title="TikTok">
+          <button
+            className="brand-icon-btn tiktok"
+            onClick={() => onOpenExternal('https://www.tiktok.com')}
+            title="TikTok"
+          >
             <Clapperboard size={20} />
           </button>
-          <button className="brand-icon-btn kick" onClick={() => onOpenExternal('https://kick.com')} title="Kick">
-
-            <svg width="20" height="20" viewBox="0 0 200 200" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <button
+            className="brand-icon-btn kick"
+            onClick={() => onOpenExternal('https://kick.com')}
+            title="Kick"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 200 200"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <path d="M30 20 H90 V80 H120 L150 20 H200 L160 100 L200 180 H150 L120 120 H90 V180 H30 V20Z" />
             </svg>
           </button>
         </div>
       </div>
-
     </div>
   )
 }

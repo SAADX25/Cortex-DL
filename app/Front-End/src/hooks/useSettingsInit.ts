@@ -3,31 +3,36 @@ import { useEffect } from 'react'
 import { useSettingsStore } from '../stores/useSettingsStore'
 
 export function useSettingsInit(): void {
-  const lang = useSettingsStore((s) => s.lang)
-  const concurrentDownloads = useSettingsStore((s) => s.concurrentDownloads)
-  const totalDownloadedBytes = useSettingsStore((s) => s.totalDownloadedBytes)
-  const username = useSettingsStore((s) => s.username)
-  const password = useSettingsStore((s) => s.password)
-  const setConcurrentDownloads = useSettingsStore((s) => s.setConcurrentDownloads)
-  const setEngineVersion = useSettingsStore((s) => s.setEngineVersion)
-  const applyUpdateState = useSettingsStore((s) => s.applyUpdateState)
-  const setUsername = useSettingsStore((s) => s.setUsername)
-  const setPassword = useSettingsStore((s) => s.setPassword)
-  const setTotalDownloadedBytes = useSettingsStore((s) => s.setTotalDownloadedBytes)
+  const lang = useSettingsStore(s => s.lang)
+  const concurrentDownloads = useSettingsStore(s => s.concurrentDownloads)
+  const totalDownloadedBytes = useSettingsStore(s => s.totalDownloadedBytes)
+  const username = useSettingsStore(s => s.username)
+  const password = useSettingsStore(s => s.password)
+  const setConcurrentDownloads = useSettingsStore(s => s.setConcurrentDownloads)
+  const setEngineVersion = useSettingsStore(s => s.setEngineVersion)
+  const applyUpdateState = useSettingsStore(s => s.applyUpdateState)
+  const setUsername = useSettingsStore(s => s.setUsername)
+  const setPassword = useSettingsStore(s => s.setPassword)
+  const setTotalDownloadedBytes = useSettingsStore(s => s.setTotalDownloadedBytes)
 
   useEffect(() => {
-    window.cortexDl.getConcurrency().then((val) => {
-      if ([3, 5, 10].includes(val)) setConcurrentDownloads(val)
-    }).catch(() => {})
-
+    window.cortexDl
+      .getConcurrency()
+      .then(val => {
+        if ([3, 5, 10].includes(val)) setConcurrentDownloads(val)
+      })
+      .catch(() => {})
   }, [setConcurrentDownloads])
 
   useEffect(() => {
-    (async () => {
-      try { setEngineVersion(await window.cortexDl.getEngineVersion()) }
-      catch { setEngineVersion('Error') }
-    })()
-
+    const loadEngineVersion = async () => {
+      try {
+        setEngineVersion(await window.cortexDl.getEngineVersion())
+      } catch {
+        setEngineVersion('Error')
+      }
+    }
+    void loadEngineVersion()
   }, [setEngineVersion])
 
   useEffect(() => {
@@ -38,16 +43,19 @@ export function useSettingsInit(): void {
   useEffect(() => {
     let disposed = false
     let receivedEvent = false
-    const unsubscribe = window.cortexDl.onUpdateStatus((status) => {
+    const unsubscribe = window.cortexDl.onUpdateStatus(status => {
       receivedEvent = true
       applyUpdateState(status)
     })
     if (window.cortexDl.getUpdateState) {
-      void window.cortexDl.getUpdateState().then((initial) => {
-        if (!disposed && !receivedEvent && initial) {
-          applyUpdateState(initial)
-        }
-      }).catch(() => {})
+      void window.cortexDl
+        .getUpdateState()
+        .then(initial => {
+          if (!disposed && !receivedEvent && initial) {
+            applyUpdateState(initial)
+          }
+        })
+        .catch(() => {})
     }
     return () => {
       disposed = true
@@ -55,7 +63,9 @@ export function useSettingsInit(): void {
     }
   }, [applyUpdateState])
 
-  useEffect(() => { localStorage.setItem('cortex-notifications', 'true') }, [])
+  useEffect(() => {
+    localStorage.setItem('cortex-notifications', 'true')
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('cortex-concurrent', String(concurrentDownloads))
@@ -64,12 +74,15 @@ export function useSettingsInit(): void {
 
   // Debounce persistence so frequent download stats ticks don't hammer synchronous localStorage writes.
   useEffect(() => {
-    const timer = setTimeout(() => localStorage.setItem('cortex-total-bytes', String(totalDownloadedBytes)), 1000)
+    const timer = setTimeout(
+      () => localStorage.setItem('cortex-total-bytes', String(totalDownloadedBytes)),
+      1000,
+    )
     return () => clearTimeout(timer)
   }, [totalDownloadedBytes])
 
   useEffect(() => {
-    (async () => {
+    const loadCredentials = async () => {
       try {
         // Load credentials from encrypted storage and scrub legacy plaintext localStorage entries.
         const [savedUser, savedPass] = await Promise.all([
@@ -80,18 +93,26 @@ export function useSettingsInit(): void {
         if (savedPass) setPassword(savedPass)
         localStorage.removeItem('cortex-username')
         localStorage.removeItem('cortex-password')
-      } catch (err) { console.error('Failed to load secure credentials', err) }
-    })()
-
+      } catch (err) {
+        console.error('Failed to load secure credentials', err)
+      }
+    }
+    void loadCredentials()
   }, [setUsername, setPassword])
   // Skip empty strings so initial state doesn't clobber stored credentials before hydration finishes.
-  useEffect(() => { if (username !== '') window.cortexDl.saveSecureData('cortex-username', username) }, [username])
-  useEffect(() => { if (password !== '') window.cortexDl.saveSecureData('cortex-password', password) }, [password])
+  useEffect(() => {
+    if (username !== '') window.cortexDl.saveSecureData('cortex-username', username)
+  }, [username])
+  useEffect(() => {
+    if (password !== '') window.cortexDl.saveSecureData('cortex-password', password)
+  }, [password])
 
   useEffect(() => {
     const statsDispose = window.cortexDl.onStatsUpdated(({ addedBytes }) => {
-      setTotalDownloadedBytes((current) => current + addedBytes)
+      setTotalDownloadedBytes(current => current + addedBytes)
     })
-    return () => { statsDispose() }
+    return () => {
+      statsDispose()
+    }
   }, [setTotalDownloadedBytes])
 }

@@ -4,11 +4,21 @@ import path from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import log from 'electron-log'
-import { type DownloadTask, type EngineContext, type EngineResult, type TaskRuntime } from '../types'
+import {
+  type DownloadTask,
+  type EngineContext,
+  type EngineResult,
+  type TaskRuntime,
+} from '../types'
 import { type IEngine } from './IEngine'
 import { ensureEnginesReady } from './engineManager'
 import { runMediaProcess } from '../services/mediaService'
-import { resolveThreadsMedia, selectThreadsDownloadPlan, THREADS_REQUEST_HEADERS, type ThreadsStreamFormat } from '../services/threadsService'
+import {
+  resolveThreadsMedia,
+  selectThreadsDownloadPlan,
+  THREADS_REQUEST_HEADERS,
+  type ThreadsStreamFormat,
+} from '../services/threadsService'
 import { threadsErrorCode } from '../../../Shared/threadsErrors'
 import { computeSpeed, nowMs } from '../utils'
 
@@ -91,9 +101,27 @@ export class ThreadsEngine implements IEngine {
       task.totalBytes = knownTotal
 
       // Download video then audio sequentially so progress advances smoothly across the combined byte total.
-      const videoBytes = await this.downloadStreamToFile(plan.video, videoDest, task, context, signal, 0, speedLimitBps, knownTotal !== null)
+      const videoBytes = await this.downloadStreamToFile(
+        plan.video,
+        videoDest,
+        task,
+        context,
+        signal,
+        0,
+        speedLimitBps,
+        knownTotal !== null,
+      )
       signal.throwIfAborted()
-      await this.downloadStreamToFile(plan.audio, audioDest, task, context, signal, videoBytes, speedLimitBps, knownTotal !== null)
+      await this.downloadStreamToFile(
+        plan.audio,
+        audioDest,
+        task,
+        context,
+        signal,
+        videoBytes,
+        speedLimitBps,
+        knownTotal !== null,
+      )
       signal.throwIfAborted()
 
       task.status = 'merging'
@@ -106,7 +134,23 @@ export class ThreadsEngine implements IEngine {
       // Remux DASH tracks into MP4 without re-encoding, moving the moov atom upfront for instant playback.
       const muxedDest = path.join(task.directory, `${task.id}.mp4`)
       await runMediaProcess(
-        ['-i', videoDest, '-i', audioDest, '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', muxedDest],
+        [
+          '-i',
+          videoDest,
+          '-i',
+          audioDest,
+          '-map',
+          '0:v:0',
+          '-map',
+          '1:a:0',
+          '-c',
+          'copy',
+          '-movflags',
+          '+faststart',
+          '-f',
+          'mp4',
+          muxedDest,
+        ],
         task,
         context,
         media.duration,
@@ -152,7 +196,10 @@ export class ThreadsEngine implements IEngine {
     if (signal.aborted) onAbort()
 
     let lastActivityAt = nowMs()
-    const responseTimer = setTimeout(() => controller.abort(new Error('Threads media request timed out')), STREAM_TIMEOUT_MS)
+    const responseTimer = setTimeout(
+      () => controller.abort(new Error('Threads media request timed out')),
+      STREAM_TIMEOUT_MS,
+    )
     const stallWatchdog = setInterval(() => {
       if (nowMs() - lastActivityAt >= STALL_TIMEOUT_MS) {
         controller.abort(new Error('Threads media download stalled'))
@@ -166,7 +213,7 @@ export class ThreadsEngine implements IEngine {
       const response = await fetch(stream.url, {
         headers: {
           'User-Agent': THREADS_REQUEST_HEADERS['User-Agent'],
-          'Referer': 'https://www.threads.com/',
+          Referer: 'https://www.threads.com/',
         },
         redirect: 'follow',
         signal: controller.signal,
@@ -230,7 +277,9 @@ export class ThreadsEngine implements IEngine {
 
       if (received <= 0) throw new Error('Threads media stream was empty')
       if (Number.isFinite(contentLength) && contentLength > 0 && received !== contentLength) {
-        throw new Error(`Threads download size mismatch: expected ${contentLength}, got ${received}`)
+        throw new Error(
+          `Threads download size mismatch: expected ${contentLength}, got ${received}`,
+        )
       }
 
       task.downloadedBytes = baseBytes + received

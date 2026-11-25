@@ -2,10 +2,16 @@
 import { seekPreview } from './trimPreview'
 
 export function isAbortPlaybackError(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && (error as { name?: string }).name === 'AbortError')
+  return Boolean(
+    error && typeof error === 'object' && (error as { name?: string }).name === 'AbortError',
+  )
 }
 
-export function syncTrimAudio(video: HTMLVideoElement | null, audio: HTMLAudioElement | null, play = false): Promise<void> {
+export function syncTrimAudio(
+  video: HTMLVideoElement | null,
+  audio: HTMLAudioElement | null,
+  play = false,
+): Promise<void> {
   if (!video || !audio || !audio.getAttribute('src')) return Promise.resolve()
   audio.volume = video.volume
   audio.muted = video.muted

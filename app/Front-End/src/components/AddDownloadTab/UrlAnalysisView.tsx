@@ -26,23 +26,59 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
   SmartImage,
   setCommentsSuccessPath,
   setIsCommentsDownloading,
-  showToast
+  showToast,
 }) => {
   useEffect(() => {
-    if (analyzeResult?.preview && window.cortexDl.analysisDebug) console.debug('[analysis timing] firstPreviewRenderedMs=', primaryAnalysis.elapsed())
+    if (analyzeResult?.preview && window.cortexDl.analysisDebug)
+      console.debug('[analysis timing] firstPreviewRenderedMs=', primaryAnalysis.elapsed())
   }, [analyzeResult?.preview])
   if (!analyzeResult || analyzeResult.kind === 'playlist') return null
   const copy = translations[lang].analysis
 
   return (
-    <div className={`video-preview-large${analyzing ? ' is-analyzing' : ''}`} style={{ alignItems: 'stretch' }}>
+    <div
+      className={`video-preview-large${analyzing ? ' is-analyzing' : ''}`}
+      style={{ alignItems: 'stretch' }}
+    >
       {analyzeResult.kind === 'ytdlp' && analyzeResult.thumbnail && (
-        <SmartImage src={analyzeResult.thumbnail} alt="thumb" loading="eager" fetchPriority="high" decoding="async" className="preview-thumb-large"
-          onLoad={() => { if (window.cortexDl.analysisDebug) console.debug('[analysis timing] thumbnailAvailableMs=', primaryAnalysis.elapsed()) }} />
+        <SmartImage
+          src={analyzeResult.thumbnail}
+          alt="thumb"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="preview-thumb-large"
+          onLoad={() => {
+            if (window.cortexDl.analysisDebug)
+              console.debug('[analysis timing] thumbnailAvailableMs=', primaryAnalysis.elapsed())
+          }}
+        />
       )}
-      <div className="preview-info-large" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div className="preview-title-large" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: '8px' }}>
-          {analyzeResult.kind === 'ytdlp' ? analyzeResult.title : analyzeResult.kind === 'direct' ? 'Direct media' : 'HLS Stream'}
+      <div
+        className="preview-info-large"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          className="preview-title-large"
+          style={{
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            marginBottom: '8px',
+          }}
+        >
+          {analyzeResult.kind === 'ytdlp'
+            ? analyzeResult.title
+            : analyzeResult.kind === 'direct'
+              ? 'Direct media'
+              : 'HLS Stream'}
         </div>
 
         {analyzing && <AnalysisActivity stage={analysisStage} lang={lang} />}
@@ -51,42 +87,96 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
           <div className="preview-metadata">
             <div className="preview-metadata-row">
               {analyzeResult.isLive && (
-                <div className="metadata-badge" style={{ backgroundColor: 'rgba(239, 68, 68, 0.18)', borderColor: 'rgba(239, 68, 68, 0.45)', color: '#fca5a5', fontWeight: 700 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                <div
+                  className="metadata-badge"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+                    borderColor: 'rgba(239, 68, 68, 0.45)',
+                    color: '#fca5a5',
+                    fontWeight: 700,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: '#ef4444',
+                      display: 'inline-block',
+                    }}
+                  />
                   <span>{copy.live}</span>
                 </div>
               )}
               {analyzeResult.views != null && (
                 <div className="metadata-badge" title={copy.views}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
                   <span>{analyzeResult.views.toLocaleString()}</span>
                 </div>
               )}
               {analyzeResult.duration != null && (
                 <div className="metadata-badge" title={copy.duration}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  <span>{
-                    (() => {
-                      const d = analyzeResult.duration as number;
-                      const h = Math.floor(d / 3600);
-                      const m = Math.floor((d % 3600) / 60);
-                      const s = d % 60;
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <span>
+                    {(() => {
+                      const d = analyzeResult.duration as number
+                      const h = Math.floor(d / 3600)
+                      const m = Math.floor((d % 3600) / 60)
+                      const s = d % 60
                       return h > 0
                         ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-                        : `${m}:${s.toString().padStart(2, '0')}`;
-                    })()
-                  }</span>
+                        : `${m}:${s.toString().padStart(2, '0')}`
+                    })()}
+                  </span>
                 </div>
               )}
               {analyzeResult.likes != null && (
                 <div className="metadata-badge" title={copy.likes}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                  </svg>
                   <span>{analyzeResult.likes.toLocaleString()}</span>
                 </div>
               )}
               {analyzeResult.dislikes != null && analyzeResult.dislikes > 0 && (
                 <div className="metadata-badge" title={copy.dislikes}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path>
+                  </svg>
                   <span>{analyzeResult.dislikes.toLocaleString()}</span>
                 </div>
               )}
@@ -95,28 +185,44 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
               {(url.includes('youtube.com') || url.includes('youtu.be')) && (
                 <div
                   className="metadata-badge"
-                  style={{ cursor: 'pointer', backgroundColor: '#3b82f6', color: '#fff', border: 'none' }}
+                  style={{
+                    cursor: 'pointer',
+                    backgroundColor: '#3b82f6',
+                    color: '#fff',
+                    border: 'none',
+                  }}
                   title={copy.saveCommentsTitle}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const res = await window.cortexDl.downloadComments(url);
+                  onClick={async e => {
+                    e.stopPropagation()
+                    const res = await window.cortexDl.downloadComments(url)
                     if (typeof res === 'object' && res !== null) {
                       if (res.success) {
-                        setCommentsSuccessPath(res.filePath || null);
-                        showToast(copy.commentsSaved);
+                        setCommentsSuccessPath(res.filePath || null)
+                        showToast(copy.commentsSaved)
                       } else {
-                        setIsCommentsDownloading(false);
-                        if (!res.canceled) showToast(copy.commentsFailed);
+                        setIsCommentsDownloading(false)
+                        if (!res.canceled) showToast(copy.commentsFailed)
                       }
                     } else if (res) {
-                      setCommentsSuccessPath(null);
-                      showToast(copy.commentsSaved);
+                      setCommentsSuccessPath(null)
+                      showToast(copy.commentsSaved)
                     } else {
-                      setIsCommentsDownloading(false);
+                      setIsCommentsDownloading(false)
                     }
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z" />
+                  </svg>
                   <span>{copy.saveComments}</span>
                 </div>
               )}
@@ -124,27 +230,57 @@ const UrlAnalysisView: React.FC<UrlAnalysisViewProps> = ({
           </div>
         )}
 
-        {analyzeResult.kind === 'ytdlp' && (url.includes('youtube.com') || url.includes('youtu.be')) && analyzeResult.comments && analyzeResult.comments.length > 0 && (
-          <div className="preview-comments custom-scrollbar">
-            <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#6b7280', fontWeight: 'bold', marginBottom: '8px' }}>
-              💬 {copy.commentsHeading}
-            </h4>
-            <div className="comments-list">
-              {analyzeResult.comments.map((comment: any, i: number) => (
-                <div key={i} className="comment-item">
-                  <div className="comment-header">
-                    <span className="comment-author">{comment.author}</span>
-                    <span className="comment-likes">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
-                      {comment.likeCount > 0 ? comment.likeCount.toLocaleString() : 0}
-                    </span>
+        {analyzeResult.kind === 'ytdlp' &&
+          (url.includes('youtube.com') || url.includes('youtu.be')) &&
+          analyzeResult.comments &&
+          analyzeResult.comments.length > 0 && (
+            <div className="preview-comments custom-scrollbar">
+              <h4
+                style={{
+                  fontSize: '0.75rem',
+                  textTransform: 'uppercase',
+                  color: '#6b7280',
+                  fontWeight: 'bold',
+                  marginBottom: '8px',
+                }}
+              >
+                💬 {copy.commentsHeading}
+              </h4>
+              <div className="comments-list">
+                {analyzeResult.comments.map((comment: any, i: number) => (
+                  <div key={i} className="comment-item">
+                    <div className="comment-header">
+                      <span className="comment-author">{comment.author}</span>
+                      <span className="comment-likes">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                        </svg>
+                        {comment.likeCount > 0 ? comment.likeCount.toLocaleString() : 0}
+                      </span>
+                    </div>
+                    <p
+                      className="comment-text"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {comment.text}
+                    </p>
                   </div>
-                  <p className="comment-text" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{comment.text}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   )

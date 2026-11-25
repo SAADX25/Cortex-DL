@@ -16,7 +16,9 @@ export function sanitizeFilename(name: string): string {
 }
 
 export function withExtension(filename: string, extensionWithoutDot: string): string {
-  const ext = extensionWithoutDot.startsWith('.') ? extensionWithoutDot.slice(1) : extensionWithoutDot
+  const ext = extensionWithoutDot.startsWith('.')
+    ? extensionWithoutDot.slice(1)
+    : extensionWithoutDot
   const base = filename.replace(/\.[^.]+$/i, '')
   return `${base}.${ext}`
 }
@@ -111,11 +113,14 @@ const IPC_THROTTLE_MS = 100
 
 const TERMINAL_STATUSES = new Set(['completed', 'error', 'canceled', 'paused'])
 
-const pendingTrailing = new Map<string, {
-  timer: ReturnType<typeof setTimeout>
-  task: DownloadTask
-  win: BrowserWindow
-}>()
+const pendingTrailing = new Map<
+  string,
+  {
+    timer: ReturnType<typeof setTimeout>
+    task: DownloadTask
+    win: BrowserWindow
+  }
+>()
 
 export function throttledSendUpdate(
   win: BrowserWindow | null,
@@ -158,7 +163,11 @@ export function flushPendingIpc(taskId: string): void {
   }
 }
 
-function schedulePendingTrailing(task: DownloadTask, win: BrowserWindow, runtime: TaskRuntime): void {
+function schedulePendingTrailing(
+  task: DownloadTask,
+  win: BrowserWindow,
+  runtime: TaskRuntime,
+): void {
   const existing = pendingTrailing.get(task.id)
   if (existing) clearTimeout(existing.timer)
 
@@ -212,7 +221,8 @@ async function terminateProcessTree(child: ChildProcessWithoutNullStreams): Prom
   }
 
   // Avoid spawning taskkill for an already-exited PID, which Windows could reuse.
-  if (process.platform === 'win32' && (typeof child.exitCode === 'number' || child.signalCode)) return
+  if (process.platform === 'win32' && (typeof child.exitCode === 'number' || child.signalCode))
+    return
 
   if (process.platform === 'win32') {
     try {
@@ -236,9 +246,7 @@ async function terminateProcessTree(child: ChildProcessWithoutNullStreams): Prom
   }
 }
 
-
 const TASKKILL_TIMEOUT_MS = 5_000
-
 
 function spawnTaskkill(pid: number): Promise<number> {
   return new Promise<number>((resolve, reject) => {
@@ -253,12 +261,12 @@ function spawnTaskkill(pid: number): Promise<number> {
       reject(new Error(`taskkill timed out after ${TASKKILL_TIMEOUT_MS}ms for PID ${pid}`))
     }, TASKKILL_TIMEOUT_MS)
 
-    killer.on('error', (err) => {
+    killer.on('error', err => {
       clearTimeout(timer)
       reject(err)
     })
 
-    killer.on('close', (code) => {
+    killer.on('close', code => {
       clearTimeout(timer)
       resolve(code ?? 1)
     })

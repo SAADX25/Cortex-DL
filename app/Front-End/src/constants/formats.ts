@@ -12,13 +12,16 @@ export const VIDEO_FORMATS: FormatOption[] = [
   { value: 'm4v', label: 'M4V' },
 ]
 
-export const AUDIO_FORMATS: FormatOption[] = SHARED_AUDIO_FORMATS.map(value => ({ value, label: value.toUpperCase() }))
+export const AUDIO_FORMATS: FormatOption[] = SHARED_AUDIO_FORMATS.map(value => ({
+  value,
+  label: value.toUpperCase(),
+}))
 
 export const FORMAT_GROUPS = [
   { label: 'VIDEO', options: VIDEO_FORMATS },
   { label: 'AUDIO', options: AUDIO_FORMATS },
 ]
 
-export const ALL_FORMAT_VALUES = [...VIDEO_FORMATS, ...AUDIO_FORMATS].map((f) => f.value)
+export const ALL_FORMAT_VALUES = [...VIDEO_FORMATS, ...AUDIO_FORMATS].map(f => f.value)
 
-export type TargetFormatValue = typeof ALL_FORMAT_VALUES[number]
+export type TargetFormatValue = (typeof ALL_FORMAT_VALUES)[number]

@@ -9,9 +9,22 @@ suite('Threads URL and extraction', test => {
     return originalLoad.call(this, request, parent, ...rest)
   }
 
-  const { isThreadsUrl, threadsPostCode, threadsCarouselIndex, normalizeAnalysisUrl } = require('../Shared/analysisUrl.ts')
-  const { parseDashManifest, parseThreadsHtml, selectThreadsDownloadPlan } = require('../Back-End/electron/services/threadsService.ts')
-  const { isYtdlpUrl, threadsErrorMessage, normalizeIpcError } = require('../Front-End/src/lib/downloadHelpers.ts')
+  const {
+    isThreadsUrl,
+    threadsPostCode,
+    threadsCarouselIndex,
+    normalizeAnalysisUrl,
+  } = require('../Shared/analysisUrl.ts')
+  const {
+    parseDashManifest,
+    parseThreadsHtml,
+    selectThreadsDownloadPlan,
+  } = require('../Back-End/electron/services/threadsService.ts')
+  const {
+    isYtdlpUrl,
+    threadsErrorMessage,
+    normalizeIpcError,
+  } = require('../Front-End/src/lib/downloadHelpers.ts')
   const { translations } = require('../Front-End/src/translations.ts')
 
   const sampleMpd = `<?xml version="1.0" encoding="UTF-8"?>
@@ -50,8 +63,14 @@ suite('Threads URL and extraction', test => {
 
     assert.equal(isThreadsUrl('https://www.threads.net/t/Df35Ch2gXOY?igsh=abc'), true)
     assert.equal(threadsPostCode('https://www.threads.net/t/Df35Ch2gXOY?igsh=abc'), 'Df35Ch2gXOY')
-    assert.equal(normalizeAnalysisUrl('https://www.threads.net/t/Df35Ch2gXOY?igsh=abc'), 'https://www.threads.com/t/Df35Ch2gXOY')
-    assert.equal(normalizeAnalysisUrl('https://threads.com/@user/post/ABC123/media?carousel=2&xmt=1'), 'https://www.threads.com/@user/post/ABC123?carousel=2')
+    assert.equal(
+      normalizeAnalysisUrl('https://www.threads.net/t/Df35Ch2gXOY?igsh=abc'),
+      'https://www.threads.com/t/Df35Ch2gXOY',
+    )
+    assert.equal(
+      normalizeAnalysisUrl('https://threads.com/@user/post/ABC123/media?carousel=2&xmt=1'),
+      'https://www.threads.com/@user/post/ABC123?carousel=2',
+    )
     assert.equal(threadsCarouselIndex('https://www.threads.com/@user/post/ABC123?carousel=2'), 2)
     assert.equal(threadsPostCode('https://www.threads.com/@norman_ph'), null)
     assert.equal(isThreadsUrl('https://www.instagram.com/reel/DfxjiHqPX1K/'), false)
@@ -87,7 +106,11 @@ suite('Threads URL and extraction', test => {
               code: 'DfxjiHqPX1K',
               original_width: 1080,
               original_height: 1920,
-              image_versions2: { candidates: [{ url: 'https://cdn.example.test/thumb.jpg', width: 941, height: 1672 }] },
+              image_versions2: {
+                candidates: [
+                  { url: 'https://cdn.example.test/thumb.jpg', width: 941, height: 1672 },
+                ],
+              },
               video_versions: [
                 { type: 101, url: 'https://cdn.example.test/prog720.mp4' },
                 { type: 102, url: 'https://cdn.example.test/prog720.mp4' },
@@ -99,7 +122,11 @@ suite('Threads URL and extraction', test => {
       },
     })
 
-    const result = parseThreadsHtml(html, 'Df3TldSEiay', 'https://www.threads.com/@norman_ph/post/Df3TldSEiay')
+    const result = parseThreadsHtml(
+      html,
+      'Df3TldSEiay',
+      'https://www.threads.com/@norman_ph/post/Df3TldSEiay',
+    )
     assert.equal(result.kind, 'media')
     assert.equal(result.media.title, 'Club tonight 🫡 Excited')
     assert.equal(result.media.likes, 6268)
@@ -132,7 +159,11 @@ suite('Threads URL and extraction', test => {
         video_versions: [{ type: 101, url: 'https://cdn.example.test/native.mp4' }],
       },
     })
-    const native = parseThreadsHtml(nativeHtml, 'Native1', 'https://www.threads.com/@creator/post/Native1')
+    const native = parseThreadsHtml(
+      nativeHtml,
+      'Native1',
+      'https://www.threads.com/@creator/post/Native1',
+    )
     assert.equal(native.kind, 'media')
     const nativePlan = selectThreadsDownloadPlan(native.media, 'mp4')
     assert.equal(nativePlan.mode, 'single')
@@ -144,17 +175,40 @@ suite('Threads URL and extraction', test => {
         user: { username: 'multi' },
         caption: { text: 'Two clips' },
         carousel_media: [
-          { image_versions2: { candidates: [{ url: 'https://cdn.example.test/photo.jpg', width: 500, height: 500 }] } },
-          { video_versions: [{ type: 101, url: 'https://cdn.example.test/clip1.mp4' }], image_versions2: { candidates: [{ url: 'https://cdn.example.test/t1.jpg', width: 500, height: 500 }] } },
-          { video_versions: [{ type: 101, url: 'https://cdn.example.test/clip2.mp4' }], image_versions2: { candidates: [{ url: 'https://cdn.example.test/t2.jpg', width: 500, height: 500 }] } },
+          {
+            image_versions2: {
+              candidates: [{ url: 'https://cdn.example.test/photo.jpg', width: 500, height: 500 }],
+            },
+          },
+          {
+            video_versions: [{ type: 101, url: 'https://cdn.example.test/clip1.mp4' }],
+            image_versions2: {
+              candidates: [{ url: 'https://cdn.example.test/t1.jpg', width: 500, height: 500 }],
+            },
+          },
+          {
+            video_versions: [{ type: 101, url: 'https://cdn.example.test/clip2.mp4' }],
+            image_versions2: {
+              candidates: [{ url: 'https://cdn.example.test/t2.jpg', width: 500, height: 500 }],
+            },
+          },
         ],
       },
     })
-    const playlist = parseThreadsHtml(carouselHtml, 'Car1', 'https://www.threads.com/@multi/post/Car1')
+    const playlist = parseThreadsHtml(
+      carouselHtml,
+      'Car1',
+      'https://www.threads.com/@multi/post/Car1',
+    )
     assert.equal(playlist.kind, 'playlist')
     assert.equal(playlist.items.length, 2)
     assert.equal(playlist.items[1].url, 'https://www.threads.com/@multi/post/Car1?carousel=1')
-    const secondItem = parseThreadsHtml(carouselHtml, 'Car1', 'https://www.threads.com/@multi/post/Car1?carousel=1', 1)
+    const secondItem = parseThreadsHtml(
+      carouselHtml,
+      'Car1',
+      'https://www.threads.com/@multi/post/Car1?carousel=1',
+      1,
+    )
     assert.equal(secondItem.kind, 'media')
     assert.equal(secondItem.media.progressiveFormats[0].url, 'https://cdn.example.test/clip2.mp4')
 
@@ -173,7 +227,11 @@ suite('Threads URL and extraction', test => {
         },
       },
     })
-    const repost = parseThreadsHtml(repostHtml, 'Repost1', 'https://www.threads.com/@sharer/post/Repost1')
+    const repost = parseThreadsHtml(
+      repostHtml,
+      'Repost1',
+      'https://www.threads.com/@sharer/post/Repost1',
+    )
     assert.equal(repost.kind, 'media')
     assert.equal(repost.media.progressiveFormats[0].url, 'https://cdn.example.test/quoted.mp4')
 
@@ -184,7 +242,11 @@ suite('Threads URL and extraction', test => {
         audio: { audio_src: 'https://cdn.example.test/voice.m4a', duration_ms: 8500 },
       },
     })
-    const voice = parseThreadsHtml(voiceHtml, 'Voice1', 'https://www.threads.com/@speaker/post/Voice1')
+    const voice = parseThreadsHtml(
+      voiceHtml,
+      'Voice1',
+      'https://www.threads.com/@speaker/post/Voice1',
+    )
     assert.equal(voice.kind, 'media')
     assert.equal(voice.media.duration, 8.5)
     assert.equal(voice.media.audioFormats[0].url, 'https://cdn.example.test/voice.m4a')
@@ -192,14 +254,45 @@ suite('Threads URL and extraction', test => {
 
   test('reports clear error codes for text-only and unavailable posts and maps localized messages', () => {
     const textOnlyHtml = wrapHtml({
-      post: { code: 'Text1', caption: { text: 'Just text' }, video_versions: null, text_post_app_info: {} },
+      post: {
+        code: 'Text1',
+        caption: { text: 'Just text' },
+        video_versions: null,
+        text_post_app_info: {},
+      },
     })
-    assert.throws(() => parseThreadsHtml(textOnlyHtml, 'Text1', 'https://www.threads.com/@u/post/Text1'), /THREADS_NO_MEDIA/)
-    assert.throws(() => parseThreadsHtml('<html><body>empty</body></html>', 'Missing1', 'https://www.threads.com/@u/post/Missing1'), /THREADS_POST_UNAVAILABLE/)
+    assert.throws(
+      () => parseThreadsHtml(textOnlyHtml, 'Text1', 'https://www.threads.com/@u/post/Text1'),
+      /THREADS_NO_MEDIA/,
+    )
+    assert.throws(
+      () =>
+        parseThreadsHtml(
+          '<html><body>empty</body></html>',
+          'Missing1',
+          'https://www.threads.com/@u/post/Missing1',
+        ),
+      /THREADS_POST_UNAVAILABLE/,
+    )
 
-    assert.equal(threadsErrorMessage(new Error('THREADS_NO_MEDIA'), translations.ar), translations.ar.threads_no_media)
-    assert.equal(threadsErrorMessage(new Error('THREADS_POST_UNAVAILABLE'), translations.en), translations.en.threads_post_unavailable)
-    assert.equal(normalizeIpcError(new Error('Error invoking remote method \'cortexdl:analyze-url\': Error: THREADS_INVALID_URL'), 'fallback', translations.ar), translations.ar.threads_invalid_url)
+    assert.equal(
+      threadsErrorMessage(new Error('THREADS_NO_MEDIA'), translations.ar),
+      translations.ar.threads_no_media,
+    )
+    assert.equal(
+      threadsErrorMessage(new Error('THREADS_POST_UNAVAILABLE'), translations.en),
+      translations.en.threads_post_unavailable,
+    )
+    assert.equal(
+      normalizeIpcError(
+        new Error(
+          "Error invoking remote method 'cortexdl:analyze-url': Error: THREADS_INVALID_URL",
+        ),
+        'fallback',
+        translations.ar,
+      ),
+      translations.ar.threads_invalid_url,
+    )
   })
 })
 
@@ -215,29 +308,97 @@ suite('Threads download integration', test => {
   const rows = new Map()
   const mockDb = {
     db: { prepare: () => ({ get: () => undefined, run: () => {} }), transaction: fn => fn },
-    taskDb: { getAllTasks: { all: () => [...rows.values()] }, upsertTask: { run: row => rows.set(row.id, { ...row }) }, deleteTask: { run: id => rows.delete(id) }, clearCompleted: { run: () => {} } },
+    taskDb: {
+      getAllTasks: { all: () => [...rows.values()] },
+      upsertTask: { run: row => rows.set(row.id, { ...row }) },
+      deleteTask: { run: id => rows.delete(id) },
+      clearCompleted: { run: () => {} },
+    },
   }
   Module._load = function (request, parent, ...rest) {
-    if (request.endsWith('/engineManager')) return { ensureEnginesReady: async () => {}, engineExecutionFailed() {}, engineReceipts: { inspect: async name => ({ name, available: true, version: '2.9.4', state: 'cached-ready' }) } }
-    if (request === './paths' || request === '../paths') return { getBinaryPath: name => path.join(process.cwd(), 'engine-baseline', name + '.exe'), getBinDirectory: () => path.join(process.cwd(), 'engine-baseline') }
+    if (request.endsWith('/engineManager'))
+      return {
+        ensureEnginesReady: async () => {},
+        engineExecutionFailed() {},
+        engineReceipts: {
+          inspect: async name => ({
+            name,
+            available: true,
+            version: '2.9.4',
+            state: 'cached-ready',
+          }),
+        },
+      }
+    if (request === './paths' || request === '../paths')
+      return {
+        getBinaryPath: name => path.join(process.cwd(), 'engine-baseline', name + '.exe'),
+        getBinDirectory: () => path.join(process.cwd(), 'engine-baseline'),
+      }
     if (request === 'electron-log') return { info() {}, warn() {}, error() {} }
     if (request === './db' || request === '../db') return mockDb
-    if (request === 'electron') return { app: { isPackaged: false, getPath: () => os.tmpdir() }, Notification: class { static isSupported() { return false } show() {} } }
+    if (request === 'electron')
+      return {
+        app: { isPackaged: false, getPath: () => os.tmpdir() },
+        Notification: class {
+          static isSupported() {
+            return false
+          }
+          show() {}
+        },
+      }
     return originalLoad.call(this, request, parent, ...rest)
   }
 
   const { DownloadManager } = require('../Back-End/electron/downloadManager.ts')
-  const { matchesMediaFormat, probeMediaFile } = require('../Back-End/electron/services/mediaService.ts')
-  const bin = name => path.join(process.cwd(), 'engine-baseline', name + (process.platform === 'win32' ? '.exe' : ''))
+  const {
+    matchesMediaFormat,
+    probeMediaFile,
+  } = require('../Back-End/electron/services/mediaService.ts')
+  const bin = name =>
+    path.join(process.cwd(), 'engine-baseline', name + (process.platform === 'win32' ? '.exe' : ''))
 
   test('downloads and muxes Threads DASH video+audio to MP4 and converts to MP3 via YoutubeEngine delegation', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-threads-dl-'))
     const videoSrc = path.join(dir, 'video_only.mp4')
     const audioSrc = path.join(dir, 'audio_only.mp4')
 
-    const vRes = cp.spawnSync(bin('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=64x128:rate=24:duration=2', '-c:v', 'libx264', '-an', videoSrc], { timeout: 30000 })
+    const vRes = cp.spawnSync(
+      bin('ffmpeg'),
+      [
+        '-y',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc2=size=64x128:rate=24:duration=2',
+        '-c:v',
+        'libx264',
+        '-an',
+        videoSrc,
+      ],
+      { timeout: 30000 },
+    )
     assert.equal(vRes.status, 0, vRes.stderr?.toString())
-    const aRes = cp.spawnSync(bin('ffmpeg'), ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=duration=2', '-c:a', 'aac', '-vn', audioSrc], { timeout: 30000 })
+    const aRes = cp.spawnSync(
+      bin('ffmpeg'),
+      [
+        '-y',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=duration=2',
+        '-c:a',
+        'aac',
+        '-vn',
+        audioSrc,
+      ],
+      { timeout: 30000 },
+    )
     assert.equal(aRes.status, 0, aRes.stderr?.toString())
 
     const videoBytes = await fs.readFile(videoSrc)
@@ -248,12 +409,18 @@ suite('Threads download integration', test => {
     try {
       server = http.createServer((req, res) => {
         if (req.url === '/video.mp4') {
-          res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': String(videoBytes.length) })
+          res.writeHead(200, {
+            'Content-Type': 'video/mp4',
+            'Content-Length': String(videoBytes.length),
+          })
           res.end(videoBytes)
           return
         }
         if (req.url === '/audio.mp4') {
-          res.writeHead(200, { 'Content-Type': 'audio/mp4', 'Content-Length': String(audioBytes.length) })
+          res.writeHead(200, {
+            'Content-Type': 'audio/mp4',
+            'Content-Length': String(audioBytes.length),
+          })
           res.end(audioBytes)
           return
         }
@@ -283,7 +450,9 @@ suite('Threads download integration', test => {
 
       global.fetch = (input, init) => {
         if (String(input).includes('threads.com')) {
-          return Promise.resolve(new Response(mockHtml, { status: 200, headers: { 'Content-Type': 'text/html' } }))
+          return Promise.resolve(
+            new Response(mockHtml, { status: 200, headers: { 'Content-Type': 'text/html' } }),
+          )
         }
         return originalFetch(input, init)
       }

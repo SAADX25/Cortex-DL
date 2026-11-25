@@ -1,30 +1,15 @@
 // Visual trim editor for VODs (zoomable timeline + dual handles) and live streams (duration capture)
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Hls from 'hls.js'
-import {
-  AlertCircle,
-  Check,
-  Crosshair,
-  Maximize2,
-  Minimize2,
-  Pause,
-  Play,
-  Radio,
-  Repeat,
-  RotateCcw,
-  Scissors,
-  SkipBack,
-  SkipForward,
-  Volume1,
-  Volume2,
-  VolumeX,
-  Zap,
-  ZoomIn,
-  ZoomOut,
-  Loader,
-} from 'lucide-react'
+import { AlertCircle, Check, Loader, Radio, RotateCcw, Scissors } from 'lucide-react'
 import './AdvancedTrimmer.css'
-import { TrimPreview, isHlsStreamUrl, seekPreview, validatePreviewUrl, videoFailure } from './trimPreview'
+import {
+  TrimPreview,
+  isHlsStreamUrl,
+  seekPreview,
+  validatePreviewUrl,
+  videoFailure,
+} from './trimPreview'
 import { releaseMediaElement } from '../MediaPlayer/mediaSession'
 import { applyTrimAudioControls, isAbortPlaybackError, syncTrimAudio } from './trimAudio'
 import {
@@ -32,10 +17,13 @@ import {
   computeRulerTicks,
   computeZoomViewport,
   formatClipBadge,
-  formatCompactTime,
   formatTimecode,
   parseTimecode,
 } from './trimTime'
+import { TrimmerControls } from './TrimmerControls'
+import { TrimmerLivePanel } from './TrimmerLivePanel'
+import { TrimmerTimeline, type DragState } from './TrimmerTimeline'
+import { TrimmerPrecisionPanel } from './TrimmerPrecisionPanel'
 import { formatMessage, translations, type Language } from '../../translations'
 
 export type TrimRange = {
@@ -60,27 +48,7 @@ type AdvancedTrimmerProps = {
   onConfirm: (range: TrimRange) => void
 }
 
-const SLIDER_STEP_SECONDS = 0.1
 const MIN_CLIP_SECONDS = 0.1
-const PLAYBACK_RATES = [0.5, 1, 1.5, 2] as const
-const ZOOM_STEPS = [1, 2, 4, 8, 16, 32, 64] as const
-const VOD_DURATION_PRESETS = [
-  { label: '30s', seconds: 30 },
-  { label: '1m', seconds: 60 },
-  { label: '5m', seconds: 300 },
-  { label: '10m', seconds: 600 },
-  { label: '30m', seconds: 1800 },
-] as const
-const LIVE_DURATION_PRESETS = [
-  { label: '15s', seconds: 15 },
-  { label: '30s', seconds: 30 },
-  { label: '1m', seconds: 60 },
-  { label: '2m', seconds: 120 },
-  { label: '5m', seconds: 300 },
-  { label: '10m', seconds: 600 },
-  { label: '30m', seconds: 1800 },
-  { label: '1h', seconds: 3600 },
-] as const
 
 function buildRange(startSeconds: number, endSeconds: number): TrimRange {
   return {
@@ -114,7 +82,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   const trackRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<TrimPreview | null>(null)
 
-  const [detectedDuration, setDetectedDuration] = useState<number>(() => (Number.isFinite(duration) && duration > 0 ? duration : 0))
+  const [detectedDuration, setDetectedDuration] = useState<number>(() =>
+    Number.isFinite(duration) && duration > 0 ? duration : 0,
+  )
   const [detectedLive, setDetectedLive] = useState<boolean>(isLive)
 
   useEffect(() => {
@@ -140,13 +110,16 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   const [liveClipSeconds, setLiveClipSeconds] = useState(() => {
     const parsedEnd = parseTimecode(initialEndTime)
     const parsedStart = parseTimecode(initialStartTime) ?? 0
-    if (parsedEnd != null && parsedEnd > parsedStart) return clampSeconds(Math.round(parsedEnd - parsedStart), 5, 21600)
+    if (parsedEnd != null && parsedEnd > parsedStart)
+      return clampSeconds(Math.round(parsedEnd - parsedStart), 5, 21600)
     return 60
   })
 
   const [startDraft, setStartDraft] = useState(() => formatTimecode(startSeconds))
   const [endDraft, setEndDraft] = useState(() => formatTimecode(endSeconds))
-  const [durationDraft, setDurationDraft] = useState(() => formatTimecode(Math.max(0, endSeconds - startSeconds)))
+  const [durationDraft, setDurationDraft] = useState(() =>
+    formatTimecode(Math.max(0, endSeconds - startSeconds)),
+  )
   const [liveDraft, setLiveDraft] = useState(() => formatTimecode(liveClipSeconds))
 
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
@@ -168,15 +141,12 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
 
   const [zoom, setZoom] = useState(1)
   const [viewStart, setViewStart] = useState(0)
-  const [activeDrag, setActiveDrag] = useState<null | {
-    kind: 'start' | 'end' | 'move' | 'scrub'
-    originX: number
-    originStart: number
-    originEnd: number
-  }>(null)
+  const [activeDrag, setActiveDrag] = useState<DragState>(null)
 
   const lastNonZeroVolume = useRef(1)
-  const requestedSeek = useRef<number>(clampSeconds(parseTimecode(initialStartTime) ?? 0, 0, safeDuration))
+  const requestedSeek = useRef<number>(
+    clampSeconds(parseTimecode(initialStartTime) ?? 0, 0, safeDuration),
+  )
 
   const isHlsActive = Boolean(streamUrl && (streamType === 'hls' || isHlsStreamUrl(streamUrl)))
 
@@ -200,7 +170,8 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     const parsedStart = parseTimecode(initialStartTime)
     const parsedEnd = parseTimecode(initialEndTime)
     const nextStart = parsedStart == null ? 0 : clampSeconds(parsedStart, 0, safeDuration)
-    const nextEnd = parsedEnd == null ? safeDuration : clampSeconds(parsedEnd, nextStart, safeDuration)
+    const nextEnd =
+      parsedEnd == null ? safeDuration : clampSeconds(parsedEnd, nextStart, safeDuration)
     setStartSeconds(nextStart)
     setEndSeconds(nextEnd)
   }, [initialEndTime, initialStartTime, safeDuration, effectiveIsLive])
@@ -220,7 +191,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       if (source !== extractedVideo) {
         releaseMediaElement(audio)
         setAudioUrl(null)
-        setStreamType(source && isHlsStreamUrl(source) ? 'hls' : (initialStreamType ?? 'progressive'))
+        setStreamType(
+          source && isHlsStreamUrl(source) ? 'hls' : (initialStreamType ?? 'progressive'),
+        )
       }
       setStreamUrl(source)
       setStreamError(error)
@@ -228,23 +201,28 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     })
     previewRef.current = preview
 
-    void preview.start(originalUrl ? async () => {
-      const streams = await window.cortexDl.getTrimPreviewStreams(originalUrl, session)
-      if (!streams) throw new Error('Preview extraction cancelled')
-      const normalizedVideoUrl = validatePreviewUrl(streams.videoUrl)
-      if (!disposed) {
-        extractedVideo = normalizedVideoUrl
-        setAudioUrl(streams.audioUrl ?? null)
-        const nextType = streams.streamType ?? (isHlsStreamUrl(normalizedVideoUrl) ? 'hls' : 'progressive')
-        setStreamType(nextType)
-        if (streams.isLive) setDetectedLive(true)
-        if (typeof streams.duration === 'number' && streams.duration > 0) {
-          setDetectedDuration(streams.duration)
-          setDetectedLive(false)
-        }
-      }
-      return normalizedVideoUrl
-    } : undefined)
+    void preview.start(
+      originalUrl
+        ? async () => {
+            const streams = await window.cortexDl.getTrimPreviewStreams(originalUrl, session)
+            if (!streams) throw new Error('Preview extraction cancelled')
+            const normalizedVideoUrl = validatePreviewUrl(streams.videoUrl)
+            if (!disposed) {
+              extractedVideo = normalizedVideoUrl
+              setAudioUrl(streams.audioUrl ?? null)
+              const nextType =
+                streams.streamType ?? (isHlsStreamUrl(normalizedVideoUrl) ? 'hls' : 'progressive')
+              setStreamType(nextType)
+              if (streams.isLive) setDetectedLive(true)
+              if (typeof streams.duration === 'number' && streams.duration > 0) {
+                setDetectedDuration(streams.duration)
+                setDetectedLive(false)
+              }
+            }
+            return normalizedVideoUrl
+          }
+        : undefined,
+    )
 
     return () => {
       disposed = true
@@ -256,7 +234,9 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       }
       releaseMediaElement(video)
       releaseMediaElement(audio)
-      void window.cortexDl.closeMediaSession(session).catch((error) => console.error('[Visual Trim] Session cleanup failed:', error))
+      void window.cortexDl
+        .closeMediaSession(session)
+        .catch(error => console.error('[Visual Trim] Session cleanup failed:', error))
     }
   }, [videoUrl, originalUrl, initialStreamType])
 
@@ -289,7 +269,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           setDetectedLive(true)
         } else if (Number.isFinite(data.details.totalduration) && data.details.totalduration > 0) {
           setDetectedLive(false)
-          setDetectedDuration((prev) => (prev > 0 ? prev : Math.round(data.details.totalduration)))
+          setDetectedDuration(prev => (prev > 0 ? prev : Math.round(data.details.totalduration)))
         }
       })
 
@@ -333,59 +313,88 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
 
-  const syncAudio = useCallback((play = false) => {
-    void syncTrimAudio(videoRef.current, audioRef.current, play).catch((error: unknown) => {
-      if (isAbortPlaybackError(error)) return
-      setAudioError(tr.audioPlayFailed)
-    })
-  }, [tr.audioPlayFailed])
+  const syncAudio = useCallback(
+    (play = false) => {
+      void syncTrimAudio(videoRef.current, audioRef.current, play).catch((error: unknown) => {
+        if (isAbortPlaybackError(error)) return
+        setAudioError(tr.audioPlayFailed)
+      })
+    },
+    [tr.audioPlayFailed],
+  )
 
-  const seekVideo = useCallback((seconds: number) => {
-    if (effectiveIsLive) return
-    const clamped = clampSeconds(seconds, 0, safeDuration)
-    requestedSeek.current = clamped
-    setCurrentTime(clamped)
-    seekPreview(videoRef.current, clamped)
-    seekPreview(audioRef.current, clamped)
-  }, [effectiveIsLive, safeDuration])
+  const seekVideo = useCallback(
+    (seconds: number) => {
+      if (effectiveIsLive) return
+      const clamped = clampSeconds(seconds, 0, safeDuration)
+      requestedSeek.current = clamped
+      setCurrentTime(clamped)
+      seekPreview(videoRef.current, clamped)
+      seekPreview(audioRef.current, clamped)
+    },
+    [effectiveIsLive, safeDuration],
+  )
 
-  const emitChange = useCallback((nextStart: number, nextEnd: number) => {
-    onChange?.(buildRange(nextStart, nextEnd))
-  }, [onChange])
+  const emitChange = useCallback(
+    (nextStart: number, nextEnd: number) => {
+      onChange?.(buildRange(nextStart, nextEnd))
+    },
+    [onChange],
+  )
 
-  const updateStart = useCallback((value: number, shouldSeek = true) => {
-    if (effectiveIsLive) return
-    const nextStart = clampSeconds(value, 0, Math.max(0, endSeconds - MIN_CLIP_SECONDS))
-    setStartSeconds(nextStart)
-    if (shouldSeek) seekVideo(nextStart)
-    emitChange(nextStart, endSeconds)
-  }, [effectiveIsLive, endSeconds, seekVideo, emitChange])
+  const updateStart = useCallback(
+    (value: number, shouldSeek = true) => {
+      if (effectiveIsLive) return
+      const nextStart = clampSeconds(value, 0, Math.max(0, endSeconds - MIN_CLIP_SECONDS))
+      setStartSeconds(nextStart)
+      if (shouldSeek) seekVideo(nextStart)
+      emitChange(nextStart, endSeconds)
+    },
+    [effectiveIsLive, endSeconds, seekVideo, emitChange],
+  )
 
-  const updateEnd = useCallback((value: number, shouldSeek = true) => {
-    if (effectiveIsLive) return
-    const nextEnd = clampSeconds(value, Math.min(safeDuration, startSeconds + MIN_CLIP_SECONDS), safeDuration)
-    setEndSeconds(nextEnd)
-    if (shouldSeek) seekVideo(nextEnd)
-    emitChange(startSeconds, nextEnd)
-  }, [effectiveIsLive, safeDuration, startSeconds, seekVideo, emitChange])
+  const updateEnd = useCallback(
+    (value: number, shouldSeek = true) => {
+      if (effectiveIsLive) return
+      const nextEnd = clampSeconds(
+        value,
+        Math.min(safeDuration, startSeconds + MIN_CLIP_SECONDS),
+        safeDuration,
+      )
+      setEndSeconds(nextEnd)
+      if (shouldSeek) seekVideo(nextEnd)
+      emitChange(startSeconds, nextEnd)
+    },
+    [effectiveIsLive, safeDuration, startSeconds, seekVideo, emitChange],
+  )
 
-  const updateLiveDuration = useCallback((seconds: number) => {
-    const next = clampSeconds(Math.round(seconds), 5, 21600)
-    setLiveClipSeconds(next)
-    onChange?.(buildRange(0, next))
-  }, [onChange])
+  const updateLiveDuration = useCallback(
+    (seconds: number) => {
+      const next = clampSeconds(Math.round(seconds), 5, 21600)
+      setLiveClipSeconds(next)
+      onChange?.(buildRange(0, next))
+    },
+    [onChange],
+  )
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current
     if (!video || !streamUrl || streamError) return
     if (video.paused) {
-      if (!effectiveIsLive && loopSelection && (video.currentTime < startSeconds || video.currentTime >= endSeconds - 0.05)) {
+      if (
+        !effectiveIsLive &&
+        loopSelection &&
+        (video.currentTime < startSeconds || video.currentTime >= endSeconds - 0.05)
+      ) {
         seekVideo(startSeconds)
       }
       setAudioError(null)
-      void video.play().then(() => {
-        syncAudio(true)
-      }).catch(() => {})
+      void video
+        .play()
+        .then(() => {
+          syncAudio(true)
+        })
+        .catch(() => {})
       // Start adaptive audio inside the user click gesture when video is already buffered.
       if (audioRef.current?.getAttribute('src') && video.readyState >= 3) {
         syncAudio(true)
@@ -394,7 +403,16 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       video.pause()
       syncAudio(false)
     }
-  }, [streamUrl, streamError, effectiveIsLive, loopSelection, startSeconds, endSeconds, seekVideo, syncAudio])
+  }, [
+    streamUrl,
+    streamError,
+    effectiveIsLive,
+    loopSelection,
+    startSeconds,
+    endSeconds,
+    seekVideo,
+    syncAudio,
+  ])
 
   const toggleMute = useCallback(() => {
     if (muted || volume === 0) {
@@ -409,30 +427,45 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     }
   }, [muted, volume, playbackRate])
 
-  const handleVolumeChange = useCallback((nextVolume: number) => {
-    const clamped = clampSeconds(nextVolume, 0, 1)
-    if (clamped > 0) lastNonZeroVolume.current = clamped
-    setVolume(clamped)
-    setMuted(clamped === 0)
-    applyTrimAudioControls(videoRef.current, audioRef.current, clamped, clamped === 0, playbackRate)
-  }, [playbackRate])
+  const handleVolumeChange = useCallback(
+    (nextVolume: number) => {
+      const clamped = clampSeconds(nextVolume, 0, 1)
+      if (clamped > 0) lastNonZeroVolume.current = clamped
+      setVolume(clamped)
+      setMuted(clamped === 0)
+      applyTrimAudioControls(
+        videoRef.current,
+        audioRef.current,
+        clamped,
+        clamped === 0,
+        playbackRate,
+      )
+    },
+    [playbackRate],
+  )
 
-  const handleRateChange = useCallback((nextRate: number) => {
-    setPlaybackRate(nextRate)
-    applyTrimAudioControls(videoRef.current, audioRef.current, volume, muted, nextRate)
-  }, [volume, muted])
+  const handleRateChange = useCallback(
+    (nextRate: number) => {
+      setPlaybackRate(nextRate)
+      applyTrimAudioControls(videoRef.current, audioRef.current, volume, muted, nextRate)
+    },
+    [volume, muted],
+  )
 
   const toggleLoopPreview = useCallback(() => {
-    setLoopSelection((prev) => {
+    setLoopSelection(prev => {
       const next = !prev
       if (next && !effectiveIsLive) {
         seekVideo(startSeconds)
         setAudioError(null)
         const video = videoRef.current
         if (video) {
-          void video.play().then(() => {
-            syncAudio(true)
-          }).catch(() => {})
+          void video
+            .play()
+            .then(() => {
+              syncAudio(true)
+            })
+            .catch(() => {})
           if (audioRef.current?.getAttribute('src') && video.readyState >= 3) {
             syncAudio(true)
           }
@@ -466,15 +499,18 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     [effectiveIsLive, viewport.viewStart, viewport.viewEnd],
   )
 
-  const changeZoom = useCallback((nextZoom: number, focusTime?: number) => {
-    if (safeDuration <= 0) return
-    const clampedZoom = clampSeconds(nextZoom, 1, 64)
-    const center = focusTime ?? (startSeconds + endSeconds) / 2
-    const nextSpan = safeDuration / clampedZoom
-    const nextStart = clampSeconds(center - nextSpan / 2, 0, Math.max(0, safeDuration - nextSpan))
-    setZoom(clampedZoom)
-    setViewStart(nextStart)
-  }, [safeDuration, startSeconds, endSeconds])
+  const changeZoom = useCallback(
+    (nextZoom: number, focusTime?: number) => {
+      if (safeDuration <= 0) return
+      const clampedZoom = clampSeconds(nextZoom, 1, 64)
+      const center = focusTime ?? (startSeconds + endSeconds) / 2
+      const nextSpan = safeDuration / clampedZoom
+      const nextStart = clampSeconds(center - nextSpan / 2, 0, Math.max(0, safeDuration - nextSpan))
+      setZoom(clampedZoom)
+      setViewStart(nextStart)
+    },
+    [safeDuration, startSeconds, endSeconds],
+  )
 
   const zoomToSelection = useCallback(() => {
     if (safeDuration <= 0) return
@@ -483,13 +519,16 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
     changeZoom(targetZoom, (startSeconds + endSeconds) / 2)
   }, [safeDuration, startSeconds, endSeconds, changeZoom])
 
-  const pointerToTime = useCallback((clientX: number): number => {
-    const el = trackRef.current
-    if (!el || viewport.viewDuration <= 0) return 0
-    const rect = el.getBoundingClientRect()
-    const ratio = clampSeconds((clientX - rect.left) / Math.max(1, rect.width), 0, 1)
-    return viewport.viewStart + ratio * viewport.viewDuration
-  }, [viewport.viewStart, viewport.viewDuration])
+  const pointerToTime = useCallback(
+    (clientX: number): number => {
+      const el = trackRef.current
+      if (!el || viewport.viewDuration <= 0) return 0
+      const rect = el.getBoundingClientRect()
+      const ratio = clampSeconds((clientX - rect.left) / Math.max(1, rect.width), 0, 1)
+      return viewport.viewStart + ratio * viewport.viewDuration
+    },
+    [viewport.viewStart, viewport.viewDuration],
+  )
 
   useEffect(() => {
     if (!activeDrag || effectiveIsLive) return
@@ -497,21 +536,34 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       const el = trackRef.current
       if (!el || viewport.viewDuration <= 0) return
       const rect = el.getBoundingClientRect()
-      const deltaSeconds = ((event.clientX - activeDrag.originX) / Math.max(1, rect.width)) * viewport.viewDuration
+      const deltaSeconds =
+        ((event.clientX - activeDrag.originX) / Math.max(1, rect.width)) * viewport.viewDuration
 
       if (activeDrag.kind === 'start') {
-        const next = clampSeconds(activeDrag.originStart + deltaSeconds, 0, Math.max(0, endSeconds - MIN_CLIP_SECONDS))
+        const next = clampSeconds(
+          activeDrag.originStart + deltaSeconds,
+          0,
+          Math.max(0, endSeconds - MIN_CLIP_SECONDS),
+        )
         setStartSeconds(next)
         seekVideo(next)
         emitChange(next, endSeconds)
       } else if (activeDrag.kind === 'end') {
-        const next = clampSeconds(activeDrag.originEnd + deltaSeconds, Math.min(safeDuration, startSeconds + MIN_CLIP_SECONDS), safeDuration)
+        const next = clampSeconds(
+          activeDrag.originEnd + deltaSeconds,
+          Math.min(safeDuration, startSeconds + MIN_CLIP_SECONDS),
+          safeDuration,
+        )
         setEndSeconds(next)
         seekVideo(next)
         emitChange(startSeconds, next)
       } else if (activeDrag.kind === 'move') {
         const length = activeDrag.originEnd - activeDrag.originStart
-        const nextStart = clampSeconds(activeDrag.originStart + deltaSeconds, 0, Math.max(0, safeDuration - length))
+        const nextStart = clampSeconds(
+          activeDrag.originStart + deltaSeconds,
+          0,
+          Math.max(0, safeDuration - length),
+        )
         const nextEnd = clampSeconds(nextStart + length, nextStart + MIN_CLIP_SECONDS, safeDuration)
         setStartSeconds(nextStart)
         setEndSeconds(nextEnd)
@@ -530,7 +582,17 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerUp)
     }
-  }, [activeDrag, effectiveIsLive, viewport.viewDuration, safeDuration, startSeconds, endSeconds, seekVideo, emitChange, pointerToTime])
+  }, [
+    activeDrag,
+    effectiveIsLive,
+    viewport.viewDuration,
+    safeDuration,
+    startSeconds,
+    endSeconds,
+    seekVideo,
+    emitChange,
+    pointerToTime,
+  ])
 
   const commitStartDraft = () => {
     const parsed = parseTimecode(startDraft)
@@ -620,14 +682,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
   const playheadPct = toViewPercent(currentTime)
   const playheadVisible = playheadPct >= 0 && playheadPct <= 100
   const clipDurationSeconds = Math.max(0, endSeconds - startSeconds)
-
-  const sliderStyle = {
-    '--trim-start': `${startPct}%`,
-    '--trim-end': `${endPct}%`,
-  } as React.CSSProperties & Record<'--trim-start' | '--trim-end', string>
-
   const effectiveVolume = muted ? 0 : volume
-  const VolumeIcon = effectiveVolume === 0 ? VolumeX : effectiveVolume < 0.5 ? Volume1 : Volume2
 
   return (
     <div
@@ -647,9 +702,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             </span>
           )}
           {!effectiveIsLive && safeDuration >= 1800 && (
-            <span className="advanced-trimmer__fast-pill">
-              {tr.fastSectionCut}
-            </span>
+            <span className="advanced-trimmer__fast-pill">{tr.fastSectionCut}</span>
           )}
         </div>
 
@@ -663,7 +716,10 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
         </div>
       </div>
 
-      <div ref={playerShellRef} className={`advanced-trimmer__player-shell${isFullscreen ? ' is-fullscreen' : ''}`}>
+      <div
+        ref={playerShellRef}
+        className={`advanced-trimmer__player-shell${isFullscreen ? ' is-fullscreen' : ''}`}
+      >
         <div className="advanced-trimmer__video-wrap">
           {isResolvingStream && (
             <div className="advanced-trimmer__loading-overlay">
@@ -709,11 +765,11 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             onWaiting={() => syncAudio()}
             onSeeking={() => syncAudio()}
             onSeeked={() => syncAudio(true)}
-            onRateChange={(event) => {
+            onRateChange={event => {
               setPlaybackRate(event.currentTarget.playbackRate)
               syncAudio(!event.currentTarget.paused)
             }}
-            onTimeUpdate={(event) => {
+            onTimeUpdate={event => {
               const now = event.currentTarget.currentTime
               if (Number.isFinite(now)) {
                 setCurrentTime(now)
@@ -723,7 +779,7 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
               }
               syncAudio(!event.currentTarget.paused)
             }}
-            onVolumeChange={(event) => {
+            onVolumeChange={event => {
               const nextMuted = event.currentTarget.muted
               const nextVol = event.currentTarget.volume
               setMuted(nextMuted)
@@ -734,16 +790,30 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
                 audioRef.current.volume = nextVol
               }
             }}
-            onError={(event) => {
+            onError={event => {
               if (isHlsActive || !streamUrl || event.currentTarget.currentSrc !== streamUrl) return
               previewRef.current?.fail(videoFailure(event.currentTarget))
             }}
-            onLoadedMetadata={(event) => {
+            onLoadedMetadata={event => {
               if (!isHlsActive && event.currentTarget.currentSrc !== streamUrl) return
-              applyTrimAudioControls(event.currentTarget, audioRef.current, volume, muted, playbackRate)
+              applyTrimAudioControls(
+                event.currentTarget,
+                audioRef.current,
+                volume,
+                muted,
+                playbackRate,
+              )
               const mediaDur = event.currentTarget.duration
-              if (!effectiveIsLive && Number.isFinite(mediaDur) && Math.abs(mediaDur - safeDuration) > 1) {
-                console.warn('[Visual Trim] Preview duration differs from analyzed duration:', mediaDur, safeDuration)
+              if (
+                !effectiveIsLive &&
+                Number.isFinite(mediaDur) &&
+                Math.abs(mediaDur - safeDuration) > 1
+              ) {
+                console.warn(
+                  '[Visual Trim] Preview duration differs from analyzed duration:',
+                  mediaDur,
+                  safeDuration,
+                )
               }
               if (!effectiveIsLive) {
                 seekPreview(event.currentTarget, requestedSeek.current)
@@ -758,12 +828,19 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             src={audioUrl ?? undefined}
             preload="auto"
             hidden
-            onLoadedMetadata={(event) => {
-              applyTrimAudioControls(videoRef.current, event.currentTarget, volume, muted, playbackRate)
+            onLoadedMetadata={event => {
+              applyTrimAudioControls(
+                videoRef.current,
+                event.currentTarget,
+                volume,
+                muted,
+                playbackRate,
+              )
               if (!effectiveIsLive) {
-                const targetTime = videoRef.current && videoRef.current.readyState >= 1
-                  ? videoRef.current.currentTime
-                  : requestedSeek.current
+                const targetTime =
+                  videoRef.current && videoRef.current.readyState >= 1
+                    ? videoRef.current.currentTime
+                    : requestedSeek.current
                 seekPreview(event.currentTarget, targetTime)
               }
               syncAudio(!videoRef.current?.paused)
@@ -783,456 +860,88 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
           />
         </div>
 
-        <div className="advanced-trimmer__controls" dir="ltr">
-          <div className="advanced-trimmer__controls-left">
-            <button
-              type="button"
-              className="advanced-trimmer__icon-btn advanced-trimmer__icon-btn--primary"
-              onClick={togglePlay}
-              disabled={!streamUrl || Boolean(streamError)}
-              aria-label={isPlaying ? 'Pause preview' : 'Play preview'}
-              title={isPlaying ? tr.pauseSpace : tr.playSpace}
-            >
-              {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-            </button>
-
-            {!effectiveIsLive && (
-              <>
-                <button
-                  type="button"
-                  className="advanced-trimmer__icon-btn"
-                  onClick={() => seekVideo(currentTime - 10)}
-                  aria-label="Back 10 seconds"
-                  title={tr.back10s}
-                >
-                  <SkipBack size={14} />
-                  <span>10</span>
-                </button>
-                <button
-                  type="button"
-                  className="advanced-trimmer__icon-btn"
-                  onClick={() => seekVideo(currentTime + 10)}
-                  aria-label="Forward 10 seconds"
-                  title={tr.forward10s}
-                >
-                  <SkipForward size={14} />
-                  <span>10</span>
-                </button>
-                <button
-                  type="button"
-                  className={`advanced-trimmer__icon-btn${loopSelection ? ' is-active' : ''}`}
-                  onClick={toggleLoopPreview}
-                  aria-label="Loop trimmed clip"
-                  aria-pressed={loopSelection}
-                  title={tr.loopSelection}
-                >
-                  <Repeat size={14} />
-                </button>
-              </>
-            )}
-
-            <div className="advanced-trimmer__audio-controls">
-              <button
-                type="button"
-                className="advanced-trimmer__icon-btn"
-                onClick={toggleMute}
-                aria-label={effectiveVolume === 0 ? 'Unmute preview' : 'Mute preview'}
-                title={effectiveVolume === 0 ? tr.unmuteM : tr.muteM}
-              >
-                <VolumeIcon size={15} />
-              </button>
-              <input
-                type="range"
-                className="advanced-trimmer__volume-slider"
-                min={0}
-                max={1}
-                step={0.01}
-                value={effectiveVolume}
-                aria-label="Preview volume"
-                onChange={(event) => handleVolumeChange(Number(event.currentTarget.value))}
-              />
-              <span className="advanced-trimmer__volume-pct">{Math.round(effectiveVolume * 100)}%</span>
-            </div>
-          </div>
-
-          <div className="advanced-trimmer__controls-right">
-            <span className="advanced-trimmer__clock">
-              {effectiveIsLive
-                ? tr.liveStream
-                : `${formatCompactTime(currentTime)} / ${formatCompactTime(safeDuration)}`}
-            </span>
-
-            {!effectiveIsLive && (
-              <div className="advanced-trimmer__rate-group" role="group" aria-label="Playback speed">
-                {PLAYBACK_RATES.map((rate) => (
-                  <button
-                    key={rate}
-                    type="button"
-                    className={`advanced-trimmer__rate-btn${playbackRate === rate ? ' is-active' : ''}`}
-                    onClick={() => handleRateChange(rate)}
-                  >
-                    {rate}x
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="advanced-trimmer__icon-btn"
-              onClick={toggleFullscreen}
-              aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen preview'}
-              title={isFullscreen ? tr.exitFullscreen : tr.fullscreen}
-            >
-              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-          </div>
-        </div>
+        <TrimmerControls
+          tr={tr}
+          streamUrl={streamUrl}
+          streamError={streamError}
+          effectiveIsLive={effectiveIsLive}
+          isPlaying={isPlaying}
+          loopSelection={loopSelection}
+          effectiveVolume={effectiveVolume}
+          currentTime={currentTime}
+          safeDuration={safeDuration}
+          playbackRate={playbackRate}
+          isFullscreen={isFullscreen}
+          onTogglePlay={togglePlay}
+          onSeekVideo={seekVideo}
+          onToggleLoop={toggleLoopPreview}
+          onToggleMute={toggleMute}
+          onVolumeChange={handleVolumeChange}
+          onRateChange={handleRateChange}
+          onToggleFullscreen={toggleFullscreen}
+        />
       </div>
 
       {effectiveIsLive ? (
-        <div className="advanced-trimmer__live-panel">
-          <div className="advanced-trimmer__live-info">
-            <strong>{tr.liveClipLength}</strong>
-            <span>{formatMessage(tr.liveClipDesc, { duration: formatTimecode(liveClipSeconds) })}</span>
-          </div>
-
-          <div className="advanced-trimmer__preset-row" dir="ltr">
-            {LIVE_DURATION_PRESETS.map((preset) => (
-              <button
-                key={preset.label}
-                type="button"
-                className={`advanced-trimmer__chip${liveClipSeconds === preset.seconds ? ' is-active' : ''}`}
-                onClick={() => updateLiveDuration(preset.seconds)}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="advanced-trimmer__live-custom" dir="ltr">
-            <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateLiveDuration(liveClipSeconds - 30)}>-30s</button>
-            <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateLiveDuration(liveClipSeconds - 10)}>-10s</button>
-            <input
-              type="text"
-              className="advanced-trimmer__time-input"
-              value={liveDraft}
-              aria-label="Live clip duration"
-              onChange={(event) => setLiveDraft(event.currentTarget.value)}
-              onBlur={commitLiveDraft}
-              onKeyDown={(event) => { if (event.key === 'Enter') commitLiveDraft() }}
-            />
-            <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateLiveDuration(liveClipSeconds + 10)}>+10s</button>
-            <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateLiveDuration(liveClipSeconds + 30)}>+30s</button>
-          </div>
-        </div>
+        <TrimmerLivePanel
+          tr={tr}
+          liveClipSeconds={liveClipSeconds}
+          liveDraft={liveDraft}
+          onLiveDraftChange={setLiveDraft}
+          onCommitLiveDraft={commitLiveDraft}
+          onUpdateLiveDuration={updateLiveDuration}
+        />
       ) : (
         <>
-          <div className="advanced-trimmer__timeline-section">
-            <div className="advanced-trimmer__timeline-bar">
-              <div className="advanced-trimmer__timeline-meta">
-                <span>{tr.clipLabel} <strong>{formatTimecode(clipDurationSeconds)}</strong></span>
-                <span className="advanced-trimmer__divider">•</span>
-                <span>{tr.zoomLabel} <strong>{zoom}x</strong></span>
-              </div>
+          <TrimmerTimeline
+            tr={tr}
+            trackRef={trackRef}
+            safeDuration={safeDuration}
+            startSeconds={startSeconds}
+            endSeconds={endSeconds}
+            clipDurationSeconds={clipDurationSeconds}
+            zoom={zoom}
+            viewport={viewport}
+            rulerTicks={rulerTicks}
+            activeDrag={activeDrag}
+            startPct={startPct}
+            endPct={endPct}
+            playheadPct={playheadPct}
+            playheadVisible={playheadVisible}
+            onChangeZoom={changeZoom}
+            onZoomToSelection={zoomToSelection}
+            onResetZoom={() => {
+              setZoom(1)
+              setViewStart(0)
+            }}
+            onSetViewStart={setViewStart}
+            onSetActiveDrag={setActiveDrag}
+            onSeekVideo={seekVideo}
+            onPointerToTime={pointerToTime}
+            onUpdateStart={updateStart}
+            onUpdateEnd={updateEnd}
+          />
 
-              <div className="advanced-trimmer__zoom-controls" dir="ltr">
-                <button
-                  type="button"
-                  className="advanced-trimmer__mini-btn"
-                  disabled={zoom <= 1}
-                  onClick={() => {
-                    const prev = [...ZOOM_STEPS].reverse().find((z) => z < zoom) ?? 1
-                    changeZoom(prev)
-                  }}
-                  aria-label="Zoom out timeline"
-                  title={tr.zoomOut}
-                >
-                  <ZoomOut size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="advanced-trimmer__mini-btn"
-                  disabled={zoom >= 64}
-                  onClick={() => {
-                    const next = ZOOM_STEPS.find((z) => z > zoom) ?? 64
-                    changeZoom(next)
-                  }}
-                  aria-label="Zoom in timeline"
-                  title={tr.zoomIn}
-                >
-                  <ZoomIn size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="advanced-trimmer__mini-btn"
-                  onClick={zoomToSelection}
-                  title={tr.fitSelectionTitle}
-                >
-                  {tr.fitClip}
-                </button>
-                {zoom > 1 && (
-                  <button
-                    type="button"
-                    className="advanced-trimmer__mini-btn"
-                    onClick={() => { setZoom(1); setViewStart(0) }}
-                  >
-                    1x
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div
-              className="advanced-trimmer__ruler"
-              dir="ltr"
-              onPointerDown={(event) => {
-                seekVideo(pointerToTime(event.clientX))
-                setActiveDrag({ kind: 'scrub', originX: event.clientX, originStart: startSeconds, originEnd: endSeconds })
-              }}
-            >
-              {rulerTicks.map((tick) => (
-                <div
-                  key={`${tick.time}-${tick.major}`}
-                  className={`advanced-trimmer__tick${tick.major ? ' is-major' : ''}`}
-                  style={{ left: `${tick.percent}%` }}
-                >
-                  <span className="advanced-trimmer__tick-line" />
-                  {tick.major && <span className="advanced-trimmer__tick-label">{tick.label}</span>}
-                </div>
-              ))}
-            </div>
-
-            <div
-              ref={trackRef}
-              className="advanced-trimmer__track"
-              dir="ltr"
-              style={sliderStyle}
-              onPointerDown={(event) => {
-                if ((event.target as HTMLElement).closest('[data-trim-handle],[data-trim-selection]')) return
-                seekVideo(pointerToTime(event.clientX))
-                setActiveDrag({ kind: 'scrub', originX: event.clientX, originStart: startSeconds, originEnd: endSeconds })
-              }}
-              onWheel={(event) => {
-                if (safeDuration <= 0) return
-                if (event.ctrlKey) {
-                  event.preventDefault()
-                  const factor = event.deltaY < 0 ? 1.5 : 1 / 1.5
-                  changeZoom(zoom * factor, pointerToTime(event.clientX))
-                } else if (zoom > 1) {
-                  event.preventDefault()
-                  const shift = (event.deltaY > 0 ? 1 : -1) * viewport.viewDuration * 0.15
-                  setViewStart((prev) => clampSeconds(prev + shift, 0, Math.max(0, safeDuration - viewport.viewDuration)))
-                }
-              }}
-            >
-              <div className="advanced-trimmer__mask advanced-trimmer__mask--left" style={{ width: `${startPct}%` }} />
-              <div className="advanced-trimmer__mask advanced-trimmer__mask--right" style={{ width: `${Math.max(0, 100 - endPct)}%` }} />
-
-              <div
-                data-trim-selection
-                className="advanced-trimmer__selection"
-                style={{ left: `${startPct}%`, width: `${Math.max(0.5, endPct - startPct)}%` }}
-                title={tr.dragWindowTitle}
-                onPointerDown={(event) => {
-                  event.stopPropagation()
-                  setActiveDrag({ kind: 'move', originX: event.clientX, originStart: startSeconds, originEnd: endSeconds })
-                }}
-              />
-
-              <button
-                type="button"
-                data-trim-handle="start"
-                className={`advanced-trimmer__handle advanced-trimmer__handle--start${activeDrag?.kind === 'start' ? ' is-dragging' : ''}`}
-                style={{ left: `${startPct}%` }}
-                aria-label="Drag trim start handle"
-                onPointerDown={(event) => {
-                  event.stopPropagation()
-                  setActiveDrag({ kind: 'start', originX: event.clientX, originStart: startSeconds, originEnd: endSeconds })
-                }}
-              >
-                <span className="advanced-trimmer__handle-grip" />
-              </button>
-
-              <button
-                type="button"
-                data-trim-handle="end"
-                className={`advanced-trimmer__handle advanced-trimmer__handle--end${activeDrag?.kind === 'end' ? ' is-dragging' : ''}`}
-                style={{ left: `${endPct}%` }}
-                aria-label="Drag trim end handle"
-                onPointerDown={(event) => {
-                  event.stopPropagation()
-                  setActiveDrag({ kind: 'end', originX: event.clientX, originStart: startSeconds, originEnd: endSeconds })
-                }}
-              >
-                <span className="advanced-trimmer__handle-grip" />
-              </button>
-
-              {playheadVisible && (
-                <div className="advanced-trimmer__playhead" style={{ left: `${playheadPct}%` }} aria-hidden="true" />
-              )}
-
-              <input
-                className="advanced-trimmer__range advanced-trimmer__range--start"
-                type="range"
-                min={0}
-                max={safeDuration}
-                step={SLIDER_STEP_SECONDS}
-                value={startSeconds}
-                aria-label="Trim start"
-                onChange={(event) => updateStart(Number(event.currentTarget.value))}
-              />
-              <input
-                className="advanced-trimmer__range advanced-trimmer__range--end"
-                type="range"
-                min={0}
-                max={safeDuration}
-                step={SLIDER_STEP_SECONDS}
-                value={endSeconds}
-                aria-label="Trim end"
-                onChange={(event) => updateEnd(Number(event.currentTarget.value))}
-              />
-            </div>
-
-            {zoom > 1 && (
-              <div className="advanced-trimmer__pan-row" dir="ltr">
-                <span className="advanced-trimmer__pan-label">{formatCompactTime(viewport.viewStart)}</span>
-                <input
-                  type="range"
-                  className="advanced-trimmer__pan-slider"
-                  min={0}
-                  max={Math.max(0, safeDuration - viewport.viewDuration)}
-                  step={Math.max(0.1, viewport.viewDuration / 200)}
-                  value={viewport.viewStart}
-                  aria-label="Pan zoomed timeline"
-                  onChange={(event) => setViewStart(Number(event.currentTarget.value))}
-                />
-                <span className="advanced-trimmer__pan-label">{formatCompactTime(viewport.viewEnd)}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="advanced-trimmer__precision-grid">
-            <div className="advanced-trimmer__field-card">
-              <div className="advanced-trimmer__field-head">
-                <label htmlFor="trim-start-input">{tr.startIn}</label>
-                <button
-                  type="button"
-                  className="advanced-trimmer__mark-btn"
-                  onClick={() => updateStart(currentTime, false)}
-                  title={tr.setPlayheadInTitle}
-                >
-                  {tr.useCurrentIn}
-                </button>
-              </div>
-              <div className="advanced-trimmer__field-row" dir="ltr">
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateStart(startSeconds - 5)}>-5s</button>
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateStart(startSeconds - 1)}>-1s</button>
-                <input
-                  id="trim-start-input"
-                  type="text"
-                  className="advanced-trimmer__time-input"
-                  value={startDraft}
-                  aria-label="Start time"
-                  onChange={(event) => setStartDraft(event.currentTarget.value)}
-                  onBlur={commitStartDraft}
-                  onKeyDown={(event) => { if (event.key === 'Enter') commitStartDraft() }}
-                />
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateStart(startSeconds + 1)}>+1s</button>
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateStart(startSeconds + 5)}>+5s</button>
-              </div>
-            </div>
-
-            <div className="advanced-trimmer__field-card">
-              <div className="advanced-trimmer__field-head">
-                <label htmlFor="trim-duration-input">{tr.clipDuration}</label>
-                <div className="advanced-trimmer__quick-chips" dir="ltr">
-                  {VOD_DURATION_PRESETS.filter((p) => p.seconds <= safeDuration).slice(0, 4).map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      className="advanced-trimmer__tiny-chip"
-                      onClick={() => updateEnd(Math.min(safeDuration, startSeconds + preset.seconds))}
-                    >
-                      +{preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="advanced-trimmer__field-row" dir="ltr">
-                <input
-                  id="trim-duration-input"
-                  type="text"
-                  className="advanced-trimmer__time-input advanced-trimmer__time-input--wide"
-                  value={durationDraft}
-                  aria-label="Clip duration"
-                  onChange={(event) => setDurationDraft(event.currentTarget.value)}
-                  onBlur={commitDurationDraft}
-                  onKeyDown={(event) => { if (event.key === 'Enter') commitDurationDraft() }}
-                />
-              </div>
-            </div>
-
-            <div className="advanced-trimmer__field-card">
-              <div className="advanced-trimmer__field-head">
-                <label htmlFor="trim-end-input">{tr.endOut}</label>
-                <button
-                  type="button"
-                  className="advanced-trimmer__mark-btn"
-                  onClick={() => updateEnd(currentTime, false)}
-                  title={tr.setPlayheadOutTitle}
-                >
-                  {tr.useCurrentOut}
-                </button>
-              </div>
-              <div className="advanced-trimmer__field-row" dir="ltr">
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateEnd(endSeconds - 5)}>-5s</button>
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateEnd(endSeconds - 1)}>-1s</button>
-                <input
-                  id="trim-end-input"
-                  type="text"
-                  className="advanced-trimmer__time-input"
-                  value={endDraft}
-                  aria-label="End time"
-                  onChange={(event) => setEndDraft(event.currentTarget.value)}
-                  onBlur={commitEndDraft}
-                  onKeyDown={(event) => { if (event.key === 'Enter') commitEndDraft() }}
-                />
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateEnd(endSeconds + 1)}>+1s</button>
-                <button type="button" className="advanced-trimmer__nudge-btn" onClick={() => updateEnd(endSeconds + 5)}>+5s</button>
-              </div>
-            </div>
-          </div>
-
-          {onTrimModeChange && (
-            <div className="advanced-trimmer__mode-bar">
-              <div className="advanced-trimmer__mode-toggle" role="group" aria-label={tr.trimModeLabel}>
-                <button
-                  type="button"
-                  className={`advanced-trimmer__mode-btn${trimMode === 'fast' ? ' is-active' : ''}`}
-                  onClick={() => onTrimModeChange('fast')}
-                  aria-pressed={trimMode === 'fast'}
-                  title={tr.fastModeTitle}
-                >
-                  <Zap size={13} aria-hidden="true" />
-                  <span>{tr.fastMode}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`advanced-trimmer__mode-btn${trimMode === 'exact' ? ' is-active is-exact' : ''}`}
-                  onClick={() => onTrimModeChange('exact')}
-                  aria-pressed={trimMode === 'exact'}
-                  title={tr.exactModeTitle}
-                >
-                  <Crosshair size={13} aria-hidden="true" />
-                  <span>{tr.exactMode}</span>
-                </button>
-              </div>
-              <span className="advanced-trimmer__mode-hint">
-                {trimMode === 'fast' ? tr.fastModeHint : tr.exactModeHint}
-              </span>
-            </div>
-          )}
+          <TrimmerPrecisionPanel
+            tr={tr}
+            safeDuration={safeDuration}
+            currentTime={currentTime}
+            startSeconds={startSeconds}
+            endSeconds={endSeconds}
+            startDraft={startDraft}
+            endDraft={endDraft}
+            durationDraft={durationDraft}
+            trimMode={trimMode}
+            onTrimModeChange={onTrimModeChange}
+            onStartDraftChange={setStartDraft}
+            onEndDraftChange={setEndDraft}
+            onDurationDraftChange={setDurationDraft}
+            onCommitStartDraft={commitStartDraft}
+            onCommitEndDraft={commitEndDraft}
+            onCommitDurationDraft={commitDurationDraft}
+            onUpdateStart={updateStart}
+            onUpdateEnd={updateEnd}
+          />
         </>
       )}
 
@@ -1246,7 +955,11 @@ const AdvancedTrimmer: React.FC<AdvancedTrimmerProps> = ({
             {effectiveIsLive ? tr.shortcutsLive : tr.shortcutsVod}
           </span>
         </div>
-        <button className="advanced-trimmer__save-btn" type="button" onClick={() => onConfirm(currentRange)}>
+        <button
+          className="advanced-trimmer__save-btn"
+          type="button"
+          onClick={() => onConfirm(currentRange)}
+        >
           <Check size={16} aria-hidden="true" />
           <span>{tr.saveTrim}</span>
         </button>

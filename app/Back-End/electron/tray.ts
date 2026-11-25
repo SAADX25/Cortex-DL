@@ -15,7 +15,7 @@ export function destroyTray(): void {
 export function createTray(
   iconPath: string,
   getWin: () => BrowserWindow | null,
-  onQuit: () => void
+  onQuit: () => void,
 ): Tray {
   if (tray) return tray
 
@@ -26,7 +26,7 @@ export function createTray(
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Open Cortex DL',
-      click: () => getWin()?.show()
+      click: () => getWin()?.show(),
     },
     { type: 'separator' },
     {
@@ -34,8 +34,8 @@ export function createTray(
       click: () => {
         onQuit()
         app.quit()
-      }
-    }
+      },
+    },
   ])
 
   tray.setContextMenu(contextMenu)

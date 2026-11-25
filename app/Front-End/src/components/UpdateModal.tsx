@@ -58,13 +58,13 @@ const UpdateModal: React.FC = () => {
   const dir = lang === 'ar' ? 'rtl' : 'ltr'
   const prefersReducedMotion = useReducedMotion()
 
-  const updateState = useSettingsStore((s) => s.updateState)
-  const updateModalOpen = useSettingsStore((s) => s.updateModalOpen)
-  const closeUpdateModal = useSettingsStore((s) => s.closeUpdateModal)
-  const onDownloadUpdate = useSettingsStore((s) => s.onDownloadUpdate)
-  const onCancelUpdateDownload = useSettingsStore((s) => s.onCancelUpdateDownload)
-  const onRestartAndInstall = useSettingsStore((s) => s.onRestartAndInstall)
-  const onCheckForUpdates = useSettingsStore((s) => s.onCheckForUpdates)
+  const updateState = useSettingsStore(s => s.updateState)
+  const updateModalOpen = useSettingsStore(s => s.updateModalOpen)
+  const closeUpdateModal = useSettingsStore(s => s.closeUpdateModal)
+  const onDownloadUpdate = useSettingsStore(s => s.onDownloadUpdate)
+  const onCancelUpdateDownload = useSettingsStore(s => s.onCancelUpdateDownload)
+  const onRestartAndInstall = useSettingsStore(s => s.onRestartAndInstall)
+  const onCheckForUpdates = useSettingsStore(s => s.onCheckForUpdates)
   const activeDownloadCount = useActiveDownloadCount()
 
   const {
@@ -82,7 +82,10 @@ const UpdateModal: React.FC = () => {
 
   const isVisible =
     updateModalOpen &&
-    (phase === 'available' || phase === 'downloading' || phase === 'downloaded' || phase === 'error')
+    (phase === 'available' ||
+      phase === 'downloading' ||
+      phase === 'downloaded' ||
+      phase === 'error')
 
   useEffect(() => {
     if (!isVisible) return
@@ -96,7 +99,10 @@ const UpdateModal: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isVisible, closeUpdateModal])
 
-  const percent = Math.min(100, Math.max(0, Math.round(progress?.percent ?? (phase === 'downloaded' ? 100 : 0))))
+  const percent = Math.min(
+    100,
+    Math.max(0, Math.round(progress?.percent ?? (phase === 'downloaded' ? 100 : 0))),
+  )
   const ringOffset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE
   const formattedDate = formatReleaseDate(releaseDate, lang)
   const displaySize = progress?.totalBytes || totalSizeBytes
@@ -147,7 +153,7 @@ const UpdateModal: React.FC = () => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: prefersReducedMotion ? 0 : 0.18 }}
-          onClick={(event) => {
+          onClick={event => {
             if (event.target === event.currentTarget) closeUpdateModal()
           }}
         >
@@ -184,7 +190,9 @@ const UpdateModal: React.FC = () => {
                   </svg>
                 )}
                 <div className="update-modal-emblem-core">
-                  {phase === 'downloading' && <ArrowDownToLine size={26} className="update-modal-download-icon" />}
+                  {phase === 'downloading' && (
+                    <ArrowDownToLine size={26} className="update-modal-download-icon" />
+                  )}
                   {phase === 'downloaded' && <CheckCircle2 size={28} />}
                   {phase === 'error' && <AlertCircle size={28} />}
                   {phase === 'available' && <Sparkles size={26} />}
@@ -199,11 +207,16 @@ const UpdateModal: React.FC = () => {
                 <div
                   className="update-version-row"
                   dir="ltr"
-                  aria-label={formatMessage(u.versionTransition, { current: currentVersion, latest: latestVersion })}
+                  aria-label={formatMessage(u.versionTransition, {
+                    current: currentVersion,
+                    latest: latestVersion,
+                  })}
                 >
                   <span className="update-version-chip current">v{currentVersion}</span>
                   <ArrowRight size={14} className="update-version-arrow" aria-hidden="true" />
-                  <span className={`update-version-chip latest phase-${phase}`}>v{latestVersion}</span>
+                  <span className={`update-version-chip latest phase-${phase}`}>
+                    v{latestVersion}
+                  </span>
                 </div>
               )}
 
@@ -214,7 +227,11 @@ const UpdateModal: React.FC = () => {
                       {u.installerSize}: <strong dir="ltr">{formatBytes(displaySize)}</strong>
                     </span>
                   ) : null}
-                  {displaySize && formattedDate ? <span className="update-meta-dot" aria-hidden="true">·</span> : null}
+                  {displaySize && formattedDate ? (
+                    <span className="update-meta-dot" aria-hidden="true">
+                      ·
+                    </span>
+                  ) : null}
                   {formattedDate ? (
                     <span className="update-meta-item">
                       {u.releaseDateLabel}: <strong>{formattedDate}</strong>
@@ -283,7 +300,9 @@ const UpdateModal: React.FC = () => {
                   <div className="update-metrics-grid">
                     <div className="update-metric-box">
                       <span className="update-metric-label">{u.speedLabel}</span>
-                      <span className="update-metric-value" dir="ltr">{speedText}</span>
+                      <span className="update-metric-value" dir="ltr">
+                        {speedText}
+                      </span>
                     </div>
                     <div className="update-metric-box">
                       <span className="update-metric-label">{u.remainingLabel}</span>
@@ -316,7 +335,9 @@ const UpdateModal: React.FC = () => {
                   {activeDownloadCount > 0 ? (
                     <div className="update-warning-strip" role="status">
                       <AlertCircle size={16} aria-hidden="true" />
-                      <span>{formatMessage(u.activeDownloadsNote, { count: activeDownloadCount })}</span>
+                      <span>
+                        {formatMessage(u.activeDownloadsNote, { count: activeDownloadCount })}
+                      </span>
                     </div>
                   ) : (
                     <div className="update-trust-strip ready">
@@ -337,7 +358,11 @@ const UpdateModal: React.FC = () => {
             <div className="update-modal-footer">
               {phase === 'available' && (
                 <>
-                  <button type="button" className="update-btn update-btn-ghost" onClick={closeUpdateModal}>
+                  <button
+                    type="button"
+                    className="update-btn update-btn-ghost"
+                    onClick={closeUpdateModal}
+                  >
                     {u.later}
                   </button>
                   <button
@@ -363,7 +388,11 @@ const UpdateModal: React.FC = () => {
                       <span>{u.cancelDownload}</span>
                     </button>
                   )}
-                  <button type="button" className="update-btn update-btn-secondary" onClick={closeUpdateModal}>
+                  <button
+                    type="button"
+                    className="update-btn update-btn-secondary"
+                    onClick={closeUpdateModal}
+                  >
                     <Minimize2 size={15} aria-hidden="true" />
                     <span>{u.hideToBackground}</span>
                   </button>
@@ -372,7 +401,11 @@ const UpdateModal: React.FC = () => {
 
               {phase === 'downloaded' && (
                 <>
-                  <button type="button" className="update-btn update-btn-ghost" onClick={closeUpdateModal}>
+                  <button
+                    type="button"
+                    className="update-btn update-btn-ghost"
+                    onClick={closeUpdateModal}
+                  >
                     {u.later}
                   </button>
                   <button
@@ -388,10 +421,18 @@ const UpdateModal: React.FC = () => {
 
               {phase === 'error' && (
                 <>
-                  <button type="button" className="update-btn update-btn-ghost" onClick={closeUpdateModal}>
+                  <button
+                    type="button"
+                    className="update-btn update-btn-ghost"
+                    onClick={closeUpdateModal}
+                  >
                     {u.close}
                   </button>
-                  <button type="button" className="update-btn update-btn-primary" onClick={handleRetry}>
+                  <button
+                    type="button"
+                    className="update-btn update-btn-primary"
+                    onClick={handleRetry}
+                  >
                     <RefreshCw size={16} aria-hidden="true" />
                     <span>{u.retry}</span>
                   </button>

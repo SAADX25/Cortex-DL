@@ -2,7 +2,18 @@
 import log from 'electron-log'
 import lock from '../../engines.lock.json'
 import { getBaselineDirectory, getBinDirectory } from './paths'
-import { verifyEngine, promoteEngine, downloadEngine, extractEngineZip, sha256, engineReceipts, engineNames, engineHealth, type EngineSpec, type EngineHealth } from './engines/engineManager'
+import {
+  verifyEngine,
+  promoteEngine,
+  downloadEngine,
+  extractEngineZip,
+  sha256,
+  engineReceipts,
+  engineNames,
+  engineHealth,
+  type EngineSpec,
+  type EngineHealth,
+} from './engines/engineManager'
 import { app, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -14,7 +25,11 @@ const marker = path.join(app.getPath('userData'), 'startup-state.json')
 export let previousStartupFailed = false
 
 // Stays "starting" until UI is ready; finding that state on next launch signals a startup crash.
-try { previousStartupFailed = JSON.parse(fs.readFileSync(marker, 'utf8')).state === 'starting' } catch { previousStartupFailed = false }
+try {
+  previousStartupFailed = JSON.parse(fs.readFileSync(marker, 'utf8')).state === 'starting'
+} catch {
+  previousStartupFailed = false
+}
 
 export const safeMode = process.argv.includes('--safe-mode')
 
@@ -29,36 +44,62 @@ export function markStartup(state: 'starting' | 'ready' | 'clean-shutdown'): voi
   try {
     fs.mkdirSync(path.dirname(marker), { recursive: true })
     // Atomic rename so a mid-write crash can't leave a half-written startup marker.
-    fs.writeFileSync(`${marker}.tmp`, JSON.stringify({ state, timestamp: new Date().toISOString() }))
+    fs.writeFileSync(
+      `${marker}.tmp`,
+      JSON.stringify({ state, timestamp: new Date().toISOString() }),
+    )
     fs.renameSync(`${marker}.tmp`, marker)
-  } catch (error) { console.warn('[Startup marker]', error) }
+  } catch (error) {
+    console.warn('[Startup marker]', error)
+  }
 }
 
 if (gotTheLock) markStartup('starting')
 
 export const startupTimings: Record<string, number> = {}
 
-
 export function startupMark(name: string): void {
   startupTimings[name] = Math.round(process.uptime() * 1000)
 }
 
-export function startupDuration(name: string, start: number): void { startupTimings[name] = Math.round((performance.now() - start) * 100) / 100 }
+export function startupDuration(name: string, start: number): void {
+  startupTimings[name] = Math.round((performance.now() - start) * 100) / 100
+}
 
-export async function afterUiReady(ui: Promise<unknown>, job: () => Promise<void>, failed: (error: unknown) => void): Promise<void> {
-  try { await ui; await job() } catch (error) { failed(error) }
+export async function afterUiReady(
+  ui: Promise<unknown>,
+  job: () => Promise<void>,
+  failed: (error: unknown) => void,
+): Promise<void> {
+  try {
+    await ui
+    await job()
+  } catch (error) {
+    failed(error)
+  }
 }
 
 export interface SetupState {
-  status: 'checking' | 'cached-ready' | 'background-check' | 'ready' | 'repair-required' | 'repairing' | 'degraded' | 'fatal'
+  status:
+    | 'checking'
+    | 'cached-ready'
+    | 'background-check'
+    | 'ready'
+    | 'repair-required'
+    | 'repairing'
+    | 'degraded'
+    | 'fatal'
   progress: number
   message: string
 }
 
-export let setupState: SetupState = { status: 'background-check', progress: 0, message: 'Checking engine receipts…' }
+export let setupState: SetupState = {
+  status: 'background-check',
+  progress: 0,
+  message: 'Checking engine receipts…',
+}
 
 const specs: EngineSpec[] = lock.packages.flatMap(pkg => pkg.engines)
-
 
 function sendState(win: BrowserWindow, state: SetupState): void {
   setupState = state
@@ -72,9 +113,22 @@ export function reportEngineFailure(win: BrowserWindow, message: string): void {
 export async function checkCachedEngines(win: BrowserWindow): Promise<void> {
   const health = await engineHealth()
   const missing = health.filter(engine => 'state' in engine && engine.state === 'repair-required')
-  sendState(win, missing.length ? { status: 'repair-required', progress: 0, message: missing.map(engine => engine.message).join('; ') }
-    : health.every(engine => engine.available) ? { status: 'cached-ready', progress: 100, message: 'Ready' }
-    : { status: 'background-check', progress: 0, message: 'Verifying changed engines in the background…' })
+  sendState(
+    win,
+    missing.length
+      ? {
+          status: 'repair-required',
+          progress: 0,
+          message: missing.map(engine => engine.message).join('; '),
+        }
+      : health.every(engine => engine.available)
+        ? { status: 'cached-ready', progress: 100, message: 'Ready' }
+        : {
+            status: 'background-check',
+            progress: 0,
+            message: 'Verifying changed engines in the background…',
+          },
+  )
 }
 
 const setupServices = {
@@ -90,29 +144,49 @@ const setupServices = {
 
 let pending: Promise<void> | null = null
 
-export async function stopSetup(): Promise<void> { await pending?.catch(() => {}) }
+export async function stopSetup(): Promise<void> {
+  await pending?.catch(() => {})
+}
 
-export function runSetup(win: BrowserWindow, allowNetwork = true, force = false, services = setupServices): Promise<void> {
+export function runSetup(
+  win: BrowserWindow,
+  allowNetwork = true,
+  force = false,
+  services = setupServices,
+): Promise<void> {
   if (pending) return pending
-  pending = setup(win, allowNetwork, force, services).finally(() => { pending = null })
+  pending = setup(win, allowNetwork, force, services).finally(() => {
+    pending = null
+  })
   return pending
 }
 
-async function setup(win: BrowserWindow, allowNetwork: boolean, force: boolean, services: typeof setupServices): Promise<void> {
-  const { receipts, binDirectory, baselineDirectory, verify, download, promote, extract, hash } = services
+async function setup(
+  win: BrowserWindow,
+  allowNetwork: boolean,
+  force: boolean,
+  services: typeof setupServices,
+): Promise<void> {
+  const { receipts, binDirectory, baselineDirectory, verify, download, promote, extract, hash } =
+    services
   const send = (state: SetupState) => {
     sendState(win, state)
   }
   let component = 'filesystem'
   try {
-    send({ status: force ? 'repairing' : 'background-check', progress: 0, message: 'Verifying changed engines…' })
+    send({
+      status: force ? 'repairing' : 'background-check',
+      progress: 0,
+      message: 'Verifying changed engines…',
+    })
     const bin = binDirectory()
     await fs.promises.mkdir(bin, { recursive: true })
     for (const spec of specs) {
       receipts.signal.throwIfAborted()
       const file = path.join(bin, spec.filename)
       // Recover a binary if a previous promotion crashed between moving the old one aside and swapping in the new one.
-      if (!fs.existsSync(file) && fs.existsSync(`${file}.previous`)) await fs.promises.rename(`${file}.previous`, file)
+      if (!fs.existsSync(file) && fs.existsSync(`${file}.previous`))
+        await fs.promises.rename(`${file}.previous`, file)
     }
     const health: EngineHealth[] = []
     for (const spec of specs) {
@@ -123,23 +197,38 @@ async function setup(win: BrowserWindow, allowNetwork: boolean, force: boolean, 
     }
     for (let i = 0; i < lock.packages.length; i++) {
       const pkg = lock.packages[i]
-      const missing = pkg.engines.filter(spec => !health.find(engine => engine.name === spec.name)?.available)
+      const missing = pkg.engines.filter(
+        spec => !health.find(engine => engine.name === spec.name)?.available,
+      )
       if (!missing.length) continue
       receipts.signal.throwIfAborted()
       component = pkg.name
       send({ status: 'repairing', progress: 40, message: 'Preparing Cortex-DL Engines…' })
-      const progress = 40 + i / lock.packages.length * 45
+      const progress = 40 + (i / lock.packages.length) * 45
       const baseline = baselineDirectory()
       const stage = await fs.promises.mkdtemp(path.join(bin, 'repair-'))
       try {
         let bundled: EngineSpec[] = []
-        try { bundled = JSON.parse(await fs.promises.readFile(path.join(baseline, 'manifest.json'), 'utf8')).engines } catch { bundled = [] }
+        try {
+          bundled = JSON.parse(
+            await fs.promises.readFile(path.join(baseline, 'manifest.json'), 'utf8'),
+          ).engines
+        } catch {
+          bundled = []
+        }
         const needsDownload: EngineSpec[] = []
         for (const spec of missing) {
           const entry = bundled.find(engine => engine.name === spec.name)
           // Reuse the bundled baseline copy when its package hash matches the lockfile, avoiding a network download.
-          if (entry?.sha256 && (entry as EngineSpec & { packageSha256?: string }).packageSha256 === pkg.sha256 && (await verify(path.join(baseline, spec.filename), entry, receipts.signal)).available) {
-            await fs.promises.copyFile(path.join(baseline, spec.filename), path.join(stage, spec.filename))
+          if (
+            entry?.sha256 &&
+            (entry as EngineSpec & { packageSha256?: string }).packageSha256 === pkg.sha256 &&
+            (await verify(path.join(baseline, spec.filename), entry, receipts.signal)).available
+          ) {
+            await fs.promises.copyFile(
+              path.join(baseline, spec.filename),
+              path.join(stage, spec.filename),
+            )
           } else needsDownload.push(spec)
         }
         if (needsDownload.length) {
@@ -152,14 +241,36 @@ async function setup(win: BrowserWindow, allowNetwork: boolean, force: boolean, 
             const mb = (received / 1024 / 1024).toFixed(1)
             const elapsed = (Date.now() - startedAt) / 1000
             const rate = elapsed >= 1 ? received / elapsed : 0
-            const speed = rate > 0 ? ` · ${rate >= 1024 * 1024 ? `${(rate / 1024 / 1024).toFixed(1)} MB/s` : `${(rate / 1024).toFixed(0)} KB/s`}` : ''
-            const seconds = total && rate > 0 ? Math.ceil(Math.max(0, total - received) / rate) : null
-            const eta = seconds !== null ? ` · ${Math.floor(seconds / 60)}m ${seconds % 60}s remaining` : ''
-            send({ status: 'repairing', progress: progress + (total ? received / total : 0) * 35 / lock.packages.length, message: `Downloading ${pkg.name}: ${mb} MB${total ? ` / ${(total / 1024 / 1024).toFixed(1)} MB` : ''}${speed}${eta}…` })
+            const speed =
+              rate > 0
+                ? ` · ${rate >= 1024 * 1024 ? `${(rate / 1024 / 1024).toFixed(1)} MB/s` : `${(rate / 1024).toFixed(0)} KB/s`}`
+                : ''
+            const seconds =
+              total && rate > 0 ? Math.ceil(Math.max(0, total - received) / rate) : null
+            const eta =
+              seconds !== null ? ` · ${Math.floor(seconds / 60)}m ${seconds % 60}s remaining` : ''
+            send({
+              status: 'repairing',
+              progress: progress + ((total ? received / total : 0) * 35) / lock.packages.length,
+              message: `Downloading ${pkg.name}: ${mb} MB${total ? ` / ${(total / 1024 / 1024).toFixed(1)} MB` : ''}${speed}${eta}…`,
+            })
           })
-          log.info('[Engines] Download completed', pkg.name, { elapsedMs: Date.now() - startedAt, bytes: (await fs.promises.stat(archive)).size })
-          send({ status: 'repairing', progress: progress + 35 / lock.packages.length, message: `Extracting and verifying ${pkg.name}…` })
-          if (pkg.url.endsWith('.zip')) await extract(archive, stage, pkg.engines.map(e => e.filename), receipts.signal)
+          log.info('[Engines] Download completed', pkg.name, {
+            elapsedMs: Date.now() - startedAt,
+            bytes: (await fs.promises.stat(archive)).size,
+          })
+          send({
+            status: 'repairing',
+            progress: progress + 35 / lock.packages.length,
+            message: `Extracting and verifying ${pkg.name}…`,
+          })
+          if (pkg.url.endsWith('.zip'))
+            await extract(
+              archive,
+              stage,
+              pkg.engines.map(e => e.filename),
+              receipts.signal,
+            )
           else await fs.promises.copyFile(archive, path.join(stage, pkg.engines[0].filename))
         }
         for (const spec of missing) {
@@ -171,25 +282,57 @@ async function setup(win: BrowserWindow, allowNetwork: boolean, force: boolean, 
           await receipts.record(spec.name, installed.version, entry.sha256)
           log.info('[Engines] Installed', spec.name)
         }
-      } finally { await fs.promises.rm(stage, { recursive: true, force: true }) }
+      } finally {
+        await fs.promises.rm(stage, { recursive: true, force: true })
+      }
     }
-    send({ status: health.every(e => e.available) ? 'background-check' : 'repairing', progress: 90, message: 'Completing engine setup…' })
-    const result = health.every(e => e.available) ? health : await Promise.all(engineNames.map(name => receipts.inspect(name)))
+    send({
+      status: health.every(e => e.available) ? 'background-check' : 'repairing',
+      progress: 90,
+      message: 'Completing engine setup…',
+    })
+    const result = health.every(e => e.available)
+      ? health
+      : await Promise.all(engineNames.map(name => receipts.inspect(name)))
     if (result.some(engine => !engine.available)) throw new Error('Post-repair verification failed')
     log.info('[Engines] Healthy', result)
     send({ status: 'ready', progress: 100, message: 'Ready' })
   } catch (error) {
     log.error('[Setup]', component, error)
-    const code = (error as NodeJS.ErrnoException).code || (error as { cause?: NodeJS.ErrnoException }).cause?.code
+    const code =
+      (error as NodeJS.ErrnoException).code ||
+      (error as { cause?: NodeJS.ErrnoException }).cause?.code
     const http = /HTTP (\d{3})/.exec(String(error))
-    const reason = http?.[1] === '404' || http?.[1] === '410' ? 'The engine download is no longer available. Install the latest Cortex DL version, then retry setup.' : http ? `The download server returned HTTP ${http[1]}. Retry setup in a moment.` : code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' ? 'Network unavailable. Check your connection and retry.' : code === 'ENOSPC' ? 'Disk is full.' : code === 'EACCES' || code === 'EPERM' ? 'Folder is not writable or security software blocked access.' : 'Engine installation failed. Check your internet connection and retry.'
-    send({ status: 'repair-required', progress: 0, message: `${component}: ${reason} Retry repair or open diagnostics.` })
+    const reason =
+      http?.[1] === '404' || http?.[1] === '410'
+        ? 'The engine download is no longer available. Install the latest Cortex DL version, then retry setup.'
+        : http
+          ? `The download server returned HTTP ${http[1]}. Retry setup in a moment.`
+          : code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT'
+            ? 'Network unavailable. Check your connection and retry.'
+            : code === 'ENOSPC'
+              ? 'Disk is full.'
+              : code === 'EACCES' || code === 'EPERM'
+                ? 'Folder is not writable or security software blocked access.'
+                : 'Engine installation failed. Check your internet connection and retry.'
+    send({
+      status: 'repair-required',
+      progress: 0,
+      message: `${component}: ${reason} Retry repair or open diagnostics.`,
+    })
     throw error
   }
 }
 
 if (!gotTheLock) app.quit()
-else void app.whenReady().then(async () => {
-  startupMark('electronReadyMs')
-  await import('./main')
-}).catch(error => { console.error('[Startup]', error); app.exit(1) })
+else
+  void app
+    .whenReady()
+    .then(async () => {
+      startupMark('electronReadyMs')
+      await import('./main')
+    })
+    .catch(error => {
+      console.error('[Startup]', error)
+      app.exit(1)
+    })

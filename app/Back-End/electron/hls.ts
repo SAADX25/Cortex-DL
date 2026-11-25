@@ -22,7 +22,10 @@ function parseAttributes(line: string): Record<string, string> {
     const eq = part.indexOf('=')
     if (eq === -1) continue
     const k = part.slice(0, eq).trim()
-    const v = part.slice(eq + 1).trim().replace(/^"|"$/g, '')
+    const v = part
+      .slice(eq + 1)
+      .trim()
+      .replace(/^"|"$/g, '')
     out[k] = v
   }
   return out
@@ -38,11 +41,22 @@ function parseResolution(value: string | undefined): { width: number; height: nu
   return { width, height }
 }
 
-export async function analyzeUrlForHls(inputUrl: string, signal?: AbortSignal): Promise<AnalyzeResult> {
+export async function analyzeUrlForHls(
+  inputUrl: string,
+  signal?: AbortSignal,
+): Promise<AnalyzeResult> {
   if (!isLikelyM3u8(inputUrl)) return { kind: 'direct' }
 
-  const res = await fetch(inputUrl, { redirect: 'follow', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000) })
-  if (!res.ok) { await res.body?.cancel(); return { kind: 'unknown' } }
+  const res = await fetch(inputUrl, {
+    redirect: 'follow',
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+      : AbortSignal.timeout(10000),
+  })
+  if (!res.ok) {
+    await res.body?.cancel()
+    return { kind: 'unknown' }
+  }
   if (!res.body) return { kind: 'unknown' }
   const reader = res.body.getReader()
   const chunks: Uint8Array[] = []
@@ -56,17 +70,20 @@ export async function analyzeUrlForHls(inputUrl: string, signal?: AbortSignal): 
       if (size > 4 * 1024 * 1024) throw new Error('HLS manifest exceeds size limit')
       chunks.push(value)
     }
-  } finally { await reader.cancel().catch(() => {}); reader.releaseLock() }
+  } finally {
+    await reader.cancel().catch(() => {})
+    reader.releaseLock()
+  }
   const text = Buffer.concat(chunks).toString('utf8')
 
   const lines = text
     .split(/\r?\n/g)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
 
-  if (!lines.some((l) => l.startsWith('#EXTM3U'))) return { kind: 'unknown' }
+  if (!lines.some(l => l.startsWith('#EXTM3U'))) return { kind: 'unknown' }
 
-  const hasMaster = lines.some((l) => l.startsWith('#EXT-X-STREAM-INF'))
+  const hasMaster = lines.some(l => l.startsWith('#EXT-X-STREAM-INF'))
   if (!hasMaster) return { kind: 'hls-media', url: inputUrl }
 
   const variants: HlsVariant[] = []
@@ -79,7 +96,8 @@ export async function analyzeUrlForHls(inputUrl: string, signal?: AbortSignal): 
     const nextUrl = lines[i + 1]
     if (!nextUrl || nextUrl.startsWith('#')) continue
     variants.push({
-      bandwidth: Number.isFinite(bandwidth) && (bandwidth as number) > 0 ? (bandwidth as number) : null,
+      bandwidth:
+        Number.isFinite(bandwidth) && (bandwidth as number) > 0 ? (bandwidth as number) : null,
       resolution,
       url: absolutize(inputUrl, nextUrl),
     })

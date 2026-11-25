@@ -24,14 +24,14 @@ export function loadMediaEndpoint(): Promise<MediaEndpoint | null> {
 
   inflightRequest = window.cortexDl
     .getMediaEndpoint()
-    .then((endpoint) => {
+    .then(endpoint => {
       if (!endpoint?.token || !endpoint.port) {
         throw new Error('media endpoint response was incomplete')
       }
       cachedEndpoint = { port: endpoint.port, token: endpoint.token }
       return cachedEndpoint
     })
-    .catch((err) => {
+    .catch(err => {
       console.error('Failed to resolve the local media endpoint', err)
 
       inflightRequest = null
@@ -67,7 +67,7 @@ export function useMediaEndpoint(): MediaEndpoint | null {
     if (endpoint) return
 
     let cancelled = false
-    loadMediaEndpoint().then((resolved) => {
+    loadMediaEndpoint().then(resolved => {
       if (!cancelled && resolved) setEndpoint(resolved)
     })
 

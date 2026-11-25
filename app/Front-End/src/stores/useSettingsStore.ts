@@ -33,7 +33,9 @@ interface SettingsStoreState {
   setEngineVersion: (v: string) => void
 
   engineUpdateStatus: { updating: boolean; message?: string; success?: boolean } | null
-  setEngineUpdateStatus: (v: { updating: boolean; message?: string; success?: boolean } | null) => void
+  setEngineUpdateStatus: (
+    v: { updating: boolean; message?: string; success?: boolean } | null,
+  ) => void
 
   healthCheck: AppHealthCheck | null
   setHealthCheck: (v: AppHealthCheck | null) => void
@@ -58,41 +60,43 @@ interface SettingsStoreState {
 
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   lang: (localStorage.getItem('language') as Language) || 'en',
-  setLang: (lang) => set({ lang }),
+  setLang: lang => set({ lang }),
 
   concurrentDownloads: 3,
-  setConcurrentDownloads: (v) => set({ concurrentDownloads: v }),
+  setConcurrentDownloads: v => set({ concurrentDownloads: v }),
 
   // Default player and Windows artwork refresh options to enabled unless explicitly turned off.
   useInAppPlayer: localStorage.getItem('cortex-inapp-player') !== 'false',
-  setUseInAppPlayer: (v) => {
+  setUseInAppPlayer: v => {
     localStorage.setItem('cortex-inapp-player', String(v))
     set({ useInAppPlayer: v })
   },
 
   refreshWindowsPlayerArtwork: localStorage.getItem('cortex-refresh-windows-artwork') !== 'false',
-  setRefreshWindowsPlayerArtwork: (v) => {
+  setRefreshWindowsPlayerArtwork: v => {
     localStorage.setItem('cortex-refresh-windows-artwork', String(v))
     set({ refreshWindowsPlayerArtwork: v })
   },
 
   totalDownloadedBytes: parseInt(localStorage.getItem('cortex-total-bytes') || '0', 10),
-  setTotalDownloadedBytes: (updater) =>
-    set((state) => ({
-      totalDownloadedBytes: typeof updater === 'function' ? updater(state.totalDownloadedBytes) : updater,
+  setTotalDownloadedBytes: updater =>
+    set(state => ({
+      totalDownloadedBytes:
+        typeof updater === 'function' ? updater(state.totalDownloadedBytes) : updater,
     })),
 
   updateState: initialAppUpdateState(currentAppVersion),
   updateModalOpen: false,
   updateDismissedVersion: null,
-  applyUpdateState: (next) =>
-    set((state) => {
+  applyUpdateState: next =>
+    set(state => {
       const prev = state.updateState
       let updateModalOpen = state.updateModalOpen
       let updateDismissedVersion = state.updateDismissedVersion
 
       if (next.phase === 'available') {
-        const isFreshVersion = !!next.latestVersion && next.latestVersion !== state.updateDismissedVersion
+        const isFreshVersion =
+          !!next.latestVersion && next.latestVersion !== state.updateDismissedVersion
         const justFinishedManualCheck = next.manualCheck && prev.phase === 'checking'
         if (isFreshVersion || justFinishedManualCheck) {
           updateModalOpen = true
@@ -110,7 +114,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     }),
   openUpdateModal: () => set({ updateModalOpen: true }),
   closeUpdateModal: () =>
-    set((state) => ({
+    set(state => ({
       updateModalOpen: false,
       updateDismissedVersion:
         state.updateState.phase === 'available' && state.updateState.latestVersion
@@ -119,21 +123,21 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     })),
 
   engineVersion: '...',
-  setEngineVersion: (v) => set({ engineVersion: v }),
+  setEngineVersion: v => set({ engineVersion: v }),
 
   engineUpdateStatus: null,
-  setEngineUpdateStatus: (v) => set({ engineUpdateStatus: v }),
+  setEngineUpdateStatus: v => set({ engineUpdateStatus: v }),
 
   healthCheck: null,
-  setHealthCheck: (v) => set({ healthCheck: v }),
+  setHealthCheck: v => set({ healthCheck: v }),
 
   healthChecking: true,
-  setHealthChecking: (v) => set({ healthChecking: v }),
+  setHealthChecking: v => set({ healthChecking: v }),
 
   username: '',
-  setUsername: (v) => set({ username: v }),
+  setUsername: v => set({ username: v }),
   password: '',
-  setPassword: (v) => set({ password: v }),
+  setPassword: v => set({ password: v }),
 
   refreshHealth: async () => {
     set({ healthChecking: true })
@@ -171,7 +175,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       if (next) get().applyUpdateState(next)
     } catch (err) {
       console.error(err)
-      set((state) => ({
+      set(state => ({
         updateState: {
           ...state.updateState,
           phase: 'error',
@@ -190,7 +194,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       if (next) get().applyUpdateState(next)
     } catch (err) {
       console.error(err)
-      set((state) => ({
+      set(state => ({
         updateState: {
           ...state.updateState,
           phase: 'error',
@@ -278,6 +282,6 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   },
 }))
 
-export const useLang = () => useSettingsStore((s) => s.lang)
+export const useLang = () => useSettingsStore(s => s.lang)
 
-export const useTranslations = () => translations[useSettingsStore((s) => s.lang)]
+export const useTranslations = () => translations[useSettingsStore(s => s.lang)]

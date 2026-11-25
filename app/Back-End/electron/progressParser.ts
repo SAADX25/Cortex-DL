@@ -5,7 +5,9 @@ import log from 'electron-log'
 
 export interface FfmpegState {
   totalDuration: number | null
-  startOffset?: number
+  sectionStart?: number
+  lastBytes?: number
+  lastBytesAtMs?: number
   stderr: string
 }
 
@@ -16,7 +18,7 @@ export function logRawProgressChunk(taskId: string, source: string, chunk: strin
 
   const lines = chunk
     .split(/\r\n|[\r\n]/)
-    .map((line) => line.trim())
+    .map(line => line.trim())
     .filter(Boolean)
 
   for (const line of lines) {
@@ -41,34 +43,57 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
     const previous = streams[key]
     streams[key] = {
       downloaded: Math.max(previous?.downloaded ?? 0, Math.round(downloaded)),
-      total: Number.isFinite(total) && total > 0
-        ? Math.max(previous?.total ?? 0, Math.round(total))
-        : previous?.total ?? null,
+      total:
+        Number.isFinite(total) && total > 0
+          ? Math.max(previous?.total ?? 0, Math.round(total))
+          : (previous?.total ?? null),
     }
     const values = Object.values(streams)
     task.downloadedBytes = values.reduce((sum, stream) => sum + stream.downloaded, 0)
     const observedTotal = values.reduce((sum, stream) => sum + (stream.total ?? 0), 0)
     const expected = task.ytdlpExpectedBytes ?? 0
-    const allObserved = task.ytdlpExpectedStreamCount && values.length >= task.ytdlpExpectedStreamCount && values.every(stream => stream.total !== null)
-    task.totalBytes = allObserved ? observedTotal : expected > 0 ? Math.max(expected, observedTotal) : values.every(stream => stream.total !== null) ? observedTotal || null : null
-    task.downloadPercent = task.totalBytes
-      ? Math.min(100, Math.round(task.downloadedBytes / task.totalBytes * 100))
-      : undefined
+    const allObserved =
+      task.ytdlpExpectedStreamCount &&
+      values.length >= task.ytdlpExpectedStreamCount &&
+      values.every(stream => stream.total !== null)
+    task.totalBytes = allObserved
+      ? observedTotal
+      : expected > 0
+        ? Math.max(expected, observedTotal)
+        : values.every(stream => stream.total !== null)
+          ? observedTotal || null
+          : null
+    if (task.totalBytes) {
+      task.downloadPercent = Math.min(
+        100,
+        Math.round((task.downloadedBytes / task.totalBytes) * 100),
+      )
+    } else if (task.phase !== 'trimming') {
+      task.downloadPercent = undefined
+    }
     if (Number.isFinite(speed) && speed >= 0) task.speedBytesPerSec = Math.round(speed)
     return true
   }
 
   // Once structured stream tracking is active, ignore legacy [download] lines so totals don't jitter.
-  if (task.engine === 'ytdlp' && task.ytdlpStreams && Object.keys(task.ytdlpStreams).length) return false
+  if (task.engine === 'ytdlp' && task.ytdlpStreams && Object.keys(task.ytdlpStreams).length)
+    return false
 
-  const progressMatch = /\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+~?\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|TiB|B)/i.exec(line)
+  const progressMatch =
+    /\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+~?\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|TiB|B)/i.exec(line)
   if (progressMatch) {
     const totalVal = parseFloat(progressMatch[2])
     const unit = progressMatch[3].toLowerCase()
-    const multiplier = unit === 'kib' ? 1024
-      : unit === 'mib' ? 1024 ** 2
-      : unit === 'gib' ? 1024 ** 3
-      : unit === 'tib' ? 1024 ** 4 : 1
+    const multiplier =
+      unit === 'kib'
+        ? 1024
+        : unit === 'mib'
+          ? 1024 ** 2
+          : unit === 'gib'
+            ? 1024 ** 3
+            : unit === 'tib'
+              ? 1024 ** 4
+              : 1
     const calculatedTotal = Math.round(totalVal * multiplier)
     if (calculatedTotal > 0 && calculatedTotal !== task.totalBytes) {
       task.totalBytes = calculatedTotal
@@ -90,9 +115,8 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
   if (speedMatch) {
     const speedVal = parseFloat(speedMatch[1])
     const sUnit = speedMatch[2].toLowerCase()
-    const multiplier = sUnit === 'kib' ? 1024
-      : sUnit === 'mib' ? 1024 ** 2
-      : sUnit === 'gib' ? 1024 ** 3 : 1
+    const multiplier =
+      sUnit === 'kib' ? 1024 : sUnit === 'mib' ? 1024 ** 2 : sUnit === 'gib' ? 1024 ** 3 : 1
     task.speedBytesPerSec = Math.round(speedVal * multiplier)
     changed = true
   }
@@ -100,17 +124,66 @@ export function parseDownloadProgress(line: string, task: DownloadTask): boolean
   return changed
 }
 
-export function parseFfmpegProgress(
-  line: string,
-  task: DownloadTask,
-  state: FfmpegState,
-): boolean {
+export function parseFfmpegProgress(line: string, task: DownloadTask, state: FfmpegState): boolean {
   let changed = false
 
   if (state.totalDuration === null) {
     const durMatch = /Duration:\s*(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/.exec(line)
     if (durMatch) {
-      state.totalDuration = parseTimeToSeconds(durMatch[1])
+      const fullDuration = parseTimeToSeconds(durMatch[1])
+      state.totalDuration =
+        state.sectionStart && fullDuration > state.sectionStart
+          ? Math.max(0.1, fullDuration - state.sectionStart)
+          : fullDuration
+    }
+  }
+
+  // Parse live output size and transfer rate emitted by FFmpeg during section/stream downloads.
+  if (task.status === 'downloading') {
+    const sizeMatch = /\bL?size=\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|kB|MB|GB|B)\b/i.exec(line)
+    if (sizeMatch) {
+      const value = parseFloat(sizeMatch[1])
+      const unit = sizeMatch[2].toLowerCase()
+      const multiplier =
+        unit === 'kib' || unit === 'kb'
+          ? 1024
+          : unit === 'mib' || unit === 'mb'
+            ? 1024 ** 2
+            : unit === 'gib' || unit === 'gb'
+              ? 1024 ** 3
+              : 1
+      const bytes = Math.round(value * multiplier)
+      if (Number.isFinite(bytes) && bytes > task.downloadedBytes) {
+        const now = Date.now()
+        if (state.lastBytes !== undefined && state.lastBytesAtMs !== undefined) {
+          const elapsedSec = (now - state.lastBytesAtMs) / 1000
+          const delta = bytes - state.lastBytes
+          if (elapsedSec >= 0.25 && delta > 0) {
+            task.speedBytesPerSec = Math.round(delta / elapsedSec)
+            state.lastBytes = bytes
+            state.lastBytesAtMs = now
+          }
+        } else {
+          state.lastBytes = bytes
+          state.lastBytesAtMs = now
+        }
+        task.downloadedBytes = bytes
+        changed = true
+      }
+    }
+
+    if (!task.speedBytesPerSec) {
+      const bitrateMatch = /\bbitrate=\s*(\d+(?:\.\d+)?)\s*kbits\/s/i.exec(line)
+      const speedMultMatch = /\bspeed=\s*(\d+(?:\.\d+)?)x/i.exec(line)
+      if (bitrateMatch && speedMultMatch) {
+        const bps = Math.round(
+          ((parseFloat(bitrateMatch[1]) * 1000) / 8) * parseFloat(speedMultMatch[1]),
+        )
+        if (Number.isFinite(bps) && bps > 0) {
+          task.speedBytesPerSec = bps
+          changed = true
+        }
+      }
     }
   }
 
@@ -118,17 +191,20 @@ export function parseFfmpegProgress(
   // FFmpeg reports out_time_ms in microseconds despite the key name; both keys divide by 1e6.
   const outTimeUnitsMatch = /^out_time_(?:ms|us)=(\d+)$/.exec(line.trim())
   if (timeMatch || outTimeUnitsMatch) {
-    const rawSec = timeMatch
+    const currentSec = timeMatch
       ? parseTimeToSeconds(timeMatch[1])
       : parseInt(outTimeUnitsMatch![1], 10) / 1_000_000
-    const currentSec = state.startOffset ? rawSec - state.startOffset : rawSec
     if (currentSec <= 0) return changed
 
     const totalDuration = state.totalDuration
 
     if (totalDuration && totalDuration > 0) {
-      const pct = Math.min(99, Math.round((currentSec / totalDuration) * 100))
-      if (task.status === 'downloading') {
+      const pct = Math.min(99, Math.max(1, Math.round((currentSec / totalDuration) * 100)))
+      if (task.phase === 'trimming') {
+        task.convertingPercent = pct
+        task.downloadPercent = pct
+        changed = true
+      } else if (task.status === 'downloading') {
         task.downloadPercent = pct
         changed = true
       } else if (task.status === 'converting' || task.status === 'merging') {
@@ -153,12 +229,16 @@ export function parseStateTransition(
   ctx: { sendUpdate: (task: DownloadTask) => void; saveState: () => void },
 ): TransitionResult {
   let detectedPath: string | null = null
-  if (task.status === 'paused' || task.status === 'canceled' || task.status === 'error' || task.status === 'completed') {
+  if (
+    task.status === 'paused' ||
+    task.status === 'canceled' ||
+    task.status === 'error' ||
+    task.status === 'completed'
+  ) {
     return { transitioned: false, detectedPath }
   }
 
-  const destMatch = /Destination:\s*(.+)$/.exec(line)
-    ?? /Merging formats into "(.+)"/.exec(line)
+  const destMatch = /Destination:\s*(.+)$/.exec(line) ?? /Merging formats into "(.+)"/.exec(line)
   if (destMatch) {
     const possiblePath = destMatch[1].trim().replace(/^["']|["']$/g, '')
     if (possiblePath) detectedPath = possiblePath

@@ -4,8 +4,8 @@ import { useUIStore } from '../stores/useUIStore'
 import React, { useState, useEffect } from 'react'
 import { X, ClipboardPaste } from 'lucide-react'
 
-export const UrlInputBar = React.memo((
-  {
+export const UrlInputBar = React.memo(
+  ({
     analyzing,
     analyzingText,
     batchCount,
@@ -27,64 +27,82 @@ export const UrlInputBar = React.memo((
     onAnalyze: (url: string) => void
     onClear: () => void
     initialUrl?: string
-  }
-) => {
-  // Keep input edits local so typing doesn't trigger global store re-renders on every keystroke.
-  const [localUrl, setLocalUrl] = useState(initialUrl)
+  }) => {
+    // Keep input edits local so typing doesn't trigger global store re-renders on every keystroke.
+    const [localUrl, setLocalUrl] = useState(initialUrl)
 
-  useEffect(() => {
-    setLocalUrl(initialUrl)
-  }, [initialUrl])
+    useEffect(() => {
+      setLocalUrl(initialUrl)
+    }, [initialUrl])
 
-  return (
-    <div className="hero-input-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-      <input
-        className="hero-input"
-        value={localUrl}
-        onChange={(e) => {
-          setLocalUrl(e.target.value)
-          // Cancel any in-flight analysis immediately when the user edits the URL.
-          primaryAnalysis.cancel()
-          useUIStore.getState().setAnalyzeResult(null)
-          useUIStore.getState().setAnalyzing(false)
-        }}
-        onKeyDown={(e) => { if (e.key === 'Enter' && localUrl.trim() && !analyzing) onAnalyze(localUrl) }}
-        placeholder={batchCount >= maxBatchItems ? `Batch full (${maxBatchItems}/${maxBatchItems}). Start download to clear.` : placeholderText}
-        dir="auto"
-        aria-label="URL input"
-      />
-      {localUrl && (
-        <button
-          className="hero-clear-btn"
-          onClick={() => { setLocalUrl(''); onClear() }}
-          aria-label="Clear URL"
-        >
-          <X size={20} />
-        </button>
-      )}
-      <button
-        className="hero-action-btn"
-        onClick={localUrl.trim().length === 0 ? onPasteAndAnalyze : () => onAnalyze(localUrl)}
-        disabled={analyzing}
-        aria-label={analyzing ? analyzingText : localUrl.trim().length === 0 ? pasteAndGoText : 'Analyze URL'}
-      >
-        {analyzing ? (
-          <><div className="spinner-sm" aria-hidden="true"></div><span>{analyzingText}</span></>
-        ) : localUrl.trim().length === 0 ? (
-          <>
-            <ClipboardPaste size={20} />
-            <span>{pasteAndGoText}</span>
-          </>
-        ) : (
-          <>
-            <span>🔍</span>
-            <span>Analyze</span>
-          </>
+    return (
+      <div className="hero-input-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
+        <input
+          className="hero-input"
+          value={localUrl}
+          onChange={e => {
+            setLocalUrl(e.target.value)
+            // Cancel any in-flight analysis immediately when the user edits the URL.
+            primaryAnalysis.cancel()
+            useUIStore.getState().setAnalyzeResult(null)
+            useUIStore.getState().setAnalyzing(false)
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && localUrl.trim() && !analyzing) onAnalyze(localUrl)
+          }}
+          placeholder={
+            batchCount >= maxBatchItems
+              ? `Batch full (${maxBatchItems}/${maxBatchItems}). Start download to clear.`
+              : placeholderText
+          }
+          dir="auto"
+          aria-label="URL input"
+        />
+        {localUrl && (
+          <button
+            className="hero-clear-btn"
+            onClick={() => {
+              setLocalUrl('')
+              onClear()
+            }}
+            aria-label="Clear URL"
+          >
+            <X size={20} />
+          </button>
         )}
-      </button>
-    </div>
-  )
-})
+        <button
+          className="hero-action-btn"
+          onClick={localUrl.trim().length === 0 ? onPasteAndAnalyze : () => onAnalyze(localUrl)}
+          disabled={analyzing}
+          aria-label={
+            analyzing
+              ? analyzingText
+              : localUrl.trim().length === 0
+                ? pasteAndGoText
+                : 'Analyze URL'
+          }
+        >
+          {analyzing ? (
+            <>
+              <div className="spinner-sm" aria-hidden="true"></div>
+              <span>{analyzingText}</span>
+            </>
+          ) : localUrl.trim().length === 0 ? (
+            <>
+              <ClipboardPaste size={20} />
+              <span>{pasteAndGoText}</span>
+            </>
+          ) : (
+            <>
+              <span>🔍</span>
+              <span>Analyze</span>
+            </>
+          )}
+        </button>
+      </div>
+    )
+  },
+)
 UrlInputBar.displayName = 'UrlInputBar'
 
 export default UrlInputBar

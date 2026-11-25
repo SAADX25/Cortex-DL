@@ -2,21 +2,10 @@
 export const APP_UPDATE_CHANNEL = 'update-status'
 
 export type AppUpdatePhase =
-  | 'idle'
-  | 'checking'
-  | 'available'
-  | 'downloading'
-  | 'downloaded'
-  | 'up-to-date'
-  | 'error'
+  'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error'
 
 export type AppUpdateErrorCode =
-  | 'offline'
-  | 'not-published'
-  | 'integrity'
-  | 'download'
-  | 'unsupported'
-  | 'unknown'
+  'offline' | 'not-published' | 'integrity' | 'download' | 'unsupported' | 'unknown'
 
 export interface AppUpdateProgress {
   percent: number
@@ -73,13 +62,14 @@ function decodeBasicEntities(input: string): string {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&#(\d+);/g, (_match, dec: string) => {
       const code = Number(dec)
-      return Number.isFinite(code) && code >= 32 && code <= 0x10ffff ? String.fromCodePoint(code) : ' '
+      return Number.isFinite(code) && code >= 32 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : ' '
     })
 }
 
 function normalizeReleaseText(raw: string): string[] {
-  const withoutBlocks = raw
-    .replace(/<\s*(script|style)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, '\n')
+  const withoutBlocks = raw.replace(/<\s*(script|style)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, '\n')
   const withBreaks = withoutBlocks
     .replace(/<\s*br\s*\/?>/gi, '\n')
     .replace(/<\/\s*(?:p|div|li|h[1-6]|tr|ul|ol)\s*>/gi, '\n')
@@ -100,9 +90,10 @@ function normalizeReleaseText(raw: string): string[] {
     if (!cleaned || /^no content\.?$/i.test(cleaned)) continue
     if (/^full changelog\s*:/i.test(cleaned)) continue
 
-    const truncated = cleaned.length > MAX_RELEASE_NOTE_LENGTH
-      ? `${cleaned.slice(0, MAX_RELEASE_NOTE_LENGTH - 1).trimEnd()}…`
-      : cleaned
+    const truncated =
+      cleaned.length > MAX_RELEASE_NOTE_LENGTH
+        ? `${cleaned.slice(0, MAX_RELEASE_NOTE_LENGTH - 1).trimEnd()}…`
+        : cleaned
     const dedupeKey = truncated.toLowerCase()
     if (seen.has(dedupeKey)) continue
     seen.add(dedupeKey)
@@ -121,7 +112,12 @@ export function parseReleaseNotes(raw: unknown): string[] {
     for (const entry of raw) {
       if (typeof entry === 'string') {
         collected.push(...normalizeReleaseText(entry))
-      } else if (entry && typeof entry === 'object' && 'note' in entry && typeof (entry as { note?: unknown }).note === 'string') {
+      } else if (
+        entry &&
+        typeof entry === 'object' &&
+        'note' in entry &&
+        typeof (entry as { note?: unknown }).note === 'string'
+      ) {
         collected.push(...normalizeReleaseText((entry as { note: string }).note))
       }
       if (collected.length >= MAX_RELEASE_NOTE_LINES) break
@@ -147,7 +143,11 @@ export function computeUpdateEta(
   totalBytes: number,
   bytesPerSecond: number,
 ): number | null {
-  if (!Number.isFinite(transferredBytes) || !Number.isFinite(totalBytes) || !Number.isFinite(bytesPerSecond)) {
+  if (
+    !Number.isFinite(transferredBytes) ||
+    !Number.isFinite(totalBytes) ||
+    !Number.isFinite(bytesPerSecond)
+  ) {
     return null
   }
   if (bytesPerSecond <= 0 || totalBytes <= 0 || transferredBytes >= totalBytes) {
@@ -160,7 +160,10 @@ export function computeUpdateEta(
 }
 
 export function createProgressSnapshot(
-  raw: { percent?: number; transferred?: number; total?: number; bytesPerSecond?: number } | null | undefined,
+  raw:
+    | { percent?: number; transferred?: number; total?: number; bytesPerSecond?: number }
+    | null
+    | undefined,
   fallbackTotalBytes: number | null,
 ): AppUpdateProgress {
   const totalBytes = Math.max(0, Number(raw?.total) || fallbackTotalBytes || 0)
@@ -202,10 +205,18 @@ export function classifyUpdateError(error: unknown): { code: AppUpdateErrorCode;
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   const detail = sanitizeErrorDetail(raw)
 
-  if (/ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|network|offline/i.test(raw)) {
+  if (
+    /ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|network|offline/i.test(
+      raw,
+    )
+  ) {
     return { code: 'offline', detail }
   }
-  if (/Cannot find latest\.yml|ERR_UPDATER_CHANNEL_FILE_NOT_FOUND|ERR_UPDATER_LATEST_VERSION_NOT_FOUND|No published versions|HttpError:\s*404/i.test(raw)) {
+  if (
+    /Cannot find latest\.yml|ERR_UPDATER_CHANNEL_FILE_NOT_FOUND|ERR_UPDATER_LATEST_VERSION_NOT_FOUND|No published versions|HttpError:\s*404/i.test(
+      raw,
+    )
+  ) {
     return { code: 'not-published', detail }
   }
   if (/sha512|checksum|signature|ERR_UPDATER_INVALID_SIGNATURE/i.test(raw)) {

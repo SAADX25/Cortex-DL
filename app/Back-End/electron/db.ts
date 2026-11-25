@@ -63,5 +63,5 @@ export const taskDb = {
 
   clearCompleted: db.prepare(`
     DELETE FROM tasks WHERE status = 'completed' OR status = 'canceled'
-  `)
+  `),
 }
